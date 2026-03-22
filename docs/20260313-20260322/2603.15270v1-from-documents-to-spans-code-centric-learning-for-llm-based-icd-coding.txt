@@ -1,0 +1,614 @@
+Title: From Documents to Spans: Code-Centric Learning for LLM-based ICD Coding
+
+URL Source: https://arxiv.org/pdf/2603.15270v1
+
+Published Time: Tue, 17 Mar 2026 06:13:11 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# From Documents to Spans: Code-Centric Learning for LLM-based ICD Coding 
+
+Xu Zhang 1,2 , Wenxin Ma 1,2 , Chenxu Wu 1,2 ,Rongsheng Wang 1,2 , Kun Zhang 1,2 * , S. Kevin Zhou 1,2,3,4 *1 School of Biomedical Engineering, Division of Life Sciences and Medicine, USTC 
+
+2 MIRACLE Center, Suzhou Institute for Advance Research, USTC 
+
+3Jiangsu Provincial Key Laboratory of Multimodal Digital Twin Technology 
+
+4State Key Laboratory of Precision and Intelligent Chemistry, USTC 
+
+xu_zhang@mail.ustc.edu.cn kkzhang@ustc.edu.cn skevinzhou@ustc.edu.cn 
+
+Abstract 
+
+ICD coding is a critical yet challenging task in healthcare. Recently, LLM-based methods demonstrate stronger generalization than dis-criminative methods in ICD coding. However, fine-tuning LLMs for ICD coding faces three major challenges. First, existing public ICD coding datasets provide limited coverage of the ICD code space, restricting a model’s ability to generalize to unseen codes. Second, naive fine-tuning diminishes the interpretability of LLMs, as few public datasets contain explicit supporting evidence for assigned codes. Third, ICD coding typically involves long clinical documents, making fine-tuning LLMs com-putationally expensive. To address these is-sues, we propose Code-Centric Learning, a training framework that shifts supervision from full clinical documents to scalable, short evi-dence spans. The key idea of this framework is that span-level learning improves LLMs’ ability to perform document-level ICD cod-ing. Our proposed framework consists of a mixed training strategy and code-centric data expansion, which substantially reduces training cost, improves accuracy on unseen ICD codes and preserves interpretability. Under the same LLM backbone, our method substantially out-performs strong baselines. Notably, our method enables small-scale LLMs to achieve perfor-mance comparable to much larger proprietary models, demonstrating its effectiveness and po-tential for fully automated ICD coding. 
+
+1 Introduction 
+
+ICD codes play a foundational role in medical insur-ance reimbursement and health data analysis. ICD coding, the process of assigning ICD codes to each patient encounter, is a critically important task in modern healthcare systems. However, manual ICD coding is time-consuming and labor-intensive, and even experienced human coders frequently make 
+
+> *
+
+Corresponding authors <Code1>  
+
+> <Code2>
+> <Code3>
+> ……
+> ~100k Documents
+
+LLMs   
+
+> ## Evidence
+> <Evidence1> ## Evidence
+> <Evidence2>
+
+…
+
+LLMs     
+
+> ## Evidence
+> <Evidence3>
+> ## Evidence
+> <Evidence4>
+> Code s
+> Spans
+> ## Code
+> <Evidence1> ## # Code
+> Code3>
+
+…    
+
+> ## Code
+> <Code3>
+> ## Code
+> <Code4>
+> ~200 Documents
+> # Evidence
+> ……
+> # Codes
+> ……
+> Evidence + Code s
+
+(a) Traditional SFT 
+
+(b) Code -Centric Learning (Ours)    
+
+> Efficiency (Training Time)
+> Generalization (Unseen Acc.)
+> 210h 40h
+
+Reduce ~ 80%   
+
+> 8.8% 50.0%
+> Code Coverage
+> <10%
+> ~100%
+> Interpretability (Evid. Recall)
+> 0%
+> 74.0%
+> Codes
+
+(c) Performance Comparison  
+
+> Cover more codes
+> Interpretable Efficient
+> Traditional SFT Code -Centric Learning (Ours)
+
+Improved x 5.7 
+
+> Cover more codes
+> Interpretable Efficient
+
+Figure 1: (a) Traditional paradigm relies on large-scale documents for training, which is inefficient, limited in code coverage, and lacks interpretability. (b) Our method uses only 200 documents to learn evidence-based ICD coding, while leveraging scalable spans to learn code knowledge. (c) Our approach hugely im-proves accuracy on codes unseen in documents, pro-vides interpretable evidence, and reduces training time. 
+
+errors (Burns et al., 2012; Horsky et al., 2018; Gan et al., 2025), which has motivated extensive re-search on automated ICD coding. Early ICD coding approaches adopt discrimina-tive models with label attention mechanisms (Mul-lenbach et al., 2018; Huang et al., 2022; Edin et al., 2024). Recently, LLM-based methods have gained attention due to their stronger generalization capa-bilities (Motzfeldt et al., 2025; Yuan et al., 2025). Among them, training-free approaches (Li et al., 2025; Motzfeldt et al., 2025) rely on carefully de-signed prompts or workflows, and place strong de-1
+
+> arXiv:2603.15270v1 [cs.CL] 16 Mar 2026
+
+mands on the capability of the backbone LLM, often requiring either proprietary models or very large open models. Such models are difficult to adopt in clinical settings due to strict privacy con-straints and limited local computing resources. In contrast, fine-tuning methods (Yuan et al., 2025) enable smaller, locally deployable LLMs to acquire ICD coding capability, making them more practi-cal for real-world healthcare applications. Given clinical notes and a simple task prompt, the LLM is optimized to output ICD codes along with their textual descriptions and outperforms discriminative models on out-of-distribution data. However, this fine-tuning paradigm entails sev-eral issues: limited code coverage , poor inter-pretability and low training efficiency . First, existing ICD coding datasets cover only a small subset of ICD codes. For example, even MIMIC-IV (Johnson et al., 2023) includes only about 10% of the 70K ICD-10-CM codes, which severely re-stricts generalization to unseen codes. Second, most ICD coding datasets provide ICD codes with-out supporting evidence; as a result, fine-tuning LLMs on such data encourages direct code predic-tion without explicit evidence grounding. This not only diminishes interpretability, but also precludes human review and correction of the underlying evi-dence, thereby limiting effective human–AI collab-oration. Third, fine-tuning LLMs on long clinical documents is computationally expensive, consider-ing the quadratic complexity with respect to input length. Collectively, these challenges limit the ap-plicability of fine-tuning LLMs for ICD coding. To address the above issues, we propose a novel training framework, Code-Centric Learning (CCL). Unlike traditional paradigms that operate on entire clinical notes, as shown in Figure 1, our method centers on code-specific evidence spans. Intuitively, ICD coding can be decomposed into two sub-tasks: locating evidence and assigning codes. If an LLM is trained to assign the correct ICD code to an evi-dence span, it implicitly learns to recognize such ev-idence in a long clinical document. Consequently, strengthening the span-level code assignment ca-pability also enhances the model’s ability to locate and aggregate codeable evidence and assign codes in a full document. Based on this intuition, CCL consists of two key strategies. First, we adopt a mixed training strat-egy that uses a limited number of documents with annotated evidence spans, together with a large col-lection of code-related evidence spans. Compared to direct fine-tuning on public ICD coding datasets, i.e., full clinical notes without evidence annotation, this strategy provides explicit interpretability and reduces computational cost by focusing on short evidence spans instead of long clinical documents. Second, we propose a code-centric data expan-sion strategy. We extract code-specific evidence spans from public datasets based on annotated codes, and supplement them using official ICD coding resources. For codes unseen in both official knowledge bases and public datasets, we retrieve the closest codes and evidence to synthesize plau-sible evidence spans, ensuring full ICD code cov-erage. Our proposed training framework enables small-scale LLMs to achieve performance com-parable to much larger proprietary models, while providing explicit interpretability and intervention capability. Our main contributions are summarized as: 
+
+• We propose a fine-tuning framework for LLM-based ICD coding that simultaneously ad-dresses three key limitations: (i) limited code coverage in public datasets, (ii) the lack of interpretability in standard fine-tuning, and (iii) the low training efficiency caused by long clinical documents. 
+
+• We introduce a novel training framework con-sisting of a mixed training strategy and a code-centric data expansion strategy, motivated by the central insight that span-level classifica-tion yields transferable gains for document-level evidence extraction. 
+
+• Our framework enables small LLMs to achieve performance comparable to much larger proprietary models on both in-domain and out-of-domain datasets, while attaining state-of-the-art results with the same back-bone. It also provides explicit interpretability and supports human–AI collaboration. 
+
+2 Related Work 
+
+2.1 Discriminative methods Label attention . Discriminative models have long dominated the ICD coding task via label attention mechanisms (Mullenbach et al., 2018), learning an independent query vector for each ICD code. The widely adopted models are PLM-ICD (Huang et al., 2022) and its variant PLM-CA (Edin et al., 2024). 2Knowledge injection . Building on label attention, several studies explore incorporating external ICD-related knowledge. DKEC (Ge et al., 2024) apply a graph network to encode knowledge from multiple sources. Correlation (Luo et al., 2024) models rela-tionships among ICD codes. MSMN (Yuan et al., 2022) and MSAM (Gomes et al., 2024) utilize syn-onyms to learn code representations. GKI-ICD (Zhang et al., 2025) injects code descriptions, syn-onyms, and hierarchy by synthesizing guidelines. 
+
+Interpretability . Traditional discriminative mod-els often lack interpretability. MDACE (Cheng et al., 2023) re-annotates a subset of MIMIC-III (Johnson et al., 2016) and provides expert-annotated evidence spans for ICD assignments. Building on MDACE, Edin et al. (2024) applies AttInGrad to map model predictions to evidence spans in the original text. AutoCodeDL (Wu et al., 2024) incorporates dictionary learning to decode dense embeddings into medical concepts. 
+
+Training efficiency . Douglas et al. (2025) pro-poses an entity-based compression method that reduces input text length while maintaining com-parable performance, highlighting redundancy of clinical documents. This issue becomes more pro-nounced as backbones shift from BERTs to LLMs. 
+
+2.2 Generative Methods Training-free methods . Early works explored the use of off-the-shelf LLMs for ICD coding, design-ing prompts and workflows. Boyle et al. (2023) prompts the LLM to predict ICD codes in a hi-erarchical manner, from chapters and sections to specific codes. MAC (Li et al., 2025) prompts the LLM to act as different roles, such as a coder and a physician, and perform cross-role verifica-tion. MedCodER (Baksi et al., 2025) and CLH (Motzfeldt et al., 2025) adopt multi-stage work-flows combining evidence extraction and candidate retrieval to address the large ICD code space. 
+
+Fine-tuning methods . Recently, Yuan et al. (2025) demonstrates that fine-tuning LLMs is more suit-able for this task than training-free paradigms and proposes a verification module to fix mistakes. Nes-terov et al. (2025) also validates this conclusion on their proposed Russian ICD coding benchmark. However, while these works demonstrate the ne-cessity of fine-tuning LLM for ICD coding, they do not attempt to improve the fine-tuning paradigm itself to address its inherent limitations. 
+
+3 Methodology 
+
+3.1 Overview 
+
+Fine-tuning LLMs for ICD coding is commonly performed at the document level (Yuan et al., 2025). Given a clinical document x and its associated ICD code set C (followed by code description), con-ventional document-level training can be cast as supervised fine-tuning (SFT): 
+
+min  
+
+> θ
+
+LSFT (fθ(x), C ) , (1) where the LLM fθ(·) maps a long clinical docu-ment to a set of ICD codes under standard next-token prediction. However, this paradigm suffers from low training efficiency, limited code coverage and poor interpretability (see Section 1). To overcome these challenges, we propose a code-centric learning framework (Figure 2). We perform mixed SFT on two types of instances: (i) a full clinical document, annotated with evidence and ICD codes; (ii) an evidence span and a single ICD code, which can be formulated as: 
+
+min 
+
+> θ
+
+h
+
+LSFT 
+
+ fθ(x), (E, C ) + LSFT 
+
+ fθ(e), c i
+
+,
+
+(2) where E denotes evidence spans supporting anno-tated ICD codes C, e denotes an evidence span with corresponding ICD code c. The former forces the LLM to extract evidence before assigning codes, enhancing interpretability , while the latter con-sists of short evidence spans that are easy to ac-quire, which naturally address issues of limited 
+
+code coverage and training efficiency .Defining (e, c ) as an evidence-code pair, 
+
+(e, c ) ∼ D , (3) where D is a multi-source knowledge base. To ensure full ICD code coverage, we construct D by integrating three tiers of evidence-code pairs: gold ,
+
+silver , and synthetic , as: 
+
+D = Dgold ∪ D silver ∪ D syn , (4) in which Dgold consists of scarce, authoritative evidence-code pairs from official ICD resources. 
+
+Dsilver is mined from public datasets, yielding a larger collection of evidence-code pairs with broader coverage. For the remaining unseen codes, we construct Dsyn by synthesizing evidence via LLM, thereby completing coverage over the entire ICD code set. Below, we will describe the details of the mixed training strategy for Eq. 2, and the code-centric data expansion strategy for Eq. 4. 3## Evidence    
+
+> -Evidence1
+> -Evidence2
+> -[Unseen Evidence3]
+> ……
+> ## ICD Codes
+> Code 1
+> Code 2
+> [Unseen Code 3]
+> ……
+
+## Mixed Training Inference 
+
+Document -level Data  
+
+> ## Evidence
+> [Evidence 1]
+> [Evidence 2]
+> ......
+> ## ICD Codes
+> [Code1]
+> [Code2]
+> ......
+
+Limited 
+
+Scalable Unseen 
+
+Document     
+
+> Chief Complaint: S/P
+> MVC Right leg and
+> chest pain
+> HISTORY OF PRESENT
+> ILLNESS: …a high -speed
+> MVC. ….Tobacco: Smokes 1
+> pack…
+> ## Evidence
+> <Evidence1>
+> ## Evidence
+> <Evidence3>
+> ## ICD Code
+> <Evidence1>
+> ## ICD Code
+> <Code3>
+
+## Infer 
+
+## …
+
+## …
+
+> Adult … high -
+> speed motor
+> vehicle collision
+> … acute right
+> lower extremity
+
+(3) Synthetic Pairs                 
+
+> “Given <Code A>, the evidence of its
+> neighbor <Code B> is …,please infer
+> the evidence for <Code A> ”
+
+(1) Gold Pairs 
+
+Code -Centric Data Expansion 
+
+(2) Silver Pairs   
+
+> “Given <Code>, please find the evidence.”
+
+Knowledge Base Public  
+
+> Dataset
+
+Clinical Text + Code Labels 
+
+Span -level Data          
+
+> ## Evidence
+> <Evidence3> ## ICD Code
+> <Code3>
+> ## Evidence
+> <Evidence4> ## ICD Code
+> <Code4>
+> ## Evidence
+> <Evidence5> ## ICD Code
+> <Code5>
+
+## SFT 
+
+## … …Figure 2: Overview of Code-Centric Learning framework. Under mixed training, document-level data enables the LLM to aggregate evidence from the full context and assign multiple ICD codes, while span-level data provides LLM with code-specific knowledge. Code-centric data expansion leverages LLMs to extract and infer evidence spans for each code from diverse knowledge sources, addressing codes not present in documents. 
+
+3.2 Mixed Training 
+
+Mixed training combines document-level supervi-sion to learn evidence aggregation under full clini-cal context with span-level supervision for scalable ICD code knowledge injection. 
+
+Document-level data refers to medical docu-ments annotated with both ICD codes and support-ing evidence. This type of data is very hard to ob-tain, and therefore extremely scarce and valuable. To our knowledge, MDACE (Cheng et al., 2023) is the only available public dataset that contains such kind of data. For each clinical document, we first extract the human-annotated evidence spans, preserving their original order in the document. We then order the ICD codes accordingly, and augment them with their textual descriptions from the ICD-10 Tabular List. Finally, we convert text, evidence and codes into instruction-tuning samples using a unified prompt template (Appendix F). Note that evidence extraction and code assignment are per-formed jointly within a single generation process, rather than through staged or multi-step pipelines. 
+
+Span-level data refers to evidence–code pairs, where the model takes an evidence span as input, and predicts the corresponding ICD code. Since ev-idence spans are much shorter than full documents, it enables efficient training. Such evidence–code pairs can be obtained from various sources. They may originate from human-curated resources or be automatically extracted by LLMs from public ICD coding datasets. Sec-tion 3.3 describes how we systematically expand these pairs to increase code coverage. 
+
+Training and inference. We fine-tune the LLM on mixed document-level and span-level data, un-der a standard autoregressive objective: 
+
+min 
+
+θ LSFT (θ) = 
+
+NX
+
+i=1 
+
+TiX
+
+t=1 
+
+− log pθ
+
+ y(i)
+
+t | x(i), y (i)
+
+<t 
+
+,
+
+(5) where N denotes the number of training sam-ples, x(i) denotes the i-th document or span along with the instruction prompt, and y(i) denotes the 
+
+i-th ground truth consisting of Ti tokens. The document-level data teaches the model to aggre-gate evidence across the full clinical context and predict ICD codes, while the code-centric data in-jects code-specific knowledge beyond the limited coverage of document-level data. At inference time, we use the same instruction as in document-level training examples, prompting the model to identify relevant evidence spans be-fore assigning ICD codes while leveraging the code knowledge learned during code-centric learning. 43.3 Code-centric Data Expansion 
+
+To ensure full code coverage, we construct a multi-tier span-level code knowledge base, composed of gold, silver and synthetic evidence-code pairs. 
+
+Gold pairs from human knowledge bases .In clinical practice, human coders routinely con-sult the Alphabetic Index and the Tabular List when assigning ICD codes. These resources pro-vide high-quality code knowledge, but had been overlooked by previous works. CLH (Motzfeldt et al., 2025) first incorporated these resources for retrieval-augmented generation. In this work, we treat Alphabetic Index terms paired with their de-fault ICD codes as gold evidence-code pairs. 
+
+Silver pairs from noisy labeled datasets . Al-though most ICD datasets provide only code labels without explicit evidence annotations, they can be utilized to extract evidence-code pairs. We con-struct silver evidence-code pairs via a two-stage LLM pipeline using Llama-3.1-70B: document-level evidence extraction followed by code-level evidence consolidation. In the first stage, given a clinical note and one of its assigned ICD codes, the LLM extracts a textual span that plausibly supports the code. We aggregate extracted spans across the dataset for each ICD code, retain unique evidence phrases, and record their frequencies. 
+
+Ec = { e | e = fLLM (x, c ), x ∈ X c }, (6) where Xc denotes the set of clinical documents labeled with code c, fLLM (x, c ) extracts support-ing evidence spans from document x for code c,yielding a large evidence set Ec. gLLM then summa-rizes Ec into a small set of representative (typical) evidence expressions ˜Ec.In the second stage, given an ICD code and its frequency-ranked evidence candidates, the LLM infers a small set of representative evidence ex-pressions for that code, forming the silver dataset 
+
+Dsilver . ˜Ec = fLLM 
+
+ c, Ec
+
+, (7) where fLLM denotes the LLM, c denotes the target ICD code, and E denotes the evidence candidates. 
+
+Synthetic pairs inferred by LLMs. Despite combining gold and silver pairs, many ICD codes remain uncovered in public datasets. To achieve full code coverage, we synthesize evidence-code pairs using GPT-5.1 guided by ICD knowledge. For each uncovered target ICD code, we retrieve its nearest neighbor code in the ICD-10-CM hier-archy and related information of this nearest code. Conditioned on this information, the LLM infers evidence that plausibly support the target code, forming the synthetic dataset Dsyn :
+
+e = fLLM 
+
+ c, c ∗, K(c∗), (8) where c denotes the target ICD code, c∗ denotes its nearest ICD code, and K(c∗) represents the associ-ated knowledge of c∗, i.e. potential evidence from gold pairs and silver pairs. These synthetic pairs complement gold and silver data, resulting in a code knowledge base with complete ICD coverage. Finally, we mix these gold, silver and synthetic evidence-code pairs, and convert them into a large, high-quality instruction-tuning dataset. 
+
+4 Experiments 
+
+4.1 Datasets MIMIC-IV (Johnson et al., 2023) is currently the largest publicly available dataset annotated with ICD-10 codes. However, many codes are not supported by the available text (Cheng et al., 2023; Edin et al., 2023; Yuan et al., 2025), making MIMIC-IV unsuitable as a reliable benchmark. We therefore treat MIMIC as a large but noise-prone training dataset, and rely on high-quality external benchmarks to measure true ICD coding perfor-mance. 
+
+MDACE (Cheng et al., 2023) is an expert-annotated subset of MIMIC-III (Johnson et al., 2016), containing gold-standard evidence span an-notations, which has become a popular ICD coding benchmark due to its high-quality annotations. 
+
+ACI-Bench (Yim et al., 2023) is a synthetic dataset of clinical notes, based on which Yuan et al. (2025) constructs a new double expert-annotated ICD-10-CM coding benchmark. 
+
+4.2 Experimental Setup 
+
+Our method extracts silver pairs from the MIMIC-IV training set, while baseline methods are fine-tuned on the same training set. Evaluation is con-ducted on MDACE and ACI-Bench, with ACI-Bench serving as a more out-of-distribution bench-mark to assess generalization. For discriminative models, we use the validated-optimal threshold. For generative models, we ex-tract the alphanumeric code component (letter fol-lowed by digits) from the LLM’s text output. We fil-ter out codes not present in the test-set label space. 5Method Backbone MDACE ACI-Bench Micro-F1 Macro-F1 Recall Precision Micro-F1 Macro-F1 Recall Precision                                                                                                                                                          
+
+> PLM-ICD (Huang et al., 2022) RoBERTa (120M) 50.6 26.5 66.6 40.8 39.3 18.3 58.1 39.6 PLM-CA (Edin et al., 2024) RoBERTa (120M) 50.0 25.8 65.3 40.4 25.1 11.1 64.8 15.5 GKI-ICD (Zhang et al., 2025) RoBERTa (120M) 50.4 26.3 64.3 41.0 47.8 25.8 62.0 39.0 CoT (Wei et al., 2022) GPT-4.1 57.0 35.8 59.7 54.4 61.9 48.1 67.6 57.0 CoT-SC (Wang et al.) GPT-4.1 57.1 36.2 56.1 58.2 61.4 47.4 67.6 56.2 MAC (Li et al., 2025) GPT-4.1 48.1 31.0 61.2 39.7 51.5 45.6 69.6 40.9 CLH (Motzfeldt et al., 2025) Qwen3-235B-2507 56.3 43.7 55.2 57.6 67.1 47.7 66.1 68.1 CoT (Wei et al., 2022) Qwen3-4B-2507 21.8 5.1 14.2 47.6 45.0 11.5 34.8 63.7 SFT (Yuan et al., 2025) Qwen3-4B-2507 56.6 29.0 50.1 65.1 64.2 39.1 57.1 73.4 CLH (Motzfeldt et al., 2025) Qwen3-4B-2507 39.2 25.8 27.4 68.6 62.3 36.5 52.7 76.3 CCL (Ours) Qwen3-4B-2507 57.7 31.4 50.6 67.5 64.5 43.1 62.8 66.2
+> CCL (Ours)+ human evidence Qwen3-4B-2507 77.4 53.2 71.7 84.0 ----CoT (Wei et al., 2022) Llama3.1-8B 26.5 9.1 20.2 38.9 43.4 12.4 36.4 53.6 SFT (Yuan et al., 2025) Llama3.1-8B 57.4 34.5 60.1 55.0 63.4 38.9 57.9 70.1
+> CLH (Motzfeldt et al., 2025) Llama3.1-8B 40.0 29.1 41.2 38.7 47.5 36.3 60.4 39.2
+> CCL (Ours) Llama3.1-8B 59.3 35.2 56.4 62.5 65.8 47.1 64.8 67.0
+> CCL (Ours) + human evidence Llama3.1-8B 78.0 54.8 73.5 83.0 ----
+
+Table 1: Performance comparison on in domain and out of domain benchmarks. Our method substantially outperforms methods based on the same LLM backbone. We also include methods based on close-ended or large-scale LLMs for reference. w/ human evidence indicates that, during inference, human-annotated evidence is added to the input, replacing model-predicted evidence. 
+
+Method Data Time/Epoch Total 
+
+(hr) (hr) SFT 100k Docs 70 210 CCL(Ours) 200 Docs E + 150k Spans 4 40 
+
+Table 2: Training time of Llama3.1-8B on a single H20 GPU under traditional SFT and CCL. 100k Docs refers to documents from the MIMIC-IV dataset with only ICD codes, while 200 Docs E refers to documents from the MDACE dataset with manual evidence annotations. 
+
+4.3 Comparison with SOTA methods 
+
+We compare our method against several baselines. For discriminative methods , we include PLM-ICD (Huang et al., 2022), PLM-CA (Edin et al., 2024) and GKI-ICD (Zhang et al., 2025), fine-tuing them on MIMIC-IV and find the optimal thresh-old. For generative methods , we include Chain-of-Thought (CoT) (Wei et al., 2022), CoT-SC (Wang et al.), MAC (Li et al., 2025), CLH (Motzfeldt et al., 2025), as well as trivial SFT (Yuan et al., 2025) on MIMIC-IV. 
+
+Accuracy. Table 1 demonstrates that our proposed (CCL) delivers strong performance across different LLM backbones on both MDACE and ACI-Bench. When applied to the same backbone model, CCL consistently achieves significant gains over both CoT and CLH, an agentic method specifically de-signed for ICD coding. Notably, CCL also sur-passes large-scale SFT despite relying on compara-tively smaller supervised data. For example, with Llama3.1-8B, CCL improves micro-F1 and macro-F1 by 2.4% and 8.2%, respectively, on ACI-Bench. 
+
+Human-AI collaboration. Unlike previous meth-ods, our paradigm explicitly extracts evidence be-fore code assignment, enabling human-in-the-loop ICD coding by allowing clinicians to review and re-vise LLM-generated evidence. As shown in Table 1, replacing model-generated evidence with human-annotated evidence yields substantial performance improvements, raising Micro-F1 from 59.3 to 78.0 and Macro-F1 from 35.2 to 54.8, highlighting the interpretability, controllability, and practical appli-cability of our approach. 
+
+Training Efficiency. Traditional ICD coding mod-els rely on large-scale corpora of long clinical notes (e.g., 1,500 words on average in MIMIC-IV). When the backbone shifts from CNNs or BERTs to mod-ern LLMs, training over such long documents be-comes computationally prohibitive. In contrast, CCL shifts supervision to much shorter span-level inputs, substantially reducing computational com-plexity. As shown in Table 2, CCL achieves a 5.2 ×
+
+reduction in total training time. Although it needs more epochs to fit 200 high-quality documents, its drastically lower per-epoch cost (4 vs. 70 hours) leads to significantly faster overall training. 
+
+4.4 Ablation Study 
+
+We present ablation study step-by-step, shown in Table 3, highlighting the effectiveness of code-centric learning and code-centric data expansion. 
+
+Zero-shot vs. finetuning. Comparing Line 1 and Line 2 shows that, even with a small amount of 664.5%            
+
+> 35.5%
+> 290
+> Codes
+> (a) Codes in MDACE Test Set
+> Seen Unseen Seen Unseen
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> F1 (%)  62.0
+> 8.8
+> 66.8
+> +4.8
+> 50.0
+> +41.2
+> (b) Effectiveness on Unseen Codes
+> Before CCL
+> After CCL
+> 40.0%
+> 41.2%
+> 18.8%
+> 160
+> Unseen Codes
+> (c) Expansion Strategy for Unseen Codes
+> Gold Silver Synthetic Gold Silver Synthetic
+> 0
+> 20
+> 40
+> 60
+> 80
+> F1 (%)
+> 2.8 8.0 12.5
+> 52.1
+> +49.3 54.9
+> +46.9
+> 39.0
+> +26.5
+> (d) Effectiveness of CCL Data
+> Before CCL
+> After CCL
+
+Figure 3: (a) Test-set codes are partitioned into seen codes and unseen codes (whether occur in the document-level training data or not). (b) Sources of spans constructed for unseen codes, with proportions of three strategies. (c) Our method improves coding accuracy on unseen codes using spans only, without additional documents. (d) Each strategy contributes to improved coding accuracy.                                         
+
+> #Doc.-level Span-level MDACE Code Evi. Gold Sil. & Syn. Mi.-F1 Ma.-F1 Rec. Pre.
+> 126.5 9.1 20.2 38.9 2✓42.3 17.0 37.8 48.2 3✓✓49.7 21.4 47.0 52.8 4✓✓✓53.4 25.2 57.2 50.1 5✓✓✓✓59.3 35.2 56.4 62.5
+
+Table 3: Ablation study using Llama-3.1-8B as the backbone model. Evi.: Evidence. Sil.: Silver. Syn.: Synthetic. Mi.-F1/Ma.-F1: Micro-F1/Macro-F1. Rec.:Recall. Pre.: Precision. 
+
+fine-tuning data, i.e. MDACE training set, LLMs achieve clear performance gains over zero-shot CoT method, demonstrating that fine-tuning is nec-essary and effective for ICD coding. 
+
+Incorporation of evidence. Comparing Line 2 and Line 3, under the same training data size, we ob-serve that augmenting the ground truth with human-annotated evidence spans (i.e., training the LLM to first extract supporting evidence before predict-ing codes) yields greater performance gains than fine-tuning on code labels alone. 
+
+Effectiveness of span-level data. Comparing Line 3 and Line 4, using only gold pairs from Alpha-betic Index yields a clear improvement in coding performance. This finding suggests that scaling span-level data can effectively boost coding perfor-mance even when document-level data is scarce. 
+
+Expanding span-level data via LLMs. Further-more, we extract or synthesize code-specific ev-idence spans, i.e. silver and synthetic pairs, to achieve full code coverage, which leads to further gains, proving that, LLMs have the ability to scale ICD coding data. 
+
+4.5 Analysis Unseen codes. As illustrated in Figure 3 (a), we categorize the codes in the test set into two groups: (1) seen codes covered by the document-level data, where the model have learned to assign these codes in the complete context, and (2) unseen codes that only occur in span-level data. We compare the dif-ferent coding performance before and after adding span-level data. The results demonstrate that CCL brings a huge accuracy improvement on unseen codes, as shown in Figure 3 (b), proving that: 
+
+Unseen codes can be learned on span-level data, without full context. 
+
+To investigate the effect of different CCL data sources, we first analyze how unseen codes are introduced through distinct augmentation mech-anisms (Figure 3(c)), and then quantify the per-formance gains attributable to each augmentation strategy. As shown in Figure 3(d), all three data sources consistently improve coding performance on the newly introduced unseen codes. In particu-lar, both the silver data and the synthetic data yield substantial performance improvements. Despite their synthetic origin, these data sources effectively expand code coverage beyond official guidelines and public datasets. This suggests that the proposed method offers a viable approach to mitigating the code coverage limitations observed in prior works. 
+
+Interpretability. Figure 4 presents a representative example from the test set. Unlike code-only meth-ods that achieve high accuracy but cannot generate supporting evidence, and evidence-based methods whose accuracy is constrained by limited annotated data, our approach is able to generate interpretable evidence while maintaining accurate ICD coding. We also perform quantitative evaluation on MDACE, where human-annotated evidence is avail-able. We prompt GPT-5.1 to extract the overlapping evidence spans between the predicted evidence and 7CCL (Ours) Evidence -based Methods Code -only Methods Ground Truth                                     
+
+> Residual Pituitary Adenoma
+> Diabetes
+> Hypokalemia
+> Glaucoma
+> Cataract
+> Hypertension
+> GERD
+> MS
+> Hypertension
+> GERD
+> Glaucoma
+> Cataract
+> Hypokalemia
+> pituitary adenoma
+> ectopic pregnancy
+> tubal ligation
+> appendectomy,
+> Parathyroidectomy
+> N/A
+> Residual Pituitary Adenoma
+> Diabetes
+> hypokalemia
+> glaucoma
+> cataract
+> hypertension
+> GERD
+> D35.2: Benign neoplasm…
+> E11.9: Type 2 diabetes mellitus …
+> E87.6: Hypokalemia
+> H40.9: Unspecified glaucoma
+> H26.9: Unspecified cataract
+> I10: Essential hypertension
+> K21.9: Gastro -esophageal reflux …
+> G35 -Multiple sclerosis
+> I10 -Essential hypertension
+> K21.9 -Gastro -esophageal reflux…
+> H40.9 –glaucoma
+> E87.3 –Hypokalemia
+> E22.0 -Pituitary adenoma
+> H26.8 -Cataract
+> Z33.1 -History of ectopic pregnancy
+> Z98.1 -Tubal ligation status
+> Z90.89 -Acquired absence of other organs
+> Z90.49 -Acquired absence of thyroid gland
+> D35.2 -Benign neoplasm …
+> E11.9 -Type 2 diabetes mellitus …
+> H40.9 –Glaucoma
+> I10 -Essential hypertension
+> K21.9 -Gastro -esophageal reflux disease
+> without esophagitis
+> D35.2: Benign neoplasm …
+> E11.9: Type 2 diabetes mellitus …
+> E87.6: Hypokalemia
+> H40.9: Glaucoma
+> H26.9: Cataract
+> I10: Essential hypertension
+> K21.9: Gastro -esophageal reflux …
+> No Evidence Provided Evidence Provided
+> Evidence ICD Codes
+
+Figure 4: An example from the test set. Code-only methods cannot generate evidence, making the results difficult for humans to evaluate and revise. Evidence-based methods suffer from limited evidence-annotated data for fine-tuing, and therefore achieve lower accuracy. Our method balances interpretability and accuracy, producing evidence and ICD codes that are highly consistent with human annotations. 
+
+Method Evi. Recall Evi. F1 
+
+100k Docs 0 0200 Docs E 70.0 66.0 200 Docs E + 150k Spans (Ours) 74.0 67.0 
+
+Table 4: Evaluation of model-predicted evidence on MDACE. While evidence-annotated documents are es-sential, span-level data can further boost interpretability. 
+
+the human-annotated evidence, and compute Re-call and F1-Score based on the number of matched spans. As shown in Table 4, models trained on MDACE exhibit strong interpretability, capturing human-consistent evidence spans that cannot be ob-tained by models fine-tuned on MIMIC-IV. More importantly, span-level data improves evidence ex-traction, especially Recall, suggesting that: 
+
+Span-level data improves document-level ev-idence extraction. 
+
+5 Discussion 
+
+Traditional ICD coding models, following Mullen-bach et al. (2018), typically formulate the task as multi-label classification. This paradigm assumes label independence, which simplifies optimization, but struggles to capture the complex dependencies in real-world ICD coding. In contrast, CCL models ICD coding as evidence-driven reasoning, and re-tains the key strength of label-attention: learning a code from a focused evidence span is much easier than learning from a full clinical document con-taining multiple codes and substantial noise. More importantly, CCL enables more flexible reasoning over evidence. Instead of assigning each code in-dependently, the model aggregates evidence across the entire clinical context and performs joint rea-soning over multiple spans, which aligns with how ICD codes are assigned in practice. Span-level data also provides a flexible mecha-nism for modeling relationships between evidence and codes. Such supervision can potentially cap-ture diverse patterns, ranging from direct mappings to more complex contextual interactions. For ex-ample, a span may support a code in isolation (Evidence A → Code A ), while in combination with additional context it may indicate a different code ( Evidence A + Evidence B → Code B ). By observing such patterns in span-level data, the LLM can integrate evidence from the global con-text and infer appropriate code assignments. 
+
+6 Conclusion 
+
+In this paper, we identify a key finding: span-level learning can effectively boost document-level ICD coding. Based on this observation, we propose a new LLM fine-tuning paradigm for ICD cod-ing, termed code-centric learning. This training paradigm incorporates mixed training and code-centric data expansion, and simultaneously ad-dresses three long-standing challenges in this do-main: limited code coverage, lack of interpretabil-ity and inefficient training on long documents. Our paradigm is efficient, scalable and better suited for real-world deployment in collaboration with human coders. We hope that the community will adopt this new paradigm and advance the long-standing goal of fully automated ICD coding. 8Limitations 
+
+This paper proposes a viable and promising fine-tuning paradigm for LLM-based ICD coding. How-ever, several limitations remain regarding the con-struction of span-level data. First, the gold pairs are relatively straightfor-ward, primarily Alphabetic Index terms and Tabu-lar List descriptions. They do not yet incorporate complex coding logic. Second, the silver and syn-thetic pairs are generated through heuristic infer-ence instead of end-to-end optimization. Although we have demonstrated their empirical effectiveness, they can be further refined. In future work, we will: (1) integrate advanced and complex coding knowledge from official cod-ing guidelines into the span-level training data, and (2) enhance the quality of the synthesized knowl-edge base through iterative refinement. 
+
+Acknowledgment 
+
+This work is supported by the Natural Science Foundation of China under Grants 62271465 and 62502490; the National Key R&D Program of China under Grant 2025YFC3408300; the Natu-ral Science Foundation of Jiangsu Province under Grant BK20250496; the Suzhou Basic Research Program under Grant SYG202338; Jiangsu Fund-ing Program for Excellent Postdoctoral Talent, and the China Postdoctoral Science Foundation under Grant 2024M763178. 
+
+Ethics Statement 
+
+We use publicly available clinical datasets. We are not aware of any ethics issues. 
+
+References 
+
+Krishanu Das Baksi, Elijah Soba, John J Higgins, Ravi Saini, Jaden Wood, Jane Cook, Jack I Scott, Nirmala Pudota, Tim Weninger, Edward Bowen, and Sanmi-tra Bhattacharya. 2025. MedCodER: A generative AI assistant for medical coding. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Lin-guistics: Human Language Technologies (Volume 3: Industry Track) , pages 449–459, Albuquerque, New Mexico. Association for Computational Linguistics. Joseph Boyle, Antanas Kascenas, Pat Lok, Maria Li-akata, and Alison O’Neil. 2023. Automated clini-cal coding using off-the-shelf large language models. In Deep Generative Models for Health Workshop NeurIPS 2023 .Elaine M Burns, E Rigby, R Mamidanna, A Bottle, P Aylin, P Ziprin, and OD Faiz. 2012. Systematic review of discharge coding accuracy. Journal of public health , 34(1):138–148. Hua Cheng, Rana Jafari, April Russell, Russell Klopfer, Edmond Lu, Benjamin Striner, and Matthew R Gorm-ley. 2023. Mdace: Mimic documents annotated with code evidence. In Proceedings of the 61st Annual Meeting of the Association for Computational Lin-guistics (Volume 1: Long Papers) , pages 7534–7550. James C Douglas, Yidong Gan, Ben Hachey, and Jonathan K Kummerfeld. 2025. Less is more: Ex-plainable and efficient icd code prediction with clini-cal entities. In Proceedings of the 63rd Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 30835–30847. Joakim Edin, Alexander Junge, Jakob D Havtorn, Lasse Borgholt, Maria Maistro, Tuukka Ruotsalo, and Lars Maaløe. 2023. Automated medical coding on mimic-iii and mimic-iv: a critical review and replicability study. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval , pages 2572–2582. Joakim Edin, Maria Maistro, Lars Maaløe, Lasse Borgholt, Jakob Drachmann Havtorn, and Tuukka Ruotsalo. 2024. An unsupervised approach to achieve supervised-level explainability in healthcare records. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing ,pages 4869–4890, Miami, Florida, USA. Association for Computational Linguistics. Yidong Gan, Maciej Rybinski, Ben Hachey, and Jonathan K. Kummerfeld. 2025. Aligning AI re-search with the needs of clinical coding workflows: Eight recommendations based on US data analysis and critical review. In Proceedings of the 63rd An-nual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 909–922, Vienna, Austria. Association for Computational Lin-guistics. Xueren Ge, Abhishek Satpathy, Ronald Dean Williams, John Stankovic, and Homa Alemzadeh. 2024. DKEC: Domain knowledge enhanced multi-label classification for diagnosis prediction. In Proceed-ings of the 2024 Conference on Empirical Methods in Natural Language Processing , pages 12798–12813, Miami, Florida, USA. Association for Computational Linguistics. Goncalo Gomes, Isabel Coutinho, and Bruno Martins. 2024. Accurate and well-calibrated ICD code as-signment through attention over diverse label embed-dings. In Proceedings of the 18th Conference of the European Chapter of the Association for Computa-tional Linguistics (Volume 1: Long Papers) , pages 2302–2315, St. Julian’s, Malta. Association for Com-putational Linguistics. Jan Horsky, Elizabeth A Drucker, and Harley Z Ramel-son. 2018. Accuracy and completeness of clinical 
+
+9coding using icd-10 for ambulatory visits. In AMIA annual symposium proceedings , volume 2017, page 912. Chao-Wei Huang, Shang-Chi Tsai, and Yun-Nung Chen. 2022. PLM-ICD: Automatic ICD coding with pre-trained language models. In Proceedings of the 4th Clinical Natural Language Processing Workshop ,pages 10–20, Seattle, WA. Association for Computa-tional Linguistics. Alistair EW Johnson, Lucas Bulgarelli, Lu Shen, Alvin Gayles, Ayad Shammout, Steven Horng, Tom J Pol-lard, Sicheng Hao, Benjamin Moody, Brian Gow, et al. 2023. Mimic-iv, a freely accessible electronic health record dataset. Scientific data , 10(1):1. Alistair EW Johnson, Tom J Pollard, Lu Shen, Li-wei H Lehman, Mengling Feng, Mohammad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G Mark. 2016. Mimic-iii, a freely accessi-ble critical care database. Scientific data , 3(1):1–9. Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody Hao Yu, Joseph E. Gonzalez, Hao Zhang, and Ion Stoica. 2023. Effi-cient memory management for large language model serving with pagedattention. In Proceedings of the ACM SIGOPS 29th Symposium on Operating Systems Principles .Rumeng Li, Xun Wang, and Hong Yu. 2025. Improv-ing rare and common icd coding via a multi-agent llm-based approach. In Proceedings of the 34th ACM International Conference on Information and Knowl-edge Management , pages 4945–4949. Junyu Luo, Xiaochen Wang, Jiaqi Wang, Aofei Chang, Yaqing Wang, and Fenglong Ma. 2024. CoRelation: Boosting automatic ICD coding through contextual-ized code relation learning. In Proceedings of the 2024 Joint International Conference on Computa-tional Linguistics, Language Resources and Eval-uation (LREC-COLING 2024) , pages 3997–4007, Torino, Italia. ELRA and ICCL. Andreas Geert Motzfeldt, Joakim Edin, Casper L. Chris-tensen, Christian Hardmeier, Lars Maaløe, and Anna Rogers. 2025. Code like humans: A multi-agent solution for medical coding. In Findings of the Asso-ciation for Computational Linguistics: EMNLP 2025 ,pages 22612–22627, Suzhou, China. Association for Computational Linguistics. James Mullenbach, Sarah Wiegreffe, Jon Duke, Jimeng Sun, and Jacob Eisenstein. 2018. Explainable predic-tion of medical codes from clinical text. In Proceed-ings of the 2018 Conference of the North American Chapter of the Association for Computational Lin-guistics: Human Language Technologies, Volume 1 (Long Papers) , pages 1101–1111, New Orleans, Louisiana. Association for Computational Linguis-tics. Alexandr Nesterov, Andrey Sakhovskiy, Ivan Sviri-dov, Airat Valiev, Vladimir Makharev, Petr Anokhin, Galina Zubkova, and Elena Tutubalina. 2025. RuC-CoD: Towards automated ICD coding in Russian. In Proceedings of the 2025 Conference on Empiri-cal Methods in Natural Language Processing , pages 2558–2585, Suzhou, China. Association for Compu-tational Linguistics. Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc V Le, Ed H Chi, Sharan Narang, Aakanksha Chowd-hery, and Denny Zhou. Self-consistency improves chain of thought reasoning in language models. In 
+
+The Eleventh International Conference on Learning Representations .Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. 2022. Chain-of-thought prompting elicits rea-soning in large language models. Advances in neural information processing systems , 35:24824–24837. John Wu, David Wu, and Jimeng Sun. 2024. Beyond label attention: Transparency in language models for automated medical coding via dictionary learning. In Proceedings of the 2024 Conference on Empiri-cal Methods in Natural Language Processing , pages 8848–8871, Miami, Florida, USA. Association for Computational Linguistics. Wen-wai Yim, Yujuan Fu, Asma Ben Abacha, Neal Snider, Thomas Lin, and Meliha Yetisgen. 2023. Aci-bench: a novel ambient clinical intelligence dataset for benchmarking automatic visit note generation. 
+
+Scientific data , 10(1):586. Moy Yuan, Han-Chin Shing, Mitch Strong, and Chai-tanya Shivade. 2025. Toward reliable clinical coding with language models: Verification and lightweight adaptation. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Process-ing: Industry Track , pages 173–184, Suzhou (China). Association for Computational Linguistics. Zheng Yuan, Chuanqi Tan, and Songfang Huang. 2022. Code synonyms do matter: Multiple synonyms matching network for automatic ICD coding. In 
+
+Proceedings of the 60th Annual Meeting of the As-sociation for Computational Linguistics (Volume 2: Short Papers) , pages 808–814, Dublin, Ireland. As-sociation for Computational Linguistics. Xu Zhang, Kun Zhang, Wenxin Ma, Rongsheng Wang, Chenxu Wu, Yingtai Li, and S Kevin Zhou. 2025. A general knowledge injection framework for ICD coding. In Findings of the Association for Compu-tational Linguistics: ACL 2025 , pages 7180–7189, Vienna, Austria. Association for Computational Lin-guistics. Yaowei Zheng, Richong Zhang, Junhao Zhang, Yanhan Ye, Zheyan Luo, Zhangchi Feng, and Yongqiang Ma. 2024. Llamafactory: Unified efficient fine-tuning of 100+ language models. In Proceedings of the 62nd Annual Meeting of the Association for Compu-tational Linguistics (Volume 3: System Demonstra-tions) , Bangkok, Thailand. Association for Computa-tional Linguistics. 
+
+10 Appendix A ICD Coding Background 
+
+A.1 ICD coding task. 
+
+The ICD Coding task recognizes diseases, symp-toms, conditions and procedures in a medical doc-ument, including discharge summaries, progress notes, and operative reports, and assign standard-ized ICD (International Classification of Diseases) codes to them. This task plays a critical role in healthcare administration, clinical statistics, reim-bursement systems, and medical research. From a computational perspective, ICD Coding is commonly formulated as a text-to-code predic-tion problem. Given a patient-level clinical docu-ment, the model is required to output a set of ICD codes. The task is characterized by a large label space, hierarchical code structures, and severe la-bel imbalance, which together make ICD Coding a challenging and distinctive problem in clinical natural language processing. 
+
+A.2 Distinction from Related Tasks 
+
+Although ICD Coding seems to share similarities with several well-studied tasks, its objectives and constraints differ substantially from those tasks, which may lead to confusion. 
+
+Difference from Diagnosis . Diagnosis aims to infer or determine what diseases a patient has, often involving clinical reasoning, uncertainty man-agement, and causal inference. In contrast, ICD Coding does not seek to generate new diagnos-tic conclusions. Instead, it focuses on assigning standardized codes based solely on diagnoses and clinical facts that have already been documented by healthcare professionals. Therefore, ICD coding should be viewed as an information standard-ization task rather than a diagnostic or decision-making task .
+
+Difference from Multi-label Text Classifica-tion . In conventional multi-label settings, labels are typically assumed to be conditionally independent given the input text, and prediction is treated as a parallel, order-agnostic decision process. In con-trast, ICD Coding involves strong dependencies among codes. In real-world coding practice, hu-man coders do not assign all codes independently or simultaneously. Instead, they follow official coding guidelines to sequentially identify the prin-cipal diagnosis, secondary diagnoses, supplemen-tary conditions, and procedures, with each step constraining and informing subsequent coding de-cisions. This process is inherently procedural and generative, rather than purely discriminative. 
+
+Difference from Information Extraction. ICD coding can be viewed as evidence extraction fol-lowed by code normalization, whereas NER and RE involve evidence extraction followed by type classification. Accordingly, we observe two key dif-ferences. First, the evidence supporting an ICD code may be distributed across multiple parts of a document, while NER and RE typically operate on locally scoped contexts. Second, ICD coding involves a substantially larger label space with thousands of standardized codes, compared to the relatively small set of entity or relation types in NER and RE. 
+
+A.3 Authoritative Resources in ICD Coding Alphabetic Index . The Alphabetic Index maps various synonyms, abbreviations, and lexical vari-ants to candidate ICD codes, thereby bridging the gap between natural language expressions and stan-dardized code identifiers. Importantly, the codes suggested by the Alphabetic Index are not defini-tive; rather, they represent preliminary references that must be further validated. 
+
+Tabular List . The Tabular List is the author-itative, structured listing of all valid ICD codes, organized by chapters, categories, subcategories, and extensions. Each code entry in the Tabular List is accompanied by a formal definition and may include additional annotations such as inclusion terms, exclusion notes, code-first instructions, and combination code indicators. Coders are required to confirm all codes suggested by the Alphabetic Index against the Tabular List before assignment. 
+
+Coding Guidelines . The Coding Guidelines pro-vide a comprehensive set of rules and conventions that govern how ICD codes should be applied in practice. Guidelines often specify conditional logic (e.g., “code first,” “use additional code,” or “do not code separately”) and clarify how multiple diag-noses or clinical conditions should be represented in a single episode. In practical ICD coding workflows, these re-sources are used in a complementary and sequential manner. The Alphabetic Index supports initial term-to-code lookup, the Tabular List determines valid and precise code selection, and the Coding Guide-lines regulate how codes are combined, ordered, and reported. 11 B Datasets 
+
+To provide a clear reference for the readers, we present the detailed statistics of each dataset in Table 5, including the number of documents in each split and the total count of unique ICD-10 codes in each dataset. 
+
+Dataset Train Dev Test Code 
+
+MIMIC-IV 89,098 13,378 19,802 5,803 MDACE 181 60 61 904 ACI-Bench 67 20 120 225 
+
+> Table 5: Statistics of each dataset.
+
+C Scaling Law 
+
+We apply CCL to models of different sizes, includ-ing Llama and Qwen families, to demonstrate the existence of scaling law. As shown in Table 6, per-formance increases with model size within each family. Across comparable sizes, Llama consis-tently outperforms Qwen, likely due to its stronger English-centric pretraining. Backbone Micro-F1 Macro-F1 Recall Precision Llama-3.2-1B 40.8 16.0 35.2 48.6 Llama-3.2-3B 53.2 26.0 47.4 60.6 Qwen2.5-0.5B 31.8 10.6 24.9 44.2 Qwen2.5-1.5B 50.6 24.1 45.0 57.8 Qwen2.5-7B 54.2 27.4 48.6 61.2 
+
+> Table 6: Scaling law of CCL framework on Llama and Qwen family on MDACE Dataset.
+
+D Implementation Details 
+
+For LLM inference, we use vLLM (Kwon et al., 2023). For SFT, we use LLaMA-Factory (Zheng et al., 2024) with LoRA (rank = 8), a batch size of 16, a learning rate of 1e-4, and a cosine scheduler with a warmup ratio of 0.1. All the experiments can be implemented on a single H20 GPU with 96GB of VRAM. 
+
+E Human Evaluation of Synthetic Data Quality 
+
+To further evaluate the quality of the synthetic ev-idence spans, we randomly sample 100 synthetic pairs and invite two physicians to assess them using the following criteria: • Support : whether the evidence span supports the assigned ICD code (0: not supportive, 1: partially supportive, 2: fully supportive). • Clinical realism : whether the evidence reflects realistic clinical language and reasoning (0: unrealistic, 1: somewhat realistic, 2: highly realistic). • Redundancy : whether multiple spans express redundant information for the same code (0: high redundancy, 1: partial redundancy, 2: no redundancy). • Diversity : diversity of clinical scenarios rep-resented by the evidence spans (0: single sce-nario, 1: multiple scenarios, 2: rich diversity). Table 7 reports the percentage of samples as-signed to each score. Encouragingly, most syn-thetic evidence spans strongly support their as-signed codes. Besides, the diversity score is high, suggesting that the synthetic data covers a wide range of clinical scenarios. However, clinical real-ism and redundancy remain imperfect, indicating that the span-level knowledge base should be fur-ther refined in future work, or replaced by human-annotated spans. Metric 0 1 2Support 2.9 19.6 77.5 Clinical realism 42.2 28.4 29.4 Redundancy 62.5 25.0 12.5 Diversity 0.0 25.0 75.0 
+
+> Table 7: Human evaluation results (%) for synthetic evidence–code pairs.
+
+F Prompts 
+
+F.1 Prompts for Code-centric Learning Framework 
+
+In this section, we present all the prompts used in our Code-Centric Learning framework, which consists of Mixed Training and Code-centric Data Expansion. Mixed Training relies on two types of data for-mats: (1) document-level evidence-based ICD cod-ing data, and (2) span-level data designed for code-centric learning. We show the prompts of these two different tasks in Table 8. 12 Table 8: Prompt templates used for Mixed Training      
+
+> Data Type Prompt Template
+> Document-level ICD coding Data Task: You are a clinical coding assistant. Your task is to analyze the provided clinical note, first extract all relevant clinical evidences that supports diagnostic coding, and then output the corresponding ICD−10−CM codes. Example ### Clinical Note: ... ### Evidence CAD COPD Anemia ### ICD−10−CM Codes I25.10 − Atherosclerotic heart disease of native coronary artery without angina pectoris J44.9 − Chronic obstructive pulmonary disease, unspecified D62 − Acute posthemorrhagic anemia −−− ### Clinical Note: \{text\} Span-level Code-Centric Learn-ing Data ### Evidence: \{evidence\} ### ICD−10−CM Codes:
+
+For Code-centric Data Expansion, we show the prompts used to construct Silver Pairs and Syn-thetic Pairs, as Gold Pairs are primarily obtained from the Official Alphabetic Index. To construct Silver Pairs, we employ LLaMA 3.1-70B to mine all supporting evidence from each MIMIC-IV sample, followed by deduplication and refinement of the evidence associated with each ICD code. We show the used prompts in Table 10. For Synthetic Pairs, we use GPT-5.1 to infer un-seen ICD codes based on existing Gold and Silver Pairs. We show the prompts in Table 9. 
+
+F.2 Prompts for Baselines 
+
+In this section, we present all the prompts used by the generative baselines, as shown in Table 11. For Chain-of-Thought (CoT), we adopt the stan-dard CoT prompting strategy. For CoT-SC, we use the same prompt as CoT, but retain only those ICD codes that appear in at least three out of five reasoning runs. For MAC, we make minor modifications to the original prompt to adapt it from ICD-9 to ICD-10, as the original method was evaluated primarily on ICD-9. For CLH, we use the official open-source imple-mentation and apply it directly to our dataset. For the SFT on MIMICIV and Code-only ICD Coding setting on MDACE in the ablation study, we use the same prompt, following Yuan et al. (2025) to add descriptions after ICD codes. 
+
+F.3 Prompts for Interpretability Evaluation 
+
+To perform quantitative evaluation on model-predicted evidence, we prompt GPT-5.1 to extract the matched spans between human-annotated ev-idence and model-predicted evidence, count the number of each set, and then compute the metrics. We present the prompt used in Table 12. 13 Table 9: Prompt templates used for Code-Centric Data Expansion (Silver Pairs) 
+
+Task Prompt Template 
+
+Evidence Extraion You are a professional ICD−10−CM coder. Your task is to extract the *verbatim minimal text spans* that supports each ICD−10−CM code. If no explicit evidence exists in the note, output: "No evidence found". −−− Example ### Clinical Note: ... ### ICD−10−CM Codes ... ### Evidence I25.10 − Atherosclerotic heart disease of native coronary artery without angina pectoris > CAD J44.9 − Chronic obstructive pulmonary disease, unspecified > COPD D62 − Acute posthemorrhagic anemia > Anemia −−− ### Clinical Note {text} ### ICD−10−CM Codes {diagnosis_codes} ### Evidence Evidence Refinement You are a professional ICD−10−CM coder. Your task is to update and refine the Evidence Set for the ICD−10−CM code below. Follow these rules: 1. Only keep the **most essential** evidence that clearly supports this code. 2. You may reference the Alphabetic Index terms, but you do not need to match them exactly. 3. Use the **Original Evidence Set** as the base. − If the MIMIC−IV evidence contains new, meaningful, or more specific expressions, add them. − If not, keep the existing evidence unchanged. 4. Remove duplicates and unify phrasing into **clear, concise, canonical** clinical expressions. 5. Output the **updated Evidence Set only**, as a bullet list. No explanation. −−− ### ICD−10−CM Code {code} ### Alphabetic Index Term {alphabetic_index_term} ### Original Evidence Set {evidence_set} ### New Evidence from MIMIC−IV {mimiciv_evidence} ### Updated Evidence Set −
+
+14 Table 10: Prompt templates used for Code-Centric Data Expansion (Synthetic Pairs) 
+
+Task Prompt Template 
+
+Synthesize Evidence You are a professional ICD−10−CM coding and clinical documentation expert. Your task is to synthesize a focused, audit−defensible list of clinical evidence terms that directly support assignment of the ICD−10−CM code: {code}. Definition of evidence: Evidence refers only to clinical findings or documentation elements that materially support the diagnosis represented by the code. Available references: {reference} Instructions: − Use the parent and sibling codes to understand diagnostic scope. − Infer conservatively based on ICD−10−CM conventions and real−world clinical documentation patterns. − Prioritize diagnostic−confirmatory evidence (e.g., imaging findings, explicit diagnoses, anatomical localization). Do NOT include: − Mechanism of injury or accident descriptions − General symptoms or nonspecific complaints − Treatment, procedures, immobilization, or care plans − Encounter setting or workflow details − Redundant negative statements unless required to distinguish code type Unspecified code rule: − If the code is unspecified, do NOT introduce inferred specificity (e.g., displacement, fracture pattern, severity). Output constraints: − Consolidate overlapping or synonymous terms. − Stop generating new items once additional terms no longer add distinct coding value. Output format: − <evidence term> − <evidence term> ... 
+
+15 Table 11: Prompt templates used for Generative Baselines 
+
+Baselines Prompt Template 
+
+CoT You are a clinical coding assistant. Your task is to analyze the provided clinical note, and then output the corresponding ICD−10−CM codes. ### Clinical Note: {text} Let's think step by step. MAC-coder You are an ICD−10 coder. You assign ICD−10 codes to the discharge summary based on the clinical care that the patients received. You cite the discharge summary as evidence when needed. You assign as manyas possible ICD−10 codes and explain the reasons for each code. The discharge summary is: {text} MAC-reviewer You are a reviewer. You will check the ICD−10 codes assigned by the coder. You can use the ICD−10 dictionary for guidance. Your role is to ensure that the assigned ICD−10 codes are correct. You assign all possible ICD−10 codes and explain the reasons for each code. The discharge summary is: {text} The ICD−10 codes assigned by the coder are: {coder_pred} MAC-physician You are a physician who treats patients. You strive to provide the best service to each patient. You document your findings, interventions and results in the discharge summary note. You check all assigned ICD−10 codes and explain the reasons for each code. The discharge summary is: {text} The ICD−10 codes assigned by the coder are: {reviewer_pred} MAC-patient You are a patient who receieved treatment at the hospital. You cooperate fully with thehealth care system to receive the best service possible. You also check the ICD−10 codes to avoid being overbilled. You check all assigned ICD−10 codes and explain the reasons for each code. The discharge summary is: {text} The ICD−10 codes assigned by the coder are: {reviewer_pred} MAC-adjustor When a patient or a physician has different thoughts about the ICD−10 codes, you will review the discharge summary and the ICD codes assigned by the coder and checked by the reviewer. You can add, remove the assigned codes to make them accurate. You can consult the ICD−10 dictionary for assistance. Your duty is to ensure that the assigned ICD−10 codes are valid and exact. You assign all possible ICD−10codes and explain the reasons for each code. The discharge summary is {text} The ICD−10 codes assigned by the physician are {physician_pred} The ICD−10 codes assigned by the patient are {patient_pred} The ICD−10 codes assigned by the coder are {coder_pred} The ICD−10 codes checked by the reviewer are {reviewer_pred} SFT / Code-only You are a clinical coding assistant. Your task is to analyze the provided clinical note, and then output the corresponding ICD −10−CM codes. ### Clinical Note: {text} 
+
+16 Table 12: Prompt templates used for Interpretability Evaluation 
+
+Task Prompt Template 
+
+Predicted Evidence Evaluation You are a clinical evidence evaluation expert. You are given two unordered sets of clinical evidence spans. Each line represents one evidence span. Evaluation rules: 1. Count only meaningful clinical evidence spans. − Ignore empty lines, headings, or formatting text. − If the same evidence appears multiple times, count it only once (semantic deduplication). 2. Matching is semantic and lenient: − If a predicted span is more specific but clearly refers to the same clinical finding as a human span, count it as a match. − Minor wording differences do not matter. − Human annotations may be shorter or less specific. − If findings contradict (e.g., different laterality), do NOT count as a match. 3. Matching must be one−to−one. − One predicted span can match at most one human span. − Do not double count matches. − Determine the optimal one−to−one matching that maximizes the number of matches. ### Predicted Evidence: {evidence} ### Human−annotated Evidence: {human_evidence} Output in markdown format exactly as: − human evidence count: X − predicted evidence count: Y − matched evidence count: Z 
+
+17
