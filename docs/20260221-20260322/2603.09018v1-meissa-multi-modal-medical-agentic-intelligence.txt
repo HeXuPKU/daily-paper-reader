@@ -1,0 +1,1161 @@
+Title: Meissa: Multi-modal Medical Agentic Intelligence
+
+URL Source: https://arxiv.org/pdf/2603.09018v1
+
+Published Time: Wed, 11 Mar 2026 00:19:24 GMT
+
+Number of Pages: 48
+
+Markdown Content:
+# Meissa : Multi-modal Medical Agentic Intelligence 
+
+Yixiong Chen 1, Xinyi Bai 2, Yue Pan 1, Zongwei Zhou 1, and Alan Yuille 1 
+
+> 1
+
+Johns Hopkins University, Baltimore, MD, USA 
+
+ychen646@jh.edu  
+
+> 2
+
+Cornell University, Ithaca, NY, USA 
+
+Abstract. Multi-modal large language models (MM-LLMs) have shown strong performance in medical image understanding and clinical reason-ing. Recent medical agent systems extend them with tool use and multi-agent collaboration, enabling complex decision-making beyond single-pass inference. However, these systems rely almost entirely on propri-etary frontier models (e.g., GPT), whose API-based deployment incurs high cost, high latency, and privacy risks that conflict with on-premise clinical requirements. We present Meissa , a lightweight 4B-parameter medical MM-LLM that brings full agentic capability offline. Instead of imitating static answers, Meissa learns both when to engage exter-nal interaction (strategy selection) and how to execute multi-step in-teraction (strategy execution) by distilling structured trajectories from frontier agent systems. To be specific, we propose: (1) Unified tra-jectory modeling : trajectories (reasoning and action traces) are rep-resented within a single state–action–observation formalism, allowing one model to generalize across heterogeneous medical environments. (2) 
+
+Three-tier stratified supervision : the model’s own errors trigger pro-gressive escalation from direct reasoning to tool-augmented and multi-agent interaction, explicitly learning difficulty-aware strategy selection. (3) Prospective–retrospective supervision : pairing exploratory for-ward traces with hindsight-rationalized execution traces enables stable learning of effective interaction policies. Trained on ∼40K curated tra-jectories, Meissa matches or exceeds proprietary frontier agents in 10 of 16 evaluation settings across 13 medical benchmarks spanning radiol-ogy, pathology, and clinical reasoning. Using over 25 × fewer parameters than typical frontier models like Gemini-3, Meissa operates fully offline with ∼22 × lower end-to-end latency compared to API-based deployment. Data, models, and environments are released at https://github.com/Schuture/Meissa. 
+
+Keywords: Agentic Behavior Distillation · Multi-modal Medical Agent 
+
+· Tool-Augmented Reasoning · Visual Question Answering 
+
+## 1 Introduction 
+
+Multi-modal large language models (MM-LLMs) can combine medical images with free-form clinical text, enabling unified visual understanding and clinical  
+
+> arXiv:2603.09018v1 [cs.AI] 9 Mar 2026 2Chen et al.
+
+reasoning [40,42,52]. When extended with agentic capabilities , the ability to take external actions such as invoking tools, requesting intermediate evidence, and co-ordinating specialist roles, these models can solve clinical tasks that are difficult for single-pass prediction systems [13, 25, 41]. However, today’s strongest med-ical agents are usually powered by proprietary frontier models (e.g., GPT [20], Gemini [45], Claude [3]) through cloud APIs. This deployment pattern is often incompatible with real clinical constraints: patient data must remain on-premise, repeated API calls increase cost, and multi-step interaction adds latency that can disrupt clinical workflows. This paper is motivated by a simple tension: frontier agents are capable, but hard to deploy. We ask: Can we transfer the action-taking behavior of frontier medical agents into a model that can run fully offline? Here, agentic behavior 
+
+refers to a model’s interaction policy : deciding whether to answer directly or to take external actions, and if it acts, choosing a sequence of actions based on observed outcomes. This differs from prior works distilling single-pass reason-ing ability [15, 39, 47, 58] from larger models to smaller models, and from those learning tool-use in a single fixed pipeline [17, 21, 57], because practical medical settings involve multiple interaction modes (direct reasoning, tool chains, visual feedback loops, role-based consultation, and multi-turn clinical questioning). 
+
+The core challenge is the lack of structured supervision for agentic behavior. Although frontier models exhibit strong agentic behaviors, there is currently no publicly available training corpus designed to teach models how to behave as medical agents. Existing benchmarks provide final answers but do not specify whether external interaction was necessary or how actions should evolve based on intermediate observations. On the other hand, existing agent systems generate agentic trajectories (reasoning and action traces) within isolated envi-ronments, each with its own format and protocol, making it difficult to construct unified supervision across heterogeneous interaction modes. To address this gap, we design a data synthesis pipeline that systematically constructs supervision for agentic behavior along three dimensions. First , we in-troduce a unified state–action–observation representation that models multiple interaction modes within a single formalism. Therefore, we avoid environment-specific formats and enable cross-environment learning within one model. Sec-ond , to teach when to act, we propose a three-tier stratification strategy driven by the model’s own errors. Queries that the model already solves become direct-reasoning trajectories (tier 1); queries solvable by a stronger frontier model with-out tools become enhanced reasoning trajectories (tier 2); and only the hardest residual samples trigger full agent environments (tier 3). This stratified supervi-sion implicitly encodes the decision boundary between direct inference and ex-ternal interaction. Third , to teach how to act within environments, we construct complementary prospective and retrospective trajectories. Prospective traces are recorded during forward interaction and capture exploratory decision-making under real observations. Retrospective traces preserve the same action sequence but provide clean hindsight explanations. Together, they provide stable execu-tion supervision across heterogeneous medical agent environments. Meissa : Multi-modal Medical Agentic Intelligence 3
+
+Based on this pipeline, we train Meissa 3, a 4B-parameter multi-modal medi-cal agent initialized from Qwen3-VL-4B model and distilled from approximately 40K frontier multimodal agent’s (Gemini-3-flash) trajectories. Training requires only ∼12 hours on 8 ×A6000 GPUs. Despite its lightweight size, Meissa is com-petitive with frontier models using over 25 × fewer parameters across 13 medical benchmarks (Sec. 4.2), matches or exceeds them in 10 of 16 evaluation settings, achieves near-oracle strategy selection, and reduces end-to-end latency by ap-proximately 22 × (Sec. 4.3) compared to cloud-based agent deployment. In summary, our work makes three contributions: (1) we introduce a unified trajectory representation and targeted synthesis pipeline for constructing super-vision of medical agentic behavior across heterogeneous environments; (2) we show Meissa , a lightweight medical agentic model, can make complex agentic behaviors available for offline deployment with low cost and inference latency; (3) we provide extensive empirical evidence that Meissa learns meaningful policy and matches closed-source models on both in-distribution and out-of-distribution (OOD) benchmarks. 
+
+## 2 Related Work 
+
+2.1 Medical Multi-modal Large Language Models 
+
+Medical MM-LLMs have evolved from specialized architectures [9, 28, 29, 33, 34, 48] to adaptations of general-purpose foundations [39, 46, 51]. LLaVA-Med [28] demonstrated biomedical VQA through instruction-tuned visual chat [31], CheX-agent [9] specialized in chest X-ray interpretation, and HuatuoGPT-Vision [7] injected medical visual knowledge at scale. Med-PaLM [43,44], Med-Gemini [46], and RadFM [49] further pushed performance through model scaling and propri-etary data. However, these models operate as single-pass reasoners without the ability to invoke tools or adaptively route queries based on difficulty. 
+
+2.2 Tool-Augmented Reasoning and Its Medical Applications 
+
+ReAct [52] established reasoning-action interleaving; FireAct [6] and AgentTun-ing [53] showed that fine-tuning on agent trajectories generalizes agentic capabil-ities across tasks. In the visual domain, DeepEyes [57] incentivized “thinking with images” via RL, and Ophiuchus [21] adapted this for medical imaging through cold-start SFT plus agentic RL. In the medical domain, MedRAX [13] inte-grated specialized tools for chest X-ray reasoning. Closely related, STeP [8] and STAR [50] train student models from teacher trajectories via trajectory-aligned SFT, and MedVistaGym [32] frames tool-augmented medical reasoning as an RL problem. Our work differs in distilling agentic behavior across four hetero-geneous environments into a single model, and in showing that SFT alone can match RL pipelines at substantially lower compute.     
+
+> 3Named after λOrionis (Meissa), the central anchor of the Orion constellation, our model functions as a unified core that coordinates heterogeneous tools and sub-agents in various medical agent environments. 4Chen et al.
+
+2.3 Multi-Agent Systems for Medicine 
+
+MDAgents [25] dispatches queries to solo experts or multi-agent debate panels based on difficulty; MedAgentSim [2] and AgentClinic [41] created simulated clinical environments for multi-turn diagnosis. Park et al. [37] demonstrated emergent behaviors from generative agent simulations, Du et al. [12] showed debate improves factual accuracy, and Society of Mind [59] explored hierarchical organization. All require frontier LLM backends at inference. We instead distill multi-agent interaction policies into a single model. 
+
+2.4 Learned Routing, Selective Prediction, and Early Exit 
+
+A model that can invoke external tools must also learn when not to . RouteLLM [35] and cascade routing [11] train lightweight routers to select between a cheap and an expensive LLM; confidence-token methods [10] embed routing inside the model itself. Selective classification [14] provides theoretical grounding for risk-coverage trade-offs. Our work differs in learning routing implicitly via stratified trajectory supervision. The model’s generated reasoning trajectory determines interaction depth without an explicit router, and in treating routing as a contin-uous choice over depth ( T =0 to T > 10 ) across four heterogeneous environments, a setting not addressed by existing frameworks. 
+
+## 3 Method 
+
+We frame the training of Meissa as agentic behavior distillation : learning a policy over interaction depth , which is the number of external actions an agent takes before producing an answer. This single variable unifies direct reasoning (depth = 0 ), single-tool queries ( depth = 1 ), multi-step tool chains, multi-agent debate, and clinical simulation into a continuous spectrum. We first define a tra-jectory formalism that captures this spectrum (Sec. 3.1), then describe how strat-ified trajectories teach strategy selection (Sec. 3.2), the agent environments that serve as trajectory sources (Sec. 3.3), and the prospective-retrospective supervi-sion that teaches strategy execution (Sec. 3.4). Figure 1 provides an overview. 
+
+3.1 Agentic Behavior Modeling 
+
+We model all agent interactions from direct reasoning to complex multi-agent collaboration within a unified trajectory formalism. An agentic trajectory is a sequence: 
+
+τ = [( s0, a 0, o 1), (s1, a 1, o 2), . . . , (sT −1, a T −1, o T )] , (1) where state st is the conversation context up to step t, at is an action, and ot is the observation returned by the environment. Concretely, each action at is serialized as either a <|call|> turn (a JSON-formatted action) or an <|assistant|> turn for the final answer. <|observation|> turn is returned by tools or sub-agents Meissa : Multi-modal Medical Agentic Intelligence 5𝐷 !"#$%&     
+
+> (Minimal
+> Traces)
+> 𝐷 $'()'%$!
+> (Stronger
+> Reasoning)
+> 𝐷 )*$'&"%
+> (Full Agentic
+> Traces)
+> Stratified
+> Training
+> Mix
+> (𝐷 !"# )Cleaned 𝐷 $%&'()*
+> (Pro -Retro Mix)
+> (a) Continuous
+> Tool Calling
+> X-ray Segmentation VQA
+> (b) Interleaved
+> Thinking with Images
+> (c) Multi -Agent
+> Collaboration
+> (d) Multi -Turn
+> Clinical Simulation
+> Doctor
+> Agent
+> Simulated
+> Environment
+> Stratified Difficulty -Aware
+> Data Generation Pipeline
+> Four Agentic Paradigms
+> (Tier 3 Environments)
+> Prospective -Retrospective
+> Training Strategy
+
+Fig. 1: Overview of Meissa : Trajectory-based agentic behavior distillation. Left: Stratified trajectory supervision uses the model’s own errors to progressively escalate interaction depth, teaching strategy selection. Center: Four agent environ-ments serve as diverse trajectory sources. Right: Prospective-retrospective supervision teaches both exploration and optimal execution policies. 
+
+in JSON format. Inference terminates when the model emits an <|assistant|> 
+
+turn or reaches Tmax ; full schemas are in the supplementary. The interaction depth T of a trajectory is the key variable that unifies all agent behaviors. Direct reasoning corresponds to T =0 (a single final-answer). For 
+
+Meissa , we set Tmax = 4 for continuous tool calling; Tmax = 6 for interleaved image-text reasoning; and multi-agent collaboration and clinical simulation pro-duce the deepest trajectories ( Tmax = 12 ). Learning when to produce a trajectory of a given depth, and how to act at each step, is the core objective of agentic behavior distillation. We train the policy πθ (at | st) based on trajectories generated by a frontier model, where next-action prediction reduces to conditional language modeling. This separates the learning problem from the environment details , enabling a single model to generalize across environments. Critically, behavioral cloning over ordered trajectories learns causal decision-making: the model predicts each action conditioned on preceding observations. (Verified on Sec. 4.4). 
+
+3.2 Behavior Distillation via Stratified Trajectory Supervision 
+
+The key insight for teaching strategy selection is that not all queries require the same interaction depth. Rather than uniformly generating complex agentic trajectories for all samples, we stratify trajectory supervision using the model’s own errors as a curriculum signal [5]: 
+
+Tier 1: Direct Reasoning Trajectories. We first run the student model 
+
+MS (Qwen3-VL-4B [4]) directly on the training set Dtrain . Samples answered 6 Chen et al. 
+
+correctly yield direct reasoning trajectories ( T =0 , no external interaction): 
+
+Ddirect = {(x, τ direct ) | (x, y ) ∈ D train , MS (x) = y}. (2) These trajectories supervise the model to answer efficiently when its parametric knowledge suffices, learning when not to act .
+
+Tier 2: Enhanced Reasoning Trajectories. The student’s incorrect samples are re-processed by a stronger teacher model MT (Gemini-3-flash [45]), again without external interaction: 
+
+Denhanced = {(x, τ enhanced ) | (x, y ) ∈ D train \ D direct , MT (x) = y}. (3) These trajectories demonstrate stronger reasoning that the student could not produce, but remain direct reasoning ( T =0 ). 
+
+Tier 3: Agentic Trajectories. The hardest residual samples are beyond both the student’s and teacher’s direct reasoning capacity. They are processed by the teacher within agent environments (Sec. 3.3): 
+
+Dagentic = {(x, τ agentic ) | (x, y ) ∈ D residual , AT (x) = y}, (4) where AT denotes the teacher operating within an agent environment and resid-ual erroneous samples Dresidual = Dtrain \(Ddirect ∪D enhanced ). Only these samples produce full multi-step trajectories with external interaction. The complete data generation procedure, including retry logic, per-tier statis-tics, and discard handling, is detailed in Algorithm 1 in supplementary material. The final dataset contains ∼40K trajectories: 8.2K direct (Tier 1), 9.8K enhanced (Tier 2), and 23.9K agentic (Tier 3). The combined supervision teaches strategy selection as an emergent behavior: simple queries are associated with direct trajectories, complex queries with multi-step ones, naturally inducing a difficulty-aware routing policy. At inference, the model’s first generated action implicitly determines the strategy. 
+
+3.3 Agent Environments and Trajectory Sources 
+
+The agentic trajectories in Dagentic are collected from four agent environments, each contributing trajectories with distinct interaction patterns (Fig. 2). These environments serve as trajectory sources rather than architectural components of Meissa itself. Their diversity ensures that the learned policy generalizes. 
+
+Visual information in trajectories. In tool-calling trajectories, the initial state s0 contains the input image as <image> tokens; observations return struc-tured text (classification labels, bounding boxes, reports). In interleaved image-text trajectories, observations additionally contain new images like cropped re-gions or segmentation overlays injected as additional <image> tokens, creating a multi-round visual reasoning chain. Multi-agent environments provide <image> 
+
+tokens for lead agent and each sub-agent at the beginning of the debate. For clinical simulation, Meissa can request either structured examination results or images as <image> tokens as needed in each call. Meissa : Multi-modal Medical Agentic Intelligence 7Continuous Tool Calling 
+
+> [Image]
+> +
+> [Query]
+> Reasoning
+> Tool Execution Block
+> Classification
+> (DenseNet )
+> Loop
+> Segmentation
+> (SAM -2)
+> VQA
+> (CheXagent )
+> Integration
+> Agent
+> Final
+> Answer
+
+Interleaved Thinking with Images 
+
+> Agent
+> New Image
+> (Cellular Detail)
+> 1. Request Zoom in
+> Pathology Whole
+> Slide Image
+> 2. Request Tool
+> [BiomedParse ]
+> New Image
+> (Cellular Masks)
+> [Final Answer
+> / Diagnosis]
+
+Multi -Agent Collaboration  
+
+> Lead Doctor Agent
+> Specialist Debate Panel
+> Pulmonologist
+> Cardiologist Radiologist
+> Intensivist
+> Debate
+> Cross examine
+> Decision Synthesis
+> Final
+> Diagnosis
+
+Multi -turn Clinical Simulation  
+
+> Patient Presentation (OSCE Case)
+> Doctor Agent
+> Simulated Environment
+> Radiologist
+> Patient
+> Lab technician
+> Request X -Ray
+> X-Ray Image
+> Ask Symptom
+> Verbal Response
+> Order Blood Test
+> Test Results
+> Final Diagnosis
+
+Fig. 2: Four agent environments as trajectory sources. Each environment pro-duces trajectories with distinct state–action–observation patterns: (a) tool calling tra-jectories with vision tool chains, (b) interleaved image-text trajectories with visual feedback loops, (c) multi-agent trajectories with expert debate and synthesis, (d) clin-ical simulation trajectories with multi-turn information gathering. 
+
+Action Space of the Agent Environments. – Continuous Tool Calling [13]. The action space consists of eight medical imaging tools: at ∈ { Classifier , Segmentation , CheXagentVQA , LLaVA-Med ,
+
+PhraseGrounding , ReportGenerator , DICOMProcessor , ImageVisualizer },each serialized as a <|call|> turn with JSON arguments. Observations ot+1 
+
+return structured text: classification probabilities, bounding box coordinates, segmentation statistics, or free-text reports. 
+
+– Interleaved Thinking with Images [17, 21, 57]. Actions select from vi-sion manipulation tools: at ∈ { ZoomIn , SAM2 , BioMedParse , OCR , Terminate }.Unlike tool calling, observations ot+1 contain new images , creating multi-round visual reasoning chains. The trajectory terminates when the model emits Terminate with the final answer. 
+
+– Multi-Agent Collaboration [25]. Actions are structured role-based queries: 
+
+at consists of a difficulty assessment, expert recruitment, expert analysis, multi-round debate contributions, or moderator synthesis. Observations ot+1 
+
+aggregate expert responses (analysis or debate argument). Debate protocols, persona prompts, and synthesis rules are in the supplementary. 
+
+– Clinical Simulation [2,41]. Actions select from clinical information-gathering tools: at ∈ { RequestPhysicalExam , RequestTest , Terminate }. The initial state s0 contains the patient presentation (demographics, history, symp-toms). Observations ot+1 return clinical findings (e.g., “Auscultation: bilat-eral basal crackles”), lab results (e.g., “Troponin I: 0.4 ng/mL”), or radiology images. The trajectory terminates with Terminate for the final diagnosis. 8 Chen et al. 
+
+3.4 Prospective-Retrospective Supervision 
+
+Learning when to act is addressed by stratified trajectories; here we address learning how to act effectively within agent environments. The key insight is that a single correct trajectory can be decomposed into two complementary supervision signals that teach different aspects of execution policy. 
+
+Prospective (forward) trajectories are recorded during real-time inference: the teacher reasons forward, potentially revising strategy upon unexpected ob-servations. Only correct trajectories are retained, teaching an exploration policy .
+
+Retrospective (backward) trajectories are generated given each prospective trajectory: a recap agent re-narrates the reasoning while preserving the original action sequence, producing a clean post-hoc narrative that teaches an optimal execution policy . The combined training set is: 
+
+DSFT = Ddirect ∪ D enhanced ∪ { τ pro (x), τ retro (x, y ) | (x, y ) ∈ D agentic }. (5) During auditing, retrospective recaps that are over-simplified or over-complicated are discarded; approximately 8% of generated recaps are filtered. We did not ob-serve significant gains from depth- or difficulty-based weighting in preliminary experiments. A detailed comparison of the two supervision modes and trajectory validation details (structural and behavioral filtering) are in the supplementary. 
+
+## 4 Experiments 
+
+4.1 Experimental Setup 
+
+We evaluate Meissa across 13 benchmarks spanning four medical domains (Tab. 1), where five benchmarks (ChestAgentBench, OmniMed, MedXpertQA, NEJM, and NEJM Ext.) are OOD. Training trajectories are generated with the train-ing sets of the datasets, n-gram de-contamination ( n=8 ) confirms zero overlap with testing data. Decontamination operates over question text, and image-level leakage is prevented by using entirely disjoint DICOM/hashing for benchmarks. Dataset details are in the supplementary. 
+
+Baselines. (1) Closed-source frontier models: GPT-4o [20], GPT-5 [36], Gemini-3-flash [45]; (2) Agentic frameworks: MedRAX [13], Ophiuchus [21], MDAgents [25], and AgentClinic [41]; (3) Base model: Qwen3-VL-4B-Instruct [4]; (4) Answer-only SFT: Qwen3-VL-4B fine-tuned on the same ∼40K queries with only teacher final answers, controlling for data exposure. 
+
+Implementation. All experiments use a node with 8 NVIDIA A6000 GPUs (48 GB). Training: LLaMA-Factory [56] with LoRA [18] rank 32, learning rate 
+
+5×10 −5, ∼12 GPU-hours, ∼239M tokens for 3 epochs. Inference: vLLM [26]. All 
+
+Meissa inference results are mean over 3 seeds ( σ in supplementary). All tasks are formulated as QA or VQA; the evaluation metric is accuracy throughout: exact-match accuracy for close-ended questions and soft-match accuracy with medical synonym normalization [1] for open-ended VQA. Meissa : Multi-modal Medical Agentic Intelligence 9                                                        
+
+> Table 1: Evaluation benchmarks (13 total across 4 agent environments). †= strict OOD: excluded from training and verified by n-gram de-contamination ( n=8 ). Benchmark Domain Modality Environment ID/OOD MIMIC-CXR-VQA [1] Radiology CXR + text Tool Calling + Col. ID ChestAgentBench [13] Radiology Multi-CXR + text Tool Calling OOD †
+> PathVQA [16] Pathology Path img + text Think img + Col. ID SLAKE [30] Mixed Med img + text Think img ID VQA-RAD [27] Radiology Rad img + text Think img ID OmniMed [19] Mixed Med img + text Think img OOD †
+> MedXpertQA [60] Clinical Med img + text Think img OOD †
+> MedQA [22] Clinical Text only Collaboration + Sim. ID PubMedQA [23] Biomedical Text + context Collaboration ID NEJM [41] Clinical Text + img Simulation OOD †
+> NEJM Ext. [41] Clinical Text + img Simulation OOD †
+> MIMIC-IV [24] Clinical EHR + CXR Simulation ID MedQA Ext. [2] Clinical Text only Simulation ID
+
+4.2 Meissa Is Competitive with Frontier Models 
+
+Table 2 presents results across all 13 benchmarks under four agent evaluation frameworks. Meissa is ranked 1st or 2nd on 10 out of 16 evaluation settings, matching frontier models. We summarize more detailed findings below: 
+
+Trajectory supervision advantage. Meissa surpasses Qwen3-VL-4B by 17.3 points and the answer-only tuned Qwen3-VL-4B direct inference baseline by 6.1 points on average, showing that trajectory supervision conveys substantially richer learning signal than data exposure alone. 
+
+OOD robustness. On the five strict OOD benchmarks, Meissa achieves strong results, most notably 62.8% on ChestAgentBench and 35.0% on NEJM (averaged with NEJM Ext.), matching or exceeding GPT-4o despite being 100 × smaller. Gains on ChestAgentBench are most pronounced on classification and detection 
+
+sub-categories, where tool-generated classification/grounding information helps enhance the image understanding beyond the Qwen3-VL model itself. 
+
+Data-rich VQA tasks. Meissa achieves the top result on PathVQA (78.2%; 12.2K training samples) and MIMIC-CXR-VQA (65.2%; 11.4K samples), rank-ing first among all methods in both cases. Notably, the base Qwen3-VL-4B already shows competitive baselines on these tasks (65.3% and 51.4%), reflect-ing that data abundance lowers the learning barrier for lightweight models. The gains attributable to Meissa thus stem primarily from learned interaction policy rather than bridging a parametric knowledge gap. 
+
+Reference-grounded tasks. On PubMedQA (77.9%, first), Meissa outper-forms GPT-4V under MDAgents by 2.9 points. PubMedQA supplies a reference abstract alongside each question, shifting the demand from encyclopedic recall to evidence synthesis over provided context. This is precisely the execution skill that prospective-retrospective trajectory supervision optimizes, explaining Meissa ’s disproportionate gain relative to its performance on knowledge-only variants. 10 Chen et al. 
+
+Table 2: Comparison under four agent evaluation frameworks. Bold : best per column; underline: second-best per column. Parenthetical superscripts on Meissa rows denote absolute improvement ( ∆) over the untrained Qwen3-VL-4B baseline within the same agent framework. † = strict OOD benchmark. All Qwen3-VL and Gemini-3-flash results are from our own evaluation, all other results are from the original papers. 
+
+Framework I: Continuous Tool Calling ChestAgentBench † MIMIC-CXR-VQA 
+
+Direct Inference GPT-4o 56.4 40.0 Gemini-3-flash 76.2 43.6 Qwen3-VL-4B (SFT) 53.3 49.7 Agent-based (MedRAX) GPT-4o 63.1 55.6 Gemini-3-flash 72.7 65.0 Qwen3-VL-4B 46.6 51.4 
+
+Meissa (Ours) 62.8 (+16 .2) 65.2 (+13 .8) 
+
+Framework II: Interleaved Thinking with Images PathVQA SLAKE VQA-RAD OmniMed † MedXpertQA †
+
+Direct Inference GPT-5 60.0 73.2 64.5 75.4 40.4 Gemini-3-flash 64.3 77.7 58.8 78.0 54.4 Qwen3-VL-4B (SFT) 73.0 77.1 69.1 67.6 33.3 Agent-based (Ophiuchus) o3 67.5 75.3 66.0 73.7 44.1 Gemini-2.5-pro 67.1 72.7 63.8 76.9 46.6 Gemini-3-flash 74.3 73.9 52.0 77.4 69.2 
+
+Ophiuchus-7B 74.3 83.9 73.6 78.6 39.3 Qwen3-VL-4B 65.3 55.6 51.8 38.1 23.9 
+
+Meissa (Ours) 78.2 (+12 .9) 82.0 (+26 .4) 70.1 (+18 .3) 82.8 (+44 .7) 36.0 (+12 .1) 
+
+Framework III: Multi-Agent Collaboration MedQA PubMedQA PathVQA MIMIC-CXR-VQA 
+
+Direct Inference GPT-4V 75.0 61.5 57.9 40.0 Gemini-3-flash 75.5 66.7 64.3 43.6 Qwen3-VL-4B (SFT) 51.8 76.8 66.4 55.2 Agent-based (MDAgents) GPT-4V 88.7 75.0 65.3 55.9 Gemini-3-flash 75.5 71.9 56.3 64.0 
+
+Qwen3-VL-4B 59.8 57.3 65.5 54.9 
+
+Meissa (Ours) 57.2 (−2.6) 77.9 (+20 .6) 67.9 (+2 .4) 59.4 (+4 .5) 
+
+Framework IV: Multi-turn Clinical Simulation NEJM † NEJM Ext. † MedQA MedQA Ext. MIMIC-IV 
+
+Agent-based (AgentClinic) GPT-4o 26.7 25.8 52.8 52.3 34.4 Gemini-3-flash 40.0 33.3 97.9 92.3 70.6 Llama-3.3-70B 20.0 24.2 54.7 53.3 36.8 Qwen2.5-72B 0.0 2.5 38.7 41.6 21.2 Qwen3-VL-4B 40.0 20.8 50.5 50.0 61.1 
+
+Meissa (Ours) 46.7 (+6 .7) 23.3 (+2 .5) 49.5 (−1.0) 46.7 (−3.3) 84.4 (+23 .3) 
+
+Matching RL-trained models at smaller scale. Ophiuchus-7B [21] is trained via cold-start SFT followed by agentic RL, requiring substantially more com-pute than our SFT-only pipeline. Despite having nearly half the parameters, 
+
+Meissa matches or exceeds Ophiuchus-7B on 3 of 5 Framework II benchmarks Meissa : Multi-modal Medical Agentic Intelligence 11                           
+
+> Table 3: Counterfactual strategy comparison on ChestAgentBench. Learned routing achieves near-oracle accuracy at ∼3×lower cost than always-agentic inference, while avoiding the accuracy degradation caused by over-invoking tools on easy queries.
+> ‡= Gemini-3-flash API does not report token usage; value is a lower-bound estimate. Strategy Avg Accuracy Avg Actions Avg Tokens Latency Gemini-3-flash 72.7 4.03 ≥860 ‡87.2s ( 72 ×)Always direct 54.2 1.0 479 1.23s ( 1×)Always agentic 45.9 3.52 2082 10.64s ( 9×)Oracle (upper bound) 63.2 1.54 933 3.41s ( 3×)Learned routing (Ours) 62.8 1.71 959 4.12s ( 3×)
+
+(PathVQA: 78.2 vs. 74.3; OmniMedVQA: 82.8 vs. 78.6) while trailing on SLAKE (82.0 vs. 83.9) and VQA-RAD (70.1 vs. 73.6). This demonstrates that stratified SFT with prospective-retrospective supervision can match RL pipelines. 
+
+Knowledge and reasoning limits. Meissa has clear limitations on tasks requiring deep parametric knowledge or expert clinical reasoning. On MedQA (Framework III), it reaches only 57.2% against GPT-4V’s 88.7%. On MedX-pertQA, it achieves 36.0% against Gemini-3-flash’s 69.2%, trailing even Ophiuchus-7B (39.3%). Mild negative transfer also appears on MedQA Ext. (Framework IV, 
+
+−3.3% relative to the base), confirming that agentic trajectory training competes with parametric knowledge retention in lightweight models. 
+
+4.3 Strategy Selection: Learning When to Act Counterfactual and oracle comparison. We compare Meissa ’s learned rout-ing against fixed strategies and an oracle router that selects the best strategy per query (Tab. 3) according to the samples’ testing correctness. Learned routing closes the gap to oracle, demonstrating near-optimal strat-egy selection: 72% of queries are routed to direct reasoning and 28% to agentic interaction. Notably, the always-agentic strategy degrades average accuracy rela-tive to always-direct, because overlong contexts and occasionally misleading tool outputs hurt easy queries that require no external information. The latency gap is even more striking: Gemini-3-flash averages 87.2s per query due to multiple API calls and remote tool execution, while Meissa averages 4.1s, a ∼22 × speedup. We present the full per-query latency distributions in the supplementary. 
+
+Depth-constrained analysis. We constrain Tmax at inference time (Fig. 3, right). Overall accuracy rises from 55.6% ( Tmax =0 ) to 60.4% ( Tmax =3 ), with only 
+
++0 .9 additional points for Tmax =∞. It confirms that three interaction rounds capture most of the available gain and deeper interactions exhibit rapidly dimin-ishing returns. 12 Chen et al. Tier 1         
+
+> (Easy)
+> Tier 2
+> (Med.)
+> Tier 3
+> (Hard)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> Routing Proportion (%)
+> 96%
+> 37%
+> 63%
+> 97%
+> (a) Strategy Selection by Tier
+> Direct ( T=0) Agentic ( T>0)
+> 500 2K 4K
+> Avg. Tokens / Query
+> 45
+> 50
+> 55
+> 60
+> 65
+> 70
+> Avg. Accuracy (%)
+> capacity
+> limit
+> (b) Performance–Efficiency Trade-off
+> Meissa
+> Gemini
+> GPT-5
+> 0123∞
+> Max Depth Tmax
+> 40
+> 45
+> 50
+> 55
+> 60
+> 65
+> 70
+> Accuracy (%)
+> (c) Depth-Constrained Accuracy
+> ID
+> OOD
+> Overall
+
+Fig. 3: Strategy selection analysis. (Left ) Tier 1 easy queries are answered directly in 96% of cases, while Tier 3 hard queries trigger agentic interaction 97% of the time, confirming difficulty-aware routing. ( Center ) Meissa accuracy peaks near 2,000 tokens / query and then drops at 4,000 tokens (capacity limit of the 4B model), whereas frontier models scale monotonically. This motivates depth allocation for lightweight models. ( Right ) Depth-constrained accuracy ( Tmax ∈ { 0, 1, 2, 3, ∞} ): accuracy improves consistently with interaction depth but exhibits diminishing returns beyond Tmax =3 .
+
+Table 4: Ablation studies. (a) Stratified trajectory supervision shows each tier contributes. (b) Prospective and retrospective supervision are complementary. Configuration ID Avg OOD Avg Overall 
+
+(a) Stratified trajectory supervision 
+
+Agentic only (Tier 3) 61.2 46.6 56.6 Direct + Agentic (Tier 1+3) 59.8 46.9 55.8 Enhanced + Agentic (Tier 2+3) 63.7 51.0 59.7 Stratified (Tier 1+2+3) 66.3 50.3 61.3 
+
+(b) Execution policy learning 
+
+Prospective only 57.6 49.7 55.1 Retrospective only 66.1 47.2 60.2 Pro + Retro (Full) 66.3 50.3 61.3 
+
+4.4 Ablation and Robustness: Learning How to Act Distillation Strategy Ablations. Table 4 shows all three tiers are necessary: Tier 1 preserves parametric knowledge; Tier 2 bridges direct and agentic rea-soning (5.5 pt gain over Tier 1+3); Tier 3 provides agentic exemplars. Tier 1+3 is worse than Tier 3 alone due to overfitting on simple samples without Tier 2. For execution policy, prospective-only excels at OOD while retrospective-only excels at ID; their combination is optimal. Teacher sensitivity analysis is in the supplementary. 
+
+Policy Robustness: Causal Decision-Making vs. Pattern Imitation. Ta-ble 5 shows that Meissa learns a causal visual policy: paraphrased outputs cause Meissa : Multi-modal Medical Agentic Intelligence 13                                      
+
+> Table 5: Policy robustness under perturbation for interleaved thinking with image framework. ∆= accuracy change vs. unperturbed Meissa on agentic-only queries ( T > 0). The model relies causally on observation content and visual feedback. Perturbation PathVQA SLAKE VQA-RAD ∆Avg
+> Meissa (unperturbed) 75.2 80.3 67.1 —Paraphrased tool outputs 76.7 76.6 66.9 −0.8
+> Visual feedback →blank 72.0 67.2 62.9 −6.8
+> Visual feedback →random 56.6 66.5 57.8 −13 .9
+> Tools disabled ( T=0 )72.1 75.7 66.3 −2.8
+> Altered prompt format 73.7 76.4 65.5 −2.3
+
+minor drops ( −0.8), while replacing visual feedback with blank or random images causes much larger drops ( −6.8 and −13 .9), confirming that the model actively perceives tool-generated observations. Disabling tools drops performance by −2.8
+
+on agentic queries; altering prompt format causes only −2.3 points, indicating abstraction beyond template memorization. 
+
+4.5 Case Study 
+
+Figure 4 illustrates Meissa ’s adaptive strategy selection on four chest X-ray queries of increasing complexity. Three findings deserve emphasis. First, the model learns meaningful depth allocation: easy queries are answered directly (T =0 ), while harder queries trigger progressively deeper tool chains ( T =1 , 3). Second, when tools return conflicting outputs (panel (c): a report generator misses an obvious opacity; panel (d): a hallucinated device list), the model cross-references multiple sources and correctly overrides unreliable outputs, demon-strating robustness to individual tool failures. Third, Meissa is able to do pro-gressive diagnosis and understand new visual evidence, dealing with failed tool-calls and confirming new findings. 
+
+## 5 Discussion and Conclusion 
+
+We presented Meissa , a 4B-parameter medical agent trained through agen-tic behavior distillation. Stratified trajectory supervision teaches when to act; prospective-retrospective supervision teaches how to act; a unified trajectory for-malism enables learning across tool calling, visual reasoning, multi-agent debate, and clinical simulation. Trained on ∼40K trajectories, Meissa is competitive with frontier models across 13 benchmarks while operating fully offline. 
+
+Why SFT over RL? Our framework is intentionally SFT-only. While RL can sharpen stopping behavior via outcome-based rewards [32], it faces two practical limitations. First, existing RL approaches are each tied to a single agent frame-work: DeepEyesV2 optimizes tool-calling via RL [17], and MARTI addresses multi-agent coordination [54]; none can jointly learn policies across the four 14 Chen et al. Q: Which statement best supports the 
+
+diagnosis of septic pulmonary embolism? 
+
+No Tools Invoked 
+
+Reasoning: bilateral nodular infiltrates 
+
+with cavitation in lower lung zones are 
+
+characteristic of septic pulmonary 
+
+embolism. 
+
+Answer: Septic pulmonary embolism. 
+
+Q: 19 -year -old, recurrent vomiting -- what 
+
+supports the Dx of pneumomediastinum? 
+
+Tool Call: chest_xray_expert 
+
+Result: "Air in the mediastinum" 
+
+Reasoning: CXR shows air outlining the 
+
+heart border, a classic sign, and the expert 
+
+tool confirms the mediastinal air location. 
+
+Answer: Pneumomediastinum. 
+
+Q: Describe observed abnormalities and 
+
+clinical implications. 
+
+Tool Call: chest_xray_report _generator 
+
+"No focal consolidation; no pneumothorax" 
+
+Reasoning: The report missed the obvious 
+
+opacity, but expert and phrase grounding 
+
+tools confirm a large mass in the left lung 
+
+with associated costophrenic blunting. 
+
+Answer: Left lung mass + pleural effusion 
+
+Tool Call: chest_xray_expert 
+
+"No focal consolidation; no pneumothorax"    
+
+> Tool Call: xray_phrase _grounding [red bbox ]
+
+"Dense opacity in left mid -to -upper zone" 
+
+Q: Can you detect any technical 
+
+assessments or devices in this chest X -ray? 
+
+Tool Call: chest_xray_expert 
+
+”No" 
+
+Reasoning: The expert and report tools 
+
+agree no devices are present suggesting 
+
+the LLaVa -Med response is likely a false 
+
+positive (hallucination). 
+
+Answer: No devices detected 
+
+Tool Call: llava_med_QA 
+
+"Yes -- pulse oximeter, ventilator" 
+
+Tool Call: chest_xray_report _generator 
+
+"Lungs clear; no devices mentioned" 
+
+(a) Direct Reasoning (T=0) (b) Single Tool Call (T=1) (c) Multi -Step Chain (T=3) (d) Conflict Resolution (T=3) 
+
+(e) Think with Image 
+
+Progressive Diagnosis 
+
+(T=4) 
+
+Tool Call: BioMedParse ;
+
+param = "blood vessels; 
+
+fibrinoid necrosis "
+
+Result: "Area=0" 
+
+Identify adrenal cortex 
+
+Tool Call: ZoomIn ; param 
+
+= [0, 500, 350, 850] 
+
+Result: region 
+
+[0, 239, 304, 455] 
+
+Confirming the cortical / 
+
+medulla structure 
+
+Tool Call: ZoomIn ; param 
+
+= [0, 500, 300, 800] 
+
+Result: region 
+
+[0, 242, 260, 427] 
+
+Fibrinoid necrosis of 
+
+arteries was discovered 
+
+Tool Call: ZoomIn ; param 
+
+= [0, 500, 300, 800] 
+
+Result: region 
+
+[0, 242, 260, 427] 
+
+Q: Does this image show vasculitis, 
+
+polyarteritis nodosa? 
+
+Reasoning: The 
+
+identification of 
+
+necrotizing vasculitis 
+
+in a medium -sized 
+
+artery (adrenal 
+
+artery) confirms the 
+
+diagnosis of 
+
+polyarteritis nodosa. 
+
+Fig. 4: Case study. Each panel shows a query with Meissa ’s reasoning trace. 
+
+(a) T =0 : bilateral nodular infiltrates with cavitation are directly recognizable; no tool is invoked. (b) T =1 : the model calls chest_xray_expert to confirm mediasti-nal air before diagnosing pneumomediastinum. (c) T =3 : the report generator misses the opacity, but the expert and phrase-grounding tools correctly identify a dense mass (red bounding box); the model reconciles the conflicting outputs. (d) T =3 , conflict resolution: llava_med_qa hallucinates a pulse oximeter and ventilator (red highlight), while two other tools confirm a clean CXR; the model identifies the hallucinated out-put. (e) T =4 , progressive diagnosis: BiomedParse failed to capture the target regions, so Meissa actively zoom in the image to confirm the findings. 
+
+heterogeneous environments Meissa operates in. Second, RL requires extensive online rollouts with live tool environments, incurring high compute cost and training variance that hinder reproducibility. Our stratified SFT achieves near-oracle routing (Tab. 3) with deterministic, compute-efficient training ( ∼12 GPU-hours), and naturally scales across environments through trajectory unification. 
+
+Deployment considerations. Deploying Meissa clinically requires human-in-the-loop safeguards: the model currently lacks calibrated uncertainty estimation and an abstention mechanism for out-of-distribution queries. Integrating selec-tive prediction [14] to enable principled deferral is an important future direction. Meissa : Multi-modal Medical Agentic Intelligence 15 
+
+## A Supplementary Material 
+
+This supplementary material provides additional details and results deferred from the main paper for space. We include: the complete data generation algo-rithm (Sec. A.1), dataset and benchmark details (Sec. A.2), agent environment tool specifications (Sec. A.3), prospective vs. retrospective supervision compar-ison (Sec. A.4), trajectory validation pipeline (Sec. A.5), extended experimen-tal results (Sec. A.6), training details (Sec. A.7), framework prompts and data generation details (Sec. A.8), latency distribution analysis (Sec. A.9), qualita-tive failure and recovery analysis (Sec. A.10), MDAgents trajectory examples (Sec. A.11), and clinical simulation trajectory examples (Sec. A.12). 
+
+A.1 Algorithm: Stratified Trajectory Data Generation 
+
+Algorithm 1 presents the complete procedure for stratified trajectory data gener-ation, including the three-tier hierarchy, retry logic for agentic trajectories ( K=8 
+
+retries per residual sample), and discard handling for persistently failed samples. 
+
+Key design choices: – Retry logic : Each residual sample receives up to K=8 attempts in the agent environment. Single API-call success rate on residual samples is 89%; the re-maining incomplete samples are discarded rather than included with incorrect trajectories. 
+
+– Environment selection : Each sample is evaluated in a pre-defined environ-ment based on dataset-to-environment evaluation setting (e.g., MIMIC-CXR-VQA → tool calling, MedQA → multi-agent collaboration). 
+
+– Validation : Valid (τ ) applies structural and behavioral filters (see Sec. A.5) before accepting a trajectory. 
+
+– Prospective-retrospective pairing : For each accepted agentic trajectory, both the original prospective trace and a retrospective re-narration are gen-erated, doubling the agentic supervision signal. 
+
+A.2 Dataset and Benchmark Details Training Data Sources Table 6 provides detailed statistics for each training data source, broken down by tier and environment. 
+
+Training data composition. The ∼40K unique trajectories break down as: 8.2K direct (Tier 1, 20%), 9.8K enhanced (Tier 2, 23%), and 23.9K agentic (Tier 3, 57%). Each agentic trajectory appears twice (once as a prospective trace and once as a retrospective re-narration), so the effective training sample count is 41.9K. The tier distribution reflects the natural difficulty spectrum: most queries are solvable by the student or teacher directly; only the hardest 37% require full agent environments. 16 Chen et al. 
+
+Algorithm 1 Stratified Trajectory Data Generation 
+
+Input: Training set Dtrain , student model MS , teacher model MT , agent environ-ments {E 1, . . . , E4}, max retries K=8 
+
+Output: Training dataset DSFT 
+
+1: Ddirect , Denhanced , Dagentic , Ddiscard ← ∅ 
+
+2: // Tier 1: Student direct reasoning 
+
+3: for (x, y ) ∈ D train do 
+
+4: if MS (x) = y then 
+
+5: Ddirect ← D direct ∪ { (x, τ direct )} ▷ T =0 , correct 6: end if 
+
+7: end for 
+
+8: // Tier 2: Teacher enhanced reasoning 
+
+9: for (x, y ) ∈ D train \ D direct do 
+
+10: if MT (x) = y then 
+
+11: Denhanced ← D enhanced ∪ { (x, τ enhanced )} ▷ T =0 , stronger reasoning 12: end if 
+
+13: end for 
+
+14: Dresidual ← D train \ (Ddirect ∪ D enhanced )
+
+15: // Tier 3: Teacher agentic trajectories with retry 
+
+16: for (x, y ) ∈ D residual do 
+
+17: success ← false 
+
+18: for k = 1 to K do 
+
+19: Select environment Ei based on dataset → environment mapping 20: τpro ← A T (x; Ei) ▷ Prospective trajectory 21: if answer (τpro ) = y ∧ Valid (τpro ) then 
+
+22: τretro ← Recap (MT , x, y, τ pro ) ▷ Retrospective trajectory 23: Dagentic ← D agentic ∪ { (x, τ pro , τ retro )}
+
+24: success ← true ; break 
+
+25: end if 
+
+26: end for 
+
+27: if success = false then 
+
+28: Ddiscard ← D discard ∪ { (x, y )} ▷ Failed after K retries 29: end if 
+
+30: end for 
+
+31: // Combine all tiers 
+
+32: DSFT ← D direct ∪ D enhanced ∪ { (τ pro , τ retro ) | · ∈ D agentic }
+
+33: return DSFT 
+
+Evaluation Benchmark Details Table 7 provides additional details for each evaluation benchmark. 
+
+OOD benchmarks. ChestAgentBench and NEJM were strictly excluded from all trajectory generation. We verified zero contamination via n-gram de-contamination (n=8 ): no 8-gram from any test question appears in the training set. 
+
+Soft-match accuracy. For open-ended VQA (MIMIC-CXR-VQA), we use bidi-rectional token overlap with medical synonym normalization [1]. Synonyms in-clude: “PICC line” = “peripherally inserted central catheter”, “ETT” = “endo-tracheal tube”, etc. Meissa : Multi-modal Medical Agentic Intelligence 17                                                                   
+
+> Table 6: Training data statistics by tier and environment. Each row shows the number of trajectories contributed by each source. “Tier 3 Discard” counts samples that failed the data filtering. Dataset Tier 1 Tier 2 Tier 3 Total Tier 3 Discard
+> Continuous Tool Calling
+> MIMIC-CXR-VQA 1.2k 0.2k 3.5k 4.9k 14.3k
+> Interleaved Thinking with Image
+> PathVQA 0.5k 1.1k 6.0k 6.6k 19.1k SLAKE 0.3k 0.3k 1.1k 1.7k 2.7k VQA-RAD 0.4k 0.1k 0.7k 1.2k 1.1k MIMIC-CXR-VQA 1.0k 0.2k 3.5k 5.7k 6.5k
+> Multi-Agent Collaboration
+> MedQA 0.6k 1.3k 0.7k 2.6k 4.4k PubMedQA 0.3k 0.3k 0.3k 0.9k 0PathVQA 1.0k 2.4k 1.2k 4.6k 8.7k MIMIC-CXR-VQA 1.6k 3.9k 1.8k 7.3k 4.5k
+> Clinical Simulation
+> MedQA 2.1k 04.3k 6.4k 1.6k MIMIC-IV 0.4k 00.8k 1.2k 1.7k
+> Total 8.2k 9.8k 23.9k 41.9k ∼64.6k
+
+Clinical simulation evaluation. For clinical simulation benchmarks (NEJM, MIMIC-IV), where answers are free-form diagnoses, we use a multi-stage accu-racy pipeline: exact string match → substring match → token overlap ( ≥80%). All benchmarks ultimately report accuracy. 
+
+A.3 Agent Environment Tool Details Continuous Tool Calling (MedRAX) The tool-calling environment provides 8 specialized medical imaging tools. Table 8 lists each tool with its input/output specification. 
+
+Tool versions. Each tool exists in two versions: a Normal version (for inference) and a Think version (for Gemini trace generation) that includes an additional 
+
+thought field requiring the agent to articulate its reasoning before each tool call. 
+
+Interleaved Thinking with Image (Ophiuchus) The Thinking with Im-age environment provides vision manipulation tools that produce edited images injected back into the conversation context: 
+
+– ZoomInSubfigure : Crops and enlarges a sub-region of the image for detailed inspection. 
+
+– SegmentRegionAroundPoint (SAM2 [38]): Segments the region around a specified point, producing a colored mask overlay. 18 Chen et al. 
+
+Table 7: Evaluation benchmark details by agent environment. Test set sizes, question formats, and evaluation metrics. Benchmarks shared across environments (e.g., MedQA) are listed under each with environment-specific test sizes. † = strict OOD. Benchmark Domain Test Size Format Metric ID/OOD 
+
+Framework I: Continuous Tool Calling 
+
+MIMIC-CXR-VQA Radiology 1,000 Open-ended Soft-match acc. ID ChestAgentBench † Radiology 2,500 Open-ended (7 cat.) Per-category acc. OOD 
+
+Framework II: Interleaved Thinking with Image 
+
+PathVQA Pathology 3,362 Yes/No + Open Accuracy ID SLAKE Mixed 1,061 Yes/No + Open Accuracy ID VQA-RAD Radiology 451 Yes/No + Open Accuracy ID OmniMedVQA † Mixed 5,000 4-way MCQ Accuracy OOD MedXpertQA † Clinical 2,000 5-way MCQ Accuracy OOD 
+
+Framework III: Multi-Agent Collaboration 
+
+MIMIC-CXR-VQA Radiology 1,000 Open-ended Soft-match acc. ID PathVQA Pathology 3,362 Yes/No + Open Accuracy ID MedQA Clinical 1,273 4-way MCQ Accuracy ID PubMedQA Biomedical 500 Yes/No/Maybe Accuracy ID 
+
+Framework IV: Clinical Simulation 
+
+MedQA Clinical 106 Open-ended (OSCE) Soft-match acc. ID MedQA Ext. Clinical 213 Open-ended (OSCE) Soft-match acc. ID NEJM † Clinical 15 Open-ended Soft-match acc. OOD NEJM Ext. † Clinical 120 Open-ended Soft-match acc. OOD MIMIC-IV Clinical 288 Open-ended Soft-match acc. ID 
+
+– BioMedParseTextSeg (BiomedParse [55]): Text-prompted biomedical im-age segmentation. 
+
+– OCR : Extracts text from image regions (useful for labeled pathology slides). 
+
+– Terminate : Produces the final answer; must be the last action in every tra-jectory. The key difference from tool calling is that observations contain new images 
+
+(cropped regions, annotated patches, segmentation overlays) injected as <image> 
+
+tokens, creating multi-round visual reasoning chains. 
+
+Multi-Agent Collaboration (MDAgents) The MDAgents environment im-plements adaptive complexity routing with three levels: 
+
+– Basic : Single-expert direct answer. 
+
+– Intermediate : Multi-agent debate with recruited specialists. Includes expert recruitment, individual analysis, multi-round debate, and moderator synthe-sis. Meissa : Multi-modal Medical Agentic Intelligence 19                 
+
+> Table 8: MedRAX tool specifications. Each tool is defined as a JSON schema in the system prompt. Tool Input Output ChestXRayClassifier CXR image 14 pathology probabilities ChestXRaySegmentation CXR image, anatomy Seg. mask + region stats CheXagent VQA CXR image, question Free-text answer LLaVA-Med VQA Medical image, question Free-text answer XRayPhraseGrounding CXR image, text phrase Bounding box coordinates ChestXRayReportGen CXR image Structured radiology report DICOMProcessor DICOM file Extracted metadata + image ImageVisualizer Image, annotations Annotated image
+
+– Advanced : Multidisciplinary team consultation. Trajectories from this environment produce 8 distinct SFT types (difficulty assessment, expert recruitment, expert analysis, debate, synthesis, plus retro-spective variants for the first two and last). 
+
+Clinical Simulation (AgentClinic) The simulation environment models doctor-patient encounters in OSCE (Objective Structured Clinical Examination) for-mat: 
+
+– RequestPhysicalExam : Returns findings from a specified physical exami-nation. 
+
+– RequestTest : Returns results of a diagnostic test (labs, imaging). 
+
+– Terminate : Issues the final diagnosis. Patient agents are scripted from structured clinical vignettes (MedQA →
+
+OSCE conversion via Gemini, MIMIC-IV EHR records). These produce the longest trajectories (up to 10+ actions) as the doctor agent gathers clinical evidence iteratively. 
+
+A.4 Prospective vs. Retrospective Supervision 
+
+Table 9 provides a detailed comparison of the two supervision modes. 
+
+Retrospective generation process. Given a prospective trajectory τ pro with correct answer y, the recap agent receives: 1. The original question x,2. The correct answer y,3. The sequence of observations from τ pro (tool outputs, agent responses, patient replies). The agent then re-narrates the reasoning while preserving the original action sequence. The same tools are called in the same order, but the reasoning between actions is tightened into a clean, post-hoc narrative that explains why each action was taken given what was ultimately learned. 20 Chen et al.                    
+
+> Table 9: Prospective vs. retrospective trajectory comparison.
+> Dimension Prospective (Forward) Retrospective (Backward) Generation time During real-time inference After correct answer is known Answer knowledge Agent does not know yAgent is given yas context Uncertainty level High (planning, hypotheses, con-tingencies) Low (hindsight rationalization) Error content May contain wrong assumptions, backtracking Clean, logically consistent Reasoning style Process-driven, exploratory Result-driven, decisive Action sequence Original (may include suboptimal steps) Same actions, re-narrated reason-ing Training signal Exploration policy: navigating un-certainty Execution policy: efficient reason-ing ID vs. OOD Better OOD generalization Better ID performance
+
+A.5 Trajectory Validation Pipeline 
+
+All generated trajectories undergo a two-stage validation pipeline before inclu-sion in the training set. 
+
+Structural Filtering Structural filters verify format compliance: 
+
+– Correctness : Only trajectories arriving at the correct answer are retained (answer (τ ) = y). 
+
+– Turn-type integrity : Conversations must follow the human → (function_call 
+
+→ observation )∗ → gpt pattern. 
+
+– Tool call validity : Each function_call must reference a tool defined in the system prompt with valid JSON arguments. 
+
+– Terminate presence : Every trajectory must end with a termination ac-tion (tool-specific: Terminate for thinking with image and clinical simulation, 
+
+[FINAL] marker for MedRAX, synthesis turn for MDAgents). 
+
+– Image alignment : The number of <image> tokens must match the number of entries in the images list. 
+
+– Length bounds : Trajectories exceeding 10,000 characters total or containing 
+
+>4 tool calls (MedRAX) / >6 rounds (thinking with image) / >12 rounds (multi-agent collaboration & clinical simulation) are discarded. 
+
+Behavioral Filtering Behavioral filters detect semantic quality issues: 
+
+– Hallucination detection : Scan <think> blocks for medical keywords (pathol-ogy names, anatomical terms) not present in the original question or tool outputs. If a medical term appears in reasoning but not in any input or ob-servation, the trajectory is flagged and reviewed. Meissa : Multi-modal Medical Agentic Intelligence 21                        
+
+> Table 10: Meissa results with standard deviations. Mean ±σover 3 seeds.
+> MIMIC ChestAg PathVQA SLAKE VQA-RAD MedQA PubMedQA NEJM MIMIC-IV
+> Meissa ±0.8 ±1.2 ±0.6 ±0.9 ±1.5 ±1.1 ±1.3 ±2.4 ±1.6
+
+– Repetition loops : Consecutive duplicate tool calls (same tool, same argu-ments) are detected and the trajectory is discarded. 
+
+– Truncation detection : Per-type checks for unclosed markdown formatting, missing terminal punctuation, or incomplete JSON structures indicate trun-cated API responses. 
+
+– Class balance : Downsample majority classes (e.g., “yes” answers in binary VQA are kept at 1/3 rate) to prevent trivial shortcut learning. 
+
+– Content length : Individual turns with <10 characters of meaningful content (excluding formatting) are rejected. 
+
+– Thought field presence : For agentic trajectories, each function_call must contain a non-empty <think> block articulating reasoning. 
+
+Quality audit. After automated filtering, a random 10% sample of remaining trajectories is reviewed by Claude Opus [3] for hallucinations, logical inconsisten-cies, and low-quality reasoning. Trajectories flagged by the audit are manually inspected and discarded if confirmed. 
+
+A.6 Extended Experimental Results Standard Deviations (3-Seed Results) All Meissa results in the main paper are mean over 3 independent training runs (different random seeds for LoRA initialization and data shuffling). Table 10 reports the full mean ± standard deviation. Standard deviations are small across all benchmarks ( σ < 2.5 on all bench-marks), indicating stable training dynamics under LoRA fine-tuning. 
+
+ChestAgentBench Per-Category Breakdown ChestAgentBench evaluates 7 categories of chest X-ray understanding. Table 11 provides the per-category breakdown. 
+
+Per-category gains. The largest improvements over the base model occur in the characterization (+22.1 points) and diagnosis (+19.0 points) categories, where Meissa leverages tool-generated structured outputs (e.g., segmentation masks, report summaries) to ground fine-grained clinical attributes. Classifica-tion (+16.9) and detection (+15.8) also benefit substantially. Categories where the base model already performs comparatively well— comparison (+11.5) and 
+
+relationship (+11.3)—show smaller but consistent gains, suggesting these tasks rely more on parametric visual knowledge than on explicit tool augmentation. 
+
+Strategy Selection: Routing Distribution and Efficiency 22 Chen et al.                                                              
+
+> Table 11: ChestAgentBench per-category accuracy. Meissa ’s improvement over the base model is most pronounced on characterization and diagnosis categories where tool-generated structured outputs provide explicit clinical grounding. Category Qwen3-VL-4B Answer-only SFT GPT-4o MedRAX+GPT-4o Meissa
+> Detection 46.9 53.5 58.7 64.1 62.7 Classification 45.2 51.8 54.6 62.9 62.1 Localization 48.8 55.6 59.0 63.6 63.0 Comparison 50.0 55.4 55.5 61.8 61.5 Relationship 51.5 56.5 59.0 63.1 62.8 Diagnosis 43.0 50.3 52.6 62.5 62.0 Characterization 41.5 49.2 56.1 64.0 63.6 Overall 46.6 53.3 56.4 63.1 62.8
+> Table 12: Routing distribution by difficulty. Percentage of queries routed to each strategy. Easy = student-solvable; Medium = teacher-solvable without tools; Hard = requires agent environment. Difficulty Direct ( T=0 ) Agentic ( T > 0) Avg Depth Easy 96% 4% 0.1 Medium 62% 38% 0.8 Hard 3% 97% 2.4 Overall 72% 28% 0.6
+
+Routing Distribution by Difficulty. Table 12 shows how Meissa ’s learned routing distributes queries across interaction depths as a function of query difficulty. The learned routing exhibits a clear monotonic relationship: easy queries are overwhelmingly routed to direct reasoning (96%), while hard queries trigger agentic interaction (97%). Medium-difficulty queries show intermediate routing, with approximately 38% escalated to tool use. This demonstrates that the model has learned to calibrate its confidence at a fine granularity rather than applying a binary easy/hard threshold. 
+
+Full Efficiency Comparisons. Table 13 presents a comprehensive efficiency com-parison across all strategy variants, extending the counterfactual analysis in the main paper. 
+
+Key findings: – Shuffled trajectories (same data, destroyed causal action order) underper-form intact trajectories by 7.7 points, confirming the model learns causal decision-making rather than benefiting from richer data exposure alone. 
+
+– Random-sample agentic (agentic trajectories for randomly selected sam-ples, not difficulty-stratified) underperforms stratified selection by 4.3 points, validating the curriculum design. Meissa : Multi-modal Medical Agentic Intelligence 23                                               
+
+> Table 13: Full efficiency comparison. Accuracy vs. cost for all strategy variants. Shuffled trajectories destroy causal action order while preserving data content. Strategy Accuracy Avg Actions Avg Tokens Relative Cost Base model (Qwen3-VL-4B) 46.6 1.0 452 1×
+> Answer-only SFT 53.3 1.0 485 1×
+> Shuffled trajectories 55.1 1.6 812 1.7 ×
+> Random-sample agentic 58.5 1.8 965 2.0 ×
+> Always direct ( T=0 )54.2 1.0 479 1×
+> Always agentic 45.9 3.5 2,082 4.3 ×
+> Learned routing (Ours) 62.8 1.7 959 2.0 ×
+> Oracle (upper bound) 63.2 1.5 933 1.9 ×
+> Table 14: Teacher sensitivity analysis. Replacing Gemini-3-flash with Qwen3-32B yields comparable results, confirming that the supervision structure matters more than the specific teacher. Teacher Model ID Avg OOD Avg Overall Gemini-3-flash 66.3 50.3 61.3 Qwen3-VL-32B-Instruct 63.5 47.2 58.0 Difference −2.8 −3.1 −3.3
+
+– Learned routing achieves 89% of oracle accuracy at only 2.0 × cost vs. always-agentic 4.3 ×, a 53% cost reduction with minimal accuracy loss. 
+
+Teacher Sensitivity Analysis We investigate whether Meissa ’s performance depends on the specific teacher model by replacing Gemini-3-flash with an open-source alternative (Qwen3-VL-32B-Instruct) for trajectory generation. The difference is only −3.3 points overall, demonstrating that Meissa ’s framework is robust to teacher choice. This has practical implications: orga-nizations preferring fully open-source pipelines can use Qwen3-32B without sig-nificant quality degradation. The supervision structure (stratified trajectories, prospective-retrospective pairing) contributes more to final performance than teacher model quality. 
+
+Per-Perturbation Robustness Breakdown Table 15 extends the robustness analysis from the main paper with per-benchmark breakdowns for each pertur-bation type. 
+
+Environment-specific patterns: – Tool Calling : Most sensitive to visual feedback removal ( → blank), con-firming the model relies on segmentation masks and classification outputs for spatial reasoning. Bounding box noise causes moderate degradation, indicat-ing learned spatial precision. 24 Chen et al. 
+
+Table 15: Per-perturbation robustness breakdown. Accuracy on agentic-only queries ( T > 0) under each perturbation, with ∆ vs. unperturbed. Tool Calling Thinking with Image MDAgents Perturbation MIMIC ChestAg PathVQA SLAKE MedQA PubMedQA Unperturbed 72.0 66.5 75.2 80.3 57.2 77.9 Paraphrased outputs 71.2 65.8 76.7 76.6 56.5 76.8 Bbox noise ( ±10px) 69.5 63.1 73.8 77.4 — —Visual → blank 64.3 58.2 72.0 67.2 — —Visual → random 58.6 51.4 56.6 66.5 — —Tools disabled ( T =0 ) 60.1 54.2 72.1 75.7 51.8 76.8 Altered prompt format 70.5 — — — 55.3 75.4 
+
+Table 16: Accuracy under maximum depth constraints. Tmax = maximum allowed interaction depth at inference. Tmax =0 forces direct reasoning for all queries. 
+
+Tmax Overall Acc Easy Acc Hard Acc Avg Depth Avg Tokens 0 (direct only) 55.6 61.2 38.5 0.0 479 1 58.3 60.8 48.7 0.4 618 2 60.0 60.5 54.6 0.9 762 3 60.4 60.3 57.1 1.2 864 
+
+∞ (unconstrained) 61.3 59.6 60.4 1.7 959 
+
+– Thinking with Image : Visual feedback replacement ( → random images) causes the largest drops, as the interleaved image-text chain is disrupted. This confirms the model conditions each reasoning step on the actual content 
+
+of tool-generated images rather than simply the presence of an image token. 
+
+– MDAgents : Most robust to perturbations overall, likely because multi-agent trajectories operate primarily over text. The altered prompt format test (chang-ing persona names and debate structure) confirms the model abstracts beyond template memorization. 
+
+Depth-Constrained Performance Table 16 provides the full depth-constrained analysis referenced in the main paper. Accuracy increases monotonically with Tmax , with diminishing returns be-yond Tmax =3 : the jump from Tmax =0 to Tmax =3 accounts for 4.8 of the total 5.7 point improvement. This confirms efficient depth allocation, as most agentic queries are resolved within 3 actions. 
+
+A.7 Training Details Hyperparameter Configuration Table 17 provides the complete hyperpa-rameter configuration for training. Meissa : Multi-modal Medical Agentic Intelligence 25                       
+
+> Table 17: Training hyperparameters.
+> Hyperparameter Value Base model Qwen3-VL-4B-Instruct Fine-tuning method LoRA LoRA rank 32 LoRA alpha 64 LoRA target modules All linear layers Learning rate 5×10 −5
+> Learning rate scheduler Cosine Warmup ratio 0.1 Epochs 3Batch size (effective) 64 Gradient accumulation steps 8 Max sequence length 6144 Precision bf16 Optimizer AdamW Weight decay 0.01 Framework LLaMA-Factory Hardware 8×NVIDIA A6000 (48 GB) Training time ∼12 hours Training tokens ∼239M
+
+Trajectory Serialization All trajectories are serialized in ShareGPT format with four turn types: 
+
+– human : Initial state containing the user question and optional <image> tokens. 
+
+– function_call : Agent action, containing a <think> reasoning block followed by a JSON tool invocation ( {"name": "...", "arguments": {...}} ). 
+
+– observation : Environment feedback, containing tool output text and option-ally new <image> tokens (for Thinking with Image). 
+
+– gpt : Final action, containing a <think> reasoning block followed by the answer (marked with [FINAL] in MedRAX). Tool definitions are embedded in the tools field as JSON schemas, and image paths are listed in the images field. The system prompt specifies the agent’s role and available tools. 
+
+Compute Budget – Training : ∼100 GPU-hours on 8 ×A6000 (48 GB), processing ∼239M tokens across 3 epochs. Wall-clock time: ∼12 hours. 
+
+– Data generation : ∼105K Gemini-3-flash API calls ($450 total cost). Qwen3-VL-4B inference via vLLM on a single A6000. 
+
+– Inference : vLLM serving on a single A6000. Average inference time per query: 1.2s (direct) to 10.6s (agentic). 26 Chen et al. 
+
+A.8 Framework Prompts and Data Generation Details 
+
+This section provides the complete system prompts used for data generation and SFT training in each of the four agent environments. All agentic trajectories follow the stratified generation procedure described in Algorithm 1. The final training dataset is constructed by directly concatenating all trajectories from the four environments without any inter-environment weighting. 
+
+Continuous Tool Calling (MedRAX) Prompts Data generation prompt (prospective). The teacher model (Gemini-3-flash) receives the following sys-tem prompt during prospective trajectory generation. It encodes a task-aware tool selection strategy with trust orderings for different clinical categories (Tab. 18). Tool schemas are provided separately via JSON (Tab. 8). 
+
+Table 18: MedRAX prospective data generation prompt. 
+
+You are a medical imaging agent for chest X - ray question answering . Your goal is to answer correctly while following a STRICT and STABLE tool - using strategy . Tools are helpful but uneven in quality . Uncontrolled tool use will reduce performance . You MUST follow the strategy below . - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -GENERAL RULES - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -1. Always begin with your own visual inspection . Form an initial hypothesis and confidence . 2. Only use tools when they are necessary to resolve uncertainty . Do NOT explore tools freely . 3. Maximum total tool calls : 4. Default : at most 2 tools . 4. Never call the same tool twice unless the previous call FAILED . If a tool fails , you may switch tools but must not retry blindly . 5. If two consecutive tool results do not change your belief , you MUST stop and answer . - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -TASK - AWARE TOOL STRATEGY - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -A ) Tubes , Lines , Devices First decide whether the question is about : - Internal / invasive devices ( CVC , NG tube , PICC , chest tube ) - External / non - invasive objects ( EKG leads , clips , nipple shadows ) Internal devices : Trust order : c h e s t _ x r a y _ r e p o r t _ g e n e r a t o r >>> x ray _p hr ase _g ro und in g > chest_xray_expert >>> llava_med_qa Strategy : - First use c h e s t _ x r a y _ r e p o r t _ g e n e r a t o r . - If a specific device is suspected but not mentioned , use xr ay_ ph ra se_ gr ou ndi ng ONCE . - Do NOT trust complex spatial descriptions from chest_xray_expert . - Do NOT use llava_med_qa unless all others fail . External devices : Trust order : xr ay _ph ra se _gr ou nd ing > chest_xray_expert > visual inspection >>> report_generator Meissa : Multi-modal Medical Agentic Intelligence 27 
+
+Strategy : - If report is silent , this does NOT mean absence . - Prefer visual evidence and grounding . B ) Pathology Presence and Location Acute / major ( pneumothorax , effusion , mass , pneumonia ) : Trust order : c h e s t _ x r a y _ r e p o r t _ g e n e r a t o r > classifier ( if >0.6) > x ray _p hr ase _g ro und in g > expert Chronic / subtle ( osteoarthritis , scarring , COPD ) : Trust order : xr ay _ph ra se _gr ou nd ing > expert > report_generator Conflict rule : If report says " clear " BUT classifier is high AND grounding localizes , visual evidence OVERRIDES the report . Grounding failure rule : If x ra y_ phr as e_ gro un di ng errors once , DO NOT retry . Immediately downgrade to classifier + expert . C ) Anatomy and Visual QA ( arrows , specific targets ) Arrow / specific structure : Trust order : chest_xray_expert > x ra y_p hr as e_g ro un din g >>> llava_med_qa > report_generator Laterality : Trust order : report_generator > x ra y_p hr as e_g ro un din g > expert >>> llava_med_qa Never rely on llava_med_qa for left / right decisions . - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -OUTPUT FORMAT - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -You may call tools using the structured tool - calling interface . After that , you MUST state your final brief reasoning process (50 words or below ) . Then finish with : [ FINAL ] < final_answer > Final answer rules : - For yes / no questions , output exactly " yes " or " no " ( lowercase ) . - Otherwise output the shortest correct phrase . 
+
+SFT training prompt. The student model receives the following simplified prompt at both training and inference time (Tab. 19). The task-aware strategy is not included; instead, the model learns tool selection behavior implicitly from the training trajectories. 
+
+Table 19: MedRAX SFT training prompt. 
+
+You are a medical imaging agent for chest X - ray question answering . Your goal is to answer correctly by following a robust and disciplined tool - using policy . - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -THINKING PROCESS - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -You possess an internal chain of thought . Before taking any action ( calling a tool ) or giving a final answer , you MUST enclose your reasoning , planning , and reflection process within < think > and </ think > tags . - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -28 Chen et al. 
+
+TOOL USE - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -If you need external information to answer the question , generate a function call . 1. Analyze the current state in your < think > block . 2. Call the appropriate tool with precise arguments . 3. Review the observation in your next < think > block . - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -FINAL ANSWER - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -When you have sufficient information , output [ FINAL ] followed by the answer . - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -PRINCIPLES - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -1. Do not call tools redundantly . 2. Stop early when evidence is sufficient . 3. Handle tool outputs critically . 
+
+Retrospective data generation. For retrospective trajectories, the same base prompt is used with an additional [RECAP] section appended to the output format, requiring a structured per-step evidence log with fields: step , tool ,
+
+why , got , update (increase/decrease/no_change), evidence , inference , and 
+
+confidence (0–100). At inference time, Meissa receives the SFT prompt with the same tool schemas but without task-aware strategy instructions, as this behavior is learned from the training trajectories. 
+
+Interleaved Thinking with Images (Thinking with Image) Prompts System prompt (prospective/forward). The teacher model receives the fol-lowing prompt during prospective trajectory generation (Tab. 20). It defines vi-sion tools and requires JSON-structured output with a thought field for reason-ing. Tools include ZoomInSubfigure , SegmentRegionAroundPoint (SAM2 [38]), 
+
+BioMedParseTextSeg (BiomedParse [55]), and Terminate .
+
+Table 20: Think with Image forward system prompt. 
+
+[ BEGIN OF GOAL ] You are a visual assistant for medical images . Given an image and a question , decide whether to use tools to help you answer . You must output a JSON object with fields " thought " and " actions ". You may call tools when they are helpful for visual understanding , localization , or segmentation . If tools are not helpful , leave " actions " empty . IMAGE REFERENCE PROTOCOL : - " img_original ": The initial full - resolution input image . - " img_last ": The output image from the immediate previous step . - " img_round_N ": The output image from a specific past step N . The system will explicitly tell you the ID of the generated image in the Observation ( e . g . , "[ Output Image ID : img_round_0 ]") . [ END OF GOAL ] [ BEGIN OF ACTIONS ] Name : ZoomInSubfigure Description : Crops the image to a specific region to see visual details clearly . Arguments : {Meissa : Multi-modal Medical Agentic Intelligence 29 
+
+’ image ’: ’ The image identifier . ’ , ’ param ’: ’ bounding box [ x1 , y1 , x2 , y2 ] , 0 -1000 normalized . ’ }Name : S e g m e n t R e g i o n A r o u n d P o i n t Description : Segments a specific object or region around given point coordinates . Use ONLY when the location of interest is known or can be precisely specified by coordinates . Arguments : {’ image ’: ’ The image identifier . ’ , ’ param ’: ’ coordinates x =" value " y =" value " (0 -1000 scale ) . ’ }Name : BioMedParseTextSeg Description : Performs text - guided semantic segmentation on medical images . Useful for identifying and localizing semantic medical entities ( neoplastic cells , tumor tissue , pathological structures , etc .) . Arguments : {’ image ’: ’ The image identifier . ’ , ’ param ’: ’ semicolon - separated list of short noun phrases ( each <= 6 words ) . ’ }Name : Terminate Description : Concludes the task and provides the final answer . Output constraints : - Keep it short : 1 -6 words for open - ended , " Yes "/" No " for y / n . - Do NOT add explanation , justification , or extra sentence . Arguments : { ’ans ’: ’A short final answer string . ’ }[ END OF ACTIONS ] [ BEGIN OF TASK INSTRUCTIONS ] 1. Only select actions from ACTIONS . 2. Call at most one action at a time . 3. Prefer BioMedParseTextSeg for semantic medical targets . 4. Use S e g m e n t R e g i o n A r o u n d P o i n t only when a specific point is clearly known . 5. Always finish by calling Terminate with the final answer . 6. YOUR OUTPUT MUST BE VALID JSON . 7. The final answer will be evaluated mainly by string match ; extra words can make a correct answer be judged incorrect . [ END OF TASK INSTRUCTIONS ] [ BEGIN OF FORMAT INSTRUCTIONS ] Your output must be in strict JSON format : {" thought ": " brief recap and decision rationale " , " actions ": [{" name ": " action_name " , " arguments ": {" argument1 ": " value1 "}} ]}[ END OF FORMAT INSTRUCTIONS ] 
+
+Retrospective/backward prompt. For retrospective trajectory generation, the thought field is removed from intermediate rounds, and a [BEGIN OF RECAP INSTRUCTIONS] section is appended (Tab. 21). The recap requires a structured JSON list with one entry per action taken. 
+
+Table 21: Think with Image backward recap instructions (appended to the system prompt). 
+
+[ BEGIN OF RECAP INSTRUCTIONS ] 30 Chen et al. 
+
+You MUST include a " recap " field ONLY in the same JSON object where you call Terminate . The recap is a hindsight evidence and decision summary . It is NOT a planning trace . The " recap " field must be a list of objects in chronological order . Each action taken ( including final Terminate ) must have exactly one recap entry . Schema for tool actions : {" step ": < integer > , " tool ": " < tool_name >" , " why ": " < short reason for calling the tool >" , " got ": " < short finding from the tool output >" , " update ": " increase " | " decrease " | " no_change " , " evidence ": " < what in the observation supports the finding >" , " inference ": " < short inference if needed >" , " confidence ": < integer 0 -100 > }Schema for the final Terminate action : {" step ": < integer > , " tool ": " Terminate " , " why ": " < short reason why the model can now answer >" }Rules : - Include one recap entry for EVERY action , including Terminate . - " evidence " must be grounded in tool observations , not speculation . - Do NOT include planning , hypotheses , or alternative branches . - If no tools were called , recap must contain exactly ONE entry for Terminate . [ END OF RECAP INSTRUCTIONS ] 
+
+Training data construction. We first run Qwen3-VL-4B on four medical VQA datasets (PathVQA, SLAKE, VQA-RAD, MIMIC-CXR-VQA) without tools (Tier 1). Samples answered incorrectly are re-processed by Gemini-3-flash with tool access (Tiers 2–3), using both forward and backward prompts. The combined training set contains 15,427 samples. At inference time, the same tool suite is available, with tool outputs (including generated images) injected as 
+
+<image> tokens into the conversation context. 
+
+Multi-Agent Collaboration (MDAgents) Prompts The MDAgents frame-work implements a structured multi-agent debate pipeline. We provide the com-plete prompts for each stage below. 
+
+Difficulty assessment. Each question is first classified by a difficulty asses-sor agent (Tab. 22). Basic questions are routed to single-expert direct answer; intermediate questions trigger multi-agent debate with 3 recruited specialists. 
+
+Table 22: MDAgents difficulty assessment prompt and SFT response templates. 
+
+System : You are a medical expert who conducts initial assessment and your job is to decide the difficulty / complexity of the medical query based on text and image . Meissa : Multi-modal Medical Agentic Intelligence 31 
+
+User : Now , given the medical query ( and potentially an image ) , you need to decide the difficulty / complexity of it : { question }. Please indicate the difficulty / complexity of the medical query among below options : 1) basic : a single medical agent can output an answer based on the visual and text info . 2) intermediate : number of medical experts with different expertise should discuss and make final decision . 3) advanced : multiple teams of clinicians from different departments need to collaborate with each other to make final decision . --- SFT Response Template ( basic ) ---< think > This is a straightforward medical question that can be answered by a single medical expert based on the available visual and text information , without requiring multi - expert discussion or cross - department collaboration . </ think > 1) basic --- SFT Response Template ( intermediate ) ---< think > This medical question requires expertise from multiple medical specialists with different backgrounds to discuss and reach a consensus , as it involves complex clinical reasoning that benefits from multi - expert deliberation . </ think > 2) intermediate 
+
+Expert recruitment. For intermediate-difficulty questions, a recruiter agent selects domain-specific specialists with communication hierarchy (Tab. 23). 
+
+Table 23: MDAgents expert recruitment prompt. 
+
+System : You are an experienced medical expert who recruits agroup of experts with diverse identity and ask them to discuss and solve the given medical query . User : Question : { question } You can recruit 3 experts in different medical expertise . Considering the medical question and the options for the answer , what kind of experts will you recruit to better make an accurate answer ? Also , you need to specify the communication structure between experts ( e . g . , Pulmonologist == Neonatologist == Medical Geneticist > Cardiologist ) , or indicate if they are independent . For example : 1. Pediatrician - Specializes in the medical care of infants , children , and adolescents . - Hierarchy : Independent 2. Cardiologist - Focuses on the diagnosis and treatment of heart and blood vessel - related conditions . - Hierarchy : Pediatrician > Cardiologist 3. Pulmonologist - Specializes in the diagnosis and treatment of respiratory system disorders . - Hierarchy : Independent IMPORTANT : Do NOT answer the medical question itself . Only output the numbered list of experts in the format above . 
+
+Synthesis and moderator vote. After 2 debate rounds with 3 turns each, a synthesizer produces a report and a moderator renders the final decision (Tab. 24). Moderator prompts are dataset-specific to enforce concise answer formats. 32 Chen et al. 
+
+Table 24: MDAgents synthesis and moderator vote prompts. 
+
+--- Synthesizer ---System : You are a medical assistant who excels at summarizing and synthesizing based on multiple experts from various domain experts . User : Here are some reports from different medical domain experts . { expert_opinions } You need to : 1. Take careful consideration of the following reports . 2. Extract key knowledge from the following reports . 3. Derive the comprehensive and summarized analysis . 4. Derive a refined and synthesized report . Provide your analysis in the following format : < think > Key Knowledge : [3 -5 bullet points ] Total Analysis : [2 -3 sentences ] </ think > your final answer --- Moderator ( MedQA ) ---System : You are a final medical decision maker who reviews all opinions from different medical experts and make final decision . User : Given each agent ’ s final answer , please review each agent ’ s opinion and make the final answer by majority vote . < think > brief reasoning </ think > ( C ) 2 nd pharyngeal arch --- Moderator ( PubMedQA ) ---< think > brief reasoning </ think > your answer : yes / no / maybe --- Moderator ( PathVQA / MIMIC - CXR - VQA ) ---Respond with ONLY the answer in 1 -5 words . No explanation . 
+
+Hindsight recap. For correctly answered samples, a recap agent generates structured retrospective analysis (Tab. 25). The recap covers difficulty justifi-cation, recruitment rationale, and evidence chain synthesis. 
+
+Table 25: MDAgents hindsight recap prompt (intermediate difficulty). 
+
+System : You are a medical reasoning analyst . Generate structured hindsight analysis using the exact section delimiters provided . User : A multi - expert medical consultation correctly answered aquestion . Review the complete record and generate hindsight analysis . Question : { question } Recruited experts : { recruiter_output } Expert opinions : { expert_summary } Synthesis : { synthesis_report } Final answer : { answer } Generate analysis using EXACTLY these delimiters : [ DIFFICULTY_RECAP ] Explain why this question requires intermediate - level multi -expert analysis rather than a single expert . Be specific to this question . (2 -3 sentences ) [/ DIFFICULTY_RECAP ] [ RECRUITMENT_RECAP ] Explain why each recruited specialist was the right choice for this specific question . (1 sentence per expert ) Meissa : Multi-modal Medical Agentic Intelligence 33 
+
+[/ RECRUITMENT_RECAP ] [ SYNTHESIS_RECAP ] Trace the evidence chain : what each expert contributed , how their insights converged , and how this leads to the final answer . (3 -5 sentences ) [/ SYNTHESIS_RECAP ] 
+
+SFT type decomposition. Each trajectory is decomposed into up to 8 SFT training samples: Type 1/1R (difficulty assessment, prospective/retrospective), Type 2/2R (expert recruitment), Type 3 (individual expert analysis), Type 4 (multi-round debate contributions), and Type 5/5R (final synthesis). Recap types (1R, 2R, 5R) replace online <think> blocks with evidence-based hindsight reasoning from the recap agent. We apply the three-tier strategy on MedQA, PubMedQA, PathVQA, and MIMIC-CXR-VQA. 
+
+Clinical Simulation Prompts Doctor agent system prompt (SFT). The following prompt is used for single-agent SFT training, where the multi-agent simulation (doctor, patient, measurement agents) is serialized into tool-calling format (Tab. 26). The {available_exams} and {available_tests} placehold-ers are filled per scenario. 
+
+Table 26: Clinical Simulation doctor agent SFT system prompt. 
+
+[ BEGIN OF GOAL ] You are an expert medical diagnostician evaluating a patient . You will be given the patient ’ s presenting complaint and history . Use the available tools to request physical examinations and medical tests to gather evidence , then provide your final diagnosis . You must reason step - by - step using < think >... </ think > tags before each tool call . [ END OF GOAL ] [ BEGIN OF ACTIONS ] Name : RequestPhysicalExam Description : Request a specific physical examination finding for the patient . Arguments : {’ exam ’: ’ Name of the physical examination ( choose from the Available Physical Examinations list ) ’ }Returns : The examination findings . Examples : {" name ": " RequestPhysicalExam " , " arguments ": {" exam ": " N e u r o l o g i c a l _ E x a m i n a t i o n "}} Name : RequestTest Description : Request a medical test or laboratory result for the patient . Arguments : {’ test ’: ’ Name of the medical test ( choose from the Available Medical Tests list ) ’ }Returns : The test results . Examples : {" name ": " RequestTest " , " arguments ": {" test ": " Blood_Tests "}} 34 Chen et al. 
+
+Name : Terminate Description : Provide your final diagnosis and conclude the evaluation . This must be called to finish . Arguments : {’ diagnosis ’: ’ Your final diagnosis -- the disease or condition name only . ’ }Examples : {" name ": " Terminate " , " arguments ": {" diagnosis ": " Myasthenia gravis "}} [ END OF ACTIONS ] [ BEGIN OF TASK INSTRUCTIONS ] 1. Only select actions from ACTIONS . 2. Call at most one action at a time . 3. After receiving each observation , reason about what you ’ ve learned before deciding next steps . 4. Request only the most relevant exams / tests -- do not request everything blindly . 5. Always finish by calling Terminate with your final diagnosis . 6. YOUR OUTPUT MUST BE VALID JSON in the tool call portion . 7. When you call Terminate , output only the disease / condition name in " diagnosis ". [ END OF TASK INSTRUCTIONS ] [ BEGIN OF AVAILABLE DATA ] Physical Examinations : { available_exams } Medical Tests : { available_tests } [ END OF AVAILABLE DATA ] [ BEGIN OF FORMAT INSTRUCTIONS ] Your output must follow this format : < think > your clinical reasoning here </ think > {" name ": " action_name " , " arguments ": {" arg ": " value "}} [ END OF FORMAT INSTRUCTIONS ] 
+
+OSCE case conversion. MedQA multiple-choice questions are converted to OSCE (Objective Structured Clinical Examination) format via Gemini (Tab. 27), separating patient-reported information from examination findings that must be actively requested by the doctor agent. For MIMIC-IV cases, pa-tient profiles are constructed from EHR records by linking CXR images, lab results, clinical notes, and discharge summaries. 
+
+Table 27: Clinical Simulation OSCE conversion prompt for MedQA questions. 
+
+You are a medical education expert . Convert this USMLE - style multiple - choice question into a structured OSCE case . QUESTION : { question } CORRECT ANSWER : { answer } INSTRUCTIONS : 1. Extract the patient ’ s presenting information ( what they would TELL the doctor ) : demographics , history , symptoms , past medical history , social history , review of systems . 2. Extract physical examination findings ( what the doctor would FIND on exam ) : vital signs , specific exam findings . 3. Extract test / lab results ( what diagnostic tests would SHOW ) : blood tests , imaging , special tests . Meissa : Multi-modal Medical Agentic Intelligence 35                                                                                     
+
+> 4. The correct diagnosis should be aconcise disease / condition . 5. CRITICAL : Do NOT put diagnostic test results or physical exam findings in the patient presentation . The doctor must REQUEST these . 6. If the question doesn ’ t mention certain fields , use reasonable defaults or leave empty . 7. Output ONLY valid JSON , no markdown code blocks . OUTPUT FORMAT ( strict JSON ) : {" OSCE_Examination ": {" O bject ive_f or_Doc tor ": " Diagnose the patient ’ s condition " , " Patient_Actor ": {" Demographics ": " < age > - year - old < gender >" , " History ": " < brief history of present illness >" , " Symptoms ": {" Primary_Symptom ": " < main complaint >" , " Secondary_Symptoms ": [" < symptom1 >" , " < symptom2 >"] } , " Pa st_Me dical _Hist ory ": " < relevant PMH >" , " Social_History ": " < relevant social history >" , " Review_of_Systems ": " < relevant ROS findings >" } , " P h y s i c a l _ E x a m i n a t i o n _ F i n d i n g s ": {" Vital_Signs ": { < key >: < value >} , " < Exam_Category >": { < finding >: < value >} } , " Test_Results ": {" < Test_Category >": { < test >: < result >} } , " Correct_Diagnosis ": " < diagnosis >" }}
+
+Training data construction. Data generation follows the stratified pipeline: Qwen3-VL-4B direct inference (Tier 1), Gemini direct inference on errors (Tier 2), and Gemini within the simulation environment on remaining errors (Tier 3). Each simulation dialogue is converted from multi-agent format (doc-tor, patient, measurement agents) into single-agent tool-calling format for SFT. At evaluation time, the model interacts with the simulation environment for up to 12 turns and must call Terminate with its final diagnosis. 
+
+A.9 Latency Distribution Analysis 
+
+Figure 5 presents the per-query latency distributions for Meissa and Gemini-3-flash+MedRAX on ChestAgentBench side by side. 
+
+Key observations. Meissa ’s latency distribution is heavily right-skewed: 75% of samples complete within 2.7 seconds, reflecting the learned routing behavior where the majority of queries are answered directly ( T =0 ) without tool invoca-tion. The long tail (up to ∼94s) corresponds to complex queries requiring 3–4 tool calls. In contrast, Gemini’s distribution is roughly bell-shaped centered around 60–100 seconds, with a tail extending past 300 seconds. This ∼22 × speedup at the mean (and ∼45 × at the median) demonstrates the practical deployment advantage of a compact, locally-running model with learned strategy selection over an API-dependent agentic system. 36 Chen et al. 0 5 10 15 20 25 30 
+
+> Latency (seconds)
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> Proportion of Samples
+
+Meissa          
+
+> Mean = 4.1s
+> Median = 1.8s
+> (a) Meissa (n=2 ,500 ). Mean: 4.1s, median: 1.8s. 050 100 150 200 250 300
+> Latency (seconds)
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> Proportion of Samples  Gemini 3 Flash + MedRAX
+> Mean = 87.2s
+> Median = 79.2s
+> (b) Gemini-3-flash + MedRAX ( n=75 ). Mean: 87.2s, median: 79.2s.
+
+Fig. 5: Per-query latency distributions on ChestAgentBench. (a) Meissa com-pletes the majority of queries in under 3 seconds; the long tail corresponds to queries invoking multiple tools. (b) Gemini-3-flash + MedRAX averages 87.2s per query due to multiple API calls and remote tool execution, resulting in ∼22 × higher latency than 
+
+Meissa . Note the different x-axis scales. 
+
+A.10 Qualitative Analysis: Failure and Recovery Patterns 
+
+We present representative examples from Meissa ’s inference trajectories that illustrate characteristic failure and recovery patterns. These examples are drawn from ChestAgentBench (tool-calling environment) and PathVQA (interleaved image-text environment). 
+
+Tool-Calling Environment (MedRAX on ChestAgentBench) 
+
+Pattern 1: Over-Invocation of Tools on Simple Questions. Example. A question asks about the chest X-ray shown in Fig. 6 of an 18-year-old with bronchiolitis obliterans: “Which of the following options best describes the findings?” The correct answer is (B): no bronchial wall thickening or pleural thickening detected. 
+
+Meissa calls 6 tools sequentially: CheXagentVQA (“no thickening detected”), 
+
+XRayPhraseGrounding (empty result), ReportGenerator (“lungs are clear”), 
+
+ChestXRayClassifier (all probabilities low), XRayPhraseGrounding for “fibro-sis” (empty result), and CheXagentVQA again (“lungs are clear”). Despite all six tools unanimously confirming normal findings, the model’s reasoning hal-lucinated: “The side view shows a prominent, thickened, and irregular central bronchus” – fabricating findings that every tool denied. The model selected op-tion (D), which was incorrect. 
+
+Analysis. Over-invocation adds context length without information gain. The model’s parametric reasoning overrode consistent tool evidence, suggesting that excessively long contexts degrade the model’s ability to track and synthesize accumulated observations. 
+
+Pattern 2: Recursion Limit from Infinite Tool-Calling Loops. Example. Using the same chest X-ray as Pattern 1 (Fig. 6), a different question asks: “Which Meissa : Multi-modal Medical Agentic Intelligence 37     
+
+> (a) PA view (b) Lateral view
+> Fig. 6: Chest X-ray for Patterns 1 and 2 (case 18321). An 18-year-old with bron-chiolitis obliterans. Both PA and lateral views show clear lungs with no bronchial wall thickening or pleural thickening – a normal-appearing chest X-ray despite clinical dis-ease.
+
+of the following is the most likely explanation for the normal appearance of the chest X-rays in this patient?” (correct: bronchiolitis obliterans can present with normal X-rays). The model entered a tool-calling loop, repeatedly invoking tools searching for abnormalities that do not exist. After 25 iterations (the LangGraph recursion limit), the agent was terminated without producing an answer. 
+
+Analysis. The model failed to recognize that the question itself implies the X-ray is normal, and no tool would find abnormalities. This illustrates a failure mode where the model cannot learn to stop tool calling when the answer requires reasoning about the absence of findings rather than detecting their presence. 
+
+Pattern 3: Conflicting Tool Results Leading to Incorrect Answers. Example. Aquestion asks about a large mass in the left hemithorax (Fig. 7). Meissa calls 4 tools: CheXagentVQA returns “no tension pneumothorax”; XRayPhraseGrounding 
+
+localizes “tension pneumothorax” (grounding tools localize any phrase, regardless of whether the pathology is present); ReportGenerator identifies “pleural effu-sion and atelectasis”; ChestXRayClassifier assigns moderate probabilities to ef-fusion (0.60) and atelectasis (0.53). The model trusted the grounding result over both the expert VQA and the report, concluding “tension pneumothorax” (in-correct; correct answer: intrapulmonary teratoma requiring surgical resection). 
+
+Analysis. The model lacks calibrated trust in different tool types. Phrase grounding tools will always return coordinates for any query text – a high-recall, low-precision behavior. The model incorrectly interpreted “grounding succeeded” as “pathology confirmed,” overriding more reliable diagnostic tools. 
+
+Pattern 4: Tool Errors with Successful Recovery. Example. A question asks about the location of a fractured rib relative to a pulmonary laceration (Fig. 8). 
+
+Meissa calls 4 tools: CheXagentVQA (3 images, produced degenerate output: “The patient, the patient, the patient...”), ReportGenerator (returned useful 38 Chen et al.     
+
+> (a) PA view (b) Lateral view
+> Fig. 7: Chest X-ray for Pattern 3 (case 6577). A 70-year-old woman with a me-chanical mitral valve. PA view shows homogeneous opacification occupying the lower two-thirds of the left hemithorax. Lateral view reveals a well-circumscribed mass with a visible prosthetic valve. The correct diagnosis is intrapulmonary teratoma.
+
+findings: “small left pleural effusion”), XRayPhraseGrounding which crashed with 
+
+MAIRA-2 error: AssertionError , and ChestXRayClassifier (returned mod-erate pathology probabilities). Despite two tool failures, the model fell back to its own visual reasoning: “Visual inspection of the lateral views shows a fracture in the 8th rib.” Combined with the report generator output, it correctly answered (B): 8th intercostal space. 
+
+Analysis. This demonstrates graceful degradation: when individual tools fail, the model can leverage remaining functional tools and its parametric visual knowledge to arrive at the correct answer. The recovery rate in such cases is approximately 71% (10 of 14 recoverable tool-error cases in ChestAgentBench). 
+
+Interleaved Image-Text Environment (Thinking with Image on PathVQA) 
+
+Pattern 5: Repetitive Tool Invocation Without Progress. Example (base model, pre-training). The question “Is this true bilateral Krukenberg?” (Fig. 9; ground truth: yes) triggered 7 consecutive ZoomInSubfigure calls. The model zoomed into the left side of the image, then repeated the exact same crop coordinates ( [100, 130, 289, 399] ) on the already-cropped result five more times, never examining the right side and never calling Terminate . The trajectory exhausted the maximum round limit with no answer produced. In a related example, the model recursively applied ZoomInSubfigure with the same relative coordinates [200, 300, 800, 800] on progressively smaller im-ages (439 ×434 → 264 ×183 → . . . → 68 ×24 pixels), eventually producing an un-readable sliver. This failure mode is largely resolved in Meissa ’s trained version, where 96% of queries are resolved in ≤1 round. Meissa : Multi-modal Medical Agentic Intelligence 39         
+
+> (a) PA view (b) Lateral view (1) (c) Lateral view (2)
+> Fig. 8: Chest X-ray for Pattern 4 (case 12819). Trauma case with rib fracture and pulmonary laceration. Arrows on the PA view indicate left lower lobe opacity (arrowhead), subcutaneous emphysema (small arrows), and a pulmonary laceration (large arrow). Lateral views show the fracture site at the 8th intercostal space (arrows). Despite two tool failures, Meissa correctly localizes the fracture via visual reasoning.
+
+Pattern 6: Tool False Positives Overriding Correct Visual Judgment. Example. 
+
+The question “Is gastrointestinal tissue present?” (Fig. 10; ground truth: no) led Meissa to call BioMedParseTextSeg with query “gastrointestinal tissue.” The tool returned a large segmented area (121,312 pixels). Trusting this false positive, the model concluded: “The area is significant, confirming its presence” and answered “Yes” (incorrect). In a similar case, the question “Is free air present in this image?” (ground truth: no) produced a segmented area of 5,192 pixels from BioMedParse. The model again trusted the tool output and answered “Yes” incorrectly. 
+
+Analysis. BioMedParse’s text-prompted segmentation will produce non-zero area for many queries, regardless of whether the queried structure is actually present. The model lacks the calibration to distinguish genuine detections from false positives based on area magnitude or segmentation quality. 
+
+Pattern 7: ZoomIn Crash with Strategy Switch Recovery. Example. The ques-tion “Is pinworm present?” (Fig. 11; ground truth: yes) began with 4 rounds of 
+
+ZoomInSubfigure , progressively zooming into smaller regions until the crop be-came too small, triggering the error: “ZoomIn failed: cannot write empty image as JPEG.” The model recovered by switching strategy to BioMedParseTextSeg 
+
+on the original image with query “pinworm,” which returned area=21,682. The model correctly answered “Yes.” 
+
+Analysis. This demonstrates effective error recovery through strategy switch-ing: when one tool fails due to parameter bounds, the model autonomously selects an alternative tool that operates on the original (uncropped) image. This recovery pattern is more common in the base model (which zooms more ag-gressively) than in Meissa (which has learned appropriate tool selection from training trajectories). 40 Chen et al.    
+
+> Fig. 9: Pathology image for Pattern 5. Gross specimen showing bilateral Kruken-berg tumors: lobulated, multinodular masses on both ovaries. The question “Is this true bilateral Krukenberg?” requires examining both sides of the image. The base model re-peatedly zoomed into the left side without ever examining the right.
+> Fig. 10: Microscopy image for Pattern 6. The image shows fungal hyphae and spores under microscopy – no gastrointestinal tissue is present. BioMedParseTextSeg
+> returned a large segmented area (121,312 pixels) when queried for “gastrointestinal tissue,” leading the model to a false positive conclusion.
+
+A.11 MDAgents Trajectory Examples 
+
+We present representative multi-agent collaboration trajectories from Meissa ’s inference on PubMedQA, demonstrating the learned debate protocol. 
+
+Example: Zero CLABSI Rate Sustainability (Correct, Unanimous) Question: “Is zero central line-associated bloodstream infection rate sustain-able?” (Context: a NICU achieved zero CLABSI for >370 consecutive days, then >600 days after a brief uptick.) 
+
+Ground truth: Yes. Prediction: Yes (correct). 
+
+Difficulty Assessment (a0): The model classifies this as intermediate , rea-soning: “This question requires synthesis of statistical trends and operational policy management across multiple domains.” Meissa : Multi-modal Medical Agentic Intelligence 41   
+
+> Fig. 11: Microscopy image for Pattern 7. Histological cross-sections of pinworms (Enterobius vermicularis ). After 4 rounds of progressive zoom caused a crash, the model recovered by switching to BioMedParseTextSeg , correctly confirming pinworm presence.
+
+Expert Recruitment (a1): Four specialists are recruited: (1) Pediatrician, (2) Neonatologist, (3) Infectious Disease Specialist, (4) Critical Care Special-ist. 
+
+Expert Analysis (a2–a5): 
+
+– Pediatrician : “Yes – the study demonstrated sustained zero CLABSI for over 370 consecutive days after implementing evidence-based practice bundles and checklists.” 
+
+– Neonatologist : “Yes – despite a brief 3.3 per 1000 line-days increase in Q1 2013, the rate was successfully re-stabilized at zero after targeted interventions.” 
+
+– Critical Care Specialist : “Yes – a 77% overall reduction over the 5-year study period demonstrates high sustainability.” 
+
+Synthesis (a6): “The implementation of evidence-based care bundles resulted in a sustained 600-day zero-rate, accompanied by a 77% overall reduction. Despite a temporary increase requiring targeted corrections, the protocols maintained efficacy through interdisciplinary collaboration.” Final answer: Yes .
+
+Example: Non-HDL-C as Cardiovascular Risk Predictor (Correct) Question: “Is non-HDL-cholesterol a better predictor of long-term outcome af-ter acute myocardial infarction compared to LDL-cholesterol?” (Context: Thai patients post-AMI; non-HDL-C >130 mg/dL had HR 3.15 for MACE, while LDL-C >100 mg/dL paradoxically had HR 0.42.) 
+
+Ground truth: Yes. Prediction: Yes (correct). 
+
+Expert Recruitment : Cardiologist, Cardiometabolic Specialist, Epidemiolo-gist. 
+
+Cross-Expert Debate : All three experts independently concluded “Yes.” The Cardiometabolic Specialist highlighted the paradoxical LDL-C finding (HR 0.42) as a key reason to prefer non-HDL-C: “Elevated LDL-C was unexpectedly associ-ated with reduced MACE risk, undermining its utility as a standalone predictor.” 42 Chen et al. 
+
+The Epidemiologist reinforced: “Non-HDL-C showed a 3.15-fold increased risk, far exceeding LDL-C’s predictive power.” 
+
+Moderator : Confirmed unanimous consensus. 
+
+Example: Carotid Endarterectomy Risk in Octogenarians (Disagree-ment) Question: “Are octogenarians at high risk for carotid endarterectomy?” (Context: study of 103 procedures in 95 octogenarians with only 4 neurologic complications and 0 deaths.) 
+
+Ground truth: No. Prediction: Yes (incorrect). 
+
+Expert Analysis : Cardiologist, Geriatrician, and Vascular Surgeon all con-cluded “No,” citing the 1.94% complication rate as far below the commonly cited 15–25% risk. However, during the debate phase, the Cardiologist briefly wavered, misinterpreting “selected high-risk patients” in the text as a diagnostic label rather than an enrollment criterion, before reverting to “No.” 
+
+Moderator Override : Despite the 3-to-0 expert consensus of “No,” the Mod-erator concluded “Yes,” overriding the correct expert majority. This represents a failure mode where the synthesis agent fails to faithfully implement the specified majority-vote protocol. 
+
+A.12 Clinical Simulation Trajectory Examples 
+
+We present representative clinical simulation trajectories from Meissa ’s infer-ence on MIMIC-IV, demonstrating the multi-turn diagnostic reasoning process. 
+
+Example: Pulmonary Tuberculosis (Correct, 5 Tool Calls) Patient Presentation: 55-year-old male with chronic cough (8 weeks), productive of clear sputum, unintentional weight loss (10 lbs/3 months), night sweats, de-creased appetite. Former smoker (20 pack-years, quit 5 years ago). 
+
+Ground truth: Pulmonary Tuberculosis. Prediction: Tuberculosis (cor-rect). 1. a0: RequestPhysicalExam (Vital_Signs ) → o1: Temperature 36.8 ◦C, BP 130/80, HR 82, RR 18.  
+
+> Reasoning: “Vital signs are within normal limits. No acute systemic infec-tion or shock. The chronic cough, weight loss, and night sweats remain concerning for TB or lung cancer.”
+
+2. a1: RequestPhysicalExam (Respiratory_Examination ) → o2: Bilateral basal crackles (right-predominant), dullness at right base, increased tactile fremitus on right lower lobe.  
+
+> Reasoning: “These findings are highly suggestive of consolidation or mass in the right lower lobe, consistent with pneumonia, tuberculosis, or lung cancer.”
+
+3. a2: RequestTest (Chest X-Ray ) → o3: Right upper lobe consolidation with cavitation, no pleural effusion. Meissa : Multi-modal Medical Agentic Intelligence 43  
+
+> Reasoning: “Right upper lobe consolidation with cavitation – a classic ra-diographic finding in TB. Cavitation is more commonly seen in TB than in malignancy, which typically presents with solid masses.”
+
+4. a3: RequestTest (Sputum Analysis ) → o4: AFB smear positive, culture pending.  
+
+> Reasoning: “AFB smear positivity is diagnostic for TB in the context of clinical symptoms and radiographic findings. No further tests required.”
+
+5. a4: Terminate (diagnosis=“Tuberculosis” ). 
+
+Analysis. The trajectory demonstrates systematic clinical reasoning: vitals →
+
+physical exam → imaging → confirmatory lab. A differential diagnosis (TB vs. lung cancer) is maintained throughout and resolved by the chest X-ray findings (cavitation favoring TB) and AFB smear confirmation. 
+
+Example: Iron Deficiency Anemia (Correct, 3 Tool Calls) Patient Presentation: 55-year-old male with persistent fatigue (2 months), uninten-tional weight loss (10 lbs), occasional headaches, general weakness. Smoker (10 cigarettes/day). History of hypertension. 
+
+Ground truth: Iron Deficiency Anemia. Prediction: Iron deficiency anemia (correct). 1. a0: RequestTest (Complete_Blood_Count ) → o1: WBC 6,500, Hgb 10.2 g/dL (low), Hct 31% (low), Plt 290K.       
+
+> Reasoning: “Microcytic anemia identified. Differential: iron deficiency, chronic disease, or hemolytic processes.”
+
+2. a1: RequestTest (Basic_Metabolic_Panel ) → o2: Glucose 85, Na 138, K 4.2, Cr 1.0 (normal).  
+
+> Reasoning: “BMP normal, ruling out metabolic causes. Iron studies needed to confirm iron deficiency.”
+
+3. a2: RequestTest (Additional_Tests ) → o3: Serum iron 25 μg/dL (low), TIBC 400 μg/dL (high), ferritin 10 ng/mL (low).  
+
+> Reasoning: “Classic iron deficiency triad: low serum iron, elevated TIBC, low ferritin. Diagnostic criteria met.”
+
+4. a3: Terminate (diagnosis=“Iron deficiency anemia” ). 
+
+Analysis. The model efficiently skips physical exam (appropriate for fatigue/weight-loss presentations) and proceeds directly to lab workup. Each test narrows the differential systematically: CBC confirms anemia, BMP ex-cludes metabolic causes, iron studies confirm the specific etiology. 
+
+Example: Acute Myocardial Infarction (Correct, 6 Tool Calls) Patient Presentation: 45-year-old male with sudden-onset central chest pain (1 hour), tight/squeezing, radiating to left arm, shortness of breath, nausea. No relief with rest. History of hypertension (10 years). Former smoker. 
+
+Ground truth: Acute Myocardial Infarction (STEMI – Inferior Wall). Pre-diction: Acute inferior myocardial infarction (correct). 44 Chen et al. 
+
+1. a0: RequestPhysicalExam (Vital_Signs ) → o1: BP 145/90, HR 95, RR 20, Temp 36.8 ◦C. 2. a1: RequestPhysicalExam (Cardiac_Examination ) → o2: Normal S1/S2, no murmurs/rubs/gallops. 3. a2: RequestPhysicalExam (Respiratory_Examination ) → o3: Clear breath sounds bilaterally. 4. a3: RequestTest (Electrocardiogram ) → o4: ST-segment elevation in leads II, III, aVF. 5. a4: RequestTest (Troponin I Levels ) → o5: Elevated at 0.4 ng/mL (normal 
+
+<0.01). 6. a5: Terminate (diagnosis=“Acute inferior myocardial infarction” ). 
+
+Analysis. The model follows the standard chest-pain protocol: physical exams rule out valvular disease (no murmurs/gallops), pericarditis (no rubs), and pul-monary causes (clear lungs). ECG identifies the classic inferior STEMI pattern (ST elevation in II, III, aVF), confirmed by elevated troponin. This is the most thorough trajectory (6 tool calls), demonstrating the model’s ability to utilize deep interaction depth ( T =6 ) when clinically appropriate. 
+
+## References 
+
+1. Aas-Alas, M., Obrador-Reina, M., Marhuenda, L.J., Albiol, A., Paredes, R.: Mimic-cxr-vqa: A medical visual question answering dataset constructed with llama-based annotations. In: Medical Imaging with Deep Learning 2. Almansoori, M., Kumar, K., Cholakkal, H.: Medagentsim: Self-evolving multi-agent simulations for realistic clinical interactions. In: International Conference on Med-ical Image Computing and Computer-Assisted Intervention. pp. 362–372. Springer (2025) 3. Anthropic: The claude 3 model family: Opus, sonnet, haiku. Anthropic Technical Report (2024) 4. Bai, S., Cai, Y., Chen, R., Chen, K., Chen, X., Cheng, Z., Deng, L., Ding, W., Gao, C., Ge, C., et al.: Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 (2025) 5. Bengio, Y., Louradour, J., Collobert, R., Weston, J.: Curriculum learning. In: Pro-ceedings of the 26th annual international conference on machine learning. pp. 41–48 (2009) 6. Chen, B., Shu, C., Shareghi, E., Collier, N., Narasimhan, K., Yao, S.: Fireact: Toward language agent fine-tuning. arXiv preprint arXiv:2310.05915 (2023) 7. Chen, J., Gui, C., Ouyang, R., Gao, A., Chen, S., Chen, G.H., Wang, X., Cai, Z., Ji, K., Wan, X., et al.: Towards injecting medical visual knowledge into multimodal llms at scale. In: Proceedings of the 2024 conference on empirical methods in natural language processing. pp. 7346–7370 (2024) 8. Chen, Y., Xu, B., Wang, X., Zhang, Y., Mao, Z.: Training llm-based agents with synthetic self-reflected trajectories and partial masking. arXiv preprint arXiv:2505.20023 (2025) Meissa : Multi-modal Medical Agentic Intelligence 45 9. Chen, Z., Varma, M., Delbrouck, J.B., Paschali, M., Blankemeier, L., Van Veen, D., Valanarasu, J.M.J., Youssef, A., Cohen, J.P., Reis, E.P., et al.: Chexagent: Towards a foundation model for chest x-ray interpretation. In: AAAI 2024 Spring Symposium on Clinical Foundation Models (2024) 10. Chuang, Y.N., Sarma, P.K., Gopalan, P., Boccio, J., Bolouki, S., Hu, X., Zhou, H.: Learning to route llms with confidence tokens. In: International Conference on Machine Learning. pp. 10859–10878. PMLR (2025) 11. Dekoninck, J., Baader, M., Vechev, M.: A unified approach to routing and cascad-ing for llms. In: Forty-second International Conference on Machine Learning 12. Du, Y., Li, S., Torralba, A., Tenenbaum, J.B., Mordatch, I.: Improving factual-ity and reasoning in language models through multiagent debate. In: Forty-first international conference on machine learning (2024) 13. Fallahpour, A., Ma, J., Munim, A., Lyu, H., Wang, B.: Medrax: Medical reasoning agent for chest x-ray. In: International Conference on Machine Learning. pp. 15661– 15676. PMLR (2025) 14. Geifman, Y., El-Yaniv, R.: Selective classification for deep neural networks. Ad-vances in neural information processing systems 30 (2017) 15. Gunasekar, S., Zhang, Y., Aneja, J., Mendes, C.C.T., Del Giorno, A., Gopi, S., Javaheripi, M., Kauffmann, P., de Rosa, G., Saarikivi, O., et al.: Textbooks are all you need. arXiv preprint arXiv:2306.11644 (2023) 16. He, X., Zhang, Y., Mou, L., Xing, E., Xie, P.: Pathvqa: 30000+ questions for medical visual question answering. arXiv preprint arXiv:2003.10286 (2020) 17. Hong, J., Zhao, C., Zhu, C., Lu, W., Xu, G., Yu, X.: DeepEyesV2: Toward agentic multimodal model. arXiv preprint arXiv:2511.05271 (2025) 18. Hu, E.J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W., et al.: Lora: Low-rank adaptation of large language models. Iclr 1(2), 3 (2022) 19. Hu, Y., Li, T., Lu, Q., Shao, W., He, J., Qiao, Y., Luo, P.: Omnimedvqa: A new large-scale comprehensive evaluation benchmark for medical lvlm. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 22170–22183 (2024) 20. Hurst, A., Lerer, A., Goucher, A.P., Perelman, A., Ramesh, A., Clark, A., Os-trow, A., Welihinda, A., Hayes, A., Radford, A., et al.: Gpt-4o system card. arXiv preprint arXiv:2410.21276 (2024) 21. Jiang, Y., Zhang, Y., Zhang, P., Li, Y., Chen, J., Shi, X., Zhen, S.: Incentivizing tool-augmented thinking with images for medical image analysis. arXiv preprint arXiv:2512.14157 (2025) 22. Jin, D., Pan, E., Oufattole, N., Weng, W.H., Fang, H., Szolovits, P.: What disease does this patient have? a large-scale open domain question answering dataset from medical exams. Applied Sciences 11 (14), 6421 (2021) 23. Jin, Q., Dhingra, B., Liu, Z., Cohen, W., Lu, X.: Pubmedqa: A dataset for biomedi-cal research question answering. In: Proceedings of the 2019 conference on empirical methods in natural language processing and the 9th international joint conference on natural language processing (EMNLP-IJCNLP). pp. 2567–2577 (2019) 24. Johnson, A.E., Bulgarelli, L., Shen, L., Gayles, A., Shammout, A., Horng, S., Pollard, T.J., Hao, S., Moody, B., Gow, B., et al.: Mimic-iv, a freely accessible electronic health record dataset. Scientific data 10 (1), 1 (2023) 25. Kim, Y., Park, C., Jeong, H., Chan, Y.S., Xu, X., McDuff, D., Lee, H., Ghassemi, M., Breazeal, C., Park, H.W.: Mdagents: An adaptive collaboration of llms for medical decision-making. Advances in Neural Information Processing Systems 37 ,79410–79452 (2024) 46 Chen et al. 26. Kwon, W., Li, Z., Zhuang, S., Sheng, Y., Zheng, L., Yu, C.H., Gonzalez, J., Zhang, H., Stoica, I.: Efficient memory management for large language model serving with pagedattention. In: Proceedings of the 29th symposium on operating systems prin-ciples. pp. 611–626 (2023) 27. Lau, J.J., Gayen, S., Ben Abacha, A., Demner-Fushman, D.: A dataset of clinically generated visual questions and answers about radiology images. Scientific data 
+
+5(1), 180251 (2018) 28. Li, C., Wong, C., Zhang, S., Usuyama, N., Liu, H., Yang, J., Naumann, T., Poon, H., Gao, J.: Llava-med: Training a large language-and-vision assistant for biomedicine in one day. Advances in Neural Information Processing Systems 36 ,28541–28564 (2023) 29. Lin, W., Zhao, Z., Zhang, X., Wu, C., Zhang, Y., Wang, Y., Xie, W.: Pmc-clip: Con-trastive language-image pre-training using biomedical documents. In: International Conference on Medical Image Computing and Computer-Assisted Intervention. pp. 525–536. Springer (2023) 30. Liu, B., Zhan, L.M., Xu, L., Ma, L., Yang, Y., Wu, X.M.: Slake: A semantically-labeled knowledge-enhanced dataset for medical visual question answering. In: 2021 IEEE 18th international symposium on biomedical imaging (ISBI). pp. 1650–1654. IEEE (2021) 31. Liu, H., Li, C., Wu, Q., Lee, Y.J.: Visual instruction tuning. Advances in neural information processing systems 36 , 34892–34916 (2023) 32. Lu, M., Lu, Y., Zhuang, Y., Mullins, M., Xie, Y., Xiao, G., Fleming, C., Shi, W., Wang, X.: Medvistagym: A scalable training environment for thinking with medical images via tool-integrated reinforcement learning. arXiv preprint arXiv:2601.07107 (2026) 33. Luo, R., Sun, L., Xia, Y., Qin, T., Zhang, S., Poon, H., Liu, T.Y.: Biogpt: generative pre-trained transformer for biomedical text generation and mining. Briefings in bioinformatics 23 (6), bbac409 (2022) 34. Luo, Y., Zhang, J., Fan, S., Yang, K., Wu, Y., Qiao, M., Nie, Z.: Biomedgpt: Open multimodal generative pre-trained transformer for biomedicine. arXiv preprint arXiv:2308.09442 (2023) 35. Ong, I., Almahairi, A., Wu, V., Chiang, W.L., Wu, T., Gonzalez, J.E., Kadous, M.W., Stoica, I.: Routellm: Learning to route llms from preference data. In: The Thirteenth International Conference on Learning Representations 36. OpenAI: Introducing gpt-5. OpenAI Technical Blog (2025) 37. Park, J.S., O’Brien, J., Cai, C.J., Morris, M.R., Liang, P., Bernstein, M.S.: Gener-ative agents: Interactive simulacra of human behavior. In: Proceedings of the 36th annual acm symposium on user interface software and technology. pp. 1–22 (2023) 38. Ravi, N., Gabeur, V., Hu, Y.T., Hu, R., Ryali, C., Ma, T., Khedr, H., Rädle, R., Rolland, C., Gustafson, L., et al.: Sam 2: Segment anything in images and videos. In: The Thirteenth International Conference on Learning Representations 39. Saab, K., Tu, T., Weng, W.H., Tanno, R., Stutz, D., Wulczyn, E., Zhang, F., Strother, T., Park, C., Vedadi, E., et al.: Capabilities of gemini models in medicine. arXiv preprint arXiv:2404.18416 (2024) 40. Schick, T., Dwivedi-Yu, J., Dessì, R., Raileanu, R., Lomeli, M., Hambro, E., Zettle-moyer, L., Cancedda, N., Scialom, T.: Toolformer: Language models can teach themselves to use tools. Advances in neural information processing systems 36 ,68539–68551 (2023) 41. Schmidgall, S., Ziaei, R., Harris, C., Reis, E., Jopling, J., Moor, M.: Agentclinic: a multimodal agent benchmark to evaluate ai in simulated clinical environments. arXiv preprint arXiv:2405.07960 (2024) Meissa : Multi-modal Medical Agentic Intelligence 47 42. Shen, Y., Song, K., Tan, X., Li, D., Lu, W., Zhuang, Y.: Hugginggpt: Solving ai tasks with chatgpt and its friends in hugging face. Advances in Neural Information Processing Systems 36 , 38154–38180 (2023) 43. Singhal, K., Azizi, S., Tu, T., Mahdavi, S.S., Wei, J., Chung, H.W., Scales, N., Tanwani, A., Cole-Lewis, H., Pfohl, S., et al.: Large language models encode clinical knowledge. Nature 620 (7972), 172–180 (2023) 44. Singhal, K., Tu, T., Gottweis, J., Sayres, R., Wulczyn, E., Amin, M., Hou, L., Clark, K., Pfohl, S.R., Cole-Lewis, H., et al.: Toward expert-level medical question answering with large language models. Nature medicine 31 (3), 943–950 (2025) 45. Team, G., Anil, R., Borgeaud, S., Alayrac, J.B., Yu, J., Soricut, R., Schalkwyk, J., Dai, A.M., Hauth, A., Millican, K., et al.: Gemini: a family of highly capable multimodal models. arXiv preprint arXiv:2312.11805 (2023) 46. Tu, T., Azizi, S., Driess, D., Schaekermann, M., Amin, M., Chang, P.C., Carroll, A., Lau, C., Tanno, R., Ktena, I., et al.: Towards generalist biomedical ai. NEJM AI 1(3), AIoa2300138 (2024) 47. Wei, J., Wang, X., Schuurmans, D., Bosma, M., Xia, F., Chi, E., Le, Q.V., Zhou, D., et al.: Chain-of-thought prompting elicits reasoning in large language models. Advances in neural information processing systems 35 , 24824–24837 (2022) 48. Wu, C., Lin, W., Zhang, X., Zhang, Y., Xie, W., Wang, Y.: Pmc-llama: toward building open-source language models for medicine. Journal of the American Med-ical Informatics Association 31 (9), 1833–1843 (2024) 49. Wu, C., Zhang, X., Zhang, Y., Hui, H., Wang, Y., Xie, W.: Towards generalist foun-dation model for radiology by leveraging web-scale 2d&3d medical data. Nature Communications 16 (1), 7866 (2025) 50. Wu, Y., Wang, H., Li, Q., Zhang, J., Yu, H., Jiang, J.: Internalizing multi-agent reasoning for accurate and efficient llm-based recommendation. arXiv preprint arXiv:2602.09829 (2026) 51. Yang, L., Xu, S., Sellergren, A., Kohlberger, T., Zhou, Y., Ktena, I., Kiraly, A., Ahmed, F., Hormozdiari, F., Jaroensri, T., et al.: Advancing multimodal medical capabilities of gemini. arXiv preprint arXiv:2405.03162 (2024) 52. Yao, S., Zhao, J., Yu, D., Du, N., Shafran, I., Narasimhan, K.R., Cao, Y.: React: Synergizing reasoning and acting in language models. In: The eleventh international conference on learning representations (2022) 53. Zeng, A., Liu, M., Lu, R., Wang, B., Liu, X., Dong, Y., Tang, J.: Agenttuning: Enabling generalized agent abilities for llms. In: Findings of the Association for Computational Linguistics: ACL 2024. pp. 3053–3077 (2024) 54. Zhang, K., Tian, K., Liu, R., Zeng, S., Zhu, X., Jia, G., Fan, Y., Lv, X., Zuo, Y., Jiang, C., et al.: Marti: A framework for multi-agent llm systems reinforced training and inference. In: The Fourteenth International Conference on Learning Representations (2025) 55. Zhao, T., Gu, Y., Yang, J., Usuyama, N., Lee, H.H., Naumann, T., Gao, J., Crab-tree, A., Abel, J., Moung-Wen, C., et al.: Biomedparse: a biomedical foundation model for image parsing of everything everywhere all at once. arXiv preprint arXiv:2405.12971 (2024) 56. Zheng, Y., Zhang, R., Zhang, J., Ye, Y., Luo, Z.: Llamafactory: Unified efficient fine-tuning of 100+ language models. In: Proceedings of the 62nd annual meeting of the association for computational linguistics (volume 3: system demonstrations). pp. 400–410 (2024) 57. Zheng, Z., Yang, M., Hong, J., Zhao, C., Xu, G., Yang, L., Shen, C., Yu, X.: Deepeyes: Incentivizing “thinking with images” via reinforcement learning. arXiv preprint arXiv:2505.14362 (2025) 48 Chen et al. 58. Zhou, C., Liu, P., Xu, P., Iyer, S., Sun, J., Mao, Y., Ma, X., Efrat, A., Yu, P., Yu, L., et al.: Lima: Less is more for alignment. Advances in Neural Information Processing Systems 36 , 55006–55021 (2023) 59. Zhuge, M., Liu, H., Faccio, F., Ashley, D.R., Csordás, R., Gopalakrishnan, A., Hamdi, A., Hammoud, H.A.A.K., Herrmann, V., Irie, K., et al.: Mindstorms in natural language-based societies of mind. Computational Visual Media 11 (1), 29– 81 (2025) 60. Zuo, Y., Qu, S., Li, Y., Chen, Z., Zhu, X., Hua, E., Zhang, K., Ding, N., Zhou, B.: Medxpertqa: Benchmarking expert-level medical reasoning and understanding. arXiv preprint arXiv:2501.18362 (2025)

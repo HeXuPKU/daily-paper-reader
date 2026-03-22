@@ -1,0 +1,643 @@
+Title: TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents
+
+URL Source: https://arxiv.org/pdf/2603.01241v1
+
+Published Time: Tue, 03 Mar 2026 02:39:00 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+Junda Wang 1 Zonghai Yao 1 Hansi Zeng 1 Zhichao Yang 1 Hamed Zamani 1 Hong Yu 2
+
+Abstract 
+
+Complex clinical decision making often fails not because a model lacks facts, but because it can-not reliably select and apply the right procedu-ral knowledge and the right prior example at the right reasoning step. We frame clinical ques-tion answering as an agent problem with two explicit, retrievable resources: skills, reusable clinical procedures such as guidelines, protocols, and pharmacologic mechanisms; and experience, verified reasoning trajectories from previously solved cases (e.g., chain-of-thought solutions and their step-level decompositions). At test time, the agent retrieves both relevant skills and ex-periences from curated libraries and performs lightweight test-time adaptation to align the lan-guage model’s intermediate reasoning with clini-cally valid logic. Concretely, we build (i) a skills library from guideline-style documents organized as executable decision rules, (ii) an experience library of exemplar clinical reasoning chains in-dexed by step-level transitions, and (iii) a step-aware retriever that selects the most useful skill and experience items for the current case. We then adapt the model on the retrieved items to reduce instance–step misalignment and to prevent reasoning from drifting toward unsupported short-cuts. Experiments on medical question-answering benchmarks show consistent gains over strong medical RAG baselines and prompting-only rea-soning methods. Our results suggest that explic-itly separating and retrieving clinical skills and experience, and then aligning the model at test time, is a practical approach to more reliable med-ical agents. 1
+
+> 1
+
+University of Massachusetts Amherst, MA, USA 2University of Massachusetts Lowell, MA, USA. Correspondence to: Junda Wang <jundawang@umass.edu>. 
+
+Preprint. March 3, 2026. 
+
+> 1
+
+The code will be released after accept. 
+
+1. Introduction 
+
+Clinical decision questions often look simple, but they hide a hard branching rule (Jiang et al., 2025a; Sellergren et al., 2025; Xu et al., 2025). For example, a question may ask what to do next for a heart-attack-like presentation at a small hospital, where a fast “clot-busting” option exists, but the patient also has a recent brain-bleed history (Li et al., 2023; Wang et al., 2025b; 2024b). A general LLM with chunk-based RAG can retrieve several true snippets (e.g., “act fast” and “bleeding risk”) (Jin et al., 2025; Zhao et al., 2025; Xiong et al., 2024b; Zakka et al., 2024; Lozano et al., 2023; Wang et al., 2024a), but it can still fail because it does not treat the hard rule as a gate at the right step. In contrast, a medical agent that can retrieve (i) a procedural skill that explicitly encodes the branch rule (including a “do-not-use” condition), and (ii) a similar verified experience trace that checks this condition before choosing the branch, can follow the correct decision path (as shown in Figure 1). This example illustrates two resources that clinicians repeat-edly rely on. First, they use reusable procedural knowledge (e.g., guidelines, protocols, decision rules, and pharmaco-logic mechanisms) that can be applied across many cases. Second, they draw on concrete prior experience (e.g., how similar cases were solved step by step, including common pitfalls and how constraints were handled). We formalize these resources for medical agents. In this work, we define clinical skills as structured procedural knowledge that can be reused across patients. We define clinical experience as verified reasoning trajectories from previously solved cases, represented as exemplar chains of thought and their step-level decompositions that expose which inference or check was required at each step. Treating both as explicit retrieval targets enables an agent to call on them at test time to guide multi-step inference. Despite rapid progress in medical LLMs and retrieval-augmented generation (Wu et al., 2024a; Wang et al., 2024a; Jiang et al., 2025b), current systems rarely support this skill–experience view (Park, 2025). First, most medi-cal RAG pipelines retrieve unstructured document chunks, which blur the distinction between procedural rules and case-specific reasoning traces, making it unclear what the model should retrieve to make a decision (Xia et al., 2025; 1
+
+> arXiv:2603.01241v1 [cs.IR] 1 Mar 2026
+
+TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents A 67-year-old man with transitional cell carcinoma of the bladder comes to the physician because of a 2-day history of ringing sensation in his ear. He received this first course of neoadjuvant chemotherapy 1 week ago. Pure tone audiometry shows a sensorineural hearing loss of 45 dB. The expected beneficial effect of the drug that caused this patient's symptoms is most likely due to which of the following actions? 
+
+A: Inhibition of proteasome B: Hyper Stabilization of microtubules C:Generation of free radicals D: Cross-linking of DNA ✅
+
+Human: Reasoning with medical guidelines and similar patients       
+
+> Experience from diagnosis of previous similar patients: A bladder-cancer patient started platinum-based chemotherapy and developed… hearing loss about a week later. … the pattern strongly pointed to cisplatin…
+> Clinical skills from medical guidelines:
+> 1. Cisplatin causes the generation of free radicals, which leads to hearing loss.
+> →🧠 (Side effect: ototoxicity) 2. Its antitumor effect arises from forming covalent bonds with DNA.
+> →🧠 This leads to DNA cross-linking, which blocks replication and induces apoptosis. 3. 🎯 Therefore, its therapeutic mechanism is due to DNA cross-linking.
+> ✅Final Answer: D
+
+LLM: Hallucinated and Heuristic Response   
+
+> Cisplatin is a chemotherapy drug that can cause various side effects such as nausea, vomiting, and hearing loss. It works by generating free radicals, which damage cells and may contribute to its anticancer effects. Cisplatin is commonly used in bladder cancer treatment. 💬💬💬🤔
+> ❌Final Answer: C (Irrelevant mixing of side effects and mechanism; lacks logical chain.)
+
+Traditional RAG: Retrieved Facts but No Logical Alignment    
+
+> 📦 [Retrieved 1] Cisplatin will leading to hearing loss…
+> 📦📦 [Retrieved 2] Cisplatin is used as a platinum-based chemotherapy for bladder...
+> 📦📦📦 [Retrieved 3] Cisplatin was discovered in 1965 and is used widely in chemotherapy. It belongs to the platinum-based family of drugs and causes various side effects including nephrotoxicity and neurotoxicity…
+> →󰷺 Therefore, its mechanism involves generating free radicals
+> 📦📦📦 ➜󰷺 ➜❌Final Answer: C (The model strings together retrieved facts without clarifying *which* fact is mechanism vs. *which* is side effect. And the documents are not personalized)
+
+Qwen2.5-14B 
+
+Ours Skills & Experience Library + TARSE  
+
+> 🧩 [Step 1] Retrieved Experience: Similar case and corresponding skills
+> 🧠 [Step 2] TARSE selectively fine-tunes reasoning to match question intent.
+> 🎯 [Step 3] Generate the hypothesis
+> 🏆 [Step 4] Retrieved the skills to verify hypothesis and get the final correct answer
+> ✅Final Answer: D
+
+Qwen2.5-7B 
+
+MedRAG 
+
+iMedRAG 
+
+TARSE-14B 
+
+TARSE-7B 
+
+rStar-14B 
+
+rStar-7B 
+
+Figure 1. Motivation and overview of Skills & Experience Library + TARSE . (Left) A clinical QA example where the key difficulty is 
+
+goal-conditional disambiguation : cisplatin’s ototoxicity (free radicals → hearing loss) is a side-effect chain, while its antitumor mechanism 
+
+is the therapeutic chain (covalent DNA binding → DNA cross-linking → apoptosis). Humans solve this by combining experience (recalling a similar bladder-cancer + platinum-chemo case that links the symptom to cisplatin) with skills (reusable guideline/mechanism logical chains) to apply a “mechanism vs. side-effect” gate and select the correct branch (DNA cross-linking, option D). In contrast, a vanilla LLM tends to follow heuristic associations and conflates toxicity with mechanism, and traditional chunk RAG retrieves true but unstructured snippets that are not step-aligned, leading to the same confusion. (Right) Our method operationalizes this workflow: (1) retrieve similar experience traces and relevant skills; (2) perform lightweight test-time adaptation to align reasoning with the question intent; (3) generate a provisional hypothesis/chain; and (4) verify/repair it using retrieved skills to produce the final answer. The bottom-right plot summarizes the accuracy–latency trade-off, showing that TARSE achieves larger gains than CoT-only and conventional RAG baselines at comparable inference time. 
+
+Liang et al., 2025; Myers et al., 2025). Second, even when relevant information is retrieved, it is often misaligned with the critical reasoning step: multi-hop clinical questions fre-quently hinge on a single missing check (e.g., contraindica-tions, time windows, or exclusion criteria), and global re-trieval does not reliably inject the right rule at the right point. Third, dominant medical RAG approaches (e.g., MedRAG-style (Xiong et al., 2024a) or iterative chunk retrieval (Xiong et al., 2024b)) are not designed to retrieve skills and expe-rience as structured objects (Ou et al., 2025). Guidelines are executable procedures, and reasoning chains are trajec-tories; fragmenting them into generic chunks can destroy their decision structure and encourage the model to “aver-age” across partially relevant snippets rather than following a coherent clinical pathway. These limitations motivate a test-time agent that retrieves structured skills and experience and aligns the model’s reasoning with them step by step. We propose a retrieval-augmented medical agent that ex-plicitly separates and operationalizes clinical skills and ex-perience. We construct a skills library from guideline-like documents organized into reusable decision procedures, and an experience library of exemplar clinical reasoning chains indexed by step-level transitions. At inference time, the agent performs step-aware retrieval over both libraries, se-lecting the most relevant skill items and experience items. We then perform lightweight test-time adaptation on the retrieved items to align the language model’s intermediate reasoning with clinically valid logic, reducing instance–step misalignment and preventing reasoning from drifting toward unsupported shortcuts. We evaluate our approach on med-ical question-answering benchmarks and compare against strong medical RAG baselines and prompting-only reason-ing methods. Across tasks, we observe consistent improve-ments, with larger gains on multi-hop and constraint-heavy questions that require explicit checks and branching deci-sions. 
+
+Contributions: i) we introduce a skill–experience framing for clinical reasoning and argue that chunk-based retrieval is structurally mismatched to these resources; ii) we build reusable libraries of clinical skills and exemplar experience with step-level indexing for retrieval; iii) we present a test-time retrieval-and-adapt framework that improves medical 2TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+reasoning performance and yields more interpretable, clini-cally grounded decision paths. 
+
+2. Related Work 
+
+Skills and Experience In the agent literature, skills are reusable procedures that an agent can call across tasks or states, and many works study how to discover and reuse them through hierarchical control, skill induction, and li-braries of callable routines (Park, 2025; Wang et al., 2025c). Skills matter because they turn a long task into shorter, sta-ble subroutines, so an agent can generalize by selecting and composing what it already knows. A related line of work stores skills as retrievable artifacts at inference time, such as tool-use templates, program sketches, natural-language pro-cedures, or checklists (Jin et al., 2025; Xiong et al., 2024b; Xia et al., 2026). This matches expert work in domains with written rules. In medicine, guidelines and protocols serve this role, since they encode decision steps and exclu-sion rules meant to be reused across patients. Prior systems retrieve curated guidance (Zakka et al., 2024), but most work is prompt-centric and treats these documents as gen-eral evidence rather than as structured skills that govern step-by-step decisions. Our method follows the skill-library view and makes it concrete for clinical reasoning. We represent guideline-like procedures as structured skill items (e.g., required checks, branch conditions, exclusion criteria) and retrieve them as objects that specify the next step, rather than as loose text. We also integrate skills with experience in a single test-time loop. In reinforcement learning, replay and off-policy methods reuse trajectories to stabilize learning and transfer (Zhang et al., 2025), and recent work also leverages self-generated trajectories and their outcomes as supervision (Wang et al., 2025a; Hu et al., 2025). For LLMs, chain-of-thought and memory-based methods reuse reasoning traces to guide new problems (Wei et al., 2022; Yan et al., 2025), but traces are usually retrieved as extra context without an explicit procedure, so models can retrieve correct facts yet execute the wrong step. We address this by curating experience as verified step-by-step traces and indexing them by step-level transitions, so retrieval targets the missing step rather than only overall similarity. At test time, we retrieve both (i) the relevant skill items from guidelines and (ii) matched trace segments, then align the model step by step with the retrieved skill items, using traces to show how checks were executed in similar cases. This targets a common failure in chunk-based RAG: retrieving true statements but omitting a required check or applying a hard rule at the wrong point. 
+
+Reasoning with LLMs and Retrieval LLMs still strug-gle with explicit multi-step inference and check-and-branch reasoning (Liu et al., 2023; Wu et al., 2024b; Dziri et al., 2023). Prompting methods (e.g., CoT, self-consistency) can improve fluency (Wei et al., 2022; Wang et al., 2022), but they do not reliably enforce correct step order or verifiable decisions in expert domains. RAG reduces unsupported claims by injecting external evidence (Lewis et al., 2020; Guu et al., 2020), yet retrieved text is often unstructured or mismatched to the specific step that needs support (Ye et al., 2023; Xiong et al., 2024a). Even medical RAG variants (e.g., MedRAG, iMedRAG) largely retrieve generic docu-ment chunks, which is insufficient when a single missed check flips the decision Our work reframes retrieval targets for clinical reasoning: instead of retrieving only chunks, the agent retrieves explicit procedural skills (reusable rules and checklists) and exemplar experience traces (verified, step-by-step solutions). This makes retrieval actionable for decision-making and reduces step mismatch by provid-ing the appropriate rule or example at the step where it is needed. 
+
+Test-Time Training and Adaptation for Reasoning Test-time training/adaptation updates a model during inference 
+
+using test-time signals; it is well studied in vision (Sun et al., 2020; Behrouz et al., 2024) but remains limited for NLP and LLM reasoning (Lee et al.). Prior objectives are often unsupervised and weakly aligned with the target reasoning process, so errors caused by instance–step misalignment per-sist: the model retrieves relevant evidence at a question level but still applies the wrong rule at the wrong step. We address this by coupling retrieval with lightweight test-time adap-tation on the agent’s retrieved skills and experience items. The retrieved artifacts provide structured, instance-specific supervision that aligns the model’s step-by-step reasoning to the correct decision logic without global retraining. 
+
+3. Problem Formulation 
+
+Hidden-chain view of reasoning. Let q ∈ Q be a ques-tion and Mθ a (small) language model with parameters θ.We posit that answering proceeds through an unobserved 
+
+sequence of micro–inference states z = ⟨z1, . . . , z T ⟩ ∈ Z T
+
+(the latent logical chain ), followed by emission of an answer 
+
+y ∈ Y :
+
+y = fθ (q, z) with z ∼ pθ (· | q).
+
+Each adjacent pair τt = ( zt → zt+1 ) is a Wtransition (claim, transformation, or sub-derivation). Errors typically arise at a local transition τt⋆ but remain hidden because z is not externalized. 
+
+Why naive retrieval misses the failing step. Standard retrieval conditions on the global query (either the input q or the model’s draft answer y), yielding document sets D(q) =
+
+TopK  rϕ(q) and D(y) = TopK  rϕ(y) from a corpus C
+
+3TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+using retriever rϕ : X → 2C . Define a step-alignment 
+
+functional A : 2 C × T → [0 , 1] that measures whether a set of documents directly relevant or irrelevant a specific transition τ (e.g., contains the premise, rule, entity relation, or counterevidence needed for that step). Empirically for the failing step t⋆,
+
+A D(q), τ t⋆
+
+ ≪ 1 and A D(y), τ t⋆
+
+ ≪ 1,
+
+because relevance to q or y is topical, not step-indexed ; thus the wrong (or missing) micro-premise persists and the error propagates. 
+
+Objective. We seek a way to (i) elicit a provisional chain 
+
+ˆz = ⟨ˆz1, . . . , ˆzT ⟩ that reflects the model’s intended interme-diate states for this instance, and (ii) retrieve by transition, not by q or y, so that evidence is locally aligned: 
+
+∀ t ∈ { 1, . . . , T −1} : Et = TopK  rϕ(q, ˆτt),
+
+ˆτt = (ˆ zt → ˆzt+1 ).
+
+with the desideratum A(Et, τ t) ≫ A(D(q), τ t), A (D(y), τ t).Using step-aligned evidence E1: T −1, the model revises its reasoning to an updated chain z′ = ⟨z′
+
+> 1
+
+, . . . , z ′ 
+
+> T
+
+⟩ and emits 
+
+y′ = fθ
+
+ q, z′, E1: T −1
+
+,
+
+aiming for improved correctness and faithfulness. 
+
+4. Experience & Skills Library Construction 
+
+4.1. Skills Library: Guideline-Style Decision Rules 
+
+We first initialize a large skills pool by collecting reusable clinical procedures from diverse guideline-style sources (e.g., CDC/NICE/WHO, textbooks, and other medical cor-pora). The sources and corpus statistics are summarized in Table 10. Each skill item s ∈ S is normalized into an actionable rule format (e.g., conditions → test →
+
+finding → action ) so it can be retrieved and applied as a step-level “gate” during reasoning. We then construct an experience library from LogicalChain trajectories paired with QA. Each item is a triple (qi, y i, zi),where qi is the question/case, yi is the verified answer, and 
+
+zi is the step-indexed logical chain. 
+
+Human evaluation. To validate the constructed experience items, we randomly sample 100 extracted instances and ask annotators to judge whether the LogicalChain is faithful and supports the paired QA. We find that 88% of the sampled items are correct. 
+
+4.2. Experience Library: Logical Chains & QA Traces 
+
+We curate LogicalChain trajectories to satisfy three princi-ples: (i) decompose reasoning into atomic, verifiable tran-sitions, (ii) keep steps grounded in entities present in the supporting context, and (iii) tightly couple the chain with QA so the chain is operational rather than decorative. 
+
+Design Principle 1 (Structured, Step-Indexed Reason-ing). We represent an experience trace as a sequence of micro–inference states z = ⟨z1 → z2 → · · · → zT ⟩,where each zt is a micro–inference state and each tran-sition τt = ( zt → zt+1 ) captures one atomic step. Let 
+
+A denote a minimal set of atomic transition types (e.g., “premise →intermediate”, “intermediate →conclusion”), and let Z be the set of valid traces. Any valid trace z ∈ Z can be decomposed into a finite sequence of atomic transitions 
+
+z = ⟨τ1, τ 2, . . . , τ T −1⟩ with τt ∈ A . This factorization makes experience (a) interpretable/verifiable at the transi-tion level and (b) addressable by step, enabling step-aware retrieval and alignment. As a concrete example in medicine, an atomic step might be “symptom → suspected drug class” or “drug class →
+
+therapeutic mechanism (rule application)”. We build a large corpus of experience traces from sources that naturally con-tain solved-case reasoning (e.g., medical QA explanations, textbook solutions, and other verified rationales). When only factual context is available (without an explicit tra-jectory), we synthesize a step-indexed chain under strict constraints (see Appendix A.3) and manually/automatically filter for faithfulness. This yields an experience library E = {(qi, y i, zi)}Ni=1 ,where each zi = ⟨zi, 1 → · · · → zi,T i ⟩ is a verified reasoning trajectory paired with qi and yi.
+
+Design Principle 2 (Entity-Grounded Abstraction). Let 
+
+U be the universe of clinical entities, and let ϕ(c) ⊆ U 
+
+extract entities mentioned in a case/context c. For each experience item (qi, y i, zi), we enforce entity alignment: 
+
+Ent( zi) ⊆ ϕ(ci),
+
+where ci is the supporting context for qi (e.g., explanation passage or case description). This keeps each transition grounded and reduces spurious steps. 
+
+Design Principle 3 (QA-Coupled Trajectories). We re-quire the answer to be entailed by the trajectory, i.e., zi |= yi.We also store step-level decompositions (e.g., τt as a re-trievable key) so that, at test time, the model can retrieve experience by the missing step rather than only by global similarity. 
+
+5. TARSE 
+
+Humans handle clinical reasoning by combining experience and skills. Before answering, clinicians recall a similar solved case (experience) to sketch a tentative reasoning tra-jectory (an explicit step-by-step plan). They then consult 4TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+Algorithm 1 TARSE: Test-Time Adaptation via Retrieval of Skills and Experience  
+
+> 1:
+
+Input: clinical case x, question q; base LLM Mθ ; experience library E; skills library S; retrievers rE , r S ; top-m
+
+experiences, top-k skills; TTT steps n, learning rate η; alignment threshold τ . 
+
+> 2:
+
+Output: final answer y; (optional) verified chain z⋆; evidence bundle { eE, eS} . 
+
+> 3:
+
+Step 1: Retrieve Experience (similar solved case) ▷ Figure: Step 1 4: B ← TopM  rE (q, x ; E) ▷ B = {(q(i), y (i), z(i))}mi=1  
+
+> 5:
+
+Step 2: TARSE = lightweight TTT for chain alignment ▷ Figure: Step 2 6: θq ← θ ▷ initialize query-adapted parameters 7: for j = 1 , . . . , n do  
+
+> 8:
+
+Lexp ← 1
+
+> m
+
+Pmi=1 − log pθq
+
+ z(i) | q(i), x (i) ▷ align to retrieved experience traces 9: θq ← θq − η∇θq Lexp  
+
+> 10:
+
+end for  
+
+> 11:
+
+Step 3: Hypothesis / Provisional chain + step-aware Skills retrieval ▷ Figure: Step 3 12: ˆz = ⟨ˆz1 → · · · → ˆzT ⟩ ∼ pθq (· | q, x ) ▷ experience-conditioned hypothesis generation 13: for t = 1 , . . . , T − 1 do  
+
+> 14:
+
+ˆτt ← (ˆ zt → ˆzt+1 ) ▷ current transition 15: St ← T opK  rS (q, x, ˆτt; S) ▷ retrieve candidate skills 16: eSt ← { s ∈ S t : Align( s; q, x, ˆτt) ≥ τ } ▷ keep only step-aligned guideline/protocol rules 17: end for  
+
+> 18:
+
+Step 4: Verify then answer */ ▷ Figure: Step 4 19: y ∼ pθq (· | q, x, z, { eSt}T −1 
+
+> t=1
+
+) ▷ final answer follows verified therapeutic chain 20: return y (and z⋆ = z). guideline-style procedures (skills) to verify the fragile step (e.g., a contraindication gate, a mechanism-vs-side-effect disambiguation, or a required time window), thereby cor-recting the local error through step-aligned verification. The whole process is shown in Figure 2 We operationalize this workflow with TARSE. Stage A (experience alignment). Given a test query, we retrieve a tiny minibatch of related solved cases from the experi-ence library (QA + verified reasoning traces) and perform lightweight test-time adaptation so the model commits to a provisional, instance-specific chain under the distribution of retrieved experience. Stage B (skills verification). We then use each transition of the provisional chain as a step query to retrieve skills (guideline/protocol rules) that are directly ap-plicable to that step, and feed these rules back to the model to verify or repair the corresponding transition. This two-stage procedure mirrors human practice: first, ground the plan in prior experience; then, verify procedural correctness using skills within a single end-to-end inference loop. 
+
+Stage A: Test-time experience alignment and provisional chain. To externalize the model’s hidden reasoning for the current query, we perform a brief, neighbor-conditioned 
+
+experience alignment so the model first commits to an ex-plicit, step-indexed provisional chain before any skills are retrieved. Given a test query q, a chain-aware retriever rϕ
+
+(with parameters ϕ) returns a tiny exemplar set of chain triples S(q) = {(q(i), y (i), z(i))}mi=1 of size m, where each 
+
+z(i) = ⟨z(i)1 → · · · → z(i) 
+
+> Ti
+
+⟩ is a step-indexed logical chain paired with question q(i) and answer y(i). Starting from base model parameters θ, we take a few gradient steps with learning rate ηcot that only align the output distribution πθ (·)
+
+to explicit chains: 
+
+θq = θ − ηcot ∇θ
+
+1
+
+m
+
+> m
+
+X
+
+> i=1
+
+− log πθ
+
+ z(i) | q(i)!
+
+,
+
+yielding query-adapted parameters θq . We then elicit a provisional chain for the instance: 
+
+ˆz = ⟨ˆz1 → · · · → ˆzT ⟩ ∼ πθq (· | q),
+
+ˆτt = (ˆ zt → ˆzt+1 ), t = 1 , . . . , T −1,
+
+where T is the length of the elicited chain and ˆτt denotes its 
+
+t-th transition. By collapsing diffuse latent hypotheses into a concrete sequence ˆz, Stage A makes intermediate states and transitions observable on this instance and furnishes the step queries {ˆτt} used in Stage B. 
+
+Stage B: Step-aware skills retrieval and verification. To correct step-local mistakes, we retrieve skills (guideline/pro-tocol rules) conditioned on each transition of the provisional chain, rather than retrieving generic document chunks by the raw question. Given the elicited chain ˆz and its tran-sitions ˆτt for t=1 , . . . , T − 1, a skills retriever rS forms a step-conditioned query from (q, ˆτt) and returns a small ranked set of candidate skill items: 
+
+St = TopK k
+
+ rS (q, ˆτt) with S1: T = {S t}T −1 
+
+> t=1
+
+.
+
+5TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents          
+
+> Figure 2. TARSE process. Starting from a real clinical diagnosis question (top), the agent first retrieves a similar verified experience trace from an Experience Library (Step 1), then performs experience-conditioned hypothesis generation to propose candidate mechanisms (Step 2). Next, it retrieves Skills from a Skills Library (e.g., guideline/protocol rules) together with supporting experience items to verify key transitions and enforce “gate” checks (Step 3), producing a refined reasoning trace that cleanly separates the side-effect chain (cisplatin →
+> free radicals →ototoxicity/hearing loss) from the therapeutic mechanism chain (cisplatin →DNA cross-linking →apoptosis). The final answer follows the verified therapeutic chain (Step 4).
+
+Optionally, a step-level alignment scorer sψ (s ; q, ˆτt) ∈
+
+[0 , 1] filters each pool by a threshold τ :
+
+eSt = { s ∈ S t : sψ (s ; q, ˆτt) ≥ τ }, eS1: T = { eSt}T −1 
+
+> t=1
+
+.
+
+We then condition the model on (i) the retrieved experience minibatch used in Stage A and (ii) the step-aligned skills bundle, and generate the final answer (optionally emitting a verified/updated chain): 
+
+y′ ∼ πθq
+
+  · q, ˆz, eS1: T , B.
+
+By conditioning retrieval on each transition ˆτt but retriev-ing skills as rules , Stage B supplies the exact gate/criteri-on/mechanism needed to validate or repair the fragile link in the chain, aligning the model’s stepwise plan with clinically valid procedures. 
+
+6. Experiment 
+
+6.1. Datasets & Models Datasets We evaluate on three medical QA sets: MedQA (Jin et al., 2021) (USMLE Step 1/2CK/3, Jun 2022–Mar 2023), MedMCQA (Pal et al., 2022) (194k MCQs across 21 subjects), and MMLU–Medical (Hendrycks et al., 2020) (nine medical areas), and two general multi-hop benchmarks: Multi-HopQA (Song et al., 2018), which require cross-document evidence and step-wise verification. 
+
+Models Our backbone is Qwen2.5 (7B/14B) (Hui et al., 2024). Baselines include instruction-tuned LLMs (Qwen2.5-Instruct), RAG systems (MedRAG, i-MedRAG), and test-time reasoning (rStar–Qwen2.5); for broader comparison, we include open-source reasoning models and proprietary LLMs. TTT–RAG consistently outperforms open-source and RAG baselines across medical and general multi-hop tasks. 
+
+6.2. Evaluation Settings 
+
+To demonstrate the importance of retrieving the right ex-perience together with the corresponding skills, we design experiments that directly compare our method against tradi-tional inference and standard medical RAG baselines. 
+
+Reasoning trace quality (experience alignment). We evaluate whether retrieving and aligning to experience im-proves the quality of the model’s generated reasoning traces. Concretely, we prompt models to “think then answer” and compare a no-adaptation CoT baseline and strong open mod-els (Qwen2.5 7B/14B/32B, Llama3.1 8B, Mistral-7B, Phi-4 14B) against our experience-aligned variant (TARSE-14B). We conduct both automatic and human evaluations. Auto-matically, we measure alignment between generated traces and gold references using string similarity and step-level entailment ( Atomic Cov. ). For human evaluation, we ran-domly sample 100 traces from different model variants and ask annotators to rate them on: (1) logical coherence and (2) 6TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents    
+
+> Table 1. Component usage, accuracy, and latency on MedQA. Time / Q reports additional per-question latency relative to the Qwen-2.5 (CoT) baseline.
+
+Medical Domain General Domain Model MedQA MedMCQA MMLU MultiHopQA 
+
+Qwen2.5-7B-Instruct 53.2 54.1 70.3 26.3 Qwen2.5-14B-Instruct 60.8 55.7 75.2 32.5 MedRAG-Qwen2.5-7B 51.0 56.9 68.1 33.2 i-MedRAG-Qwen2.5-7B 54.3 57.6 74.4 35.6 rStar-Qwen2.5-7B 58.1 55.9 69.8 29.1 rStar-Qwen2.5-14B 63.2 56.7 77.2 34.1 TARSE-7B 70.1 62.1 75.4 45.1 TARSE-14B 73.8 64.3 78.5 48.5                                                      
+
+> Table 2. Model Performance split by Medical vs General domains.
+> Method Uses CoT Uses RAG Uses TTT Accuracy (MedQA) Time / Q (s) Tokens
+> Qwen-2.5 (CoT) ✓✗✗55.1 +0s +0 Qwen-2.5-rStar ✓✗✗58.1 +497s +491,132 Only TTT ✗✗✓59.1 +24s +37,826 Only RAG-Skills (MedRAG) ✗✓✗58.7 +0s +2,641 CoT+RAG-Skills (iMedRAG) ✓✓✗62.5 +26s +23,143 TTT+Experience ✓✗✓59.3 +25s +39,177 TTT+Experience+RAG-Skills ✓✓✓70.1 +32s +56,214
+
+domain correctness. We report win rates against baselines. 
+
+Answer accuracy (skills-based verification and correc-tion). We evaluate whether retrieving skills at the right step corrects errors and improves final accuracy. We use two complementary settings. Cross-domain comparison: on medical (MedQA, MedMCQA, MMLU–Medical) and general multi-hop suites (MultiHopQA, 2Wiki), we run the same backbones (Qwen2.5–7B/14B) and compare: (i) CoT baselines (Qwen2.5 CoT, rStar), (ii) question-level RAG (MedRAG), (iii) interactive CoT+RAG (i–MedRAG), and (iv) our method that retrieves experience to form a provi-sional chain and then retrieves step-aligned skills to veri-fy/repair it before answering. 
+
+Controlled ablations: we further isolate components with three configurations matching backbone, prompts, and de-coding: Setting 1 TTT (no experience supervision, no skills retrieval; direct answer), Setting 2 experience-aligned TTT (Logical) (with experience/trace supervision; still direct answer), and Setting 3 TARSE (experience alignment + step-aware skills retrieval and verification). If gains appear primarily in Setting 3 and persist across domains against (i)–(iii), we attribute improvements to step-aligned skills verification rather than to longer reasoning or question-level retrieval. 
+
+Efficiency metrics. In addition to accuracy, we report efficiency in terms of both (i) additional wall-clock time per question and (ii) additional tokens per question, where                                                      
+
+> Table 3. Performance of different models on reasoning quality in the MedQA dataset.
+> Model ROUGE-1 Atomic Cov. Human
+> Qwen2.5 7B 0.2841 ±0.0063 0.3541 ±0.0063 31% Llama3.1 8B 0.2640 ±0.0146 0.3215 ±0.0270 39% Mistral-7B 0.2617 ±0.0012 0.3211 ±0.0021 30% Phi-4 (14B) 0.2438 ±0.0012 0.3213 ±0.0040 45% Qwen2.5 14B 0.2429 ±0.0646 0.5437 ±0.0682 41% Qwen2.5 32B 0.2225 ±0.0003 0.5936 ±0.0017 41% TARSE-14B 0.3318 ±0.0130 0.6112 ±0.0210 –
+
+token overhead is measured relative to the CoT baseline. 
+
+7. Results 
+
+7.1. Main Results Reasoning trace quality. We evaluate whether retriev-ing and aligning with experience (verified-reasoning traces from solved cases) improves the quality of the model’s generated reasoning trace for a new question. Compared with plain CoT baselines, lightweight test-time adaptation provides modest stabilization but still trails experience-aligned variants, as the trace-quality comparison on MedQA shows (Table 3). Among strong non-TTT open mod-els, ROUGE-1 clusters in a narrow band (Qwen2.5-7B 
+
+0.2841 ± 0.0063 , Llama3.1-8B 0.2640 ± 0.0146 , Mistral-7B 0.2617 ± 0.0012 , Phi-4-14B 0.2438 ± 0.0012 ), while step-level entailment ( Atomic Cov. ) grows mainly with scale on the same backbone (Qwen2.5-14B 0.5437 ± 0.0682 →
+
+Qwen2.5-32B 0.5936 ± 0.0017 ), indicating larger models 7TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+may assert more supported facts without necessarily produc-ing step-aligned traces. By contrast, our experience-aligned pipeline (TARSE-14B) achieves the strongest automatic trace quality, ROUGE-1 0.3318 ± 0.0130 and Atomic Cov. 
+
+0.6112 ± 0.0210 , suggesting that retrieving similar solved-case experience and adapting to it helps the model external-ize a more faithful, step-indexed reasoning trajectory. 
+
+Answer accuracy. Table 2 summarizes performance split by medical and general domains. Across datasets, our method improves over strong baselines, suggesting that com-bining experience-grounded reasoning with step-aligned skill verification is effective for multi-hop and constraint-heavy problems. 
+
+Cross-domain pattern. A consistent trend is that TARSE yields larger gains on datasets where correctness depends on 
+
+executing a specific procedural check at the right time (e.g., exclusion criteria, contraindication gates, or mechanism-vs-side-effect disambiguation) rather than merely recalling a fact. This explains why TARSE improves not only in the medical domain (MedQA/MedMCQA/MMLU) but also transfers to a general multi-hop benchmark (MultiHopQA): the bottleneck is often step selection and verification, which is domain-agnostic. 
+
+Why question-level RAG is insufficient. Comparing MedRAG and i-MedRAG with TARSE indicates that re-trieving more text does not reliably translate to higher ac-curacy when the retrieved evidence is not aligned to the failing transition. In Table 1, Only RAG (MedRAG) im-proves modestly over the CoT baseline but remains far be-low TTT+CoT+RAG. This gap supports our central claim: the dominant failure mode is not missing evidence per se, but misplaced evidence —relevant snippets retrieved at the question level are often too coarse to correct a particular mistaken step. 
+
+Why TARSE can beat longer “thinking”. Heavy test-time scaling (e.g., rStar) increases inference-time explo-ration, but it does not change what the model treats as the decision bottleneck. When errors originate from confus-ing two nearby causal chains (therapeutic mechanism vs. adverse-effect mechanism) or skipping a gate condition, sampling more chains can amplify the same wrong heuristic. In contrast, TARSE explicitly (i) anchors the provisional chain to similar verified experience and then (ii) injects step-aligned skills as executable rules to constrain the fragile link, which is a qualitatively different correction mechanism. 
+
+Practical takeaway. Overall, the results suggest a sim-ple deployment guideline: if a benchmark (or real clinical setting) contains many questions whose label flips when a single intermediate check is applied or omitted, then adding 
+
+step-aware skills verification is more reliable than scaling up CoT length or retrieving more unstructured passages. 
+
+7.2. Ablation Study. 
+
+Table 1 isolates the contributions of CoT, RAG, and test-time adaptation (TTT). Adding step-indexed supervision during TTT yields a modest but consistent gain when the model answers without retrieval (Only TTT: 59.1 vs. Qwen-2.5 (CoT): 55.1; and TTT+CoT: 59.3), suggesting that aligning to experience helps the model produce cleaner intermediate premises. The major correction appears when the reasoning chain is further verified with skills via retrieval: TTT+CoT+RAG reaches 70.1 on MedQA, improving over CoT+RAG (iMe-dRAG: 62.5). This supports our hypothesis that step-aligned skill verification, rather than simply longer CoT, is the key driver of accuracy gains. 
+
+7.3. Efficiency 
+
+Table 1 disentangles the accuracy–latency–token trade-off. Pure CoT (55.1, +0s) is the weakest. Adding more “think-ing” without retrieval via rStar yields only a small gain (58.1, +497s), indicating poor efficiency. Either component alone helps modestly: Only RAG improves to 58.7 at no extra time (+3.6, +0s), while Only TTT reaches 59.1 with mod-erate overhead (+4.0, +24s). Combining CoT with generic interactive RAG (iMedRAG) produces a larger boost (62.5, +26s), showing synergy between reasoning and document access. Besides latency, Table 1 reports the additional token cost per question relative to CoT. Overall, the full TTT+CoT+RAG remains the best trade-off (70.1, +32s): it improves accuracy while keeping both latency and token overhead moderate compared with heavy test-time scaling baselines. 
+
+8. Conclusion 
+
+We present LOGICAL CHAIN + TARSE, a retrieval-augmented reasoning framework that enhances LLM perfor-mance by integrating structured logical chains through test-time adaptation. By dynamically aligning the model’s rea-soning process with retrieved inference paths, TARSE signif-icantly enhances performance on medical and mathematical benchmarks, surpassing existing retrieval-augmented and instruction-tuned baselines. Experimental results show that incorporating structured reasoning pathways during infer-ence improves both the accuracy and logical coherence of model outputs. These findings demonstrate the effectiveness of logic-guided, instance-specific adaptation in advancing the reasoning capabilities of LLMs for complex tasks. 8TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+Impact Statement 
+
+This work studies how to make a reasoning agent more re-liable by retrieving two curated resources at test time: (1) clinical skills, which are reusable step-by-step rules from guidelines and protocols, and (2) clinical experience, which are verified reasoning traces from solved cases. The agent re-trieves the right skill and the right experience for the current reasoning step, then uses lightweight test-time adaptation to keep its intermediate reasoning aligned with these resources and to avoid unsupported shortcuts. This can improve deci-sion support for medical question answering, especially for multi-step questions that need explicit checks and branching. It can also generalize to other domains that have clear proce-dures and many past solved traces, such as safety checklists, debugging, compliance review, and scientific workflows. At the same time, medical deployment needs careful use. Wrong or outdated skills, biased experience traces, or wrong retrieval can still lead to wrong answers. Over-reliance on retrieved tool outputs can also mislead users. These sys-tems should be used as decision support, not as autonomous diagnosis, and they should be tested with clinical safety protocols, audit logs for retrieved items, and strong privacy controls. 
+
+References 
+
+Behrouz, A., Zhong, P., and Mirrokni, V. Titans: Learning to memorize at test time. arXiv preprint arXiv:2501.00663 ,2024. Cobbe, K., Kosaraju, V., Bavarian, M., Chen, M., Jun, H., Kaiser, L., Plappert, M., Tworek, J., Hilton, J., Nakano, R., et al. Training verifiers to solve math word problems, 2021. URL https://arxiv. org/abs/2110.14168 , 9, 2021. Dziri, N., Lu, X., Sclar, M., Li, X. L., Jiang, L., Lin, B. Y., Welleck, S., West, P., Bhagavatula, C., Le Bras, R., et al. Faith and fate: Limits of transformers on compositionality. 
+
+Advances in Neural Information Processing Systems , 36: 70293–70332, 2023. Guu, K., Lee, K., Tung, Z., Pasupat, P., and Chang, M. Retrieval augmented language model pre-training. In 
+
+International conference on machine learning , pp. 3929– 3938. PMLR, 2020. He, C., Luo, R., Bai, Y., Hu, S., Thai, Z. L., Shen, J., Hu, J., Han, X., Huang, Y., Zhang, Y., et al. Olympiadbench: A challenging benchmark for promoting agi with olympiad-level bilingual multimodal scientific problems. arXiv preprint arXiv:2402.14008 , 2024. Hendrycks, D., Burns, C., Basart, S., Zou, A., Mazeika, M., Song, D., and Steinhardt, J. Measuring mas-sive multitask language understanding. arXiv preprint arXiv:2009.03300 , 2020. Hu, M., Zhao, P., Xu, C., Sun, Q., Lou, J.-G., Lin, Q., Luo, P., and Rajmohan, S. Agentgen: Enhancing planning abilities for large language model based agent via envi-ronment and task generation. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 1 , pp. 496–507, 2025. Hui, B., Yang, J., Cui, Z., Yang, J., Liu, D., Zhang, L., Liu, T., Zhang, J., Yu, B., Lu, K., et al. Qwen2. 5-coder technical report. arXiv preprint arXiv:2409.12186 , 2024. Jiang, S., Wang, Y., Song, S., Hu, T., Zhou, C., Pu, B., Zhang, Y., Yang, Z., Feng, Y., Zhou, J. T., et al. Hulu-med: A transparent generalist model towards holistic medical vision-language understanding. arXiv preprint arXiv:2510.08668 , 2025a. Jiang, X., Fang, Y., Qiu, R., Zhang, H., Xu, Y., Chen, H., Zhang, W., Zhang, R., Fang, Y., Ma, X., et al. Tc–rag: Turing–complete rag’s case study on medical llm systems. In Proceedings of the 63rd Annual Meeting of the Asso-ciation for Computational Linguistics (Volume 1: Long Papers) , pp. 11400–11426, 2025b. Jin, B., Zeng, H., Yue, Z., Yoon, J., Arik, S., Wang, D., Zamani, H., and Han, J. Search-r1: Training llms to reason and leverage search engines with reinforcement learning. arXiv preprint arXiv:2503.09516 , 2025. Jin, D., Pan, E., Oufattole, N., Weng, W.-H., Fang, H., and Szolovits, P. What disease does this patient have? alarge-scale open domain question answering dataset from medical exams. Applied Sciences , 11(14):6421, 2021. Lee, Y., Kim, D., Kang, J., Bang, J., Song, H., and Lee, J.-G. Ra-tta: Retrieval-augmented test-time adaptation for vision-language models. In The Thirteenth International Conference on Learning Representations .Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., Küttler, H., Lewis, M., Yih, W.-t., Rocktäschel, T., et al. Retrieval-augmented generation for knowledge-intensive nlp tasks. Advances in neural information pro-cessing systems , 33:9459–9474, 2020. Li, Y., Li, Z., Zhang, K., Dan, R., Jiang, S., and Zhang, Y. Chatdoctor: A medical chat model fine-tuned on a large language model meta-ai (llama) using medical domain knowledge. Cureus , 15(6), 2023. Liang, S., Zhang, L., Zhu, H., Wang, W., He, Y., and Zhou, D. Rgar: Recurrence generation-augmented retrieval for factual-aware medical question answering. arXiv preprint arXiv:2502.13361 , 2025. Lightman, H., Kosaraju, V., Burda, Y., Edwards, H., Baker, B., Lee, T., Leike, J., Schulman, J., Sutskever, I., and Cobbe, K. Let’s verify step by step. In The Twelfth 
+
+9TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+International Conference on Learning Representations ,2023. Liu, H., Ning, R., Teng, Z., Liu, J., Zhou, Q., and Zhang, Y. Evaluating the logical reasoning ability of chatgpt and gpt-4. arXiv preprint arXiv:2304.03439 , 2023. Lozano, A., Fleming, S. L., Chiang, C.-C., and Shah, N. Clinfo. ai: An open-source retrieval-augmented large lan-guage model system for answering medical questions using scientific literature. In Pacific Symposium on Bio-computing 2024 , pp. 8–23. World Scientific, 2023. Myers, S., Dligach, D., Miller, T. A., Barr, S., Gao, Y., Churpek, M., Mayampurath, A., and Afshar, M. Eval-uating retrieval-augmented generation vs. long-context input for clinical reasoning over ehrs. arXiv preprint arXiv:2508.14817 , 2025. Ou, J., Huang, T., Zhao, Y., Yu, Z., Lu, P., and Ying, R. Experience retrieval-augmentation with electronic health records enables accurate discharge qa. arXiv preprint arXiv:2503.17933 , 2025. Pal, A., Umapathi, L. K., and Sankarasubbu, M. Medmcqa: A large-scale multi-subject multi-choice dataset for medi-cal domain question answering. In Conference on Health, Inference, and Learning , pp. 248–260. PMLR, 2022. Park, S. Instruct-skillmix: A powerful pipeline for llm instruction tuning. Master’s thesis, Princeton University, 2025. Sellergren, A., Kazemzadeh, S., Jaroensri, T., Kiraly, A., Traverse, M., Kohlberger, T., Xu, S., Jamil, F., Hughes, C., Lau, C., et al. Medgemma technical report. arXiv preprint arXiv:2507.05201 , 2025. Song, L., Zhang, Y., Wang, Z., and Gildea, D. A graph-to-sequence model for amr-to-text generation. arXiv preprint arXiv:1805.02473 , 2018. Sun, Y., Wang, X., Liu, Z., Miller, J., Efros, A., and Hardt, M. Test-time training with self-supervision for generaliza-tion under distribution shifts. In International conference on machine learning , pp. 9229–9248. PMLR, 2020. Team, A.-M. Ai-mo amc validation dataset. 
+
+https://huggingface.co/datasets/ AI-MO/aimo-validation-amc , 2024. Accessed: 2024-05-09. Wang, H., Wang, J., Leong, C. T., and Li, W. Steca: Step-level trajectory calibration for llm agent learning. arXiv preprint arXiv:2502.14276 , 2025a. Wang, J., Yang, Z., Yao, Z., and Yu, H. Jmlr: Joint med-ical llm and retrieval training for enhancing reasoning and professional question answering capability. arXiv preprint arXiv:2402.17887 , 2024a. Wang, J., Yao, Z., Yang, Z., Zhou, H., Li, R., Wang, X., Xu, Y., and Yu, H. Notechat: a dataset of synthetic patient-physician conversations conditioned on clinical notes. In Findings of the Association for Computational Linguistics: ACL 2024 , pp. 15183–15201, 2024b. Wang, X., Wei, J., Schuurmans, D., Le, Q., Chi, E., Narang, S., Chowdhery, A., and Zhou, D. Self-consistency im-proves chain of thought reasoning in language models. 
+
+arXiv preprint arXiv:2203.11171 , 2022. Wang, X., Li, J., Chen, S., Zhu, Y., Wu, X., Zhang, Z., Xu, X., Chen, J., Fu, J., Wan, X., et al. Huatuo-26m, a large-scale chinese medical qa dataset. In Findings of the Association for Computational Linguistics: NAACL 2025 ,pp. 3828–3848, 2025b. Wang, Z. Z., Gandhi, A., Neubig, G., and Fried, D. Inducing programmatic skills for agentic tasks. arXiv preprint arXiv:2504.06821 , 2025c. Wei, J., Wang, X., Schuurmans, D., Bosma, M., Xia, F., Chi, E., Le, Q. V., Zhou, D., et al. Chain-of-thought prompting elicits reasoning in large language models. Advances in neural information processing systems , 35:24824–24837, 2022. Wu, J., Zhu, J., Qi, Y., Chen, J., Xu, M., Menolascina, F., and Grau, V. Medical graph rag: Towards safe medi-cal large language model via graph retrieval-augmented generation. arXiv preprint arXiv:2408.04187 , 2024a. Wu, Z., Qiu, L., Ross, A., Akyürek, E., Chen, B., Wang, B., Kim, N., Andreas, J., and Kim, Y. Reasoning or reciting? exploring the capabilities and limitations of language models through counterfactual tasks. In Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , pp. 1819–1862, 2024b. Xia, P., Chen, J., Wang, H., Liu, J., Zeng, K., Wang, Y., Han, S., Zhou, Y., Zhao, X., Chen, H., et al. Skillrl: Evolv-ing agents via recursive skill-augmented reinforcement learning. arXiv preprint arXiv:2602.08234 , 2026. Xia, S., Lin, H., Wu, Y., Zhou, Y., Li, Z., Wan, Z., Xing, X., Zheng, Y., Li, X., Shan, C., et al. Medrek: Retrieval-based editing for medical llms with key-aware prompts. 
+
+arXiv preprint arXiv:2510.13500 , 2025. Xiong, G., Jin, Q., Lu, Z., and Zhang, A. Benchmarking retrieval-augmented generation for medicine. In Findings of the Association for Computational Linguistics ACL 2024 , pp. 6233–6251, 2024a. 10 TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+Xiong, G., Jin, Q., Wang, X., Zhang, M., Lu, Z., and Zhang, A. Improving retrieval-augmented generation in medicine with iterative follow-up questions. In Bio-computing 2025: Proceedings of the Pacific Symposium ,pp. 199–214. World Scientific, 2024b. Xu, W., Chan, H. P., Li, L., Aljunied, M., Yuan, R., Wang, J., Xiao, C., Chen, G., Liu, C., Li, Z., et al. Lingshu: A generalist foundation model for unified multimodal medical understanding and reasoning. arXiv preprint arXiv:2506.07044 , 2025. Yan, S., Yang, X., Huang, Z., Nie, E., Ding, Z., Li, Z., Ma, X., Kersting, K., Pan, J. Z., Schütze, H., et al. Memory-r1: Enhancing large language model agents to manage and utilize memories via reinforcement learning. arXiv preprint arXiv:2508.19828 , 2025. Ye, R., Zhang, C., Wang, R., Xu, S., and Zhang, Y. Natural language is all a graph needs. arXiv preprint arXiv:2308.07134 , 2023. Zakka, C., Shad, R., Chaurasia, A., Dalal, A. R., Kim, J. L., Moor, M., Fong, R., Phillips, C., Alexander, K., Ashley, E., et al. Almanac—retrieval-augmented language models for clinical medicine. Nejm ai , 1(2):AIoa2300068, 2024. Zhang, K., Chen, X., Liu, B., Xue, T., Liao, Z., Liu, Z., Wang, X., Ning, Y., Chen, Z., Fu, X., et al. Agent learning via early experience. arXiv preprint arXiv:2510.08558 ,2025. Zhao, X., Liu, S., Yang, S.-Y., and Miao, C. Medrag: En-hancing retrieval-augmented generation with knowledge graph-elicited reasoning for healthcare copilot. In Pro-ceedings of the ACM on Web Conference 2025 , pp. 4442– 4457, 2025. 11 TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+A. Appendix 
+
+A.1. Robustness: Evaluation on Math Domain. 
+
+For mathematical reasoning, we conduct a comprehensive evaluation on four widely-used benchmarks: MATH (Lightman et al., 2023), AMC 2023 (Team, 2024), Olympiad Bench (He et al., 2024), and GSM8K (Cobbe et al., 2021). We conduct further ablation studies to better understand the behavior of our TARSE framework: 
+
+Impact of Small-Batch Size during Test-Time Training. We systematically vary the size of the adaptation batch used in TTT (e.g., 1, 2, 4, 8 examples) to assess how the quantity of retrieved supervision affects the quality of adaptation and final accuracy. This ablation helps reveal the trade-off between adaptation speed and generalization performance. 
+
+Parallel Multi-Query Test-Time Adaptation. To simulate a multi-user inference setting and evaluate scalability, we group concurrent user queries (e.g., 3, 6, 9, 12 queries) and perform joint adaptation using a concatenated retrieval batch. This parallel strategy aims to amortize the cost of TTT while enabling more efficient resource sharing. We measure how this affects accuracy and adaptation stability across different levels of parallelism. 
+
+Parallelize Experiment. To investigate how different configurations of logical chain integration and test-time paralleliza-tion affect mathematical reasoning performance, we conduct two sets of ablation studies, visualized in Table 4. In the Figure 3, we vary the retention percentage of retrieved logical chains during test-time training—from 20 to 100 samples and observe a monotonic increase in accuracy. This indicates that maintaining a higher proportion of logical-reasoning steps during adaptation substantially improves the model’s ability to solve complex symbolic problems, increasing accuracy from 60.9% to 63.2%. We also evaluate the effect of the parallel user batch size, in which retrieved batches from 3, 6, 9, or 12 users are aggregated and jointly used for test-time training. We find that moderate parallelism (6 users) improves performance by reducing variance in reasoning paths, whereas excessive parallelism (12 users) introduces noise and degrades accuracy. This suggests a trade-off between parallel efficiency and reasoning fidelity, and highlights the importance of controlled batch-level adaptation for symbolic reasoning tasks.  
+
+> Figure 3. Ablation study for TARSE. (Top) Effect of the number of retained small-batch samples used in logical chain supervision. (Bottom) Impact of varying the number of parallel users during batch-wise test-time training.
+
+12 TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents                      
+
+> Table 4. Comparison of model performance across mathematical benchmarks. rStar-Math shows strong performance across all metrics.
+> Model MATH AMC2023 Olympiad GSM8K
+> Qwen2-7B-Instruct 49.6 25.0 0.04 82.3 NuminaMath-7B-COT 55.8 27.5 0.03 76.3 rStar-Qwen2 60.4 30.0 20.0 87.2 TARSEs 63.2 30.0 24.7 87.0
+
+A.2. Error Analysis 
+
+To better understand the limitations of different retrieval strategies, we conducted an error analysis comparing a baseline RAG approach with our proposed TARSE framework. Using Qwen2.5-14B as the base model, we retrieve documents and directly generate answers, and compared this with TARSE’s test-time adapted retrieval and inference. We randomly sampled 100 test cases and manually categorized each incorrect prediction into one or more of the following four error types: (1) irrelevant or missing evidence, (2) misleading evidence, (3) insufficient reasoning ability, and (4) forgotten knowledge. The ColBERT-RAG setup produced 15 errors due to irrelevant or missing documents, 6 from misleading content, 20 due to reasoning failures, and 6 involving forgotten background knowledge. In contrast, TARSE reduced these numbers to 7, 0, 12, and 5 respectively. These results highlight that TARSE not only improves retrieval relevance but also reduces reasoning and knowledge-related errors, suggesting that test-time adaptation provides more reliable and contextually aligned inputs for downstream inference. 
+
+A.3. Data Construction Pipeline 
+
+We categorize documents into two types: (1) Expert-authored documents with explicit reasoning traces , such as clinical guidelines, medical board exam explanations, or textbook problem solutions. These documents often contain structured logic that can be extracted or lightly reformatted to form usable reasoning chains. (2) Factual documents without explicit reasoning , including textbook paragraphs, curated QA datasets, and encyclopedic resources such as Wikipedia. These texts provide rich medical knowledge but require additional processing to reveal the underlying reasoning structure. The details are shown in Table 5 For type (2), we synthesize logical chains by prompting GPT-4 with a structured instruction template. Each input includes a factual medical passage, and the model is asked to generate a step-by-step logical chain that connects context to conclusion while avoiding large logical jumps. We include constraints to ensure that: • The logical chain begins with the key facts or conditions in the document; • Intermediate reasoning steps are included (e.g., physiological mechanisms, diagnostic steps, or treatment justifications); • The final step logically derives the medically relevant conclusion (e.g., diagnosis, mechanism, treatment); • Language remains generalizable and concise, avoiding unnecessary specifics (e.g., age, lab values) unless clinically necessary. A representative prompt looks like this: 
+
+“The text below contains a medical fact. Your task is to generate a logical chain that explains the underlying reasoning. Be concise but complete. Return format: Logical Chain: A → B → C” 
+
+This process allows us to convert static medical knowledge into dynamic reasoning trajectories that can be retrieved and aligned at inference time. 13 TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents  
+
+> Table 5. Prompt Template for Logical Rule Generation.
+
+System Prompt The text below contains medical information. Your task is to create rules based on the medical knowledge presented, ensuring each rule comprehensively represents the information in the evidence text without omitting any significant details. 
+
+1. Clear Distinction Between Conditions and Outcomes 
+
+Each rule should clearly reflect when certain items are conditions, patient characteris-tics, or prerequisites (such as specific diagnoses, clinical findings, or circumstances) and when others are outcomes, actions, or recommendations. Always list conditions at the start of the rule, followed by the recommended actions or results. 
+
+2. Multiple Rules for Complex Evidence If an evidence statement includes multiple distinct aspects, create separate rules for each part. This ensures that each concept is represented fully and clearly, preventing unrelated ideas from being merged into a single rule. Reuse the evidence as needed for each distinct rule. 
+
+3. Parallel Items and Logical Structure Arrange items logically within each rule. • For items that have a natural sequence based on real-world logic (e.g., patient characteristics → diagnostics → treatment recommendations), follow this order. • If items are parallel without a strict sequence, indicate them at the same level within the rule without imposing order (e.g., “PET benefits → Diagnosis, Staging, Treatment Response”). 
+
+4. Real-World Logical Order When applicable, follow a natural sequence based on real-world relationships rather than sentence order. The preferred structure is: • Conditions or Requirements • Diagnostics • Findings or Results • Treatment Recommendations or Actions • Follow-Up or Monitoring Plans (if applicable) Present these elements in this logical order, regardless of how they are arranged in the original text. 
+
+5. Reconstruct Guideline Ensure that the generated set of evidence and rules covers the guideline comprehen-sively, allowing the guideline to be reconstructed accurately from these parts. Use exact phrasing from the original guideline text where feasible. 
+
+6. Include Every Key Detail Represent every significant term, phrase, or concept from the evidence. Each rule should be as concise as possible while fully representing all critical details. Avoid redundancy, but include all essential information. 
+
+7. Direct Language Without Conditionals Use clear and direct language without excessive use of conditionals like “if” or “when.” Each rule should be logically complete and self-contained, conveying the full context of the information. 
+
+14 TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+8. Output Format Key Terms to Include : {key_words} 
+
+Medical Text :
+
+{medical_text} 
+
+Example Rule Format: Correct: Evidence : “A patient presents with abdominal pain, followed by a CT scan, which shows an abscess. Treatment includes antibiotics.” 
+
+Rule : Abdominal pain → CT scan → Abscess detected → Treatment: Antibiotics. 
+
+Incorrect: Evidence : “A patient presents with abdominal pain, followed by a CT scan, which shows an abscess. Treatment includes antibiotics.” 
+
+Rule : Abdominal pain → Abscess detected → CT scan → Treatment: Antibiotics. 
+
+Return Format 
+
+• Evidence: • Rule: • Evidence: • Rule: Return only the specified output format without additional commentary or explanation. 
+
+A.4. Retriever Training and Evaluation 
+
+A.4.1. L OGICAL CHAIN RETRIEVER TRAINING 
+
+We retrieve logical chains using a two-stage retrieval–reranking pipeline (). First, we use ColBERT to retrieve the top-K candidate logical chains for each query q. Then, a cross-encoder is applied to rerank these candidates. This pipeline balances retrieval efficiency with reranking effectiveness, leveraging ColBERT’s fast dense retrieval and the cross-encoder’s stronger semantic matching capabilities. Specifically, the cross encoder is trained to map a query q (typically a user question) to its corresponding logical chain l+, sampled from a shared document d. Each training instance is constructed as a triplet 
+
+(q, l +, {l− 
+
+> i
+
+}Ni=1 ), where l+ is the gold reasoning path and l− 
+
+> i
+
+are hard negatives sampled from neighboring chains within the same document d. The training objective minimizes the following contrastive loss: 
+
+L = − log exp( Sim (q, l +)) exp( Sim (q, l +)) + PNi=1 exp( Sim (q, l − 
+
+> i
+
+)) , (1) where Sim (q, l ) denotes the similarity score between query q and candidate logical chain l, computed via a dual-encoder architecture. The softmax denominator encourages the model to assign the highest score to the gold chain. Each query q is associated with a unique logical chain l, such that the retrieved logical chain l+ implies both the supporting document and the reasoning steps required to answer q. This alignment enables the retriever to support dual downstream tasks. QA-to-Chain Retrieval: Given a clinical question q, retrieve the corresponding logical chain l+ that reflects guideline-based reasoning. Guideline-to-Chain Retrieval: Given a document excerpt d, retrieve an appropriate reasoning path l+ for diagnostic or therapeutic inference. By training jointly on both tasks, the retriever learns generalizable alignment between questions, reasoning chains, and medical documents, supporting structured retrieval across diverse input scenarios. A.4.2. E VALUATON RESULTS 
+
+We compare the retrieval accuracy of our proposed Logical Chain Retriever against a strong baseline, ColBERT Retriever, on top-k evidence selection. For the test datasets, we construct QA pairs based on Pubmed corpus to test. As shown in Table 6, the Logical Chain Retriever consistently outperforms ColBERT across all values of k. Notably, it achieves 73.27% top-5 accuracy, compared to 62.33% with ColBERT. This performance gap widens with larger k, reaching 81.79% 15 TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents           
+
+> Table 6. Top-kretrieval accuracy (%) comparison between Logical Chain Retriever and ColBERT Retriever. Logical Chain Retriever 73.27 77.49 80.13 81.79 ColBERT Retriever 62.33 65.12 67.48 70.51
+
+at top-20 retrieval, demonstrating the effectiveness of incorporating structured reasoning signals during retrieval. These results indicate that explicitly modeling logical chains not only improves alignment with the query intent, but also facilitates retrieval of more relevant and explanatory evidence. 
+
+A.5. QA Generation Examples 
+
+Given a logical chain, we automatically generate QA pairs by framing the final step as the answer and rephrasing the earlier reasoning path as a question. This alignment ensures that the question is logically entailed by the steps in the chain, and that the answer is the natural conclusion of the reasoning process. For example, given the input: 
+
+Document : “Cisplatin binds DNA and induces cross-linking, which causes apoptosis.” 
+
+Logical chain : “Cisplatin → DNA crosslinking → blocks replication → apoptosis” We generate: 
+
+Q: What is the therapeutic mechanism of Cisplatin? 
+
+A: DNA cross-linking This question-answer pair reflects both the factual content and the reasoning structure, enabling it to be used in alignment tasks or as a target for supervised fine-tuning. When needed, we apply controlled variation (e.g., passive voice, question style) to increase linguistic diversity while preserving the underlying logic. 
+
+A.6. Evaluation Prompt Design 
+
+When evaluating close QA, we only need to calculate accuracy. However, many open QA tasks, such as diagnostic reasoning questions in the Amboss Dataset, present additional challenges. Although several methods exist for measuring textual similarity, such as F1 or ROUGE, both approaches have significant limitations in the medical domain. Therefore, we propose a very strict evaluation pipeine by using two evaluation metrics: the USMLE-Factuality score and the GPT-4o score. For the GPT-4o score, directly allowing GPT-4o to grade the answers is often ineffective, as GPT-4o tends to favor answers that align with its preferred linguistic style, which may not match our intended criteria. Thus, we introduce a scoring framework to evaluate model’s fine grained diagnostic ability based on three aspects: Key Points , Inference , and Evidence which is designed by doctors: • Key Points assess whether the model’s answer includes the critical elements present in the ground truth. • Inference evaluates whether the diagnostic reasoning in the model’s answer is correct, follows the same steps as the ground truth, and whether any key steps are omitted. • Evidence examines whether the model’s answer provides the crucial evidence to support its conclusions or diagnostic reasoning. Finally, an average score will be calculated to represent the overall quality of the answer. To further reduce the influence of linguistic style on GPT-4’s scoring, we propose revising all model-generated answers through GPT-4, ensuring that all outputs align with GPT-4’s own style distribution. During this revision, GPT-4 will only see the model’s answer, without access to any other information. When scoring, GPT-4 will generate its own summaries of Key Points , Inference , and Evidence based on the ground truth. When assigning scores to these aspects, GPT-4 will no longer see the original answer but will only reference its summarized 
+
+Key Points , Inference , and Evidence .16 TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents  
+
+> Table 7. Evaluation Pipeline Prompt Example Template.
+
+## System Prompt 
+
+## The text below contains medical information. Your task is to create rules based on the medical knowledge presented, ensuring each rule comprehensively represents the information in the evidence text without omitting any significant details. 
+
+## Clear Distinction 
+
+## Each rule should clearly reflect when certain items are conditions, patient characteristics, or prerequisites (such as specific diagnoses, clinical findings, or circumstances) and when others are outcomes, actions, or recommendations. Always list conditions at the start of the rule, followed by the recommended actions or results. 
+
+## Multiple Rules for Complex Evidence 
+
+## If an evidence statement includes multiple distinct aspects, create sep-arate rules for each part. This ensures that each concept is represented fully and clearly, preventing unrelated ideas from being merged into a single rule. Reuse the evidence as needed for each distinct rule. 
+
+## Parallel Items and Logical Structure 
+
+## Arrange items logically within each rule. - For items that have a natural sequence based on real-world logic (e.g., patient characteristics -> diag-nostics -> treatment recommendations), follow this order. - If items are parallel without a strict sequence, indicate them at the same level within the rule without imposing order, such as "PET benefits -> Diagnosis, Staging, Treatment Response" if they all apply equally. 
+
+## Real-World Logical Order 
+
+## Over Sentence Structure**: When applicable, follow a natural sequence based on real-world relationships rather than sentence order. The pre-ferred sequence generally follows: - **Conditions or Requirements** (e.g., patient characteristics or specific criteria) - **Diagnostics** (e.g., tests performed) - **Findings or Results** (e.g., outcomes of diag-nostics) - **Treatment Recommendations or Actions** (e.g., proposed treatments based on findings) - **Follow-Up or Monitoring Plans** (if applicable) Present these elements in this logical order, regardless of how they are arranged in the original text. 
+
+## Reconstruct Guideline 
+
+## Ensure that the generated set of evidence and rules covers the guideline comprehensively, allowing the guideline to be reconstructed accurately from these parts. Each evidence should be presented as close to the original guideline text as possible, using exact phrasing where feasible. 
+
+## Include Details 
+
+## Represent every significant term, phrase, or concept from the evidence. Each rule item should be as concise as possible while fully representing all critical details. Avoid unnecessary redundancy but ensure all essential information is included. Use clear and direct language without excessive use of conditionals like “if” or “when.” Each rule should be logically complete and self-contained, conveying the full context of the informa-tion.  
+
+> 17 TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents
+> Table 8. Evaluation Pipeline Prompt Example Template (continued).
+
+## Output Format 
+
+## **Key Terms to Include**: key words **Medical Text**: medical text **Medical Path**: medical path **Example Rule Format**: -**Correct**: - **Evidence**: "A patient presents with abdominal pain, followed by a CT scan, which shows an abscess. Treatment includes an-tibiotics." - **Rule**: Abdominal pain -> CT scan -> Abscess detected -> Treatment: Antibiotics. - **Incorrect** (based purely on sentence or-der): - **Evidence**: "A patient presents with abdominal pain, followed by a CT scan, which shows an abscess. Treatment includes antibiotics." -**Rule**: Abdominal pain -> Abscess detected -> CT scan -> Treatment: Antibiotics. **Return Format**: 1. Evidence: Rule: 2. Evidence: Rule: Return only the specified output format without additional commentary or explanation. 
+
+B. Case Study  
+
+> Table 11. Human Annotated Sample Case.
+
+Question: A 67-year-old man with transitional cell carcinoma of the bladder comes to the physician because of a 2-day history of ringing sensation in his ear. He received this first course of neoadjuvant chemotherapy 1 week ago. Pure tone audiometry shows a sensorineural hearing loss of 45 dB. The expected beneficial effect of the drug that caused this patient’s symptoms is most likely due to which of the following actions? A: Inhibition of proteasome, B: Hyperstabilization of microtubules, C:Generation of free radicals, D: Cross-linking of DNA 
+
+Phi-4: To determine the expected beneficial effect of the drug that caused the patient’s symptoms, we need to identify the drug likely responsible for the sensorineural hearing loss and understand its mechanism of action. 1. The patient has transitional cell carcinoma of the bladder and received neoadjuvant chemotherapy. 2. A common chemotherapy drug used for bladder cancer is cisplatin. 3. Cisplatin is known to cause ototoxicity, which can manifest as sensorineural hearing loss. 4 Cisplatin will lead generation of free radicals and lead hearing loss hence the final answer should be C. 
+
+Qwen-2.5-14B-Instruct Forms of chemotherapy used in transitional cell carcinoma of the bladder often include platinum-based agents like cisplatin. Cisplatin is known for its ototoxicity, which can lead to sensorineural hearing loss. -> Cisplatin’s mechanism of action involves the generation of free radicals, which can damage cellular components including those in the auditory system. -> Therefore, the generation of free radicals is the most likely action causing the patient’s symptoms. -> The correct answer is C 
+
+TARSE: Small Batch Finetune: Pretrain Data: MDMA: 3,4-Methylenedioxymethamphetamine (MDMA), commonly known as ecstasy (E) or molly, is a psychoactive drug primarily used for recreational purposes. The desired effects include altered sensations, increased energy, empathy, as well as pleasure. When taken by mouth, effects begin in 30 to 45 minutes and last 3 to 6 hours... 
+
+Finetune Data: Scenario: Dr. Smith, a seasoned urologist, is preparing for a surgical procedure to repair an anterior urethral stricture in a 45-year-old male patient. The patient is informed that a surgical resident will be involved in the operation as part of their training. The patient expresses concern about the potential impact of the resident’s involvement on the surgery’s... 18 TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+Inference: 1. Transitional cell carcinoma of the bladder -> Neoadjuvant chemotherapy -> Agent causing ototoxicity leading to sensorineural hearing loss -> Correct action of the drug is hyperstabi-lization of microtubules 2. Transitional cell carcinoma of the bladder -> Neoadjuvant chemotherapy -> Ototoxicity side-effect -> Sensorineural hearing loss -> Caused by generation of free radicals 3.Transitional cell carcinoma of the bladder -> Neoadjuvant chemotherapy -> mechanism is Cross DNA Link -> Chemotherapeutic agent causing ototoxicity -> Sensorineural hearing loss observed -> Ototoxic mechanism involves generation of free radicals -> Answer: E 
+
+Retrieve to Verify: 1. Cisplatin is a chemotherapy drug → causes ototoxicity (hearing loss) →
+
+due to accumulation of reactive oxygen species (ROS) in the cochlea → ROS cause oxidative stress and damage cochlear hair cells → Antioxidants neutralize ROS and reduce cochlear damage 
+
+→ therefore, antioxidants can help prevent cisplatin-induced hearing loss 2. Chemotherapy Drug -> Cross DNA Link -> Therapy 
+
+Final Answer: D
+
+Doctor Comment: The clinical reasoning task requires distinguishing between a drug’s therapeutic mechanism and its side-effect profile. While models like Phi-4 and Qwen-2.5-14B correctly identified cisplatin as the causative agent, they misattributed the drug’s mechanism of action to its ototoxic side effect (free radical generation). In contrast, TARSE correctly disambiguates the therapeutic mechanism (DNA cross-linking) from side effects, demonstrating a structured reasoning pathway that mirrors human clinical logic. 19 TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents 
+
+Table 9. Evaluation Pipeline Prompt Example Template. 
+
+Extract Key Points 
+
+Based on the question and answer, summarize ten key points that you consider to be the most crucial from the standard answer. Return the re-sponse in the following format: {1.2.3....} Here is the question:{question} Here is the answer:{answer} Please do not provide any additional infor-mation. 
+
+Key Points 
+
+1. Multifocal electroretinogram (ERG) showed reduced signal in the right eye throughout the macula, confirming the diagnosis of AZOOR.2. Acute zonal occult outer retinopathy (AZOOR) was first described by Gass in 1993... 
+
+Extract Diagnostic Reasoning 
+
+Based on the question and answer, please provide a detailed summary of the diagnostic reasoning from the standard answer. Return the response in the following format: {1.2.3....} Here is the question:{question} Here is the answer:{answer} Please do not provide any additional information. 
+
+Diagnostic Reasoning 
+
+1. The patient is a 7-year-old boy with a slowly growing, asymptomatic lump on the left lower neck since birth.2. Physical examination showed a yellowish, hump-like mass with a hairy surface and cartilage-like consistency near the left sternocleidomastoid muscle... 
+
+Extract Evidence 
+
+Based on the question and answer, please provide a detailed evidence list which is proposed by correct answer. Return the response in the following format: {1.2.3....} Here is the question:{question} Here is the answer:{answer} Please do not provide any additional information. 
+
+Evidence 
+
+1. Slowly growing, asymptomatic lump on left lower neck since birth.2. Physical examination revealed a yellowish, hump-like mass with hairy surface and cartilage-like consistency.3. Ultrasonography indicated a hy-poechoic, avascular, bulging nodule with an anechoic tubular structure.4. MRI demonstrated a protuberant nodule with diffuse... 
+
+Key Points Score 
+
+Act as a USMLE evaluator, your role involves assessing and comparing a medical student’s explanation to the provided target answer. Begin the assessment by carefully reviewing the provided target answer. Then, based on following specific criteria, determine the score for the student’s answer. Please judge whether medical student’s answer include these key points(or some other relevant points. But the amount of points must be complete). For example, ground truth have 10 key points, if student answer include one key he will get 0.5 point(if the answer include 5 points so should be 2.5). Medical student’s answer: {answer} Key Points: {Key Point} Please only return a float number(from 0 to 5). You should check each point one by one(shouldn’t judge based on language style such as fluence and so on. Only judge based on whether the student’s answer include correct or relevant and complete key points). Don’t generate any other information. 
+
+Table 10. Sources of Medical Guidelines, Information, and Corpus Statistics                                                                                     
+
+> Source/Corpus Full Name Guidelines/#Doc. Words/#Snippets Audience/Domain Country Released
+> CCO Cancer Care Ontario 87 199K Doctor Canada Yes CDC Center for Disease Control and Prevention 621 6.7M Doctor USA Yes CMA Canadian Medical Association 431 1.7M Doctor Canada Yes ICRC International Committee of the Red Cross 49 1.2M Doctor International Yes NICE National Institute for Health and Care Excellence 1656 8.1M Doctor UK Yes PubMed PubMed 1627 10.8M Doctor Mix Yes SPOR Strategy for Patient-Oriented Research 217 1.1M Doctor Canada Yes WHO World Health Organization 223 3.1M Both International Yes WikiDoc WikiDoc 33058 34M Both International Yes StatPearls StatPearls 9.3k 301.2k Both International Yes Textbooks Textbooks 18 125.8k Both International Yes Wikipedia Wikipedia 6.5M 29.9M Both International Yes MedCorp MedCorp 30.4M 54.2M Both International Yes
+
+20

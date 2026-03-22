@@ -1,0 +1,1488 @@
+Title: HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships
+
+URL Source: https://arxiv.org/pdf/2603.18459v1
+
+Published Time: Fri, 20 Mar 2026 00:43:38 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+# HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 
+
+## XIANGXU ZHANG, Gaoling School of Artificial Intelligence, Renmin University of China, China 
+
+## XIAO ZHOU ∗†‡ , Gaoling School of Artificial Intelligence, Renmin University of China, China 
+
+## HONGTENG XU †‡ , Gaoling School of Artificial Intelligence, Renmin University of China, China 
+
+## JIANXUN LIAN, Microsoft Research Asia, China 
+
+Medication recommendation aims to generate safe and effective medication sets from health records. However, accurately recom-mending medications hinges on inferring a patient’s latent clinical condition from sparse and noisy observations, which requires both (i) preserving the visit-level combinatorial semantics of co-occurring diagnoses/procedures and (ii) leveraging informative historical references through effective, visit-conditioned retrieval. Most existing methods fall short in one of these aspects: graph-based modeling often fragments higher-order intra-visit patterns into pairwise relations, while inter-visit augmentation methods commonly exhibit an imbalance between learning a globally stable representation space and performing dynamic retrieval within it. To address these limitations, this paper proposes HypeMed , a two-stage hypergraph-based framework unifying intra-visit coherence modeling and inter-visit augmentation. HypeMed consists of two components: MedRep for representation pre-training and SimMR for similarity-enhanced recommendation. In the first stage, MedRep encodes clinical visits as hyperedges via knowledge-aware contrastive pre-training, creating a globally consistent, retrieval-friendly embedding space. In the second stage, SimMR performs dynamic retrieval within this space, fusing retrieved references with the patient’s longitudinal data to refine medication prediction. Evaluation on real-world benchmarks shows that HypeMed outperforms state-of-the-art baselines in both recommendation precision and DDI reduction, simultaneously enhancing the effectiveness and safety of clinical decision support. The implementation is publicly available at https://github.com/xansar/HypeMed. CCS Concepts: • Information systems → Data mining ; • Applied computing → Health informatics .Additional Key Words and Phrases: Medication Recommendation, Electronic Health Records, Hypergraph 
+
+ACM Reference Format: 
+
+Xiangxu Zhang, Xiao Zhou, Hongteng Xu, and Jianxun Lian. 2024. HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships. ACM Trans. Inf. Syst. XX, X, Article XXX (March 2024), 28 pages. https://doi.org/XXXXXXX. XXXXXXX 
+
+1 Introduction 
+
+Healthcare remains a fundamental societal challenge [ 2, 3 , 26 ], intensified by rapid urbanization [ 15 , 17 , 24 , 27 , 50 ,53 ] and recurring public health crises [ 16 , 57 ]. As a key application of Artificial Intelligence (AI) [ 14 , 49 , 51 , 58 ] in healthcare [ 18 , 35 ], medication recommendation systems [ 7, 37 , 43 , 47 , 54 ] aim to generate safe and effective medication combinations from patients’ Electronic Health Records (EHRs) [ 8, 30 ]. EHRs provide a longitudinal trace of diagnoses, 
+
+> ∗
+
+Corresponding author. 
+
+> †
+
+Also with Beijing Key Laboratory of Research on Large Models and Intelligent Governance. 
+
+> ‡
+
+Also with Engineering Research Center of Next-Generation Intelligent Search and Recommendation, MOE. Authors’ Contact Information: Xiangxu Zhang, Gaoling School of Artificial Intelligence, Renmin University of China, Beijing, China, xansar@ruc.edu.cn; Xiao Zhou, Gaoling School of Artificial Intelligence, Renmin University of China, Beijing, China, xiaozhou@ruc.edu.cn; Hongteng Xu, Gaoling School of Artificial Intelligence, Renmin University of China, Beijing, China, hongtengxu313@gmail.com; Jianxun Lian, Microsoft Research Asia, Beijing, China, jianxun.lian@outlook.com. 2024. Manuscript submitted to ACM Manuscript submitted to ACM 1
+
+> arXiv:2603.18459v1 [cs.IR] 19 Mar 2026
+
+2 Zhang, et al. Common Cold    
+
+> Allergic Rhinitis
+> Upper Respiratory
+> Infection
+> Physical
+> Examination
+> Ibuprofen
+> Antihistamine
+> Bacterial
+> Pharyngitis
+> Throat
+> Examination
+> Amoxicillin
+> Steroid Spray
+> Bronchitis
+> Chronic Cough
+> Pulmonary
+> Function Test
+> Asthma Inhaler
+> Cough Syrup
+> Pneumonia
+> Chest X-ray
+> Cephalosporin
+> Bronchodilator
+> Visit-1 Visit-2 Visit-3 Visit-4
+> Time
+> Diagnosis
+> Procedure
+> Medication
+
+Bob's 
+
+Health Record 
+
+Fig. 1. Overview of Bob’s EHR spanning four medical visits. Each visit includes diagnosis, procedure, and medication codes, illustrating the progression of related respiratory conditions over time. Note that the medication section in Visit-4 is left unfilled, indicating it as the target for medication recommendation. 
+
+procedures, and medications across visits (Fig. 1). While EHRs offer a wealth of information, the inherent complexity and high dimensionality of such data make it difficult to capture the complete clinical picture. Despite steady progress [ 21 , 40 , 42 , 43 , 47 , 48 ], the central difficulty remains unchanged: medication recommendations hinge on accurately inferring a patient’s latent clinical condition from sparse, noisy observations . The observed medical codes provide only indirect, discrete evidence of an underlying physiological state, making condition reconstruction inherently ambiguous. To approximate the true patient status, a model must integrate evidence not only from the current observations but also from their relationships in EHRs. In this paper, we use patient relationships to refer to two comple-mentary forms of clinical evidence: (i) intra-visit set-level co-occurrence among diagnoses/procedures/medications, which reflects coherent syndromic patterns, and (ii) inter-visit connections that link the current visit to relevant visits in the patient trajectory, including prior visits of the same patient and clinically similar visits from other patients. However, existing methods often fail to unify these two forms of evidence, yielding a fragmented and superficial estimate of the underlying condition. 
+
+From the intra-visit perspective , a dominant bottleneck is semantic fragmentation . Most approaches [ 28 , 37 , 43 , 47 ]model co-occurrence with simple graphs, breaking inherently high-order clinical patterns into pairwise edges and thus diluting visit-level combinatorial semantics. For instance, Charcot’s triad—fever, right-upper-quadrant pain, and jaundice—is individually non-specific, but their co-occurrence is highly suggestive of acute cholangitis and warrants urgent care [ 10 , 34 ]. This motivates modeling a visit as a set-level interaction, rather than an accumulation of pairwise relations. From the inter-visit perspective , the key is to retrieve the right historical references that can effectively complement the current visit for decision making [ 4 , 5, 38 ]. Existing methods often exhibit an imbalance between static representation learning and dynamic retrieval. Representation-centric approaches (e.g., DGCL [ 28 ], PROMISE [ 42 ]) mainly focus on learning a globally stable and static embedding space by aggregating historical/external signals, 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 3yet they typically lack an explicit mechanism to perform visit-conditioned retrieval tailored to the current context. In contrast, retrieval-centric approaches (e.g., GAMENet [ 37 ], COGNet [ 43 ], VITA [ 21 ], DAPSNet [ 40 ]) emphasize on-the-fly retrieval in the embedding space to augment the current input, but often rely on representations that are not explicitly optimized for retrieval, making the retrieved neighbors less semantically aligned with the current clinical context. This imbalance motivates a unified design that jointly shapes a retrieval-friendly representation space and performs context-aware retrieval within it. To address these limitations, we propose HypeMed , a hypergraph-based framework that reconstructs latent clinical conditions by unifying intra-visit combinatorial interaction modeling with inter-visit reference augmentation, thereby capturing patient relationships both within and across visits. To mitigate semantic fragmentation , we model each clinical visit as a hyperedge, so that the representation is learned from the set-level co-occurrence of diagnoses and procedures rather than decomposed pairwise links. Based on this structure, we introduce Medical Entity Relevance Representation (MedRep) , a knowledge-aware hypergraph contrastive pre-training stage that encodes high-order interactions into a globally consistent embedding space. On top of the MedRep space, to alleviate the representation– retrieval imbalance, we further propose Similar Visit Enhanced Medication Recommendation (SimMR) , which performs visit-conditioned dynamic retrieval directly in this hyperedge-aware metric space. This coupled design makes the retrieved neighbors better aligned with the current visit context, enabling HypeMed to incorporate informative historical references and refine the estimated condition for medication recommendation. Extensive experiments on real-world benchmarks (MIMIC-III/IV and eICU) demonstrate that HypeMed consistently outperforms state-of-the-art baselines in recommendation accuracy while reducing drug–drug interaction (DDI) rates, thereby achieving a superior balance of clinical effectiveness and medication safety. Our main contributions are summarized as follows: 
+
+• We address semantic fragmentation in intra-visit modeling by representing each visit as a hyperedge and proposing a hypergraph-based contrastive pre-training module (MedRep) to encode knowledge-aware entity representations that capture combinatorial semantics. 
+
+• We alleviate the representation–retrieval imbalance in inter-visit augmentation by designing a similar visit enhanced medication recommendation module (SimMR) that performs visit-conditioned dynamic retrieval directly in the MedRep-optimized embedding space for context-aligned reference aggregation. 
+
+• Extensive experiments on public MIMIC-III/IV and eICU datasets demonstrate that HypeMed consistently improves recommendation accuracy while reducing the drug–drug interaction (DDI) rate, validating both effectiveness and safety. 
+
+2 Related Work 2.1 Medication Recommendation 
+
+Medication recommendation is an important subdomain of recommender systems [ 12 , 13 , 25 , 29 , 56 ]. Improving medication recommendation from EHRs hinges on two complementary capabilities: modeling intra-visit clinical context from the current observations, and leveraging inter-visit references from the patient trajectory and clinically similar visits from other patients. 
+
+Intra-visit reasoning with relational structures. A representative line of work leverages structured relational modeling—often via graph neural networks (GNNs) [ 36 ]—to capture concurrence among diagnoses, procedures, and medications, and to inject domain knowledge such as DDIs for safety-aware prediction [1, 6, 28, 37, 43, 47, 55]. While 
+
+> Manuscript submitted to ACM
+
+4 Zhang, et al. effective, these methods predominantly operate on pairwise edges, which can fragment the visit-level context when the clinical meaning arises from the joint presence of multiple entities. 
+
+Inter-visit augmentation via similarity and retrieval. Early studies mainly adopted instance-based models that recommend medications from a single visit, without explicitly leveraging inter-visit context [ 11 , 54 ]. Later, longitudinal 
+
+models incorporated a patient’s historical visits to capture temporal dependencies and improve prediction [ 6, 7 , 22 , 28 ,39 , 43 ]. More recently, external augmentation extends the context beyond an individual patient by retrieving similar visits from the broader cohort, yet existing designs often emphasize only one side of the problem. PROMISE [ 42 ] mainly focuses on learning a globally stable, trajectory-level representation (e.g., via DTW-based aggregation), but provides limited visit-conditioned, on-the-fly retrieval for the current context. In contrast, DAPSNet [ 40 ] emphasizes dynamic retrieval at prediction time to augment the current visit, but relies on representations that are not explicitly optimized for retrieval, which may weaken the quality of retrieved references. However, these retrieval-based approaches often decouple similarity estimation from representation learning, which can induce a mismatch between the embedding space and the retrieval objective, ultimately limiting the utility of retrieved references. 
+
+Our approach. To fill these gaps, HypeMed unifies intra-visit coherence modeling with inter-visit reference augmentation in a single hypergraph framework. MedRep represents each visit as a hyperedge and performs knowledge-aware hypergraph contrastive pre-training to encode high-order interactions into a globally consistent, retrieval-friendly embedding space, mitigating semantic fragmentation. Building upon this space, SimMR performs visit-conditioned dynamic retrieval and integrates the retrieved references with the patient trajectory to refine latent condition estimation and improve medication recommendation. 
+
+2.2 Hypergraph Contrastive Learning in Recommendation 
+
+Hypergraph contrastive learning [ 23 ] has recently attracted increasing attention as an effective strategy to mitigate data sparsity and enhance representation robustness in recommender systems. For instance, in the context of session-based recommendation, DHCN [ 45 ] applies contrastive learning to align session representations derived from hypergraphs and their corresponding line graphs. MHCN [ 52 ] extends this idea to social recommendation by contrasting local and global node representations, while HCCF [ 44 ] integrates collaborative filtering with contrastive learning to alleviate over-smoothing and sparsity issues. Collectively, these methods demonstrate the potential of combining hypergraph structures with contrastive objectives to capture richer relational semantics. However, their applications remain largely confined to general recommendation scenarios. This paper adapts and extends hypergraph contrastive learning to medication recommendation, enabling set-level intra-visit modeling and inter-visit reference augmentation in a unified framework. 
+
+3 Preliminaries 
+
+This section introduces the notations and definitions used in this paper and outlines the process of constructing the hypergraph. The main symbols are summarized in Tab. 1. 
+
+3.1 Notations and Definitions 
+
+3.1.1 Definition of EHR Data. The fundamental unit of EHR data is the patient, and each patient’s EHR consists of multiple visits. Let R = {S (𝑖 ) }𝑁 𝑖 =1 represent the EHR data of 𝑁 patients. Each patient 𝑖 has a patient trajectory, represented as an ordered sequence of visits S (𝑖 ) = ⟨S 1, S2, . . . , S| S (𝑖 ) | ⟩, where each visit S𝑡 = ⟨d𝑡 , p𝑡 , m𝑡 ⟩ contains diagnosis, procedure, and medication multi-hot vectors, with d𝑡 ∈ { 0, 1}| D | , p𝑡 ∈ { 0, 1}| P | , and m𝑡 ∈ { 0, 1}| M | . Given the 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 5
+
+> Table 1. Summary of main notations used in this paper.
+
+Notation Definition 
+
+R EHR database containing all patients’ visit sequences 
+
+S (𝑖 ) 
+
+> 𝑡
+
+The 𝑡 -th visit of patient 𝑖 (patient index 𝑖 is omitted when clear) 
+
+D, P, M Sets of all diagnosis, procedure, and medication codes 
+
+d, p, m Multi-hot vectors for diagnoses, procedures, and medications 
+
+vD , vP , and vM Visit representations derived from diagnoses, procedures, and medications 
+
+HX = (N X, EX ) Hypergraph for domain 𝑋 ∈ {D , P, M} 
+
+ZX, UX Node and hyperedge embeddings learned from HX
+
+h𝑡 Health status representation of visit 𝑡 (derived from diagnoses and procedures) 
+
+vℎ𝑖𝑠𝑡 , v𝑠𝑖𝑚 Representations from the historical-visit and similar-visit channels 
+
+v𝑡 Final fused visit representation 
+
+y𝑡 Predicted probability vector of medications for visit 𝑡 
+
+A Drug–drug interaction (DDI) adjacency matrix current diagnosis d𝑡 , procedure p𝑡 , and the EHR history ⟨S 1, S2, . . . , S𝑡 −1⟩, HypeMed aims to predict the medication set 
+
+m𝑡 for the current visit. Patient indices (𝑖 ) and domain subscripts are omitted when clear from context. 
+
+3.1.2 Definition of Hypergraph. A hypergraph is denoted as H = (N , E) , where N and E are the sets of nodes and hyperedges, respectively. Fig. 2 illustrates an example hypergraph with four nodes and two hyperedges, where 
+
+N = {𝑛 𝑖 }4 
+
+> 𝑖 =1
+
+and E = {𝑒 𝑖 }2
+
+> 𝑖 =1
+
+. Each hyperedge can connect more than two nodes; for example, 𝑒 1 connects 𝑛 1, 𝑛 2, and 𝑛 3.
+
+N ( 𝑛 𝑖 ) denotes the set of hyperedges incident to node 𝑛 𝑖 , and N ( 𝑒 𝑖 ) represents the set of nodes contained in hyperedge 
+
+𝑒 𝑖 .         
+
+> Fig. 2. An example of a hypergraph with four nodes and two hyperedges: 𝑒 1connects nodes 𝑛 1,𝑛 2, and 𝑛 3, while 𝑒 2connects nodes
+> 𝑛 3and 𝑛 4.
+
+3.2 EHR Hypergraph Construction 
+
+When constructing the EHR hypergraph, we do not merge all medical entities into a single heterogeneous hypergraph. Instead, Alg. 1 outlines the process for building separate hypergraphs for each domain: diagnosis, procedure, and medication. This design is motivated by three factors: context specificity, complexity management, and scalability, as detailed below. 
+
+> Manuscript submitted to ACM
+
+6 Zhang, et al. 
+
+Algorithm 1 Hypergraph Construction for Diagnosis, Procedure, and Medication  
+
+> 1:
+
+function ConstructHypergraphs ({H 𝑋 }𝑋 ∈ { D ,P,M } , R) 
+
+> 2:
+
+𝑁 D, 𝑁 P, 𝑁 M ← ∅ ⊲ Initialize node sets  
+
+> 3:
+
+𝐸 D, 𝐸 P, 𝐸 M ← ∅ ⊲ Initialize hyperedge sets  
+
+> 4:
+
+AddEntitiesToHypergraph (D, 𝑁 D, 𝐸 D, R) 
+
+> 5:
+
+AddEntitiesToHypergraph (P, 𝑁 P, 𝐸 P, R) 
+
+> 6:
+
+AddEntitiesToHypergraph (M, 𝑁 M, 𝐸 M, R) 
+
+> 7:
+
+return (𝑁 D, 𝐸 D ), (𝑁 P, 𝐸 P ), (𝑁 M, 𝐸 M ) 
+
+> 8:
+
+end function  
+
+> 9:
+
+procedure AddEntitiesToHypergraph (X, 𝑁 X, 𝐸 X, R) 
+
+> 10:
+
+for all entities 𝑥 ∈ X do  
+
+> 11:
+
+Add 𝑥 to 𝑁 X 
+
+> 12:
+
+end for  
+
+> 13:
+
+for all visits S (𝑖 ) 
+
+> 𝑡
+
+∈ R do  
+
+> 14:
+
+𝑒 X ← hyperedge for entities in S (𝑖 ) 
+
+> 𝑡
+
+of type X 
+
+> 15:
+
+Add 𝑒 X to 𝐸 X 
+
+> 16:
+
+end for  
+
+> 17:
+
+end procedure 
+
+• Context Specificity : Diagnoses, procedures, and medications each carry distinct medical information and contextual meanings. By constructing separate hypergraphs, we can capture the unique contextual relationships inherent to each type of medical entity more precisely. 
+
+• Complexity Management : A single visit may contain as many as hundreds of medical entities. Incorporating all these entities into a single heterogeneous hyperedge could lead to excessively high complexity and introduce additional noise, making it more difficult to capture the relationships among nodes. Constructing separate hypergraphs reduces system complexity, making the model easier to train. 
+
+• Flexibility and Scalability : The structure of independently constructed hypergraphs offers greater flexibility for future model iterations. This design also facilitates extension to new entity types or updated datasets. Taking the diagnosis hypergraph HD = (N D, ED ) as an example, it is constructed in two steps: 
+
+• Node Set Construction : Create nodes for all diagnostic entities in D and add them to the hypergraph node set 
+
+ND .
+
+• Hyperedge Set Construction : Traverse all visits in the EHR training data. For each diagnostic vector d(𝑖 )
+
+> 𝑡
+
+in visit S (𝑖 ) 
+
+> 𝑡
+
+, create a hyperedge 𝑒 connecting all diagnostic entities contained in that visit, and add 𝑒 to the hypergraph hyperedge set ED .The construction procedures for HP and HM follow the same logic. 
+
+4 Framework 
+
+This section outlines the HypeMed framework, as illustrated in Fig. 3. The architecture primarily comprises the Medical Entity Relevance Representation Stage (MedRep) and the Similar Visit Enhanced Medication Recommendation Stage (SimMR). We also explored an end-to-end variant in early experiments, which resulted in an approximately 3% decrease in Jaccard score and lower training efficiency. Therefore, in this paper we adopt a two-stage training pipeline. 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 7We adopt a two-stage training paradigm, consisting of pre-training followed by fine-tuning. First, we pre-train MedRep on the clinical hypergraph with a contrastive objective to learn medical entity (node) and visit (hyperedge) representations. At the start of SimMR, we instantiate two trainable embedding tables for entities and visit hyperedges, initialized with the pre-trained MedRep outputs. During fine-tuning, these embedding tables and all recommender parameters are optimized end-to-end under the recommendation loss. This preserves the semantic structure learned in pre-training while allowing task-specific adaptation at the embedding level, yielding stable optimization and improved downstream performance. The overall training pipeline is illustrated in Alg. 2. Knowledge-aware Hypergraph Encoder    
+
+> Visit Representation
+> Memory Representation
+> Output
+> Historical Information
+> Similar Visit Information
+> Query
+> Value
+> Key
+> MedRep: Medical Entity Relevance Representation SimMR: Similar Visit Enhanced Medication Recommendation
+> Patient EHR
+> Hypergraph Contrastive Learning
+
+Fig. 3. Overall architecture of HypeMed . HypeMed comprises two stages: the Medical Entity Relevance Representation Stage (MedRep) and the Similar Visit Enhanced Medication Recommendation Stage (SimMR). MedRep focuses on encoding intra-visit set-level combinatorial semantics into a globally consistent, retrieval-friendly embedding space. SimMR integrates longitudinal history and visit-conditioned retrieved similar visits to refine latent condition estimation. 
+
+4.1 MedRep: Medical Entity Relevance Representation 
+
+In the MedRep stage, we obtain node and hyperedge representations through hypergraph-based contrastive learning. We first generate two augmented subgraphs of the original hypergraph and then apply a knowledge-aware hypergraph encoder (KHGE) to compute node and hyperedge embeddings for both views. Finally, we perform contrastive learning between these two views to enhance embedding quality. By modeling each visit as a hyperedge that jointly connects diagnoses, procedures, and medications, MedRep mitigates the intra-visit semantic fragmentation (Introduction) and yields context-aware entity and visit embeddings. Below we first introduce the encoder, followed by the augmentation and contrastive objectives. 
+
+4.1.1 Knowledge-aware Hypergraph Encoder. We design a knowledge-aware hypergraph encoder (Fig. 4) to capture contextual information and incorporate prior medical category knowledge. This encoder consists of two complementary modules: (1) a Local Message Passing Network (LMPN) that models neighborhood-level dependencies on the medical hy-pergraph, and (2) a Knowledge-aware Global Attention Network (KGAN) that incorporates structured medical knowledge 
+
+> Manuscript submitted to ACM
+
+8 Zhang, et al. 
+
+Algorithm 2 Two-Stage Training Pipeline for HypeMed  
+
+> 1:
+
+function TrainModel (H, D, P, M) 
+
+> 2:
+
+Initialize KHGE parameters ⊲ Stage 1: MedRep training  
+
+> 3:
+
+Construct augmented subgraphs H1, H2 by dropout on H 
+
+> 4:
+
+for 𝑒𝑝𝑜𝑐ℎ = 1 to 𝑒 𝑟𝑒𝑝 do  
+
+> 5:
+
+(Z1, U1) ← EncodeHypergraph (H 1) ⊲ Encode augmented hypergraph via the hypergraph encoder (Sec. 4.1.1)  
+
+> 6:
+
+(Z2, U2) ← EncodeHypergraph (H 2) ⊲ Encode augmented hypergraph via the hypergraph encoder (Sec. 4.1.1)  
+
+> 7:
+
+Optimize Z1, U1, Z2, U2 using contrastive loss L𝑐𝑙 ⊲ Eq. (5)  
+
+> 8:
+
+end for  
+
+> 9:
+
+return Z, U ⊲ Final entity and hyperedge embeddings  
+
+> 10:
+
+Initialize SimMR with Z, U ⊲ Stage 2: SimMR training (embeddings initialized from MedRep and trainable)  
+
+> 11:
+
+for 𝑒𝑝𝑜𝑐ℎ = 1 to 𝑒 𝑟𝑒𝑐 do  
+
+> 12:
+
+for all visits S (𝑖 ) 
+
+> 𝑡
+
+do  
+
+> 13:
+
+Retrieve 𝑘 similar visits for vsim  
+
+> 14:
+
+vhist ← ComputeHistoricalRepresentation (S (𝑖 ) 
+
+> 𝑡
+
+) ⊲ Aggregate past visits via temporal attention (Sec. 4.2.2)  
+
+> 15:
+
+vsim ← ComputeSimilarVisitRepresentation (S (𝑖 ) 
+
+> 𝑡
+
+) ⊲ Encode retrieved similar visits (Sec. 4.2.3)  
+
+> 16:
+
+Fuse vhist and vsim to obtain v𝑡  
+
+> 17:
+
+Optimize with total loss L 
+
+> 18:
+
+end for  
+
+> 19:
+
+end for  
+
+> 20:
+
+return trained SimMR model  
+
+> 21:
+
+end function 
+
+(e.g., ICD/ATC hierarchies) to capture global correlations. The outputs of both components are fused via a two-layer feed-forward network with residual connections and layer normalization. The detailed formulations for each module are presented as follows. 
+
+(a) Local Message Passing Network (LMPN). Research on graph neural networks [ 36 ] and hypergraph neural networks [ 9 ] suggests that node representations derived from local message passing effectively model neighborhood relationships, making nodes connected by edges more similar. Thus, applying local message passing on a medical hypergraph enhances the similarity of medical entity representations within the same visit. The LMPN is implemented via a hypergraph attention layer followed by layer normalization and residual connections, as illustrated in Fig. 4. Local message passing involves two processes: hyperedge representation computation and node representation computation: 
+
+u(𝑘 +1) 
+
+> 𝑗
+
+=∑︁   
+
+> 𝑛 𝑖 ∈ N ( 𝑒 𝑗 )
+
+𝛼 (𝑘 ) 
+
+> 𝑖 𝑗
+
+z(𝑘 ) 
+
+> 𝑖
+
+,
+
+z(𝑘 +1) 
+
+> 𝑖
+
+=∑︁   
+
+> 𝑒 𝑗 ∈ N ( 𝑛 𝑖 )
+
+𝛼 (𝑘 ) 
+
+> 𝑖 𝑗
+
+u(𝑘 ) 
+
+> 𝑗
+
+,
+
+(1) where the attention coefficient 𝛼 (𝑘 ) 
+
+> 𝑖 𝑗
+
+controls the message weight between node 𝑛 𝑖 and hyperedge 𝑒 𝑗 . Before aggregation, a learnable linear transformation is applied to refine both node and hyperedge embeddings. 
+
+(b) Knowledge-aware Global Attention Network (KGAN). To capture long-range dependencies and inject domain knowledge, we introduce the Knowledge-aware Global Attention Network (KGAN). Medical knowledge from ICD or 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 9Multi-Head Attention  
+
+> Node Embedding
+> ICD/ATC Code Tree
+> Message Passing Neural Network
+> Hypergraph Add & Norm Add & Norm
+> Feed Forward
+> Add & Norm
+> Node Output
+> Edge Output
+> Edge Embedding
+> Knowledge Encoding
+> Knowledge Bias
+> Structure Encoding
+> Position Encoding
+> Local Message Passing Network (LMPN), Eq. (1) Knowledge-aware Global Attention Network (KGAN), Eq. (2)
+
+Fig. 4. The detailed architecture of the Knowledge-aware Hypergraph Encoder (KHGE). The encoder consists of a Local Message Passing Network (LMPN) and a Knowledge-aware Global Attention Network (KGAN). The LMPN focuses on message propagation over the medical hypergraph, while the KGAN integrates medical knowledge into a global self-attention mechanism. The two outputs are combined through a feed-forward fusion layer with residual connections. 
+
+ATC code hierarchies provides a structured prior indicating semantic closeness among entities. We first transform the hierarchical tree into a knowledge bias matrix 𝛀 , where each element encodes the path distance between two entities and is mapped to a learnable bias parameter. This bias is then incorporated into the multi-head self-attention mechanism as: 
+
+Z(𝑘 +1) 
+
+> 𝑔
+
+= Softmax W𝑞 Z(𝑘 ) (W𝑘 Z(𝑘 ) )T + 𝛀 
+
+√𝑑 
+
+!
+
+W𝑣 Z(𝑘 ) . (2) Here, W𝑞 , W𝑘 , and W𝑣 are learnable projection matrices, and 𝛀 provides a prior bias that allows the attention to favor medically related entities. 
+
+(c) Fusion and Multi-layer Aggregation. We integrate the node representations from LMPN and KGAN through a two-layer feed-forward network (FFN) with residual connections and layer normalization, where Z(𝑘 +1) 
+
+> ℓ
+
+and Z(𝑘 +1)
+
+> 𝑔
+
+denote the outputs of LMPN and KGAN, respectively. To mitigate over-smoothing, we perform a layer-wise average of intermediate representations: 
+
+Z(𝑘 +1) = FFN 
+
+
+
+Z(𝑘 +1) 
+
+> ℓ
+
++ Z(𝑘 +1)
+
+> 𝑔
+
+
+
+,
+
+Z = 1
+
+> 𝐿 𝐿
+
+∑︁ 
+
+> 𝑘 =1
+
+Z(𝑘 ) , U = 1
+
+> 𝐿 𝐿
+
+∑︁ 
+
+> 𝑘 =1
+
+U(𝑘 ) .
+
+(3) This fusion mechanism effectively combines local relational learning with global knowledge reasoning. 
+
+4.1.2 Hypergraph Contrastive Learning. Existing research [ 23 ] indicates that hypergraph contrastive learning can enhance the representational capabilities of embeddings. Hypergraph contrastive learning brings the representations of similar nodes and hyperedges closer together while distancing those of dissimilar nodes and hyperedges. This aligns with our expectations for medical entity representation. Hence, we employ a hypergraph contrastive learning approach 
+
+Manuscript submitted to ACM 10 Zhang, et al. based on nodes and hyperedges for the training phase of MedRep. Initially, we construct two augmented subgraphs based on the original hypergraph. Subsequently, we compute node and hyperedge representations based on these two subgraphs. Finally, contrastive learning is executed between these two sets of representations. 
+
+Augmented Subgraphs Construction . EHR data often contains a considerable amount of noise, which can negatively impact the learning of medical entity representations. To address this issue, constructing augmented subgraphs through random dropout of elements in the original visits has become crucial for mitigating the effects of noise [ 23 , 41 ]. We independently perform two stochastic augmentations on the original hypergraph to obtain subgraphs H1 and H2, by randomly dropping nodes, incidences, and features with predefined probabilities. Dropped elements are excluded when computing the contrastive objectives. 
+
+Contrastive Learning. After obtaining two augmented subgraphs H1 and H2, we use the knowledge-aware hypergraph encoder to generate node and hyperedge embeddings for both views: 
+
+Z1, U1 = KHGE (H 1),
+
+Z2, U2 = KHGE (H 2). (4) To enhance the consistency of multi-level representations, we adopt a three-level contrastive learning strategy encompassing node-, hyperedge-, and membership-level objectives (as illustrated in the upper-left of Fig. 3). This design ensures that (1) nodes sharing similar contexts are mapped closely in the embedding space, (2) hyperedges containing related nodes exhibit similar representations, and (3) membership contrast bridges the alignment between node and hyperedge embeddings. The overall contrastive objective is formulated as: 
+
+L𝑐𝑙 = InfoNCE (Z1, Z2) + 𝜆 1 InfoNCE (U1, U2) + 𝜆 2 InfoNCE (Z1, U2), (5) where 𝜆 1 and 𝜆 2 balance the contributions of hyperedge-level and membership-level contrastive terms. The InfoNCE loss [31] is defined as: 
+
+InfoNCE (U, V) = − 1
+
+> 𝑁 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+log exp (u𝑖 ·v𝑖 /𝜏 )
+
+Í𝑁 𝑗 =1 exp (u𝑖 ·v𝑗 /𝜏 ) , (6) where 𝜏 is the temperature parameter controlling the smoothness of the contrastive distribution. During the MedRep stage, we optimize L𝑐𝑙 to jointly learn node embeddings Z (medical entities) and hyperedge embeddings U (visits), thereby establishing a unified and semantically consistent representation space. Upon completing MedRep, we export the learned embedding matrices for medical entities and visit embeddings (factorized into diagnosis, procedure, and medication subspaces). These matrices are then used in SimMR to initialize 
+
+two trainable embedding tables (entities and visits), which are updated jointly with the recommender parameters. Specifically, the task-specific representations are obtained as: 
+
+ZX, UX = KHGE (H X ), X ∈ {D , P, M} . (7) In this way, the pre-trained embeddings serve as a high-quality initialization for the recommendation task, enabling the model to leverage rich medical correlations captured during the contrastive learning phase. 
+
+4.2 SimMR: Similar Visit Enhanced Medication Recommendation 
+
+In the second stage, we train SimMR based on the representations obtained from MedRep, specifically optimizing for the medication recommendation task. In clinical practice, similar visits are often consulted as external evidence [ 4 , 5 , 38 ]. Accordingly, SimMR refines latent condition estimation for the current visit by augmenting it with two types of 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 11 inter-visit references: (i) information from the patient trajectory (temporal causality) and (ii) visit-conditioned retrieved similar visits (analogical evidence). We first compute the representation of the current visit and then feed it into two channels to obtain complementary visit representations: a historical channel and a similar-visit channel. Finally, we fuse these two representations and apply a dot-product scorer to produce the medication probabilities. The pipeline is shown in the right panel of Fig. 3. 
+
+4.2.1 Visit Representation. A single visit may involve multiple domains of medical entities (diagnoses, procedures, medications) that exhibit semantic gaps. We therefore compute domain-specific visit representations for each visit. We first mean-pool the entity embeddings in a given domain to form an initial visit representation ( zX 
+
+> 𝑡
+
+), then refine it via attention between it and the corresponding entity embeddings (like hyperedge computation in MedRep). This yields the domain-specific visit representation and facilitates subsequent similar-visit retrieval. Concretely, for domain X ∈ {D , P, M} , we compute 
+
+vX 
+
+> 𝑡
+
+= MHA 
+
+
+
+zX 
+
+> 𝑡
+
+, ZX, ZX 
+
+, (8) where MHA (·) denotes multi-head attention and zX 
+
+> 𝑡
+
+is the mean-pooled embedding of the entities in domain X for the 
+
+𝑡 -th visit. We obtain vD 
+
+> 𝑡
+
+, vP 
+
+> 𝑡
+
+, and vM 
+
+> 𝑡
+
+accordingly, and denote the medication label as m𝑡 ∈ { 0, 1}| M | .
+
+4.2.2 Historical Information Representation. The success of longitudinal medication recommendation methods [ 37 , 43 ,47 ] underscores the significance of historical information in the task of medication recommendation. This subsection describes how we compute visit representations using historical information. Two types of information are particularly crucial in a patient trajectory. The first is the patient’s health status information, which includes diagnostic and procedure conditions. These visits directly reflect the patient’s health condition. The second type is medication information. Existing studies [ 43 , 46 ] indicate that patients exhibit continuity in medication usage. Medications previously administered are likely to be used again in the future. Hence, modeling medication information can reflect the patient’s historical trends in medication usage. However, considering all historical visits in the patient trajectory is impractical, as not all historical visits are relevant to the current one. Visits from the distant past may not provide helpful references for current medication. Therefore, we employ a window-based visit attention mechanism over the patient trajectory. The following formula can represent this process: 
+
+vhist = MHA (h𝑡 , V𝑡 −𝑘 :𝑡 −1, V𝑡 −𝑘 :𝑡 −1) , (9) where h𝑡 is the current health-status embedding (from diagnoses and procedures), and V𝑡 −𝑘 :𝑡 −1 ∈ R𝑘 ×𝑑 stacks the 𝑘 
+
+most recent visit embeddings. The resulting vhist captures recent diagnostic, procedural, and medication trends within the temporal window. 
+
+4.2.3 Similar Visit Information Representation. In the MedRep stage, we obtain embeddings for all training visits (hyperedges) and factorize them into domain-specific subspaces. Given h𝑡 , we retrieve the top-𝑘 similar visits in the health-status subspace to ensure consistency with the pre-trained geometry. This design is clinically motivated: we retrieve similar past visits as external evidence, and condition the retrieval on the current visit’s health-status embedding 
+
+h𝑡 to ensure relevance. Let U𝐻 and UM denote the hyperedge embeddings in the health-status (diagnosis/procedure) 
+
+> Manuscript submitted to ACM
+
+12 Zhang, et al. and medication subspaces, respectively. We aggregate the retrieved evidence via attention: 
+
+vsim = MHA 
+
+
+
+h𝑡 , U𝐻  
+
+> top-𝑘
+
+, UM
+
+> top-𝑘
+
+
+
+, (10) where U𝐻  
+
+> top-𝑘
+
+and UM 
+
+> top-𝑘
+
+are from the retrieved 𝑘 nearest visits in the corresponding subspaces. To further improve retrieval alignment, we adopt an in-batch contrastive objective that aligns the current visit’s embeddings with those of the retrieved visits in the same representation spaces: 
+
+L𝑠𝑖𝑚 𝑐𝑙 = InfoNCE 
+
+
+
+h𝑡 , U𝐻 
+
++ InfoNCE 
+
+
+
+vM 
+
+> 𝑡
+
+, UM 
+
+, (11) where both terms use temperature-scaled inner-product similarity, consistent with the pre-trained geometry, and help mitigate representation–retrieval mismatch during fine-tuning by maintaining geometric consistency between the current visit and the retrieved visits. 
+
+4.2.4 Channels Fusion. We perform representation fusion after obtaining the visit representations from the two channels (historical information and similar visit information). We stack the two channel representations for the same visit and compute their weights using a two-layer MLP followed by a Softmax layer. This process is formulated as follows: 
+
+v𝑡 = 𝛼 hist vhist + 𝛼 sim vsim , [𝛼 hist , 𝛼 sim ] = Softmax  MLP ([ vhist ∥vsim ]) . (12) To capture information from different perspectives, we apply regularization constraints to them. We encourage the two representations to be decorrelated (approximately orthogonal). Concretely, we minimize their cosine similarity: 
+
+L𝑜𝑟𝑡ℎ = vhist ·vsim 
+
+∥vhist ∥ ∥ vsim ∥ . (13) 
+
+4.2.5 Prediction and Objectives. We calculate the probability distribution for recommending medications by assessing the dot-product similarity between the representations of patient visits and medications. This can be expressed as follows: 
+
+y𝑡 = 𝜎 
+
+
+
+v⊤ 
+
+> 𝑡
+
+ZM 
+
+, (14) where 𝜎 (·) is the logistic function applied element-wise. Given a threshold 𝜂 , the predicted medication set is 
+
+ˆ𝑚 𝑡 = { 𝑖 | ( y𝑡 )𝑖 ≥ 𝜂 }. (15) Here, (y𝑡 )𝑖 denotes the 𝑖 𝑡ℎ element of y𝑡 . That is, ˆ𝑚 𝑡 is the set of indices whose predicted probabilities exceed 𝜂 .We adopt the binary cross-entropy loss, multi-label loss, and DDI loss used in SafeDrug [ 47 ], where the binary cross-entropy loss and multi-label loss are related to prediction accuracy, and the DDI loss pertains to the DDI rate. These loss functions are computed as follows: 
+
+• Binary Cross Entropy Loss is a typical loss function used in machine learning, particularly effective in multi-label classification settings. It calculates the loss by measuring the distance between the model’s predicted probabilities and the actual binary labels, penalizing predictions based on the divergence from the true labels. This makes it highly suitable for scenarios where each instance can belong to multiple classes independently. 
+
+L𝑏𝑐𝑒 = −
+
+> | M |
+
+∑︁ 
+
+> 𝑖 =1
+
+h
+
+m𝑡,𝑖 log y𝑡,𝑖 + ( 1 − m𝑡,𝑖 ) log (1 − y𝑡,𝑖 )
+
+i
+
+. (16) 
+
+• Multi-label Loss promotes model predictions where the presence of one label significantly exceeds the probability of an absent label by a specified margin, effectively learning both label occurrence and their relationships in 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 13 multi-label classification tasks. 
+
+L𝑚𝑢𝑙𝑡𝑖 = 1
+
+> | M |
+
+∑︁   
+
+> 𝑖,𝑗 :m𝑡,𝑖 =1,m𝑡,𝑗 =0
+
+max  0, 1 − ( y𝑡,𝑖 − y𝑡,𝑗 ) . (17) 
+
+• DDI Loss is designed to minimize the risk of adverse drug-drug interactions in predictive models. It penal-izes predicted probabilities assigned to medication pairs with known DDIs, thus reducing the likelihood of recommending harmful medication combinations in clinical settings. 
+
+L𝑑𝑑𝑖 =∑︁ 
+
+> 𝑖,𝑗
+
+A𝑖 𝑗 y𝑡,𝑖 y𝑡,𝑗 . (18) Here, |M| is the number of medications, m𝑡 is the ground-truth multi-hot label, y𝑡 is the predicted probability vector, and A ∈ R| M | × | M | is the DDI adjacency matrix. The total loss function can be formulated as follows: 
+
+L = L𝑏𝑐𝑒 + 𝜆 𝑚𝑢𝑙𝑡𝑖 L𝑚𝑢𝑙𝑡𝑖 + 𝜆 𝑑𝑑𝑖 L𝑑𝑑𝑖 + 𝜆 𝑎𝑢𝑥 (L 𝑠𝑖𝑚 𝑐𝑙 + L 𝑜𝑟𝑡ℎ ), (19) where 𝜆 𝑚𝑢𝑙𝑡𝑖 , 𝜆 𝑑𝑑𝑖 , and 𝜆 𝑎𝑢𝑥 are balancing hyperparameters. 
+
+5 Experiments 
+
+To evaluate the performance of HypeMed against state-of-the-art (SOTA) models, we conduct extensive experiments on three widely used and publicly available benchmark datasets: MIMIC-III [20], MIMIC-IV [19], and eICU [32]. 
+
+5.1 Experimental Settings 
+
+5.1.1 Datasets. MIMIC-III 1 and MIMIC-IV 2 are large-scale de-identified EHR databases from the Beth Israel Deaconess Medical Center, comprising data from over 40,000 ICU patients across diverse clinical conditions. eICU 3 is a multi-center critical care database covering more than 200 hospitals across the United States and is used to assess model generalizability under cross-institutional settings. Following prior work [ 6, 28 , 43 , 48 ], we adopt the data preprocessing pipeline from SafeDrug [ 47 ], which includes filtering low-frequency entities, removing patients with fewer than two visits, and converting codes into standardized ICD and ATC formats. For eICU, medications are recorded using GTC codes. Since procedure codes are unavailable, we use only diagnosis and medication information for this dataset. Moreover, because eICU lacks a DDI graph, we exclude DDI-related losses and metrics during both training and evaluation. The statistics of the processed datasets are summarized in Tab. 2. Following common practice in contrastive represen-tation learning (e.g., TriCL [ 23 ] and SGL [ 41 ]), we construct two independently augmented views of each hypergraph to form positive pairs for contrastive supervision. Empirically, this setup achieves an optimal balance between represen-tation diversity and computational efficiency. 
+
+5.1.2 Evaluation. To comprehensively evaluate model performance, we employ five standard metrics: Jaccard Similarity 
+
+↑ (%), F1-score ↑ (%), and Precision-Recall AUC (PRAUC) ↑ (%) for accuracy; DDI Rate ↓ (%) for safety; and the average number of prescribed medications (# Med.) ↓ for prescription compactness. The ground-truth DDI rates are 8.68% and 7.24% for the MIMIC-III and MIMIC-IV datasets, respectively. 4 Given that the DDI ground truth is non-zero, our       
+
+> 1https://physionet.org/content/mimiciii/1.4/
+> 2https://physionet.org/content/mimiciv/2.0/
+> 3https://physionet.org/content/eicu-crd/2.0/
+> 4Due to discrepancies across prior reports [ 28 ,39 ,43 ], we recalculated the DDI ground truth following the standard procedure and provide reference code for reproducibility. Manuscript submitted to ACM
+
+14 Zhang, et al. 
+
+> Table 2. Statistics of processed MIMIC-III/MIMIC-IV and eICU.
+
+Item MIMIC-III MIMIC-IV eICU 
+
+# of patients 6,350 9,036 7,855 # of visits 15,032 20,616 16,869 avg. # of visits 2.37 2.28 2.15 # of unique diag. codes 1,958 1,892 692 # of unique proc. codes 1,430 4,939 -# of unique med. codes 131 131 46 avg. # of diag. per visit 10.51 13.62 4.32 avg. # of proc. per visit 3.84 3.55 -avg. # of med. per visit 11.44 10.29 10.59 objective is not to eliminate DDIs entirely, but to ensure that the model’s recommended medication combinations exhibit a DDI rate below the empirical human benchmark. Symbols ↑ and ↓ respectively indicate higher is better and 
+
+lower is better . To ensure a fair and consistent comparison, we adopt the conventional evaluation metrics used in the domain of medication recommendation [37, 43, 47]. The calculation methods for each metric are as follows: 
+
+• Jaccard Similarity between the predicted and ground-truth medication sets for an individual patient is computed as: 
+
+Jaccard = 1
+
+𝑇 
+
+> 𝑇
+
+∑︁  
+
+> 𝑡 =1
+
+|𝑚 𝑡 ∩ ˆ𝑚 𝑡 ||𝑚 𝑡 ∪ ˆ𝑚 𝑡 | , (20) where 𝑚 𝑡 denotes the ground-truth medication set and ˆ𝑚 𝑡 the predicted set at visit 𝑡 .
+
+• F1-score is defined as: 
+
+F1 = 1
+
+𝑇 
+
+> 𝑇
+
+∑︁ 
+
+> 𝑡 =1
+
+2𝑃 𝑡 𝑅 𝑡 
+
+𝑃 𝑡 + 𝑅 𝑡 
+
+, 𝑃 𝑡 = |𝑚 𝑡 ∩ ˆ𝑚 𝑡 || ˆ𝑚 𝑡 | , 𝑅 𝑡 = |𝑚 𝑡 ∩ ˆ𝑚 𝑡 ||𝑚 𝑡 | . (21) Here, 𝑃 𝑡 and 𝑅 𝑡 denote the precision and recall for visit 𝑡 , respectively, and 𝑇 is the total number of visits. 
+
+• PRAUC represents the area under the precision–recall curve. Following prior work [ 43 , 47 ], we compute it as the mean of per-visit average precision scores: 
+
+PRAUC = 1
+
+𝑇 
+
+> 𝑇
+
+∑︁  
+
+> 𝑡 =1
+
+AP 𝑡 , (22) where AP 𝑡 is the average precision of visit 𝑡 .
+
+• DDI Rate measures the proportion of predicted medication pairs that have known drug–drug interactions: 
+
+DDI = 1
+
+𝑇 
+
+> 𝑇
+
+∑︁  
+
+> 𝑡 =1
+
+Í| ˆ𝑚 𝑡 |
+
+> 𝑖 =1
+
+Í| ˆ𝑚 𝑡 | 
+
+> 𝑗 =𝑖 +1
+
+⊮{A ˆ𝑚 (𝑖 )     
+
+> 𝑡 ,ˆ𝑚 (𝑗 )
+> 𝑡
+
+= 1}
+
+Í| ˆ𝑚 𝑡 |
+
+> 𝑖 =1
+
+Í| ˆ𝑚 𝑡 | 
+
+> 𝑗 =𝑖 +1
+
+1 , (23) where ⊮{·} denotes the indicator function and A is the adjacency matrix of the DDI graph. 
+
+• # Med. quantifies the average number of medications prescribed per visit: 
+
+#Med . = 1
+
+𝑇 
+
+> 𝑇
+
+∑︁  
+
+> 𝑡 =1
+
+| ˆ𝑚 𝑡 |. (24) 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 15 First, we calculate these metrics for each patient, and then we compute the average value across all patients to determine the final performance of the method. Following prior work [ 6, 43 , 47 , 48 ], we evaluate all models using a bootstrapping protocol rather than cross-validation. Each model is trained on a fixed training set with hyperparameters tuned on a validation set. During evaluation, we perform ten rounds of bootstrapped testing by randomly sampling 80% of the test set with replacement, reporting the mean and standard deviation across rounds. 
+
+5.1.3 Baselines. To demonstrate the effectiveness of HypeMed , we compare it against representative medication recom-mendation methods, grouped into three categories: machine-learning , instance-based , and longitudinal approaches. 
+
+• Machine Learning Methods. – LR is a logistic regression–based baseline that performs independent binary classification for each medication label. 
+
+– ECC [33 ] (Ensembled Classifier Chain) encodes diagnosis and procedure sets into multi-hot vectors and applies a chain of SVM classifiers to perform multi-label prediction. The chaining mechanism enables ECC to capture label dependencies and improve overall prediction accuracy. 
+
+• Instance-based Methods. – LEAP [ 54 ] formulates medication recommendation as a sequential decision-making process. It employs a recurrent decoder with content-based attention to model label dependencies across visits. 
+
+• Longitudinal Methods. – RETAIN [7] is an interpretable predictive framework that processes EHR data using a reverse-time attention mechanism, enhancing both prediction accuracy and clinical interpretability. 
+
+– GAMENet [ 37 ] integrates a DDI knowledge graph with a memory-augmented GCN to jointly model patient history and medication safety. 
+
+– SafeDrug [ 47 ] recommends effective and safe medication combinations by jointly modeling global and local molecular structures of medications. It also incorporates a controllable loss term to explicitly penalize DDIs. 
+
+– COGNet [ 43 ] introduces a “copy-or-predict” mechanism within an encoder–decoder framework. By leveraging historical medication usage, COGNet determines whether to replicate past prescriptions or predict new ones. 
+
+– Carmen [ 6] is a context-aware medication recommendation framework based on graph neural networks. It fuses molecular structure, contextual information, and DDI graph encoding to enhance both performance and safety. 5
+
+– DGCL [28 ] employs graph contrastive learning to jointly train medication knowledge graphs and EHR graphs, effectively controlling DDI levels and improving recommendation robustness. 
+
+– VITA [ 21 ] improves accuracy through relevant-visit selection and target-aware attention mechanisms, which better capture relationships between current and historical visits. 
+
+– MoleRec [48 ] utilizes molecular substructure–aware encoding and attention mechanisms to generate person-alized and safer medication combinations. 
+
+– DAPSNet [40] employs dual attention mechanisms at both code and visit levels to construct comprehensive patient representations. It retrieves information from similar trajectories through a patient memory module and applies an information bottleneck to enhance robustness and safety.  
+
+> 5We were unable to successfully execute Carmen’s official implementation; therefore, we report the results provided in their paper [ 6], obtained under the same data preprocessing pipeline. Manuscript submitted to ACM
+
+16 Zhang, et al. 
+
+– PROMISE [ 42 ] introduces a pre-trained multimodal framework that integrates structured EHRs and clinical text via hypergraph and language encoders. By combining multimodal pre-training with controllable DDI optimization, it effectively balances accuracy and medication safety. We adopted the hyperparameter configurations recommended in the original papers of all baseline models to ensure fair comparison. For baselines without publicly available implementations, we carefully re-implemented them according to the methodological details described in their papers. Our method was implemented in Python 3.8.16 using PyTorch 1.13.1. Experiments were conducted on a workstation equipped with dual Intel Xeon Gold 5318Y CPUs, 251GB of RAM, and three NVIDIA A40 GPUs. The hyperparameter search space is summarized in Tab. 3. 
+
+> Table 3. Hyperparameter search space.
+
+Hyperparameter Range 
+
+Learning rate [5 × 10 −3, 1 × 10 −4]
+
+Weight decay [1 × 10 −4, 1 × 10 −5]
+
+Dropout ratio [0, 0.5]
+
+Epochs 50 
+
+Batch size 16 
+
+Pretraining epochs {150 , 300 , 500 , 1500 , 3000 }
+
+Pretraining learning rate {1 × 10 −3, 5 × 10 −4 }
+
+Pretraining weight decay {1 × 10 −4, 1 × 10 −5 }
+
+KHGE layers {1, 2, 4}
+
+Embedding dimension 64 
+
+𝜆 multi [1, 10 −6]
+
+𝜆 ddi [1, 10 −6]
+
+𝜆 aux [1, 10 −6]
+
+5.2 Performance Comparison 
+
+As shown in Tab. 4, Tab. 5, and Tab. 6, HypeMed achieves the best or highly competitive overall performance across the three benchmark datasets ( MIMIC-III , MIMIC-IV , and eICU ), particularly on Jaccard and F1, while maintaining favorable safety/compactness trade-offs, demonstrating strong generalization ability across diverse clinical settings. 
+
+Machine learning (ML) methods (LR and ECC) achieve relatively low performance, as they rely on simple multi-hot encodings and fail to capture temporal or relational dependencies among medical entities. Instance-based methods 
+
+(e.g., LEAP) make predictions solely based on the current visit, ignoring both patient history and inter-visit references from similar visits, which further limits their accuracy. Longitudinal methods (e.g., RETAIN, GAMENet, SafeDrug, COGNet, DGCL, and MoleRec) perform substantially better by modeling temporal dependencies within patient histories. Among them, SafeDrug effectively reduces DDI rates by incorporating drug–drug interaction information, though at the cost of slightly lower accuracy. COGNet employs sequence generation with beam search, achieving modest accuracy gains but increasing the number of recommended medications and thus DDI risk. VITA retrieves relevant past visits via target-aware attention, yet its performance varies with dataset temporal structures. Carmen , DGCL , and 
+
+MoleRec further integrate co-occurrence relationships, contrastive learning, and molecular structures, respectively, to enhance medication representations. However, these models mainly focus on intra-patient historical modeling and overlook inter-visit reference augmentation via visit-conditioned retrieval. 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 17 
+
+Table 4. Performance comparison on MIMIC-III in terms of Jaccard (%), F1 (%), PRAUC (%), DDI (%) and # Med.. Numbers in bold 
+
+and underlined indicate the best and the second-best performance, respectively, according to t-tests at the 95% confidence level. The ground-truth rate of DDI in the MIMIC-III dataset is 8.68%. In the DDI column, values in orange indicate that the mean+std exceeds the ground truth (inferior), while values in blue indicate that the mean-std falls below it (superior). 
+
+Model Jaccard ↑ F1 ↑ PRAUC ↑ DDI ↓ # Med. ↓
+
+LR 49 .24 ±0.27 64 .96 ±0.25 75 .48 ±0.31 8.30 ±0.07 16 .05 ±0.14 
+
+ECC 48 .89 ±0.26 64 .47 ±0.23 76 .19 ±0.20 8.57 ±0.08 15 .74 ±0.07 
+
+LEAP 45 .50 ±0.18 61 .68 ±0.17 65 .46 ±0.42 7.82 ±0.08 18 .57 ±0.08 
+
+RETAIN 48 .60 ±0.34 64 .66 ±0.34 75 .98 ±0.43 8.83 ±0.10 18 .92 ±0.13 
+
+GAMENet 50 .18 ±0.20 65 .84 ±0.19 76 .48 ±0.23 8.88 ±0.09 27 .39 ±0.19 
+
+SafeDrug 51 .14 ±0.25 66 .81 ±0.23 76 .43 ±0.23 5.87 ±0.04 18 .94 ±0.13 
+
+DAPSNet 51 .68 ±0.30 67 .22 ±0.26 76 .64 ±0.40 5.96 ±0.05 21 .14 ±0.15 
+
+PROMISE 52 .33 ±0.25 67 .91 ±0.21 80 .58 ±0.17 9.33 ±0.15 15 .27 ±0.13 
+
+COGNet 52 .94 ±0.39 68 .30 ±0.36 76 .79 ±0.25 8.62 ±0.09 28 .08 ±0.18 
+
+Carmen 52 .67 ±0.21 68 .12 ±0.19 76 .52 ±0.36 – –DGCL 52 .54 ±0.15 67 .98 ±0.14 77 .28 ±0.15 8.31 ±0.03 21 .92 ±0.05 
+
+VITA 52 .15 ±0.25 67 .42 ±0.21 76 .23 ±0.25 8.11 ±0.09 29 .53 ±0.15 
+
+MoleRec 53 .12 ±0.39 68 .50 ±0.33 77 .51 ±0.25 7.16 ±0.07 20 .54 ±0.16 
+
+HypeMed 53 .73 ±0.30 69 .06 ±0.25 78 .34 ±0.31 8.19 ±0.07 20 .01 ±0.14 
+
+Table 5. Performance comparison on MIMIC-IV . The ground-truth DDI rate is 7.24%. Other notations are consistent with Tab. 4. 
+
+Model Jaccard ↑ F1 ↑ PRAUC ↑ DDI ↓ # Med. ↓
+
+LR 47 .65 ±0.20 63 .31 ±0.20 74 .08 ±0.22 7.07 ±0.09 13 .85 ±0.09 
+
+ECC 45 .82 ±0.16 61 .39 ±0.15 73 .58 ±0.14 7.11 ±0.14 13 .08 ±0.14 
+
+LEAP 43 .73 ±0.26 59 .84 ±0.25 63 .73 ±0.26 6.57 ±0.06 17 .34 ±0.07 
+
+RETAIN 44 .10 ±0.49 60 .23 ±0.50 71 .60 ±0.40 7.29 ±0.14 14 .43 ±0.17 
+
+GAMENet 47 .80 ±0.26 63 .56 ±0.28 75 .09 ±0.20 7.85 ±0.05 23 .36 ±0.17 
+
+SafeDrug 48 .47 ±0.17 64 .24 ±0.17 74 .27 ±0.22 6.11 ±0.11 18 .15 ±0.11 
+
+DAPSNet 49 .14 ±0.22 64 .85 ±0.19 74 .07 ±0.14 5.95 ±0.07 18 .62 ±0.15 
+
+PROMISE 47 .29 ±0.30 63 .29 ±0.28 76 .76 ±0.28 7.08 ±0.13 11 .34 ±0.08 
+
+COGNet 50 .38 ±0.27 65 .87 ±0.23 74 .99 ±0.15 7.79 ±0.15 25 .43 ±0.19 
+
+Carmen 50 .06 ±0.12 65 .69 ±0.07 74 .62 ±0.30 – –DGCL 49 .98 ±0.13 65 .62 ±0.12 75 .52 ±0.14 7.50 ±0.04 18 .41 ±0.07 
+
+VITA 50 .31 ±0.29 65 .75 ±0.26 74 .80 ±0.20 7.45 ±0.11 26 .37 ±0.18 
+
+MoleRec 50 .64 ±0.23 66 .23 ±0.21 75 .14 ±0.32 6.78 ±0.07 17 .74 ±0.11 
+
+HypeMed 51 .05 ±0.28 66 .50 ±0.25 76 .23 ±0.28 6.65 ±0.11 16 .53 ±0.16 
+
+Compared with DAPSNet and PROMISE , the performance improvements of HypeMed primarily stem from its 
+
+representation-consistent design that couples representation learning and visit-conditioned inter-visit retrieval. Although DAPSNet and PROMISE also incorporate similarity information to improve recommendation accuracy, their retrieval mechanisms are decoupled from representation learning: DAPSNet relies on embedding-level similarity and answer-side matching, while PROMISE computes trajectory similarity via DTW followed by hierarchical attention. This separation can lead to a mismatch between the learned embedding space and the retrieval criterion. In contrast, 
+
+HypeMed performs retrieval and aggregation within the same hypergraph representation space, enabling coherent use of inter-visit references to refine latent condition estimation and medication prediction. This representation–retrieval 
+
+> Manuscript submitted to ACM
+
+18 Zhang, et al.  
+
+> Table 6. Performance comparison on eICU . There is no DDI information available in the eICU dataset. Other notations are consistent with Tab. 4.
+
+Model Jaccard ↑ F1 ↑ PRAUC ↑ # Med. ↓
+
+LR 39 .96 ±0.22 55 .33 ±0.21 73 .24 ±0.36 7.55 ±0.07 
+
+ECC 33 .41 ±0.26 47 .66 ±0.29 72 .66 ±0.28 5.62 ±0.05 
+
+LEAP 41 .25 ±0.18 56 .43 ±0.21 62 .67 ±0.29 13 .36 ±0.04 
+
+RETAIN 41 .29 ±0.35 56 .53 ±0.34 71 .02 ±0.35 9.81 ±0.06 
+
+GAMENet 40 .80 ±0.17 56 .00 ±0.18 68 .86 ±0.18 12 .45 ±0.03 
+
+SafeDrug 41 .19 ±0.23 56 .42 ±0.21 69 .79 ±0.30 10 .68 ±0.06 
+
+DAPSNet 41 .14 ±0.28 56 .44 ±0.30 69 .99 ±0.31 10 .87 ±0.06 
+
+PROMISE 40 .89 ±0.25 56 .41 ±0.26 73 .54 ±0.32 7.16 ±0.05 
+
+COGNet 41 .19 ±0.42 56 .20 ±0.43 67 .68 ±0.41 20 .14 ±0.10 
+
+DGCL 38 .23 ±0.14 53 .38 ±0.15 69 .63 ±0.13 8.70 ±0.02 
+
+VITA 41 .46 ±0.26 56 .38 ±0.29 67 .39 ±0.37 18 .47 ±0.03 
+
+MoleRec 41 .32 ±0.20 56 .63 ±0.24 70 .14 ±0.27 10 .44 ±0.05 
+
+HypeMed 41 .95 ±0.23 56 .97 ±0.23 68 .71 ±0.27 16 .32 ±0.02 
+
+consistency ensures semantically aligned visit matching and contributes to the observed performance gains across multiple evaluation metrics. Consequently, HypeMed surpasses the strongest baselines on the primary recommendation metrics across all three datasets, achieving Jaccard score improvements of +0.61% , +0.41% , and +0.49% on MIMIC-III, MIMIC-IV, and eICU, respectively. Moreover, HypeMed maintains DDI rates below or comparable to real-world prescriptions (8.68% for MIMIC-III and 7.24% for MIMIC-IV), indicating that its superior accuracy does not compromise safety (on MIMIC-III/IV where DDI graphs are available). Notably, the results on the eICU dataset further demonstrate HypeMed ’s robustness and generalization capability on cross-domain, cross-institution, and cross-population datasets. Overall, HypeMed achieves a favorable balance between accuracy and safety, underscoring its potential as a reliable clinical decision-support system. 
+
+5.3 Ablation Study 
+
+To evaluate the contribution of each component in HypeMed , we conduct comprehensive ablation studies on the MIMIC-III [ 20 ] and MIMIC-IV [ 19 ] datasets. We construct several model variants as follows: (1) HypeMed –MedRep–None ini-tializes entity and visit representations randomly, removing the pretrained entity and visit representations from MedRep; (2) HypeMed –MedRep–Fixed keeps the embeddings generated by MedRep frozen during SimMR training, preventing task-specific adaptation; (3) HypeMed –MedRep–HGCN replaces the KHGE encoder in MedRep with a standard HGCN [ 9]; (4) HypeMed –MedRep–GCN replaces the KHGE encoder with a conventional GCN [ 36 ]; (5) HypeMed –SimMR–w/o Hist. removes the historical information encoder, relying solely on the similarity channel; and (6) HypeMed –SimMR–w/o Sim. disables the similarity channel, preserving only the historical encoder. From the results, several key observations can be drawn. First, all ablated variants show degraded performance compared to the full HypeMed , confirming the overall effectiveness and complementarity of its components. Second, removing MedRep ( HypeMed –MedRep–None) leads to a notable decline (e.g., Jaccard decreases from 53 .10 → 51 .70 in MIMIC-III), highlighting the essential role of pretrained representations in encoding medical knowledge. Notably, the 
+
+HypeMed –MedRep–Fixed variant, which freezes the pretrained embeddings without further optimization, exhibits a more pronounced decrease compared to the jointly optimized model. This confirms that fine-tuning the pretrained representations during SimMR training is crucial for aligning them with the downstream recommendation objective. 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 19 
+
+Table 7. Ablation study on MIMIC-III and MIMIC-IV . Results are reported for both MedRep and SimMR ablations. Jaccard, F1, PRAUC, and DDI are expressed as percentages (%), while #Med. retains its original scale. Values denote mean ± standard deviation over ten bootstrap sampling. 
+
+MIMIC-III Model Jaccard ↑ F1 ↑ PRAUC ↑ DDI ↓ #Med. ↓
+
+HypeMed 53 .10 ±0.43 68 .49 ±0.37 77 .32 ±0.37 6.67 ±0.06 22 .77 ±0.13 
+
+– SimMR– w/o Sim. 52 .91 ±0.42 68 .33 ±0.37 77 .44 ±0.34 6.40 ±0.06 22 .50 ±0.13 
+
+– SimMR– w/o Hist. 51 .90 ±0.41 67 .40 ±0.37 76 .40 ±0.44 6.12 ±0.06 23 .16 ±0.17 
+
+– MedRep–None 51 .70 ±0.46 67 .23 ±0.42 76 .28 ±0.36 6.52 ±0.06 23 .51 ±0.14 
+
+– MedRep–Fixed 50 .49 ±0.23 66 .24 ±0.21 75 .44 ±0.33 6.45 ±0.04 22 .74 ±0.13 
+
+– MedRep–HGCN 52 .17 ±0.45 67 .67 ±0.40 75 .66 ±0.35 6.01 ±0.05 22 .37 ±0.13 
+
+– MedRep–GCN 51 .40 ±0.40 66 .96 ±0.36 76 .31 ±0.38 6.05 ±0.05 23 .50 ±0.12 
+
+MIMIC-IV Model Jaccard ↑ F1 ↑ PRAUC ↑ DDI ↓ #Med. ↓
+
+HypeMed 50 .92 ±0.25 66 .35 ±0.24 75 .96 ±0.26 6.60 ±0.13 16 .68 ±0.11 
+
+– SimMR–w/o Sim. 50 .52 ±0.26 66 .03 ±0.23 75 .91 ±0.24 6.79 ±0.15 16 .61 ±0.12 
+
+– SimMR–w/o Hist. 49 .98 ±0.23 65 .52 ±0.21 75 .19 ±0.25 6.47 ±0.11 16 .26 ±0.11 
+
+– MedRep–None 50 .15 ±0.25 65 .68 ±0.23 75 .47 ±0.25 6.65 ±0.11 16 .61 ±0.11 
+
+– MedRep–Fixed 46 .68 ±0.21 62 .58 ±0.22 72 .99 ±0.27 6.01 ±0.07 21 .11 ±0.12 
+
+– MedRep–HGCN 50 .21 ±0.23 65 .76 ±0.22 75 .54 ±0.30 6.48 ±0.12 16 .63 ±0.12 
+
+– MedRep–GCN 50 .25 ±0.20 65 .77 ±0.19 75 .61 ±0.23 6.48 ±0.12 16 .95 ±0.11 
+
+Furthermore, substituting the KHGE encoder with HGCN or GCN ( HypeMed –MedRep–HGCN / HypeMed –MedRep–GCN) produces only marginal gains (Jaccard: 50 .15 → 50 .25 in MIMIC-IV) over the random baseline, indicating that conventional graph encoders are less capable of capturing intra-visit combinatorial semantics among medications. Finally, removing the historical channel ( HypeMed –SimMR–w/o Hist.) results in the largest degradation (e.g., F1: 68 .49 → 67 .40 
+
+/ 66 .35 → 65 .52 in MIMIC-III/IV respectively), underscoring the critical importance of longitudinal information. Nevertheless, the two channels are complementary, and their integration yields the best overall performance. 
+
+5.4 Hyperparameters Analysis 
+
+In HypeMed , three hyperparameters potentially influence the final performance: (1) the number of pretraining epochs in the MedRep stage, (2) the number of retrieved similar visits (Top-𝑛 ) in SimMR, and (3) the number of augmented hypergraph views used for contrastive learning. We conduct a comprehensive sensitivity analysis to evaluate their effects, with results summarized in Tab. 8, Tab. 9, and Tab. 10. All experiments evaluate five metrics—Jaccard, F1, PRAUC, DDI rate, and average number of medications—while keeping all other settings fixed. 
+
+(1) Number of Pretraining Epochs. We vary the number of pretraining epochs over {0, 100 , 300 , 1000 } to examine the effect of contrastive pretraining duration. As shown in Tab. 8, performance on both datasets first improves and then slightly declines as the number of epochs increases, indicating that moderate pretraining enhances representation quality, whereas excessive training may lead to overfitting or representation collapse. 
+
+(2) Number of Retrieved Similar Visits. To assess the impact of inter-visit reference retrieval, we vary the number of retrieved similar visits (Top-𝑛 ) in {0, 1, 10 , 100 , 500 , 1000 }. As shown in Tab. 9, incorporating a small number of similar visits significantly enhances predictive performance, whereas a large 𝑛 introduces noise or less relevant samples, 
+
+> Manuscript submitted to ACM
+
+20 Zhang, et al. 
+
+Table 8. Pretraining-epoch sensitivity analysis on MIMIC-III and MIMIC-IV . Jaccard, F1, PRAUC, and DDI are reported in percentage (%), while #Med. retains its original scale. Values denote mean ± standard deviation over ten bootstrap sampling. 
+
+Dataset Epoch Jaccard ↑ F1 ↑ PRAUC ↑ DDI ↓ #Med. ↓
+
+MIMIC-III 
+
+0 52 .27 ±0.25 67 .75 ±0.22 77 .08 ±0.32 7.93 ±0.10 21 .90 ±0.17 
+
+100 52 .48 ±0.23 67 .97 ±0.20 76 .10 ±0.29 6.00 ±0.04 21 .93 ±0.10 
+
+300 52 .26 ±0.25 67 .78 ±0.22 76 .27 ±0.39 6.06 ±0.04 22 .74 ±0.11 
+
+1000 51 .91 ±0.22 67 .41 ±0.19 75 .95 ±0.37 6.28 ±0.04 22 .95 ±0.14 
+
+MIMIC-IV 
+
+0 49 .87 ±0.23 65 .48 ±0.23 75 .60 ±0.27 6.30 ±0.10 16 .50 ±0.14 
+
+100 50 .03 ±0.23 65 .65 ±0.22 75 .87 ±0.27 6.34 ±0.07 16 .81 ±0.17 
+
+300 50 .17 ±0.33 65 .75 ±0.32 75 .92 ±0.27 6.39 ±0.09 16 .32 ±0.15 
+
+1000 49 .66 ±0.26 65 .30 ±0.26 75 .67 ±0.25 6.46 ±0.09 16 .20 ±0.16 
+
+Table 9. Top-𝑛 sensitivity analysis on MIMIC-III and MIMIC-IV . Jaccard, F1, PRAUC, and DDI are expressed as percentages (%), while #Med. retains its original scale. Values denote mean ± standard deviation over ten bootstrap sampling. 
+
+Dataset Top-𝑛 Jaccard ↑ F1 ↑ PRAUC ↑ DDI ↓ #Med. ↓
+
+MIMIC-III 
+
+0 53 .10 ±0.43 68 .49 ±0.37 77 .32 ±0.37 6.67 ±0.06 22 .77 ±0.13 
+
+1 53 .23 ±0.40 68 .59 ±0.35 77 .50 ±0.35 6.52 ±0.04 22 .58 ±0.13 
+
+10 52 .93 ±0.37 68 .33 ±0.33 77 .43 ±0.38 6.25 ±0.05 22 .63 ±0.13 
+
+100 52 .88 ±0.40 68 .27 ±0.35 77 .20 ±0.36 6.44 ±0.06 23 .31 ±0.13 
+
+500 52 .80 ±0.38 68 .22 ±0.34 77 .13 ±0.36 6.39 ±0.06 23 .20 ±0.12 
+
+1000 52 .86 ±0.37 68 .26 ±0.33 77 .16 ±0.39 6.40 ±0.05 22 .97 ±0.12 
+
+MIMIC-IV 
+
+0 50 .52 ±0.26 66 .03 ±0.23 75 .91 ±0.24 6.79 ±0.15 16 .61 ±0.12 
+
+1 50 .51 ±0.25 66 .01 ±0.24 75 .79 ±0.21 6.69 ±0.12 16 .93 ±0.11 
+
+10 50 .39 ±0.23 65 .90 ±0.21 75 .98 ±0.23 6.49 ±0.12 16 .69 ±0.11 
+
+100 50 .70 ±0.18 66 .23 ±0.17 76 .18 ±0.23 6.49 ±0.13 16 .80 ±0.12 
+
+500 50 .77 ±0.21 66 .29 ±0.19 76 .30 ±0.23 6.52 ±0.13 16 .51 ±0.12 
+
+1000 50 .72 ±0.15 66 .22 ±0.14 76 .25 ±0.22 6.54 ±0.10 16 .42 ±0.12 
+
+leading to marginal declines in Jaccard and F1. Nevertheless, the DDI rate and average medication count remain stable, suggesting that HypeMed achieves a robust balance between accuracy and safety. 
+
+Table 10. Performance and GPU memory usage under different numbers of views on MIMIC-III and MIMIC-IV . Jaccard, F1, PRAUC, and DDI are reported in percentage (%); #Med. and GPU Memory (GiB) keep their original scales. 
+
+Dataset #Views Jaccard ↑ F1 ↑ PRAUC ↑ DDI ↓ #Med. ↓ GPU Mem. MIMIC-III 
+
+2 51 .13 ±0.17 66 .77 ±0.16 75 .73 ±0.34 6.50 ±0.05 23 .80 ±0.14 9.76 3 51 .26 ±0.22 66 .85 ±0.18 75 .86 ±0.40 6.23 ±0.05 24 .60 ±0.12 14 .09 4 51 .05 ±0.20 66 .67 ±0.19 75 .89 ±0.43 6.33 ±0.04 23 .49 ±0.12 24 .53 
+
+MIMIC-IV 
+
+2 48 .67 ±0.23 64 .40 ±0.22 73 .57 ±0.32 5.90 ±0.07 20 .93 ±0.17 14 .46 3 48 .61 ±0.21 64 .34 ±0.20 73 .44 ±0.27 5.99 ±0.06 21 .19 ±0.18 23 .75 4 48 .66 ±0.25 64 .39 ±0.25 73 .31 ±0.29 6.03 ±0.07 20 .87 ±0.17 38 .61 
+
+(3) Number of Augmented Views. In lines 5–6 of Alg. 2, HypeMed generates two augmented hypergraph views for contrastive pretraining in the MedRep stage. This design follows standard contrastive frameworks [ 23 , 41 ], where two 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 21 correlated views are typically sufficient to learn discriminative yet invariant representations. To validate this choice, we vary the number of augmented views over {2, 3, 4}. As shown in Tab. 10, adding more views provides negligible improvements or even slight degradation, while GPU memory usage increases sharply (from 9.8 →24.5 GiB on MIMIC-III and 14.5 →38.6 GiB on MIMIC-IV). These findings suggest that two views strike the best balance between performance and computational efficiency, supporting the design adopted in Alg. 2. 1 2 3 4 5
+
+> Visit length (number of past visits)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Channel gate weight
+> −0.20
+> −0.15
+> −0.10
+> −0.05
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> Spearman correlation (ρ)
+
+(a) MIMIC-III 1 2 3 4 5 6 7 
+
+> Visit length (number of past visits)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Channel gate weight
+> −0.2
+> −0.1
+> 0.0
+> 0.1
+> 0.2
+> Spearman correlation (ρ)
+> History
+> Similarity
+> ρ(Jaccard, History)
+> ρ(Jaccard, Similarity)
+
+(b) MIMIC-IV Fig. 5. Visualization of adaptive channel weighting and its association with model performance across different visit lengths. Blue and orange dots represent per-visit gate weights for the history and similarity channels, respectively. Black and purple lines indicate the Spearman correlations ( 𝜌 ) between Jaccard performance and each channel’s weight, computed within visit-length groups. To ensure statistical reliability, visit-length groups with fewer than 20 samples were excluded. 
+
+5.5 Interpretability analysis 
+
+To better understand how HypeMed balances information from different sources, we visualize the per-visit gate weights of the two channels learned by the fusion module (blue: history channel; orange: similarity channel) in Fig. 5, along with their Spearman correlations ( 𝜌 ) with predictive performance (Jaccard). Each dot represents a single visit. In both datasets, the similarity channel generally receives smaller gate weights than the history channel, since the latter always incorporates the current visit’s diagnosis and procedure information—even for single-visit patients—whereas the similarity channel depends on retrieved visits and provides supplementary context when longitudinal data are sparse. This finding aligns with our ablation results, where removing the history channel led to a larger performance degradation. However, the strength of association between each channel and predictive accuracy varies across datasets. In MIMIC-III, where patient trajectories are shorter and sparser, the similarity-channel weight correlates positively with performance during early visits (1–4), suggesting that retrieved visits compensate for limited historical context. Once sufficient history accumulates ( ≥5 visits), the correlation shifts toward the history channel, indicating increasing reliance on personal longitudinal information. In contrast, MIMIC-IV contains richer and longer patient trajectories, and its performance correlates more strongly with the history channel across all visit lengths. Overall, the correlation between predictive accuracy and the similarity-channel weight exhibits a general downward trend as visit length increases, indicating that HypeMed gradually shifts its reliance from retrieved similar visits to accumulated patient-specific history. This visualization thus provides an intrinsic, model-level diagnostic perspective on how the relative contributions of different information sources evolve with increasing data completeness. 
+
+> Manuscript submitted to ACM
+
+22 Zhang, et al. 
+
+Table 11. Performance comparison under the cold-start (first-visit) setting on MIMIC-III and MIMIC-IV . All metrics are reported as percentages (%), except for the average number of medications (#Med.). Values denote mean ± standard deviation over ten bootstrapped runs. A total of 192 and 307 patients have only one visit in MIMIC-III and MIMIC-IV, respectively. 
+
+Dataset Model Jaccard ↑ F1 ↑ PRAUC ↑ DDI ↓ #Med. ↓
+
+MIMIC-III 
+
+SafeDrug 49 .47 ±1.24 65 .22 ±1.03 74 .92 ±0.91 6.22 ±0.20 18 .01 ±0.26 
+
+DAPSNet 50 .68 ±0.95 66 .20 ±0.79 74 .90 ±1.00 6.12 ±0.11 19 .92 ±0.33 
+
+COGNet 51 .19 ±1.20 66 .64 ±1.11 75 .62 ±0.69 8.62 ±0.15 24 .90 ±0.27 
+
+HypeMed 51 .60 ±0.86 67 .14 ±0.73 75 .83 ±0.98 8.65 ±0.29 20 .04 ±0.31 
+
+HypeMed -SimMR- w/o Hist. 49 .93 ±1.00 65 .46 ±0.92 74 .78 ±1.04 6.19 ±0.25 23 .44 ±0.32 
+
+HypeMed -SimMR- w/o Sim. 49 .52 ±1.08 65 .24 ±0.98 74 .62 ±0.96 6.35 ±0.25 22 .43 ±0.28 
+
+MIMIC-IV 
+
+SafeDrug 44 .89 ±1.16 60 .61 ±1.14 66 .83 ±1.34 6.41 ±0.24 17 .58 ±0.31 
+
+DAPSNet 49 .49 ±1.10 65 .23 ±1.01 73 .71 ±1.05 6.07 ±0.22 17 .49 ±0.25 
+
+COGNet 46 .91 ±0.48 62 .64 ±0.46 72 .82 ±0.70 8.90 ±0.17 18 .67 ±0.39 
+
+HypeMed 50 .30 ±0.94 65 .78 ±0.86 75 .19 ±1.11 6.81 ±0.37 16 .31 ±0.27 
+
+HypeMed -SimMR- w/o Hist. 49 .84 ±0.98 65 .39 ±0.89 74 .94 ±1.13 6.61 ±0.34 16 .30 ±0.25 
+
+HypeMed -SimMR- w/o Sim. 49 .62 ±1.00 65 .15 ±0.94 74 .89 ±1.12 7.18 ±0.26 16 .86 ±0.36 
+
+5.6 Cold-start performance analysis 
+
+To evaluate whether the proposed similar-visit retrieval mechanism effectively alleviates the cold-start problem, we perform a targeted assessment under the no-history (first-visit) setting, as shown in Tab. 11. Across both MIMIC-III 
+
+and MIMIC-IV , HypeMed achieves the best performance among all baselines ( SafeDrug , DAPSNet , and COGNet ) in terms of Jaccard, F1, and PRAUC, demonstrating strong generalization capability even when patient history is unavailable. Compared with its ablated variants, the complete model exhibits clear advantages. Removing the similarity channel (w/o Sim. ) leads to consistent declines in all major metrics—on MIMIC-III , Jaccard decreases by approximately 2% and F1 by 1.5% —indicating that retrieved visits provide valuable external priors that compensate for the absence of personal history. In contrast, removing the historical channel ( w/o Hist. ) results in slightly lower performance, suggesting that under the single-visit condition, the model mainly relies on current-visit information while still benefiting from the structural representation of the historical channel. Together with the observations from Fig. 5, these results highlight a complementary effect between the two channels: the similarity channel is crucial in true cold-start cases, whereas the historical channel becomes increasingly influential as longitudinal information accumulates. These findings quantitatively verify that the dual-channel design enables HypeMed to adaptively balance retrieved population-level knowledge and patient-specific information, thereby achieving superior robustness and predictive accuracy in cold-start scenarios. 
+
+5.7 Retrieval-quality correlation analysis 
+
+To quantify the advantage of joint representation–retrieval learning over a decoupled retrieval paradigm, we report the retrieval-quality correlation analysis in Fig. 6. From Fig. 6, we observe two key trends: First, for both HypeMed and HypeMed -MedRep-None, higher retrieval quality generally leads to better prediction performance, confirming that relevant references provide useful complementary signals [21, 40, 43]. Second, under the same retrieval-quality bin, HypeMed consistently achieves higher accuracy than 
+
+HypeMed -MedRep-None, indicating that the performance gain is not solely explained by retrieving “more correct” cases. 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 23 0.32 0.47 0.51 0.55 0.59 0.68                           
+
+> Neighbor match (binned)
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Prediction score
+> Jaccard (MIMIC-III)
+> 0.32 0.47 0.51 0.55 0.59 0.68
+> Neighbor match (binned)
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Prediction score
+> PRAUC (MIMIC-III)
+> 0.32 0.47 0.51 0.55 0.59 0.68
+> Neighbor match (binned)
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Prediction score
+> F1 (MIMIC-III)
+> 0.22 0.39 0.44 0.49 0.53 0.65
+> Neighbor match (binned)
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Prediction score
+> Jaccard (MIMIC-IV)
+> 0.22 0.39 0.44 0.49 0.53 0.65
+> Neighbor match (binned)
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Prediction score
+> PRAUC (MIMIC-IV)
+> 0.22 0.39 0.44 0.49 0.53 0.65
+> Neighbor match (binned)
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Prediction score
+> F1 (MIMIC-IV)
+> HypeMed HypeMed MedRep None
+
+Fig. 6. Retrieval-quality correlation analysis. We compare HypeMed with HypeMed -MedRep-None, a controlled variant that keeps the same prediction architecture but removes MedRep pre-training, resulting in retrieval within a non-pretrained embedding space. Test visits are grouped into bins by retrieval quality, measured as the F1 score between medications in the retrieved visits and the ground-truth medications. The x-axis denotes retrieval-quality bins (higher is better), and the y-axis reports the final prediction performance. 
+
+This result supports our hypothesis that coupling representation learning with retrieval improves how retrieved context is 
+
+represented and used. In HypeMed -None, retrieval is performed in a randomly initialized or weakly regularized embedding space; even when the retrieved visits exhibit comparable label overlap, their embeddings may be poorly organized with respect to visit semantics, making the fused context less predictable and less exploitable by the downstream predictor. In contrast, MedRep pre-trains a hyperedge-aware metric space where visit embeddings are explicitly optimized to encode high-order clinical interactions and preserve set-level semantics. Therefore, retrieved neighbors become not only label-relevant but also geometrically compatible with the query visit, providing a more structured and informative signal for fusion, which ultimately translates into consistently better prediction performance. 
+
+5.8 Time complexity comparison 
+
+We perform a time complexity analysis by comparing our approach with state-of-the-art methods, using floating point operations (FLOPs) as the metric. Specifically, we measure the FLOPs for each model during the inference phase. The results are illustrated in Fig. 7. Thanks to its two-stage design, HypeMed reuses MedRep embeddings and avoids additional GNN computations during inference. This significantly reduces its computational load, making its FLOPs count second only to SafeDrug. On the other hand, MoleRec executes a 4-layer GNN across multiple graphs, which results in the highest FLOPs during inference among the evaluated models. 
+
+> Manuscript submitted to ACM
+
+24 Zhang, et al. 10 5 10 6 10 7 10 8 10 9
+
+## FLOPS (Lower is Better) 
+
+## 10 5
+
+## 10 6 
+
+> Params (Lower is Better)
+> GAMENet
+> SafeDrug
+> COGNet
+> DGCL
+> MoleRec
+> VITA
+> HypeMed
+> 50.18
+> 51.14
+> 52.15
+> 52.54
+> 52.94
+> 53.12
+> 53.73 Jaccard (%)
+> Fig. 7. Comparative time complexity across models (FLOPs vs. Parameters)
+
+5.9 Case study 
+
+To illustrate the effectiveness of HypeMed ’s recommendations more vividly, we conduct a case study with Patient-908 
+
+as an example. Patient-908 from the MIMIC-III test set has two medical visits. During the first visit, the patient was diagnosed with diseases such as cirrhosis, liver cancer, and chronic hepatitis. In the second visit, new conditions were added, including complications from liver transplantation, renal failure, and confirmed sepsis. Tab. 12 displays detailed information. Due to space constraints, we use the ICD codes to represent diagnoses and ATC codes to represent medications. Fig. 8 demonstrates the visualization of diagnosis entities using HGCN and KHGE as encoders in MedRep. Points in the same color correspond to the same ICD category. The KHGE group embeddings show apparent clustering by ICD categories. Nodes within the same category display closer distances. In contrast, the HGCN group shows scattered distribution without clear category distinction. To better demonstrate the effectiveness of KHGE, we select three groups of diagnosis entities from Visit-2, each belonging to the same category in the ICD classification system. The groups are as follows: 
+
+• ★ Persons With Potential Health Hazards Related To Personal And Family History (V1083, V168, and V1582); 
+
+• ▶ Symptoms (78060, 78552); 
+
+• + Varicose veins of other sites (4568, 4561). Different markers are used to highlight entities belonging to different groups. We find that in the HGCN group, the distribution of these three entity groups was dispersed, while in the KHGE group, entities belonging to the same category are clustered together. This suggests that by incorporating the ICD classification system into the modeling process, KHGE can translate the relative distances of entities in ICD into distances in embedding representations, 
+
+> Manuscript submitted to ACM
+
+HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 25 granting similar representations to entities of the same category. In contrast, HGCN, lacking ICD information, fails to capture such information. 50 25 0 25 50 
+
+50 
+
+25 
+
+0
+
+25 
+
+50 4561 
+
+4568 
+
+V1083 
+
+V168 
+
+V1582 78552 
+
+78060 
+
+# HGCN Diagnosis 
+
+50 25 0 25 50 
+
+50 
+
+25 
+
+0
+
+25 
+
+50 4561 
+
+4568 
+
+V1083 
+
+V168 
+
+V1582 
+
+78552 
+
+78060 
+
+# KHGE Diagnosis 
+
+> Fig. 8. Comparative Visualization of Diagnosis Entity Representations in MedRep using HGCN and KHGE Encoders.
+
+We then compare the effectiveness of medication recommendations for Patient-908 under two scenarios: with and without similar visit information (refer to Tab. 12). During the first visit, where the patient has no prior medical history, direct recommendations are prone to omissions and errors. To address this, HypeMed assigns a higher weight (90.43%) to similar visit information, thereby mitigating these inaccuracies. In the second visit, owing to the continuity of the patient’s condition, HypeMed can recommend the most suitable medications by relying on historical information, which is assigned a weight of 67.55%. However, errors in recommendations persist. At this juncture, information from similar visits plays a role in eliminating inappropriate medications. Ultimately, using similar visit information in the model increases the Jaccard similarity of medication recommendations from 46.15% / 55.17% to 77.27% / 64.00% in Visit-1 / Visit-2. This indicates that information on similar visits can significantly improve the accuracy of recommendations, especially when there is no history of prior medical consultations.  
+
+> Table 12. The example of Patient-908 with two visits for the case study. Medications recommended correctly without using similar visit information are highlighted in bold . Blue and orange are used respectively to denote additional correct medications introduced and erroneous medications eliminated after incorporating similar visit information.
+
+Diagnoses Medications 
+
+Visit-1 V8741, V153, 79029, V1083, 5715, 1550, 07054 N02B, A01A, A02B , A06A , B05C ,
+
+J05A , A12C , A07A , J01E , N01A, 
+
+C03C , J01C, N02A , B01A , N05C, D01A, J01D, L04A, D11A , A04A ,A07E, D07A, D04A, C03D Visit-2 99682, 78552, 0389, 99592, 5848, 570, 28419, 4561, 5589, 78060, 07070, 5715, V1083, E8780, 4568, V168, V1582 
+
+N02B , A01A , A02B , A06A , B05C ,
+
+A12A , A12C , C01C , A07A , J02A, 
+
+J05A , V03A, J01E , J01C, N02A, A02A, 
+
+J01M , B01A , N05C , J01D , B02B, C08C, D11A , A04A, A07E 
+
+> Manuscript submitted to ACM
+
+26 Zhang, et al. 
+
+6 Conclusion and Future Work 
+
+In conclusion, we propose HypeMed , a hypergraph-based medication recommendation framework that reconstructs a patient’s latent clinical condition by unifying intra-visit set-level coherence modeling with inter-visit reference augmentation. Through a two-stage design, MedRep encodes high-order clinical co-occurrence into a globally consistent, retrieval-friendly embedding space, while SimMR performs visit-conditioned retrieval of similar visits and integrates them with longitudinal history for robust medication prediction. Extensive experiments on three real-world benchmarks (MIMIC-III, MIMIC-IV, and eICU) show that HypeMed consistently achieves strong overall performance and outperforms state-of-the-art baselines on key accuracy metrics while maintaining competitive safety. Ablation and case studies further verify the complementary contributions of MedRep and SimMR and highlight the benefit of representation–retrieval consistency in utilizing retrieved references. Nevertheless, similar to prior methods [ 43 , 48 ], HypeMed may recommend slightly more medications than the ground truth, leading to suboptimal performance on the #Med. metric. In addition, embedding-based retrieval can occasionally introduce less relevant visits, especially when the current visit is under-specified. In future work, we plan to improve retrieval robustness (e.g., by incorporating stronger relevance filtering or uncertainty-aware retrieval) and enhance prescription compactness to further strengthen the clinical applicability of HypeMed .
+
+Acknowledgments 
+
+This research was supported by the Public Computing Cloud of Renmin University of China and by the Fund for Building World-Class Universities (Disciplines) at Renmin University of China. 
+
+References 
+
+[1] Suman Bhoi, Mong Li Lee, Wynne Hsu, Hao Sen Andrew Fang, and Ngiap Chuan Tan. 2021. Personalizing medication recommendation with a graph-based approach. ACM Transactions on Information Systems (TOIS) 40, 3 (2021), 1–23. [2] David Blumenthal, Elizabeth J Fowler, Melinda Abrams, and Sara R Collins. 2020. Covid-19—implications for the health care system. , 1483–1488 pages. [3] Paula Braveman and Laura Gottlieb. 2014. The social determinants of health: it’s time to consider the causes of the causes. Public health reports 129, 1_suppl2 (2014), 19–31. [4] Lee R Brooks, Geoffrey R Norman, and Scott W Allen. 1991. Role of specific similarity in a medical diagnostic task. Journal of Experimental Psychology: General 120, 3 (1991), 278. [5] Sherry-Ann Brown. 2016. Patient similarity: emerging concepts in systems and precision medicine. Frontiers in physiology 7 (2016), 561. [6] Qianyu Chen, Xin Li, Kunnan Geng, and Mingzhong Wang. 2023. Context-Aware Safe Medication Recommendations with Molecular Graph and DDI Graph Embedding. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 37. 7053–7060. [7] Edward Choi, Mohammad Taha Bahadori, Jimeng Sun, Joshua Kulas, Andy Schuetz, and Walter Stewart. 2016. Retain: An interpretable predictive model for healthcare using reverse time attention mechanism. Advances in neural information processing systems 29 (2016). [8] R Scott Evans. 2016. Electronic health records: then, now, and in the future. Yearbook of medical informatics 25, S 01 (2016), S48–S61. [9] Yifan Feng, Haoxuan You, Zizhao Zhang, Rongrong Ji, and Yue Gao. 2019. Hypergraph neural networks. In Proceedings of the AAAI conference on artificial intelligence , Vol. 33. 3558–3565. [10] Jean Louis Frossard and Florent Bonvin. 2011. Charcot’s triad. International journal of emergency medicine 4, 1 (2011), 18. [11] Fan Gong, Meng Wang, Haofen Wang, Sen Wang, and Mengyue Liu. 2021. SMR: medical knowledge graph embedding for safe medicine recommendation. Big Data Research 23 (2021), 100174. [12] Hanze Guo, Jianxun Lian, and Xiao Zhou. 2026. Why not Collaborative Filtering in Dual View? Bridging Sparse and Dense Models. ACM Transactions on Information Systems (2026). [13] Hanze Guo, Yijun Ma, and Xiao Zhou. 2025. Sorex: Towards self-explainable social recommendation with relevant ego-path extraction. ACM Transactions on Information Systems (2025). [14] Hanze Guo, Jing Yao, Xiao Zhou, Xiaoyuan Yi, and Xing Xie. 2025. Counterfactual Reasoning for Steerable Pluralistic Value Alignment of Large Language Models. arXiv preprint arXiv:2510.18526 (2025). [15] Tengfei He and Xiao Zhou. 2025. MotifGPL: Motif-Enhanced Graph Prototype Learning for Deciphering Urban Social Segregation. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 39. 28079–28087. Manuscript submitted to ACM HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships 27 
+
+[16] Qian Hong, Cheng Bian, Xiao Zhou, Xiaoyu Li, Yelei Li, and Zijing Zeng. 2025. Lost in Time? A Meta-Learning Framework for Time-Shift-Tolerant Physiological Signal Transformation. arXiv preprint arXiv:2511.21500 (2025). [17] Qian Hong, Siyuan Chang, and Xiao Zhou. 2026. WED-Net: A Weather-Effect Disentanglement Network with Causal Augmentation for Urban Flow Prediction. arXiv preprint arXiv:2601.22586 (2026). [18] Fei Jiang, Yong Jiang, Hui Zhi, Yi Dong, Hao Li, Sufeng Ma, Yilong Wang, Qiang Dong, Haipeng Shen, and Yongjun Wang. 2017. Artificial intelligence in healthcare: past, present and future. Stroke and vascular neurology 2, 4 (2017). [19] Alistair EW Johnson, Lucas Bulgarelli, Lu Shen, Alvin Gayles, Ayad Shammout, Steven Horng, Tom J Pollard, Sicheng Hao, Benjamin Moody, Brian Gow, et al. 2023. MIMIC-IV, a freely accessible electronic health record dataset. Scientific data 10, 1 (2023), 1. [20] Alistair EW Johnson, Tom J Pollard, Lu Shen, Li-wei H Lehman, Mengling Feng, Mohammad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G Mark. 2016. MIMIC-III, a freely accessible critical care database. Scientific data 3, 1 (2016), 1–9. [21] Taeri Kim, Jiho Heo, Hongil Kim, Kijung Shin, and Sang-Wook Kim. 2024. VITA:‘Carefully Chosen and Weighted Less’ Is Better in Medication Recommendation. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 38. 8600–8607. [22] Hung Le, Truyen Tran, and Svetha Venkatesh. 2018. Dual memory neural computer for asynchronous two-view sequential learning. In Proceedings of the 24th ACM SIGKDD international conference on knowledge discovery & data mining . 1637–1645. [23] Dongjin Lee and Kijung Shin. 2023. I’m me, we’re us, and i’m us: Tri-directional contrastive learning on hypergraphs. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 37. 8456–8464. [24] Jinlin Li, Xintong Li, and Xiao Zhou. 2025. FAP-CD: Fairness-driven age-friendly community planning via conditional diffusion generation. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 39. 28168–28176. [25] Lei Li and Xiao Zhou. 2025. Leave no one Behind: Enhancing Diversity While Maintaining Accuracy in Social Recommendation. In International Conference on Database Systems for Advanced Applications . Springer, 51–67. [26] Lei Li, Xiao Zhou, and Zheng Liu. 2025. R2med: A benchmark for reasoning-driven medical retrieval. arXiv preprint arXiv:2505.14558 (2025). [27] Xintong Li, Haoran Zhang, and Xiao Zhou. 2025. Spatio-Temporal Hierarchical Causal Models. arXiv preprint arXiv:2511.20558 (2025). [28] Xingwang Li, Yijia Zhang, Xiaobo Li, Hao Wei, and Mingyu Lu. 2023. Dgcl: Distance-wise and graph contrastive learning for medication recommendation. Journal of Biomedical Informatics 139 (2023), 104301. [29] Yijun Ma, Chaozhuo Li, and Xiao Zhou. 2024. Tail-steak: Improve friend recommendation for tail users via self-training enhanced knowledge distillation. In Proceedings of the AAAI conference on artificial intelligence , Vol. 38. 8895–8903. [30] Nir Menachemi and Taleah H Collum. 2011. Benefits and drawbacks of electronic health record systems. Risk management and healthcare policy 
+
+(2011), 47–55. [31] Aaron van den Oord, Yazhe Li, and Oriol Vinyals. 2018. Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 
+
+(2018). [32] Tom J Pollard, Alistair EW Johnson, Jesse D Raffa, Leo A Celi, Roger G Mark, and Omar Badawi. 2018. The eICU Collaborative Research Database, a freely available multi-center database for critical care research. Scientific data 5, 1 (2018), 1–13. [33] Jesse Read, Bernhard Pfahringer, Geoff Holmes, and Eibe Frank. 2011. Classifier chains for multi-label classification. Machine learning 85 (2011), 333–359. [34] Steva Rumsey, Joel Winders, and Andrew D MacCormick. 2017. Diagnostic accuracy of Charcot’s triad: a systematic review. ANZ journal of surgery 
+
+87, 4 (2017), 232–238. [35] Deepti Saraswat, Pronaya Bhattacharya, Ashwin Verma, Vivek Kumar Prasad, Sudeep Tanwar, Gulshan Sharma, Pitshou N Bokoro, and Ravi Sharma. 2022. Explainable AI for healthcare 5.0: opportunities and challenges. IEEe Access 10 (2022), 84486–84517. [36] Franco Scarselli, Marco Gori, Ah Chung Tsoi, Markus Hagenbuchner, and Gabriele Monfardini. 2008. The graph neural network model. IEEE transactions on neural networks 20, 1 (2008), 61–80. [37] Junyuan Shang, Cao Xiao, Tengfei Ma, Hongyan Li, and Jimeng Sun. 2019. Gamenet: Graph augmented memory networks for recommending medication combination. In proceedings of the AAAI Conference on Artificial Intelligence , Vol. 33. 1126–1133. [38] Julie Solomon. 2006. Case Studies: why are they important? Nature Clinical Practice Cardiovascular Medicine 3, 11 (2006), 579–579. [39] Hongda Sun, Shufang Xie, Shuqi Li, Yuhan Chen, Ji-Rong Wen, and Rui Yan. 2022. Debiased, Longitudinal and Coordinated Drug Recommendation through Multi-Visit Clinic Records. Advances in Neural Information Processing Systems 35 (2022), 27837–27849. [40] Jialun Wu, Yuxin Dong, Zeyu Gao, Tieliang Gong, and Chen Li. 2023. Dual attention and patient similarity network for drug recommendation. 
+
+Bioinformatics 39, 1 (2023), btad003. [41] Jiancan Wu, Xiang Wang, Fuli Feng, Xiangnan He, Liang Chen, Jianxun Lian, and Xing Xie. 2021. Self-Supervised Graph Learning for Recommendation. In Proceedings of the 44th International ACM SIGIR Conference on Research and Development in Information Retrieval (, Virtual Event, Canada,) (SIGIR ’21) . Association for Computing Machinery, New York, NY, USA, 726–735. https://doi.org/10.1145/3404835.3462862 [42] Jialun Wu, Xinyao Yu, Kai He, Zeyu Gao, and Tieliang Gong. 2024. PROMISE: A pre-trained knowledge-infused multimodal representation learning framework for medication recommendation. Information Processing & Management 61, 4 (2024), 103758. [43] Rui Wu, Zhaopeng Qiu, Jiacheng Jiang, Guilin Qi, and Xian Wu. 2022. Conditional generation net for medication recommendation. In Proceedings of the ACM Web Conference 2022 . 935–945. [44] Lianghao Xia, Chao Huang, Yong Xu, Jiashu Zhao, Dawei Yin, and Jimmy Huang. 2022. Hypergraph contrastive collaborative filtering. In Proceedings of the 45th International ACM SIGIR conference on research and development in information retrieval . 70–79. Manuscript submitted to ACM 28 Zhang, et al. 
+
+[45] Xin Xia, Hongzhi Yin, Junliang Yu, Qinyong Wang, Lizhen Cui, and Xiangliang Zhang. 2021. Self-supervised hypergraph convolutional networks for session-based recommendation. In Proceedings of the AAAI conference on artificial intelligence , Vol. 35. 4503–4511. [46] Chaoqi Yang, Cao Xiao, Lucas Glass, and Jimeng Sun. 2021. Change matters: Medication change prediction with recurrent residual networks. arXiv preprint arXiv:2105.01876 (2021). [47] Chaoqi Yang, Cao Xiao, Fenglong Ma, Lucas Glass, and Jimeng Sun. 2021. SafeDrug: Dual Molecular Graph Encoders for Safe Drug Recommendations. In Proceedings of the Thirtieth International Joint Conference on Artificial Intelligence, IJCAI 2021 .[48] Nianzu Yang, Kaipeng Zeng, Qitian Wu, and Junchi Yan. 2023. Molerec: Combinatorial drug recommendation with substructure-aware molecular representation learning. In Proceedings of the ACM Web Conference 2023 . 4075–4085. [49] Xixian Yong, Jianxun Lian, Xiaoyuan Yi, Xiao Zhou, and Xing Xie. 2025. MOTIVEBENCH: How Far Are We From Human-Like Motivational Reasoning in Large Language Models?. In Findings of the Association for Computational Linguistics: ACL 2025 . 20059–20089. [50] Xixian Yong, Peilin Sun, Zihe Wang, and Xiao Zhou. 2026. Intelli-Planner: Towards Customized Urban Planning via Large Language Model Empowered Reinforcement Learning. arXiv preprint arXiv:2601.21212 (2026). [51] Xixian Yong, Xiao Zhou, Yingying Zhang, Jinlin Li, Yefeng Zheng, and Xian Wu. [n. d.]. Think or Not? Exploring Thinking Efficiency in Large Reasoning Models via an Information-Theoretic Lens. In The Thirty-ninth Annual Conference on Neural Information Processing Systems .[52] Junliang Yu, Hongzhi Yin, Jundong Li, Qinyong Wang, Nguyen Quoc Viet Hung, and Xiangliang Zhang. 2021. Self-supervised multi-channel hypergraph convolutional network for social recommendation. In Proceedings of the web conference 2021 . 413–424. [53] Haoran Zhang, Youjin Wang, Yi Duan, Rong Fu, Dianyu Zhao, Sicheng Fan, Shuaishuai Cao, Wentao Guo, and Xiao Zhou. 2026. Social-JEPA: Emergent Geometric Isomorphism. arXiv preprint arXiv:2603.02263 (2026). [54] Yutao Zhang, Robert Chen, Jie Tang, Walter F Stewart, and Jimeng Sun. 2017. LEAP: learning to prescribe effective and safe treatment combinations for multimorbidity. In proceedings of the 23rd ACM SIGKDD international conference on knowledge Discovery and data Mining . 1315–1324. [55] Yingying Zhang, Xian Wu, Quan Fang, Shengsheng Qian, and Changsheng Xu. 2023. Knowledge-enhanced attributed multi-task learning for medicine recommendation. ACM Transactions on Information Systems 41, 1 (2023), 1–24. [56] Xiao Zhou, Zhongxiang Zhao, and Hanze Guo. 2025. Tricolore: Multi-Behavior User Profiling for Enhanced Candidate Generation in Recommender Systems. IEEE Transactions on Knowledge and Data Engineering (2025). [57] Guangpu Zhu, Xiaoyu Li, Xin Sui, Jie Hawes, Ramy Hussein, Qian Hong, Xiao Zhou, Zijing Zeng, and Yelei Li. 2025. Hypertension Risk Screening Using Long-Term Photoplethysmogram and Ballistocardiograph Measurements from a Smartwatch. In 2025 47th Annual International Conference of the IEEE Engineering in Medicine and Biology Society (EMBC) . IEEE, 1–6. [58] Yanxu Zhu, Shitong Duan, Xiangxu Zhang, Jitao Sang, Peng Zhang, Tun Lu, Xiao Zhou, Jing Yao, Xiaoyuan Yi, and Xing Xie. 2025. MoHoBench: Assessing Honesty of Multimodal Large Language Models via Unanswerable Visual Questions. arXiv preprint arXiv:2507.21503 (2025). Manuscript submitted to ACM

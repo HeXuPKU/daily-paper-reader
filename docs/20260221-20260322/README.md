@@ -1,20 +1,132 @@
 # 日报 · 2026-02-21 ~ 2026-03-22
 
-- 生成时间：2026-03-22 08:42:14 UTC
-- 当次推荐总数：0
+- 生成时间：2026-03-22 09:23:26 UTC
+- 当次推荐总数：113
 - 精读区：0
-- 速读区：0
+- 速读区：113
 
 ## 今日简报（AI）
-> 今日无新推荐，系统未产出可展示论文。
-
-> 本次触发没有产出可推荐论文。
+今日精选 113 篇 AI 医疗前沿进展，重点攻克阿尔茨海默病治疗优化与电子病历时序建模难题。
+推荐关注 ALPACA 强化学习环境对药物重用的赋能，以及 PaReGTA 利用大模型精准捕捉病历时序特征的新范式。
+建议深入探索大模型与强化学习在临床决策支持与长周期健康数据分析中的跨界融合应用。
 
 ## 精读区
 - 本次无精读推荐。
 
 ## 速读区
-- 本次无速读推荐。
+1. [ALPACA: A Reinforcement Learning Environment for Medication Repurposing and Treatment Optimization in Alzheimer's Disease](/20260221-20260322/2602.19298v1-alpaca-a-reinforcement-learning-environment-for-medication-repurposing-and-treatment-optimization-in-alzheimers-disease) （10.0/10）
+2. [PaReGTA: An LLM-based EHR Data Encoding Approach to Capture Temporal Information](/20260221-20260322/2602.19661v1-paregta-an-llm-based-ehr-data-encoding-approach-to-capture-temporal-information) （10.0/10）
+3. [PaReGTA: An LLM-based EHR Data Encoding Approach to Capture Temporal Information](/20260221-20260322/2602.19661v2-paregta-an-llm-based-ehr-data-encoding-approach-to-capture-temporal-information) （10.0/10）
+4. [MediX-R1: Open Ended Medical Reinforcement Learning](/20260221-20260322/2602.23363v1-medix-r1-open-ended-medical-reinforcement-learning) （10.0/10）
+5. [FHIRPath-QA: Executable Question Answering over FHIR Electronic Health Records](/20260221-20260322/2602.23479v1-fhirpath-qa-executable-question-answering-over-fhir-electronic-health-records) （10.0/10）
+6. [A medical coding language model trained on clinical narratives from a population-wide cohort of 1.8 million patients](/20260221-20260322/2603.00221v2-a-medical-coding-language-model-trained-on-clinical-narratives-from-a-population-wide-cohort-of-18-million-patients) （10.0/10）
+7. [MedGPT-oss: Training a General-Purpose Vision-Language Model for Biomedicine](/20260221-20260322/2603.00842v1-medgpt-oss-training-a-general-purpose-vision-language-model-for-biomedicine) （10.0/10）
+8. [MedCollab: Causal-Driven Multi-Agent Collaboration for Full-Cycle Clinical Diagnosis via IBIS-Structured Argumentation](/20260221-20260322/2603.01131v1-medcollab-causal-driven-multi-agent-collaboration-for-full-cycle-clinical-diagnosis-via-ibis-structured-argumentation) （10.0/10）
+9. [TARSE: Test-Time Adaptation via Retrieval of Skills and Experience for Reasoning Agents](/20260221-20260322/2603.01241v1-tarse-test-time-adaptation-via-retrieval-of-skills-and-experience-for-reasoning-agents) （10.0/10）
+10. [CARE: Towards Clinical Accountability in Multi-Modal Medical Reasoning with an Evidence-Grounded Agentic Framework](/20260221-20260322/2603.01607v1-care-towards-clinical-accountability-in-multi-modal-medical-reasoning-with-an-evidence-grounded-agentic-framework) （10.0/10）
+11. [Contextual Invertible World Models: A Neuro-Symbolic Agentic Framework for Colorectal Cancer Drug Response](/20260221-20260322/2603.02274v1-contextual-invertible-world-models-a-neuro-symbolic-agentic-framework-for-colorectal-cancer-drug-response) （10.0/10）
+12. [MedCoRAG: Interpretable Hepatology Diagnosis via Hybrid Evidence Retrieval and Multispecialty Consensus](/20260221-20260322/2603.05129v1-medcorag-interpretable-hepatology-diagnosis-via-hybrid-evidence-retrieval-and-multispecialty-consensus) （10.0/10）
+13. [Empowering Locally Deployable Medical Agent via State Enhanced Logical Skills for FHIR-based Clinical Tasks](/20260221-20260322/2603.06902v1-empowering-locally-deployable-medical-agent-via-state-enhanced-logical-skills-for-fhir-based-clinical-tasks) （10.0/10）
+14. [Adaptive Double-Booking Strategy for Outpatient Scheduling Using Multi-Objective Reinforcement Learning](/20260221-20260322/2603.07270v1-adaptive-double-booking-strategy-for-outpatient-scheduling-using-multi-objective-reinforcement-learning) （10.0/10）
+15. [Med-Evo: Test-time Self-evolution for Medical Multimodal Large Language Models](/20260221-20260322/2603.07443v1-med-evo-test-time-self-evolution-for-medical-multimodal-large-language-models) （10.0/10）
+16. [EveryQuery: Zero-Shot Clinical Prediction via Task-Conditioned Pretraining over Electronic Health Records](/20260221-20260322/2603.07900v1-everyquery-zero-shot-clinical-prediction-via-task-conditioned-pretraining-over-electronic-health-records) （10.0/10）
+17. [A prospective clinical feasibility study of a conversational diagnostic AI in an ambulatory primary care clinic](/20260221-20260322/2603.08448v1-a-prospective-clinical-feasibility-study-of-a-conversational-diagnostic-ai-in-an-ambulatory-primary-care-clinic) （10.0/10）
+18. [MAPLE: Elevating Medical Reasoning from Statistical Consensus to Process-Led Alignment](/20260221-20260322/2603.08987v1-maple-elevating-medical-reasoning-from-statistical-consensus-to-process-led-alignment) （10.0/10）
+19. [Meissa: Multi-modal Medical Agentic Intelligence](/20260221-20260322/2603.09018v1-meissa-multi-modal-medical-agentic-intelligence) （10.0/10）
+20. [MedMASLab: A Unified Orchestration Framework for Benchmarking Multimodal Medical Multi-Agent Systems](/20260221-20260322/2603.09909v1-medmaslab-a-unified-orchestration-framework-for-benchmarking-multimodal-medical-multi-agent-systems) （10.0/10）
+21. [Human-AI Co-reasoning for Clinical Diagnosis with Evidence-Integrated Language Agent](/20260221-20260322/2603.10492v1-human-ai-co-reasoning-for-clinical-diagnosis-with-evidence-integrated-language-agent) （10.0/10）
+22. [Human-AI Co-reasoning for Clinical Diagnosis with Evidence-Integrated Language Agent](/20260221-20260322/2603.10492v2-human-ai-co-reasoning-for-clinical-diagnosis-with-evidence-integrated-language-agent) （10.0/10）
+23. [HeartAgent: An Autonomous Agent System for Explainable Differential Diagnosis in Cardiology](/20260221-20260322/2603.10764v1-heartagent-an-autonomous-agent-system-for-explainable-differential-diagnosis-in-cardiology) （10.0/10）
+24. [When OpenClaw Meets Hospital: Toward an Agentic Operating System for Dynamic Clinical Workflows](/20260221-20260322/2603.11721v1-when-openclaw-meets-hospital-toward-an-agentic-operating-system-for-dynamic-clinical-workflows) （10.0/10）
+25. [ELISA: An Interpretable Hybrid Generative AI Agent for Expression-Grounded Discovery in Single-Cell Genomics](/20260221-20260322/2603.11872v1-elisa-an-interpretable-hybrid-generative-ai-agent-for-expression-grounded-discovery-in-single-cell-genomics) （10.0/10）
+26. [ELISA: An Interpretable Hybrid Generative AI Agent for Expression-Grounded Discovery in Single-Cell Genomics](/20260221-20260322/2603.11872v2-elisa-an-interpretable-hybrid-generative-ai-agent-for-expression-grounded-discovery-in-single-cell-genomics) （10.0/10）
+27. [QuarkMedBench: A Real-World Scenario Driven Benchmark for Evaluating Large Language Models](/20260221-20260322/2603.13691v1-quarkmedbench-a-real-world-scenario-driven-benchmark-for-evaluating-large-language-models) （10.0/10）
+28. [OpenHospital: A Thing-in-itself Arena for Evolving and Benchmarking LLM-based Collective Intelligence](/20260221-20260322/2603.14771v1-openhospital-a-thing-in-itself-arena-for-evolving-and-benchmarking-llm-based-collective-intelligence) （10.0/10）
+29. [OpenHospital: A Thing-in-itself Arena for Evolving and Benchmarking LLM-based Collective Intelligence](/20260221-20260322/2603.14771v2-openhospital-a-thing-in-itself-arena-for-evolving-and-benchmarking-llm-based-collective-intelligence) （10.0/10）
+30. [MedArena: Comparing LLMs for Medicine-in-the-Wild Clinician Preferences](/20260221-20260322/2603.15677v1-medarena-comparing-llms-for-medicine-in-the-wild-clinician-preferences) （10.0/10）
+31. [Human-Guided Agentic AI for Multimodal Clinical Prediction: Lessons from the AgentDS Healthcare Benchmark](/20260221-20260322/2602.19502v1-human-guided-agentic-ai-for-multimodal-clinical-prediction-lessons-from-the-agentds-healthcare-benchmark) （9.0/10）
+32. [AgenticSum: An Agentic Inference-Time Framework for Faithful Clinical Text Summarization](/20260221-20260322/2602.20040v1-agenticsum-an-agentic-inference-time-framework-for-faithful-clinical-text-summarization) （9.0/10）
+33. [Transcending the Annotation Bottleneck: AI-Powered Discovery in Biology and Medicine](/20260221-20260322/2602.20100v1-transcending-the-annotation-bottleneck-ai-powered-discovery-in-biology-and-medicine) （9.0/10）
+34. [An artificial intelligence framework for end-to-end rare disease phenotyping from clinical notes using large language models](/20260221-20260322/2602.20324v1-an-artificial-intelligence-framework-for-end-to-end-rare-disease-phenotyping-from-clinical-notes-using-large-language-models) （9.0/10）
+35. [Imputation of Unknown Missingness in Sparse Electronic Health Records](/20260221-20260322/2602.20442v1-imputation-of-unknown-missingness-in-sparse-electronic-health-records) （9.0/10）
+36. [Momentum Memory for Knowledge Distillation in Computational Pathology](/20260221-20260322/2602.21395v2-momentum-memory-for-knowledge-distillation-in-computational-pathology) （9.0/10）
+37. [Hierarchical Lead Critic based Multi-Agent Reinforcement Learning](/20260221-20260322/2602.21680v1-hierarchical-lead-critic-based-multi-agent-reinforcement-learning) （9.0/10）
+38. [MEDSYN: Benchmarking Multi-EviDence SYNthesis in Complex Clinical Cases for Multimodal Large Language Models](/20260221-20260322/2602.21950v1-medsyn-benchmarking-multi-evidence-synthesis-in-complex-clinical-cases-for-multimodal-large-language-models) （9.0/10）
+39. [What Topological and Geometric Structure Do Biological Foundation Models Learn? Evidence from 141 Hypotheses](/20260221-20260322/2602.22289v1-what-topological-and-geometric-structure-do-biological-foundation-models-learn-evidence-from-141-hypotheses) （9.0/10）
+40. [When Does Multimodal Learning Help in Healthcare? A Benchmark on EHR and Chest X-Ray Fusion](/20260221-20260322/2602.23614v1-when-does-multimodal-learning-help-in-healthcare-a-benchmark-on-ehr-and-chest-x-ray-fusion) （9.0/10）
+41. [When Metrics Disagree: Automatic Similarity vs. LLM-as-a-Judge for Clinical Dialogue Evaluation](/20260221-20260322/2603.00314v1-when-metrics-disagree-automatic-similarity-vs-llm-as-a-judge-for-clinical-dialogue-evaluation) （9.0/10）
+42. [MED-COPILOT: A Medical Assistant Powered by GraphRAG and Similar Patient Case Retrieval](/20260221-20260322/2603.00460v1-med-copilot-a-medical-assistant-powered-by-graphrag-and-similar-patient-case-retrieval) （9.0/10）
+43. [From Literature to Hypotheses: An AI Co-Scientist System for Biomarker-Guided Drug Combination Hypothesis Generation](/20260221-20260322/2603.00612v1-from-literature-to-hypotheses-an-ai-co-scientist-system-for-biomarker-guided-drug-combination-hypothesis-generation) （9.0/10）
+44. [ResGene-T: A Tensor-Based Residual Network Approach for Genomic Prediction](/20260221-20260322/2603.00744v1-resgene-t-a-tensor-based-residual-network-approach-for-genomic-prediction) （9.0/10）
+45. [A Framework for Transparent Reporting of Data Quality Analysis Across the Clinical Electronic Health Record Data Lifecycle](/20260221-20260322/2603.00921v1-a-framework-for-transparent-reporting-of-data-quality-analysis-across-the-clinical-electronic-health-record-data-lifecycle) （9.0/10）
+46. [Conformal Prediction for Risk-Controlled Medical Entity Extraction Across Clinical Domains](/20260221-20260322/2603.00924v1-conformal-prediction-for-risk-controlled-medical-entity-extraction-across-clinical-domains) （9.0/10）
+47. [ProtRLSearch: A Multi-Round Multimodal Protein Search Agent with Large Language Models Trained via Reinforcement Learning](/20260221-20260322/2603.01464v1-protrlsearch-a-multi-round-multimodal-protein-search-agent-with-large-language-models-trained-via-reinforcement-learning) （9.0/10）
+48. [Heterogeneous Agent Collaborative Reinforcement Learning](/20260221-20260322/2603.02604v1-heterogeneous-agent-collaborative-reinforcement-learning) （9.0/10）
+49. [PrivMedChat: End-to-End Differentially Private RLHF for Medical Dialogue Systems](/20260221-20260322/2603.03054v1-privmedchat-end-to-end-differentially-private-rlhf-for-medical-dialogue-systems) （9.0/10）
+50. [Tracing Pharmacological Knowledge In Large Language Models](/20260221-20260322/2603.03407v1-tracing-pharmacological-knowledge-in-large-language-models) （9.0/10）
+51. [RAG-X: Systematic Diagnosis of Retrieval-Augmented Generation for Medical Question Answering](/20260221-20260322/2603.03541v1-rag-x-systematic-diagnosis-of-retrieval-augmented-generation-for-medical-question-answering) （9.0/10）
+52. [Rethinking the Efficiency and Effectiveness of Reinforcement Learning for Radiology Report Generation](/20260221-20260322/2603.04022v1-rethinking-the-efficiency-and-effectiveness-of-reinforcement-learning-for-radiology-report-generation) （9.0/10）
+53. [Who Judges the Judge? Evaluating LLM-as-a-Judge for French Medical open-ended QA](/20260221-20260322/2603.04033v1-who-judges-the-judge-evaluating-llm-as-a-judge-for-french-medical-open-ended-qa) （9.0/10）
+54. [Identifying genes associated with phenotypes using machine and deep learning](/20260221-20260322/2603.06804v1-identifying-genes-associated-with-phenotypes-using-machine-and-deep-learning) （9.0/10）
+55. [RexDrug: Reliable Multi-Drug Combination Extraction through Reasoning-Enhanced LLMs](/20260221-20260322/2603.08166v1-rexdrug-reliable-multi-drug-combination-extraction-through-reasoning-enhanced-llms) （9.0/10）
+56. [TA-RNN-Medical-Hybrid: A Time-Aware and Interpretable Framework for Mortality Risk Prediction](/20260221-20260322/2603.08278v1-ta-rnn-medical-hybrid-a-time-aware-and-interpretable-framework-for-mortality-risk-prediction) （9.0/10）
+57. [A prospective clinical feasibility study of a conversational diagnostic AI in an ambulatory primary care clinic](/20260221-20260322/2603.08448v2-a-prospective-clinical-feasibility-study-of-a-conversational-diagnostic-ai-in-an-ambulatory-primary-care-clinic) （9.0/10）
+58. [A prospective clinical feasibility study of a conversational diagnostic AI in an ambulatory primary care clinic](/20260221-20260322/2603.08448v3-a-prospective-clinical-feasibility-study-of-a-conversational-diagnostic-ai-in-an-ambulatory-primary-care-clinic) （9.0/10）
+59. [Quantifying Memorization and Privacy Risks in Genomic Language Models](/20260221-20260322/2603.08913v1-quantifying-memorization-and-privacy-risks-in-genomic-language-models) （9.0/10）
+60. [Tracking Cancer Through Text: Longitudinal Extraction From Radiology Reports Using Open-Source Large Language Models](/20260221-20260322/2603.09638v1-tracking-cancer-through-text-longitudinal-extraction-from-radiology-reports-using-open-source-large-language-models) （9.0/10）
+61. [Tracking Cancer Through Text: Longitudinal Extraction From Radiology Reports Using Open-Source Large Language Models](/20260221-20260322/2603.09638v2-tracking-cancer-through-text-longitudinal-extraction-from-radiology-reports-using-open-source-large-language-models) （9.0/10）
+62. [Automatic Cardiac Risk Management Classification using large-context Electronic Patients Health Records](/20260221-20260322/2603.09685v1-automatic-cardiac-risk-management-classification-using-large-context-electronic-patients-health-records) （9.0/10）
+63. [Omics Data Discovery Agents](/20260221-20260322/2603.10161v1-omics-data-discovery-agents) （9.0/10）
+64. [Omics Data Discovery Agents](/20260221-20260322/2603.10161v2-omics-data-discovery-agents) （9.0/10）
+65. [DT-BEHRT: Disease Trajectory-aware Transformer for Interpretable Patient Representation Learning](/20260221-20260322/2603.10180v1-dt-behrt-disease-trajectory-aware-transformer-for-interpretable-patient-representation-learning) （9.0/10）
+66. [SNPgen: Phenotype-Supervised Genotype Representation and Synthetic Data Generation via Latent Diffusion](/20260221-20260322/2603.10873v1-snpgen-phenotype-supervised-genotype-representation-and-synthetic-data-generation-via-latent-diffusion) （9.0/10）
+67. [LLM-MINE: Large Language Model based Alzheimer's Disease and Related Dementias Phenotypes Mining from Clinical Notes](/20260221-20260322/2603.13673v1-llm-mine-large-language-model-based-alzheimers-disease-and-related-dementias-phenotypes-mining-from-clinical-notes) （9.0/10）
+68. [Six Interventions for the Responsible and Ethical Implementation of Medical AI Agents](/20260221-20260322/2603.13743v1-six-interventions-for-the-responsible-and-ethical-implementation-of-medical-ai-agents) （9.0/10）
+69. [Beyond Medical Diagnostics: How Medical Multimodal Large Language Models Think in Space](/20260221-20260322/2603.13800v1-beyond-medical-diagnostics-how-medical-multimodal-large-language-models-think-in-space) （9.0/10）
+70. [sebis at ArchEHR-QA 2026: How Much Can You Do Locally? Evaluating Grounded EHR QA on a Single Notebook](/20260221-20260322/2603.13962v1-sebis-at-archehr-qa-2026-how-much-can-you-do-locally-evaluating-grounded-ehr-qa-on-a-single-notebook) （9.0/10）
+71. [The Taxonomies, Training, and Applications of Event Stream Modelling for Electronic Health Records](/20260221-20260322/2603.14003v1-the-taxonomies-training-and-applications-of-event-stream-modelling-for-electronic-health-records) （9.0/10）
+72. [Selective Fine-Tuning of GPT Architectures for Parameter-Efficient Clinical Text Classification](/20260221-20260322/2603.14183v1-selective-fine-tuning-of-gpt-architectures-for-parameter-efficient-clinical-text-classification) （9.0/10）
+73. [MedPriv-Bench: Benchmarking the Privacy-Utility Trade-off of Large Language Models in Medical Open-End Question Answering](/20260221-20260322/2603.14265v1-medpriv-bench-benchmarking-the-privacy-utility-trade-off-of-large-language-models-in-medical-open-end-question-answering) （9.0/10）
+74. [Prediction-based Inference in Electronic Health Record (EHR)-linked Biobanks](/20260221-20260322/2603.14356v1-prediction-based-inference-in-electronic-health-record-ehr-linked-biobanks) （9.0/10）
+75. [Sample-Efficient Adaptation of Drug-Response Models to Patient Tumors under Strong Biological Domain Shift](/20260221-20260322/2603.16185v1-sample-efficient-adaptation-of-drug-response-models-to-patient-tumors-under-strong-biological-domain-shift) （9.0/10）
+76. [Deployment and Evaluation of an EHR-integrated, Large Language Model-Powered Tool to Triage Surgical Patients](/20260221-20260322/2603.17234v1-deployment-and-evaluation-of-an-ehr-integrated-large-language-model-powered-tool-to-triage-surgical-patients) （9.0/10）
+77. [GLaDiGAtor: Language-Model-Augmented Multi-Relation Graph Learning for Predicting Disease-Gene Associations](/20260221-20260322/2602.18769v1-gladigator-language-model-augmented-multi-relation-graph-learning-for-predicting-disease-gene-associations) （8.0/10）
+78. [Health+: Empowering Individuals via Unifying Health Data](/20260221-20260322/2602.19319v1-health-empowering-individuals-via-unifying-health-data) （8.0/10）
+79. [A Secure and Interoperable Architecture for Electronic Health Record Access Control and Sharing](/20260221-20260322/2602.20830v1-a-secure-and-interoperable-architecture-for-electronic-health-record-access-control-and-sharing) （8.0/10）
+80. [Momentum Memory for Knowledge Distillation in Computational Pathology](/20260221-20260322/2602.21395v1-momentum-memory-for-knowledge-distillation-in-computational-pathology) （8.0/10）
+81. [BEDCrypt: Privacy-preserving interval analytics with homomorphic encryption](/20260221-20260322/2602.21994v1-bedcrypt-privacy-preserving-interval-analytics-with-homomorphic-encryption) （8.0/10）
+82. [Importance of Prompt Optimisation for Error Detection in Medical Notes Using Language Models](/20260221-20260322/2602.22483v1-importance-of-prompt-optimisation-for-error-detection-in-medical-notes-using-language-models) （8.0/10）
+83. [Inferring Chronic Treatment Onset from ePrescription Data: A Renewal Process Approach](/20260221-20260322/2602.23824v1-inferring-chronic-treatment-onset-from-eprescription-data-a-renewal-process-approach) （8.0/10）
+84. [Multimodal Alignment Improves Generalizability of Genomic Biomarker Prediction in Computational Pathology](/20260221-20260322/2603.00193v1-multimodal-alignment-improves-generalizability-of-genomic-biomarker-prediction-in-computational-pathology) （8.0/10）
+85. [Prompt Sensitivity and Answer Consistency of Small Open-Source Large Language Models on Clinical Question Answering: Implications for Low-Resource Healthcare Deployment](/20260221-20260322/2603.00917v1-prompt-sensitivity-and-answer-consistency-of-small-open-source-large-language-models-on-clinical-question-answering-implications-for-low-resource-healthcare-deployment) （8.0/10）
+86. [Prompt Sensitivity and Answer Consistency of Small Open-Source Large Language Models on Clinical Question Answering: Implications for Low-Resource Healthcare Deployment](/20260221-20260322/2603.00917v2-prompt-sensitivity-and-answer-consistency-of-small-open-source-large-language-models-on-clinical-question-answering-implications-for-low-resource-healthcare-deployment) （8.0/10）
+87. [Linking Knowledge to Care: Knowledge Graph-Augmented Medical Follow-Up Question Generation](/20260221-20260322/2603.01252v1-linking-knowledge-to-care-knowledge-graph-augmented-medical-follow-up-question-generation) （8.0/10）
+88. [RAPO: Expanding Exploration for LLM Agents via Retrieval-Augmented Policy Optimization](/20260221-20260322/2603.03078v1-rapo-expanding-exploration-for-llm-agents-via-retrieval-augmented-policy-optimization) （8.0/10）
+89. [RANGER: Sparsely-Gated Mixture-of-Experts with Adaptive Retrieval Re-ranking for Pathology Report Generation](/20260221-20260322/2603.04348v1-ranger-sparsely-gated-mixture-of-experts-with-adaptive-retrieval-re-ranking-for-pathology-report-generation) （8.0/10）
+90. [Contextual Counterfactual Credit Assignment for Multi-Agent Reinforcement Learning in LLM Collaboration](/20260221-20260322/2603.06859v1-contextual-counterfactual-credit-assignment-for-multi-agent-reinforcement-learning-in-llm-collaboration) （8.0/10）
+91. [HIDDENdb: Co-dependency database reveals a plethora of genetic and protein interactions](/20260221-20260322/2603.06903v1-hiddendb-co-dependency-database-reveals-a-plethora-of-genetic-and-protein-interactions) （8.0/10）
+92. [Retrieval-Augmented Generation for Predicting Cellular Responses to Gene Perturbation](/20260221-20260322/2603.07233v1-retrieval-augmented-generation-for-predicting-cellular-responses-to-gene-perturbation) （8.0/10）
+93. [Learning Clinical Representations Under Systematic Distribution Shift](/20260221-20260322/2603.07348v1-learning-clinical-representations-under-systematic-distribution-shift) （8.0/10）
+94. [Adversarial Domain Adaptation Enables Knowledge Transfer Across Heterogeneous RNA-Seq Datasets](/20260221-20260322/2603.08062v1-adversarial-domain-adaptation-enables-knowledge-transfer-across-heterogeneous-rna-seq-datasets) （8.0/10）
+95. [A Recipe for Stable Offline Multi-agent Reinforcement Learning](/20260221-20260322/2603.08399v1-a-recipe-for-stable-offline-multi-agent-reinforcement-learning) （8.0/10）
+96. [PathoScribe: Transforming Pathology Data into a Living Library with a Unified LLM-Driven Framework for Semantic Retrieval and Clinical Integration](/20260221-20260322/2603.08935v1-pathoscribe-transforming-pathology-data-into-a-living-library-with-a-unified-llm-driven-framework-for-semantic-retrieval-and-clinical-integration) （8.0/10）
+97. [PathoScribe: Transforming Pathology Data into a Living Library with a Unified LLM-Driven Framework for Semantic Retrieval and Clinical Integration](/20260221-20260322/2603.08935v2-pathoscribe-transforming-pathology-data-into-a-living-library-with-a-unified-llm-driven-framework-for-semantic-retrieval-and-clinical-integration) （8.0/10）
+98. [VIVID-Med: LLM-Supervised Structured Pretraining for Deployable Medical ViTs](/20260221-20260322/2603.09109v1-vivid-med-llm-supervised-structured-pretraining-for-deployable-medical-vits) （8.0/10）
+99. [VIVID-Med: LLM-Supervised Structured Pretraining for Deployable Medical ViTs](/20260221-20260322/2603.09109v2-vivid-med-llm-supervised-structured-pretraining-for-deployable-medical-vits) （8.0/10）
+100. [Performance Evaluation of Open-Source Large Language Models for Assisting Pathology Report Writing in Japanese](/20260221-20260322/2603.11597v1-performance-evaluation-of-open-source-large-language-models-for-assisting-pathology-report-writing-in-japanese) （8.0/10）
+101. [Patient-Level Multimodal Question Answering from Multi-Site Auscultation Recordings](/20260221-20260322/2603.13362v1-patient-level-multimodal-question-answering-from-multi-site-auscultation-recordings) （8.0/10）
+102. [Clinician input steers frontier AI models toward both accurate and harmful decisions](/20260221-20260322/2603.14158v1-clinician-input-steers-frontier-ai-models-toward-both-accurate-and-harmful-decisions) （8.0/10）
+103. [FairMed-XGB: A Bayesian-Optimised Multi-Metric Framework with Explainability for Demographic Equity in Critical Healthcare Data](/20260221-20260322/2603.14947v1-fairmed-xgb-a-bayesian-optimised-multi-metric-framework-with-explainability-for-demographic-equity-in-critical-healthcare-data) （8.0/10）
+104. [Open Biomedical Knowledge Graphs at Scale: Construction, Federation, and AI Agent Access with Samyama Graph Database](/20260221-20260322/2603.15080v1-open-biomedical-knowledge-graphs-at-scale-construction-federation-and-ai-agent-access-with-samyama-graph-database) （8.0/10）
+105. [Open Biomedical Knowledge Graphs at Scale: Construction, Federation, and AI Agent Access with Samyama Graph Database](/20260221-20260322/2603.15080v2-open-biomedical-knowledge-graphs-at-scale-construction-federation-and-ai-agent-access-with-samyama-graph-database) （8.0/10）
+106. [Open Biomedical Knowledge Graphs at Scale: Construction, Federation, and AI Agent Access with Samyama Graph Database](/20260221-20260322/2603.15080v3-open-biomedical-knowledge-graphs-at-scale-construction-federation-and-ai-agent-access-with-samyama-graph-database) （8.0/10）
+107. [SAGE: Multi-Agent Self-Evolution for LLM Reasoning](/20260221-20260322/2603.15255v1-sage-multi-agent-self-evolution-for-llm-reasoning) （8.0/10）
+108. [CTG-DB: An Ontology-Based Transformation of ClinicalTrials.gov to Enable Cross-Trial Drug Safety Analyses](/20260221-20260322/2603.15936v2-ctg-db-an-ontology-based-transformation-of-clinicaltrialsgov-to-enable-cross-trial-drug-safety-analyses) （8.0/10）
+109. [A Scoping Review of AI-Driven Digital Interventions in Mental Health Care: Mapping Applications Across Screening, Support, Monitoring, Prevention, and Clinical Education](/20260221-20260322/2603.16204v1-a-scoping-review-of-ai-driven-digital-interventions-in-mental-health-care-mapping-applications-across-screening-support-monitoring-prevention-and-clinical-education) （8.0/10）
+110. [Federated Learning with Multi-Partner OneFlorida+ Consortium Data for Predicting Major Postoperative Complications](/20260221-20260322/2603.16723v1-federated-learning-with-multi-partner-oneflorida-consortium-data-for-predicting-major-postoperative-complications) （8.0/10）
+111. [Complementary Reinforcement Learning](/20260221-20260322/2603.17621v1-complementary-reinforcement-learning) （8.0/10）
+112. [HypeMed: Enhancing Medication Recommendations with Hypergraph-Based Patient Relationships](/20260221-20260322/2603.18459v1-hypemed-enhancing-medication-recommendations-with-hypergraph-based-patient-relationships) （8.0/10）
+113. [A Dataset and Resources for Identifying Patient Health Literacy Information from Clinical Notes](/20260221-20260322/2603.19082v1-a-dataset-and-resources-for-identifying-patient-health-literacy-information-from-clinical-notes) （8.0/10）
 
 ---
 使用键盘方向键可在日报/论文之间快速切换。

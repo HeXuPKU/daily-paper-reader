@@ -1,0 +1,676 @@
+Title: AgenticSum: An Agentic Inference-Time Framework for Faithful Clinical Text Summarization
+
+URL Source: https://arxiv.org/pdf/2602.20040v1
+
+Published Time: Tue, 24 Feb 2026 03:16:27 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# AgenticSum: An Agentic Inference-Time Framework for Faithful Clinical Text Summarization 
+
+Fahmida Liza Piya 1 Rahmatollah Beheshti 1
+
+# Abstract 
+
+Large language models (LLMs) offer substantial promise for automating clinical text summariza-tion, yet maintaining factual consistency remains challenging due to the length, noise, and hetero-geneity of clinical documentation. We present 
+
+AgenticSum , an inference-time, agentic frame-work that separates context selection, generation, verification, and targeted correction to reduce hallucinated content. The framework decom-poses summarization into coordinated stages that compress task-relevant context, generate an ini-tial draft, identify weakly supported spans using internal attention grounding signals, and selec-tively revise flagged content under supervisory control. We evaluate AgenticSum on two pub-lic datasets, using reference-based metrics, LLM-as-a-judge assessment, and human evaluation. Across various measures, AgenticSum demon-strates consistent improvements compared to vanilla LLMs and other strong baselines. Our re-sults indicate that structured, agentic design with targeted correction offers an effective inference-time solution to improve clinical note summariza-tion using LLMs. 
+
+Data and Code Availability This study uses the MIMIC-IV-Ext-BHC dataset (Aali et al., 2024a) available on Phy-sioNet and the SOAP summary dataset (Neupane, 2024) available on Hugging Face Datasets. Code to reproduce our experiments is available at https://github.com/ healthylaife/CHIL_AgenticSUM .
+
+Institutional Review Board (IRB) This study involved human subjects as part of an evaluation survey and was deemed exempt from full Institutional Review Board (IRB) review due to minimal risk.  
+
+> 1University of Delaware, Newark, DE, USA. Correspondence to: Fahmida Liza Piya <lizapiya@udel.edu >.
+> Preprint. February 24, 2026.
+
+# 1. Introduction 
+
+Hallucination remains a persistent challenge in clinical text summarization (Wan et al., 2024; Chuang et al., 2024), re-flecting a mismatch between the generative behavior of large language models and the evidentiary and accountabil-ity requirements of clinical documentation (Slobodkin et al., 2024a; Goodman et al., 2024; Piya & Beheshti, 2025a). In this context, (faithfulness) hallucinations typically appear as fluent but unsupported statements, including inferred diagnoses, treatments, or patient attributes that are not ex-plicitly grounded in the source record. Unlike benign errors in open-domain generation, such deviations can misrepre-sent clinical facts, undermine downstream decision-making, and erode clinician trust. As a result, clinical documenta-tion workflows rely on structured oversight in which draft summaries are reviewed, corrected, and authorized by a responsible practitioner prior to release (Saadat et al., 2025; Goodman et al., 2024). By contrast, most LLM-based sum-marization pipelines operate in a single forward pass (Ren et al., 2025), with factuality assessed, if at all, only through post hoc evaluation (Grolleau et al., 2025; Croxford et al., 2025) or correction mechanisms (Wan et al., 2024), rather than explicit verification or supervisory control during gen-eration (Ji et al., 2023). Despite their strong generative capabilities, most LLM-based clinical summarization systems generate summaries directly from long, noisy, and redundant clinical notes with-out explicit mechanisms for verification, correction, or con-trolled termination (Piya & Beheshti, 2025b). Clinical doc-umentation often contains templated text, copied sections, fragmented timelines, and institution-specific shorthand, which makes reliable single-pass generation difficult (Ra-jkomar et al., 2018; Johnson et al., 2023). As a result, unsupported content can propagate unchecked into the final output, a failure mode repeatedly observed in evaluations of LLM-generated medical summaries (Asgari et al., 2025; Joseph et al., 2024). In the absence of explicit supervi-sion or revision control, these systems lack a principled mechanism to determine whether a summary should be corrected, partially revised, or released as-is, even when hallucinations are detected (McKenna et al., 2023; Huang et al., 2025). This stands in contrast to clinical documen-1
+
+> arXiv:2602.20040v1 [cs.CL] 23 Feb 2026 AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization
+
+tation workflows, in which draft summaries are generally reviewed and authorized by a responsible practitioner prior to release (Meligonis et al., 2025; Goodman et al., 2024). Consequently, hallucination in clinical summarization re-flects not only a modeling limitation but also a mismatch between single-step generation and high-stakes documenta-tion practices. To address the lack of verification and control in single-pass generation, prior work has explored agentic AI frameworks that introduce structure, feedback, and iterative refinement into language model generation (Shinn et al., 2023; Fu et al., 2023; Ke et al., 2024). By decomposing generation into co-ordinated stages, these approaches have shown promise in complex reasoning tasks and have attracted interest in clini-cal and biomedical settings (Asgari et al., 2025; Kim et al., 2025). However, most existing agentic systems rely on self-generated critique without explicit grounding in the source document, lack principled supervision over revision termina-tion, and do not align with clinical documentation workflows that require accountable review prior to release (Shinn et al., 2023; Madaan et al., 2023; Yao et al., 2023). Consequently, agentic decomposition alone remains insufficient for faithful and supervised clinical summarization. While agentic frameworks introduce procedural structure into generation, they do not provide reliable signals for grounding or supervision on their own. In parallel, re-cent work has explored model-internal signals for assess-ing factual consistency in generated text (Piya & Beheshti, 2025a). Decoder-side signals such as attention patterns of-fer lightweight, token-level indicators of factual grounding without external supervision or fine-tuning (Chuang et al., 2024; Bui et al., 2025; Jiang et al., 2025). Considered inde-pendently, agentic architectures support iterative refinement, while model-internal signals provide localized diagnostics for factual consistency. However, these approaches remain largely decoupled: agentic systems lack grounded signals to guide revision and termination, and signal-based methods are not integrated into generation or release control (Slobod-kin et al., 2024b). Consequently, a cohesive framework that unifies procedural oversight with model-internal evidence remains missing. In this work, we introduce a structured agentic framework for clinical text summarization that explicitly separates gen-eration from verification and revision, enabling systematic hallucination detection and control. The framework decom-poses summarization into modular stages for reconstructed input with important context, draft generation, factuality assessment, and targeted correction, yielding a verifiable multi-stage process with interpretable signals of content grounding. Our contributions are as follows. • We introduce AgenticSum , an agent-based clinical summarization framework that decomposes input se-lection, summary generation, factuality assessment, and targeted correction into distinct, auditable stages. This separation enables structured factual assessment and controlled correction during inference, without fine-tuning or task-specific supervision. • We propose two core mechanisms within the 
+
+AgenticSum framework: FOCUS , an attention-guided input compression module that prioritizes clin-ically relevant context during summary draft gener-ation, and AURA , a grounding analysis module that leverages model-internal signals, including decoder at-tention, to quantify token-level reliance on source con-tent. Together, these components support fine-grained traceability and localized correction of unsupported statements. • We evaluate AgenticSum on MIMIC-IV discharge summaries and SOAP notes, demonstrating consistent improvements in factual accuracy and error localiza-tion over single-pass summarization baselines while maintaining comparable fluency under deployment-realistic constraints. 
+
+# 2. Related Work 
+
+Our proposed method draws on several lines of prior work, which we briefly cover below. 
+
+Clinical Text Summarization Recent advances in clin-ical summarization have leveraged pre-trained language models (Piya & Beheshti, 2025a), including domain-adapted models such as BioGPT (Luo et al., 2022) and 
+
+PubMedBERT (Gu et al., 2021), as well as instruction-tuned models like Flan-T5 (Lyu et al., 2024). Task-specific architectures have also been proposed (Han & Choi, 2024), such as Pointer-GPT , to improve content reten-tion. However, most existing approaches operate over un-compressed token sequences, leading to inefficiencies and increased hallucination risk in long clinical narratives. As clinical documents grow longer and more heterogeneous, expanded context length further increases computational cost and exacerbates factual inconsistency, making it harder for models to distinguish source-supported content from prior-driven inferences. 
+
+Extrinsic Hallucination, Prior-Driven Generation, and Faithfulness In clinical summarization, large language models may produce fluent and clinically plausible content that is not explicitly supported by the source document, a phenomenon broadly characterized as hallucination and par-ticularly concerning in high-stakes settings (Asgari et al., 2025; Huang et al., 2025). Many existing summarization models are designed to condense overall records or narrative 2AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization Focus Agent  
+
+> Draft Agent
+> Lens Agent
+> Fix Agent
+> Raw Input
+> (e.g discharge summary)
+> Final
+> Summarized Text
+> Filtered Output via Contextual Understanding of Sentences (FOCUS)
+> Attention to Underlying
+> Reference Alignment ( AURA)
+> Frozen LLM Inference
+> Initiates the Summary Pipeline
+> Clinical Supervisor Agent
+> Compressed Input
+> Initial Summary from Reconstructed Text
+> Targeted Hallucinated Span Rewrite
+> Supervisor Agent
+> Decides to
+> release / improve
+
+Figure 1. Our agentic framework, AgenticSum , designed for hallucination-aware clinical text summarization. 
+
+history, prioritizing coverage and coherence rather than strict source faithfulness. When applied to clinical notes, which require precise attribution to documented evidence, this de-sign emphasis can lead to unsupported inferences. One well-studied form of hallucination is extrinsic hallucination ,in which generated statements appear clinically reasonable but are not grounded in the input text (Huang et al., 2025; McKenna et al., 2023). Prior work shows that such errors are often driven by reliance on learned statistical regularities and training-time correlations, especially when inputs are un-derspecified or ambiguous. This prior-driven behavior can shift generation away from source-based evidence toward inference, undermining faithfulness even when relevant in-formation is present in the document (Maynez et al., 2020; Pagnoni et al., 2021). As a result, recent evaluation frame-works emphasize faithfulness through source-grounded fac-tuality, assessing whether generated statements are explic-itly supported by the input text (Kry ´sci ´nski et al., 2020; Huang et al., 2025). Several recent approaches adopt this perspective by leveraging model-internal signals to estimate reliance on source content during generation (Chuang et al., 2024; Bui et al., 2024; Jiang et al., 2025). 
+
+Token-Level Filtering and Attention-Based Selection 
+
+Prior work has explored improving LLM efficiency through model-level compression techniques such as pruning (Fran-tar & Alistarh, 2023), quantization (Dettmers et al., 2022), and knowledge distillation (Hinton, 2015; Piya et al., 2024), reducing memory footprint and inference latency under hardware constraints. These methods operate on model parameters and representations and are largely agnostic to input structure and informational density (Piya et al., 2022). In clinical NLP, this limitation is critical: aggressive com-pression can degrade performance on domain-specific tasks requiring fine-grained semantic distinctions, as even low-magnitude parameters may encode clinically salient associ-ations (Tinn et al., 2023; Ma et al., 2023). Although distilla-tion transfers general linguistic competence (Ho et al., 2022), distilled models often fail to preserve nuanced biomedical context and long-range dependencies essential for clinical summarization (Magister et al., 2022). To address redun-dancy at the input level, token-level filtering methods re-duce effective context length at inference time by selec-tively retaining informative subsets of the input. Early ap-proaches such as PoWER-BERT prune tokens based on attention scores (Goyal et al., 2020), but are limited to encoder-based architectures. Subsequent methods introduce differentiable top-k selection with stochastic perturbations, enabling gradient-based optimization at the cost of vari-ance undesirable in safety-critical settings. More recent attention-based techniques retain salient tokens to reduce latency and memory overhead (Lin et al., 2024; Lou et al., 2024), and deterministic, architecture-compatible filtering has been demonstrated for long clinical inputs (Piya & Be-heshti, 2025b). However, token-level selection methods pri-marily emphasize efficiency and do not define mechanisms for enforcing factual grounding or preventing unsupported content during generation. 
+
+Agentic Decomposition for Faithful Clinical Summariza-tion Beyond input efficiency, prior work suggests that hallucination in clinical summarization arises not only from 3AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+insufficient context or inefficient processing, but from gen-eration pipelines that fail to separate generation from ver-ification and correction (Maynez et al., 2020; Dziri et al., 2022). In single-pass prompting, generation, factual assess-ment, and revision are entangled within a single inference step, leaving no principled mechanism to identify or cor-rect unsupported statements once produced. This limitation is particularly problematic in clinical settings, where lo-cally plausible errors can be clinically misleading. These concerns have motivated growing interest in agentic and multi-stage frameworks that decouple generation, evalua-tion, and revision during inference (Madaan et al., 2023; Shinn et al., 2023). Prior work shows that separating rea-soning and action (Yao et al., 2023), enabling iterative self-critique (Shinn et al., 2023; Madaan et al., 2023), and coor-dinating role-specialized agents can improve robustness and controllability in complex generation tasks. Related studies demonstrate the effectiveness of agentic collaboration for document-level processing, including collaborative trans-formation and summarization (Fang et al., 2025; Li et al., 2025), and agent-based systems have been explored to sup-port clinical workflows (Yang & Velazquez-Villarreal, 2025). However, existing approaches primarily emphasize task ac-curacy, interaction quality, or efficiency, with limited focus on source-grounded faithfulness or explicit hallucination diagnosis in document-level clinical summarization. Con-sequently, while agentic decomposition offers a promising structural foundation, its integration with factual verification remains unresolved. 
+
+# 3. Methodology 
+
+We introduce a modular framework for clinical text sum-marization that explicitly separates generation, verification, and targeted repair to detect and reduce hallucinations. The framework decomposes summarization into role-specialized components for, i) input compression, ii) draft generation, iii) hallucination detection, and iv) constrained revision, implemented by the FocusAgent , DraftAgent , Hallucination-DetectorAgent , and FixAgent , respectively. Refinement is governed by a supervisory control module, the ClinicalSu-pervisorAgent , which determines whether further correction is required or whether the summary has stabilized and can be finalized. This design enables structured inference-time refinement with explicit termination control, rather than re-lying on unconstrained self-correction. Figure 1 provides an overview of the framework. 
+
+Problem Formulation. Let D denote the space of clinical documents, and let D ∈ D be an input document repre-sented as a sequence of tokens, 
+
+D = ( t1, t 2, . . . , t n),
+
+where ti denotes the i-th input token and n is the document length. The objective is to generate a summary 
+
+S = ( y1, y 2, . . . , y LS ),
+
+that is concise, clinically informative, and faithful to the source document, where yℓ denotes the ℓ-th output token and LS may vary across documents. We define hallucination as the generation of statements in 
+
+S that are not supported by evidence in the source docu-ment D. Rather than optimizing an explicitly constrained objective, we approximate faithful summarization through an inference-time decomposition that separates generation, verification, and revision. Conceptually, the goal is to pro-duce the summary S∗ that is likely to be generated under the pretrained language model, while remaining well supported by the source document: 
+
+S∗ ≈ arg max  
+
+> S
+
+P (S | D; θ),
+
+where θ denotes fixed, pretrained model parameters. This objective is approximated through an iterative inference procedure that identifies and revises unsupported spans us-ing explicit grounding and entailment signals derived from 
+
+D. We define an entailment scoring function E(·, ·), where 
+
+E(s, D ) ∈ [0 , 1] measures the degree to which a summary span s ⊂ S is supported by and consistent with the content of the source document D, as determined by a pretrained language model operating in an evaluative role. 
+
+FocusAgent: Input Compression via FOCUS 
+
+Clinical narratives often interleave clinically salient infor-mation with templated documentation, conversational filler, and tangential discourse, particularly in longitudinal records and patient–provider communications (Chen et al., 2025). Importantly, conversational segments are not inherently ex-traneous and frequently contain clinically meaningful infor-mation, including symptom descriptions, treatment adher-ence updates, and patient-reported outcomes that must be preserved during summarization (Chen et al., 2025; Piya & Beheshti, 2025a). Because relevance is often localized and weakly signaled in such settings, relying on generative attention alone conflates evidence identification with text synthesis. We therefore introduce an explicit input compres-sion stage that precedes generation. We formalize this design as Filtered Output via Contex-tual Understanding of Sentences (FOCUS) , a sentence-level input compression mechanism that selectively retains con-text salient for summarization. FOCUS is a deterministic, attention-based filtering procedure that leverages decoder self-attention from a frozen transformer model to estimate sentence-level contextual salience. Sentences are scored independently, ranked by salience, and a fixed proportion 4AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+of the highest-ranked sentences is retained as compressed input for subsequent agents. Let the input document D be partitioned into m sentences, 
+
+D =
+
+> m
+
+[
+
+> j=1
+
+uj ,
+
+where each sentence uj corresponds to a contiguous subset of tokens with index set Tj ⊆ { 1, . . . , n }, and the sets 
+
+{Tj }mj=1 form a disjoint partition of the document tokens. FocusAgent performs sentence-level input compression by estimating sentence importance using decoder self-attention from a pretrained transformer model. Each sentence is pro-cessed independently in a single forward pass with attention outputs enabled, and the resulting decoder self-attention weights are used solely as an internal signal to estimate contextual relevance rather than for autoregressive genera-tion. Operating exclusively at the sentence level preserves semantic coherence, negation structure, and clinical inter-pretability while providing a lightweight and deterministic compression mechanism without additional trainable pa-rameters. Let A denote the decoder self-attention tensor from the final transformer layer for a given sentence, with shape H × T × T , where H is the number of attention heads and T is the number of tokens in the sentence. Sen-tence salience is computed as a single scalar by aggregating decoder self-attention across heads and token interactions, with normalization by sentence length. Formally, the impor-tance score of sentence uj is defined as, 
+
+βj = 1
+
+HT 
+
+> H
+
+X
+
+> h=1
+> T
+
+X
+
+> i=1
+> T
+
+X
+
+> k=1
+
+A(j)
+
+> h,i,k
+
+,
+
+where A(j) denotes the decoder self-attention tensor corre-sponding to sentence uj . Let m denote the total number of sentences in the input document. FOCUS retains the top k sentences, where k denotes the number of sentences selected after compression and is defined as, 
+
+k = ⌊r · m⌋,
+
+for a user-selected retention ratio r ∈ (0 , 1] . The resulting compressed input is given by 
+
+Dreduced = { uj | βj ≥ βk },
+
+where uj denotes the j-th sentence in the input document and βk denotes the k-th highest sentence salience score. 
+
+DraftAgent: Summary Generation 
+
+Given the compressed input Dreduced , the DraftAgent gen-erates an initial summary using a pretrained decoder-only language model. The compressed document serves as the sole conditioning context for generation, reflecting the input selection performed by the FocusAgent. Formally, the DraftAgent produces an initial draft summary 
+
+S(0) = ( y1, . . . , y LS ),
+
+where yℓ denotes the ℓ-th generated token and LS is the length of the summary. The model parameters are fixed, and no task-specific fine-tuning is performed. Generation is carried out in a zero-shot or instruction-tuned setting us-ing a deterministic or low-variance decoding strategy. The DraftAgent is intentionally unconstrained with respect to factual verification. Its role is to generate a fluent and co-herent draft summary conditioned on Dreduced , deferring assessment of evidential support and correction of potential hallucinations to subsequent agents in the pipeline. 
+
+HallucinationDetectorAgent: Hallucination Detection with AURA 
+
+The HallucinationDetectorAgent evaluates the current sum-mary S(t), beginning with the initial draft S(0) , using com-plementary attention-based and semantic signals. We de-fine an attention-based grounding signal, termed AURA 
+
+(Attention-to-Underlying-Reference Alignment), which quantifies the degree to which generated tokens in S(t) at-tend to the source document during decoding and serves as an indicator of source reliance. Let A(t) ∈ RH×Lt denote the aggregated decoder self-attention weights associated with the generation of output token yt, where Lt = |D| + t − 1 denotes the total sequence length at decoding step t. Let Tinput ⊆ { 1, . . . , L t} denote positions corresponding to tokens from the source document. The token-level AURA score is defined as: AURA (yt, D ) = 1
+
+H
+
+> H
+
+X
+
+> h=1
+
+P 
+
+> i∈Tinput
+
+A(t)
+
+> h,i
+
+PLt 
+
+> i=1
+
+A(t) 
+
+> h,i
+
++ ε ,
+
+where ε > 0 is a small constant added for numerical stabil-ity. In our framework, hallucination detection is performed at the sentence level, and we therefore aggregate token-level AURA scores to obtain span-level grounding estimates. Let the current summary S(t) be segmented into M spans (sen-tences), 
+
+S(t) = {z1, . . . , z M },
+
+where each span zj consists of a contiguous subset of output tokens with index set Ij ⊆ { 1, . . . , L S }. The span-level AURA score is defined as 
+
+aj = 1
+
+|Ij |
+
+X
+
+> t∈Ij
+
+AURA (yt, D ),
+
+where aj ∈ [0 , 1] reflects attention-based source reliance for span zj .5AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+While attention-based grounding provides a useful signal of source reliance, it does not directly determine whether a gen-erated span is explicitly supported by the source document. To complement AURA, the HallucinationDetectorAgent per-forms semantic verification at the span level using textual entailment. For each span zj , we assess whether its content is explicitly entailed by the source document D under a structured hallucination annotation prompt that treats D as the sole ground truth, yielding a binary hallucination label 
+
+hj ∈ { 0, 1},
+
+where hj = 1 indicates that span zj is unsupported by the source document. For each span zj , the HallucinationDe-tectorAgent outputs a continuous grounding score aj and a binary hallucination label hj , providing complementary signals used to guide targeted correction. 
+
+FixAgent: Targeted Hallucination Repair 
+
+For each summary span zj , the FixAgent receives two com-plementary signals produced by the HallucinationDetec-torAgent: a continuous AURA-based grounding score aj ,reflecting attention-based source reliance, and a semantic entailment label hj ∈ { 0, 1}, indicating whether the span is explicitly supported by the source document. The set of candidate hallucinated spans is defined as: 
+
+H = {zj : hj = 1 or aj < τ },
+
+where τ ∈ [0 , 1] is a grounding threshold applied to the AURA score, with lower values of aj indicating weaker source reliance. Given the set of hallucinated spans H, the FixAgent pro-duces a revised summary 
+
+S(t+1) = Fix (Dreduced , S (t), H; θ),
+
+using the compressed document produced by the Fo-cusAgent, the current summary S(t), and the identified hal-lucinated spans H.
+
+ClinicalSupervisorAgent: Supervised Iterative Refinement 
+
+As illustrated in Figure 1, refinement proceeds through an iterative control loop that alternates between hallucination detection and targeted repair, starting from the initial draft 
+
+S(0) produced by the DraftAgent. At iteration t, the Hallu-cinationDetectorAgent identifies a set of hallucinated spans 
+
+H(t). If further refinement is permitted, the FixAgent ap-plies targeted revisions to produce an updated summary: 
+
+S(t+1) = Fix (Dreduced , S (t), H(t); θ).
+
+To assess convergence, the ClinicalSupervisorAgent com-putes an aggregate grounding statistic based on span-level AURA scores. Specifically, let 
+
+¯A(t) = 1
+
+M
+
+> M
+
+X
+
+> j=1
+
+aj
+
+denote the mean span-level AURA score at iteration t, where 
+
+aj is the grounding score associated with span zj and M is the number of spans in the current summary. Refinement is halted when any of the following conditions is satisfied: 
+
+¯A(t) − ¯A(t−1) < ϵ ∨ H(t) \ H (t−1) = ∅ ∨ t = Tmax .
+
+The ClinicalSupervisorAgent performs supervisory control exclusively by determining whether refinement should con-tinue or halt, without directly modifying summary content. 
+
+# 4. Experiments 
+
+4.1. Data 
+
+For the summarization task, we used MIMIC-IV-Ext-BHC benchmark dataset (Aali et al., 2024a), which was specif-ically curated to support clinical text summarization re-search. This dataset, derived from the MIMIC-IV-Note database (Adiba et al., 2026), includes 279,033 clinical notes paired with corresponding brief hospital course (BHC) summaries. To facilitate model training, the dataset was pre-processed to standardize note structure, clean formatting, and normalize length to an average of 2,267 tokens per note. The resulting benchmark (Aali et al., 2024b) pro-vides a structured and scalable resource tailored for eval-uating factual consistency in clinical summarization. The second dataset we incorporated comprises 1,473 patient-doctor conversations from the FigShare (Singh, 2011) and MTS-Dialog (Abacha et al., 2023) collections, specifically designed for generating clinical summaries. These con-versations have been annotated to create structured SOAP (Subjective, Objective, Assessment, and Plan) summaries, available on Hugging Face datasets (Neupane, 2024). 
+
+4.2. Hallucination Annotation Prompt 
+
+To identify hallucinated spans in model-generated sum-maries, we employ a structured instruction prompt that en-forces a strict textual entailment criterion. Each summary statement must be explicitly and unambiguously supported by the source document; content lacking direct verification is labeled as hallucinated. To reduce confirmation bias, the prompt prohibits reliance on clinical knowledge, plausible inference, or prior assumptions, treating the source docu-ment as the sole ground truth. The full prompt and output format are provided in Appendix B. 6AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+4.3. Evaluation Metrics 
+
+We evaluate generated summaries using reference-based lexical metrics, embedding-based semantic similarity mea-sures, and LLM-based judgment to assess content overlap, semantic alignment, and factual reliability. 
+
+Semantic Metrics. We report BLEU-1 and BLEU-2 (Pap-ineni et al., 2002) for unigram and bigram overlap, ROUGE-L (Lin, 2004) for longest common subsequence recall and structural alignment, and BERTScore (Zhang et al., 2019) (precision, recall, F1) to measure semantic similarity using contextual embeddings from a pretrained BERT model (De-vlin et al., 2019). 
+
+LLM-as-a-Judge. To complement automatic hallu-cination detection, we employ an instruction-tuned 
+
+LLaMA-3-8B model (Dubey et al., 2024). Each gener-ated summary is evaluated against its corresponding clinical note on a 1–5 integer scale across four dimensions: Hal-lucination (↓; unsupported or fabricated content), Factual Consistency (↑; faithfulness to the source), Completeness 
+
+(↑; coverage of core clinical information), and Coherence 
+
+(↑; fluency and logical organization). The model follows a structured evaluation prompt with anchored scoring criteria and returns scores in a strict key–value format, which are parsed automatically. The full evaluation prompt is provided in Appendix C. 
+
+Human Evaluation. Human evaluation was conducted via a multi-part online survey comparing baseline and re-vised summaries with respect to hallucination severity. The survey remains accessible through an anonymous link. 1
+
+Study details and participant information are provided in Appendix F. For each case, participants were shown the original clinical note followed by two summaries: one gen-erated by a standard LLM and one produced by our method. Raters were asked to (i) identify which summary contained more hallucinated content (i.e., unsupported by the source note) and (ii) rate each summary on a 5-point hallucina-tion severity Likert scale (1 = no hallucination, 5 = severe hallucination). The study covered three clinical domains: psychiatric, cardiopulmonary, and oncological. In all cases, the draft summary contained an initial summary generated by a vanilla LLM with some degree of hallucinated con-tent, while the AgenticSum -revised summary aimed to reduce such errors. For each domain, we report two met-rics: (1) Correct Guess Accuracy , defined as the percentage of raters correctly identifying the more hallucinated sum-mary, and (2) hallucination severity scores for both draft and 
+
+AgenticSum outputs, where lower values indicate higher 
+
+> 1https://docs.google.com/forms/d/e/ 1FAIpQLSdLwaecJJS4TZQVMQhS5v2INJGne-Lp5cuZ9drSSKR_ p3XGIg/viewform?usp=header
+
+factual fidelity. 
+
+4.4. Ablation Study 
+
+We conduct a module-wise ablation study using the same LLM, prompts, and decoding settings as the main experi-ments to isolate the contribution of individual components. We compare a Vanilla LLM baseline, a DraftAgent (FO-CUS + LLM) configuration to assess the effect of input-side compression, and the full AgenticSum system, which adds hallucination diagnostics and selective post-generation cor-rection. This study evaluates the incremental impact of input filtering and post-generation refinement. 
+
+4.5. Results 
+
+As shown in Table 1, we evaluate all models using lexical overlap metrics (BLEU and ROUGE-L) and semantic sim-ilarity (BERTScore), capturing both surface accuracy and deeper semantic alignment with reference summaries. This evaluation assesses AgenticSum ’s generalization across diverse clinical documentation styles and provides a foun-dation for subsequent factuality and hallucination analyses. Across both clinical datasets, AgenticSum achieves the strongest overall performance. On MIMIC-IV, it outper-forms Llama-3.2-3B , with substantially higher BLEU-2 (12.61 vs. 7.17) and BERTScore (84.50 vs. 81.90). It further generalizes well to the SOAP Summary dataset, achiev-ing the highest BERTScore (86.32) and BLEU-2 (15.80) among all models. While MedAlpaca-7B attains higher ROUGE-L on SOAP summaries, AgenticSum exhibits a more favorable balance between lexical fidelity and seman-tic accuracy, highlighting its ability to generate clinically meaningful summaries across varied input formats. To evaluate hallucination mitigation, we employ 
+
+Llama-3.2-8B-Instruct (AI, 2024) as an LLM judge, to assess hallucination frequency, factual consistency, completeness, and coherence on a 1–5 scale. Table 2 reports results across two clinical datasets. AgenticSum achieves the lowest hallucination rating on MIMIC-IV (1.88 ± 0.42) and ranks among the lowest on SOAP summaries (2.08 ±
+
+1.08), indicating improved factual grounding. It also attains strong completeness scores (3.43 ± 0.68 on MIMIC-IV and 3.33 ± 1.12 on SOAP) and competitive factual consistency across both datasets. While coherence is not always the highest, AgenticSum demonstrates a favorable balance across hallucination reduction, completeness, coherence, and factual consistency. Compared to prior models such as ConTextual and MedAlpaca-7B , AgenticSum 
+
+exhibits more reliable performance across evaluation dimensions, producing summaries that are less prone to hallucination while preserving overall quality and alignment with source content. Table 3 reports human evaluation results comparing a vanilla 7AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+Table 1. Summary quality comparison across medical datasets. We report lexical overlap (BLEU, ROUGE-L) and semantic similarity (BERTScore).                                                                                                                                                                                                                                         
+
+> Model MIMIC-IV SOAP Summary ROUGE-L BLEU-1 BLEU-2 BERTScore ROUGE-L BLEU-1 BLEU-2 BERTScore (↑)(↑)(↑)(↑)(↑)(↑)(↑)(↑)
+> BioBART 8.00 ±3.20 6.88 ±5.20 2.05 ±2.10 78 .10 ±1.60 7.41 ±4.90 5.27 ±4.20 1.83 ±2.80 77 .32 ±2.50
+> T5-Large 7.96 ±3.30 4.95 ±5.30 1.41 ±2.20 79 .84 ±1.60 7.52 ±5.20 3.86 ±3.90 1.24 ±2.40 78 .46 ±2.70
+> Flan-T5 7.82 ±6.86 4.51 ±6.91 2.20 ±4.35 78 .64 ±4.38 8.91 ±5.00 8.35 ±5.10 2.17 ±2.90 77 .05 ±2.80
+> Gemma3-1B 9.85 ±3.40 7.89 ±5.60 3.20 ±2.40 79 .78 ±1.60 8.97 ±5.30 7.25 ±5.30 2.84 ±3.20 79 .25 ±2.50
+> Llama-3.2-3B 10 .65 ±3.78 15 .54 ±6.55 7.17 ±3.22 81 .90 ±1.60 12 .53 ±5.31 13 .12 ±9.35 8.10 ±6.17 83 .99 ±2.34
+> Mistral-7B 9.87 ±3.40 4.43 ±5.20 2.09 ±2.20 80 .71 ±1.70 9.34 ±5.60 4.08 ±4.40 1.85 ±2.70 81 .18 ±2.40
+> MedAlpaca-7B 7.87 ±3.92 12 .29 ±8.15 5.63 ±3.89 76 .18 ±19 .42 15 .75 ±9.20 14 .41 ±9.87 7.16 ±6.23 82 .01 ±3.39
+> ConTextual 11 .04 ±3.50 12 .63 ±6.10 4.65 ±2.60 81 .37 ±1.70 10 .70 ±4.50 11 .55 ±5.50 6.09 ±4.20 83 .60 ±2.20
+> AgenticSum 21 .62 ±3.20 18 .37 ±5.80 12 .61 ±2.90 84 .50 ±3.50 24 .99 ±4.80 23 .94 ±7.20 15 .80 ±5.40 86 .32 ±2.10
+
+Table 2. LLM-as-a-Judge Evaluation of Hallucination and Summary Quality Across Datasets. Scores are assigned by an instruction-tuned LLM acting as an evaluator using a 1–5 scale across four axes: hallucination frequency (lower is better), completeness, coherence, and factual consistency (higher is better). All metrics are rated on a 1–5 scale. 
+
+Model MIMIC-IV SOAP Summary Hallucination Completeness Coherence Factual Hallucination Completeness Coherence Factual (↓) (↑) (↑) (↑) (↓) (↑) (↑) (↑)
+
+BioBART 2.45 ± 0.72 2.95 ± 0.68 4.21 ± 0.89 3.68 ± 0.55 2.38 ± 0.65 2.87 ± 0.58 4.15 ± 0.74 3.72 ± 0.48 
+
+T5-Large 2.52 ± 0.78 2.88 ± 0.72 4.08 ± 0.95 3.61 ± 0.58 2.47 ± 0.69 2.82 ± 0.64 4.02 ± 0.82 3.65 ± 0.52 
+
+Flan-T5 2.37 ± 0.80 3.18 ± 0.80 4.60 ± 1.03 3.79 ± 0.62 2.41 ± 0.74 3.12 ± 0.76 4.52 ± 0.88 3.75 ± 0.59 
+
+Gemma3-1B 2.35 ± 0.68 3.08 ± 0.74 4.28 ± 0.82 3.71 ± 0.54 2.42 ± 0.71 2.98 ± 0.66 4.22 ± 0.78 3.68 ± 0.49 
+
+Llama-3.2-3B 2.11 ± 0.67 3.25 ± 0.70 4.38 ± 0.86 3.79 ± 0.50 2.20 ± 0.51 3.14 ± 0.47 4.38 ± 0.80 3.84 ± 0.37 
+
+Mistral-7B 2.19 ± 0.50 3.19 ± 0.56 4.54 ± 0.80 3.82 ± 0.41 2.23 ± 0.58 2.99 ± 0.30 4.05 ± 0.98 3.74 ± 0.50 
+
+MedAlpaca-7B 2.21 ± 0.39 3.18 ± 0.85 4.80 ± 0.51 3.96 ± 0.24 2.13 ± 0.44 3.07 ± 0.38 4.68 ± 0.66 3.86 ± 0.38 
+
+ConTextual 2.08 ± 0.58 3.42 ± 0.72 3.82 ± 0.75 4.55 ± 0.82 2.15 ± 0.48 3.28 ± 0.55 4.50 ± 0.55 4.67 ± 0.52 
+
+AgenticSum 1.88 ± 0.42 3.43 ± 0.68 3.88 ± 0.92 4.01 ± 0.35 2.08 ± 1.08 3.33 ± 1.12 4.23 ± 1.15 3.99 ± 1.21 
+
+Table 3. Human evaluation of hallucination severity and annotator agreement across clinical domains . Correct Guess Accuracy ( ↑)indicates the proportion of annotators identifying the same summary as more hallucinated. Hallucination severity is rated on a 1–5 ordinal scale, where lower values indicate fewer hallucinations ( ↓). All Wilcoxon signed-rank tests were statistically significant ( p < 0.001 for all domains). Rank-biserial correlation is reported as effect size. Dominance p-values are computed using a binomial test against chance agreement. 
+
+Clinical Domain Correct Guess ↑ Mean Hallucination Severity ↓ Effect Size Dominance p
+
+Accuracy (%) Vanilla / AgenticSum (rrb )Psychiatric 91.3 3.74 / 1.91 0.905 < 0.001 
+
+Cardiopulmonary 78.3 3.91 / 2.09 0.800 0.005 Oncology 87.0 4.13 / 1.96 0.909 < 0.001 
+
+8AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+LLM draft and AgenticSum across three clinical domains. A total of 23 participants completed the hallucination evalu-ation survey. Each participant reviewed three clinical note scenarios, each containing a summary generated by a vanilla LLM and its corresponding AgenticSum revision. Partic-ipants represented a range of academic and clinical back-grounds: 10 participants (43.5%) held a Master’s degree (e.g., MSc, MPH, MEng), 5 (21.7%) held a Bachelor’s degree (e.g., BA, BSc), 4 (17.4%) held an MBBS or equiva-lent medical degree, and 4 (17.4%) held a Doctoral degree (e.g., PhD, MD, DrPH). AgenticSum was consistently judged as less hallucinated than the vanilla draft, with anno-tator agreement exceeding 78% in all domains and reaching 91.3% in the psychiatric setting. As shown in Table 3, mean hallucination severity scores were substantially lower for AgenticSum across all domains: from 3.74 to 1.91 in psy-chiatric notes, from 3.91 to 2.09 in cardiopulmonary notes, and from 4.13 to 1.96 in oncology notes. These reductions correspond to large effect sizes (rank-biserial correlation 
+
+rrb ∈ [0 .80 , 0.91] ) and were statistically significant under paired Wilcoxon signed-rank tests ( p < 0.001 across all domains). Dominance tests further confirmed that annotator preferences for AgenticSum exceeded chance agreement in each domain. This distribution supports the credibility of the evaluation by ensuring that responses were contributed by in-dividuals with substantial academic or clinical training. De-tails of the human evaluation protocol and statistical testing procedures are provided in Appendix F. We also performed a module-wise ablation study to assess the contributions of input filtering (FOCUS), post-generation correction (FixA-gent), and supervisory control. While FOCUS alone yields mixed lexical effects, adding FixAgent produces consistent gains, improving BLEU-2 from 5.61 to 7.85 and BERT F1 from 80.92 to 82.45 on MIMIC-IV. The full AgenticSum 
+
+pipeline with Clinical Supervisor achieves the strongest per-formance across datasets, indicating that post-generation correction and supervised refinement are critical for robust gains. Detailed ablation results are provided in Appendix J. 
+
+# 5. Conclusion 
+
+We presented AgenticSum , an agentic framework for clin-ical summarization that explicitly integrates hallucination detection and content compression into the inference process through staged context selection, generation, verification, and targeted revision. By decoupling these roles, the frame-work enables localized correction of unsupported content while preserving fluency and structural coherence. Across lexical and semantic similarity measures, LLM-as-a-judge evaluation, and human assessment, AgenticSum consis-tently reduces hallucination severity while maintaining or improving summary quality. Ablation results further in-dicate that input filtering alone is insufficient for reliable hallucination control, whereas post-generation correction and supervisory refinement are key to achieving robust fac-tual grounding. Together, these findings suggest that agentic decomposition provides a practical and extensible approach for mitigating hallucinations in clinical summarization sys-tems at inference time, without external model training or relying on external knowledge sources. While the proposed framework improves contextual faithfulness in clinical sum-marization, it does not eliminate hallucinations entirely and primarily targets contextual misalignment, leaving some forms of factual distortion, such as subtle semantic omis-sions, unaddressed. The reliance on model-internal attention signals may also miss hallucinations not reflected in atten-tion patterns; we mitigate this by combining attention-based grounding with span-level semantic verification. Our ex-periments focus on small and mid-sized language models, which may be easier to deploy locally in clinical settings, considering the latency and cost. Nevertheless, the frame-work does not assume any model-specific architecture or training procedure, and our results show improvements in performance when an arbitrary base LLM is extended by integrating it into our framework. 
+
+# Acknowledgements 
+
+Our work was supported by NSF award 2443639, and NIH awards, P20GM103446, and U54GM104941. 
+
+# References 
+
+Aali, A., Van Veen, D., Arefeen, Y., Hom, J., Bluethgen, C., Reis, E. P., Gatidis, S., Clifford, N., Daws, J., Tehrani, A., Kim, J., and Chaudhari, A. MIMIC-IV-Ext-BHC: Labeled Clinical Notes Dataset for Hospital Course Summarization. PhysioNet, 2024a. URL https://physionet.org/content/ labelled-notes-hospital-course/1.1. 0/ .Aali, A., Van Veen, D., Arefeen, Y. I., Hom, J., Blueth-gen, C., Reis, E. P., Gatidis, S., Clifford, N., Daws, J., Tehrani, A. S., et al. A benchmark of domain-adapted large language models for generating brief hospital course summaries. arXiv preprint arXiv:2403.05720 , 2024b. Abacha, A. B., Yim, W.-w., Fan, Y., and Lin, T. An empiri-cal study of clinical note generation from doctor-patient encounters. In Proceedings of the 17th Conference of the European Chapter of the Association for Computational Linguistics , pp. 2291–2302, 2023. Adiba, F. I., Zhang, Y., and Beheshti, R. Bias and Fairness in Medical LLMs: An Extensive Scoping Review, June 2025. URL https://osf.io/fqejh_v1/ .Adiba, F. I., Danduri, V., Piya, F. L., Abbasi, A., Gupta, M., and Beheshti, R. A multimodal data processing pipeline 9AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+for mimic-iv dataset. arXiv preprint arXiv:2601.11606 ,2026. AI, M. The llama 3 herd of models, 2024. URL https: //ai.meta.com/blog/meta-llama-3/ .Asgari, E., Monta ˜na-Brown, N., Dubois, M., Khalil, S., Balloch, J., Yeung, J. A., and Pimenta, D. A framework to assess clinical safety and hallucination rates of llms for medical text summarisation. npj Digital Medicine , 8(1): 1–15, 2025. Bui, T., Liu, Z., and Liu, Y. Correctness-aware attention for hallucination detection. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing (EMNLP) , 2024. Bui, T.-D., Vu, T. T., Nguyen, T.-T., Nguyen, S., and Vo, H. D. Correctness assessment of code generated by large language models using internal representations. arXiv preprint arXiv:2501.12934 , 2025. Chen, C., Piya, F. L., Rolnick, J. A., Milbourne, S. A., Wu, C. H., Powers, T. M., Garcia, J. S., Aggarwal, V., Zhang, A., and Beheshti, R. Leveraging social determinants of health (sdoh) knowledge graph to identify latent patterns in veteran suicide risk. In 2025 IEEE EMBS International Conference on Biomedical and Health Informatics (BHI) ,pp. 1–7. IEEE, 2025. Chuang, Y.-S., Qiu, L., Hsieh, C.-Y., Krishna, R., Kim, Y., and Glass, J. Lookback lens: Detecting and mitigating contextual hallucinations in large language models using only attention maps. arXiv preprint arXiv:2407.07071 ,2024. Cliff, N. Dominance statistics: Ordinal analyses to answer ordinal questions. Psychological Bulletin , 114(3):494– 509, 1993. Croxford, E., Gao, Y., First, E., Pellegrino, N., Schnier, M., Caskey, J., Oguss, M., Wills, G., Chen, G., Dligach, D., et al. Evaluating clinical ai summaries with large language models as judges. npj Digital Medicine , 8(1): 640, 2025. Dettmers, T., Lewis, M., Belkada, Y., and Zettlemoyer, L. Gpt3. int8 (): 8-bit matrix multiplication for transformers at scale. Advances in Neural Information Processing Systems , 35:30318–30332, 2022. Devlin, J., Chang, M.-W., Lee, K., and Toutanova, K. Bert: Pre-training of deep bidirectional transformers for lan-guage understanding. In Proceedings of the 2019 Confer-ence of the North American Chapter of the Association for Computational Linguistics: Human Language Technolo-gies, Volume 1 (Long and Short Papers) , pp. 4171–4186. Association for Computational Linguistics, 2019. Dubey, A., Jauhri, A., Pandey, A., Kadian, A., Al-Dahle, A., Letman, A., Mathur, A., Schelten, A., Yang, A., Fan, A., et al. The llama 3 herd of models. arXiv e-prints , pp. arXiv–2407, 2024. Dziri, N., Kamalloo, E., Ahuja, K., et al. Faithfulness in natural language generation: A survey of hallucinations, metrics, and mitigation strategies. Transactions of the ACL , 2022. Fang, D., Qiang, J., Ouyang, X., Zhu, Y., Yuan, Y., and Li, Y. Collaborative document simplification using multi-agent systems. In Proceedings of the 31st International Conference on Computational Linguistics , pp. 897–912, 2025. Frantar, E. and Alistarh, D. Sparsegpt: Massive language models can be accurately pruned in one-shot. In Inter-national Conference on Machine Learning , pp. 10323– 10337. PMLR, 2023. Fu, Y., Peng, H., Khot, T., and Lapata, M. Improv-ing language model negotiation with self-play and in-context learning from ai feedback. arXiv preprint arXiv:2305.10142 , 2023. URL https://arxiv. org/abs/2305.10142 .Goodman, K. E., Yi, P. H., and Morgan, D. Ai-generated clinical summaries require more than accuracy. JAMA ,331(8):637–638, 2024. doi: 10.1001/jama.2024.0555. Goyal, S., Choudhury, A. R., Raje, S., Chakaravarthy, V., Sabharwal, Y., and Verma, A. Power-bert: Accelerating bert inference via progressive word-vector elimination. In International Conference on Machine Learning , pp. 3690–3699. PMLR, 2020. Grolleau, F., Alsentzer, E., Keyes, T., Chung, P., Swami-nathan, A., Aali, A., Hom, J., Huynh, T., Lew, T., Liang, A. S., Chu, W., Steele, N. Z., Lin, C. F., Yang, J., Black, K. C., Ma, S. P., Haredasht, F. N., Shah, N. H., Schulman, K., and Chen, J. H. Medfacteval and medagentbrief: A framework and workflow for generating and evaluating factual clinical summaries. 
+
+arXiv preprint arXiv:2509.05878 , 2025. URL https: //arxiv.org/abs/2509.05878 .Gu, Y., Tinn, R., Cheng, H., Lucas, M., Usuyama, N., Liu, X., Naumann, T., Gao, J., and Poon, H. Domain-specific language model pretraining for biomedical natural lan-guage processing. ACM Transactions on Computing for Healthcare (HEALTH) , 3(1):1–23, 2021. Han, H. and Choi, J. Optimal path for biomedical text summarization using pointer gpt. arXiv preprint arXiv:2404.08654 , 2024. 10 AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+Hinton, G. Distilling the knowledge in a neural network. 
+
+arXiv preprint arXiv:1503.02531 , 2015. Ho, N., Schmid, L., and Yun, S.-Y. Large language models are reasoning teachers. arXiv preprint arXiv:2212.10071 ,2022. Huang, L., Yu, W., Ma, W., Zhong, W., Feng, Z., Wang, H., Chen, Q., Peng, W., Feng, X., Qin, B., et al. A survey on hallucination in large language models: Principles, taxon-omy, challenges, and open questions. ACM Transactions on Information Systems , 43(2):1–55, 2025. Ji, Z., Lee, N., Frieske, R., Yu, T., Su, D., Xu, Y., Ishii, E., Bang, Y., Madotto, A., and Fung, P. Survey of halluci-nation in natural language generation. ACM Computing Surveys , 55(12):1–38, 2023. Jiang, X., Ye, H., Zhu, Y., Zheng, X., Chen, Z., and Gong, J. Hicd: Hallucination-inducing via attention disper-sion for contrastive decoding to mitigate hallucinations in large language models. arXiv preprint arXiv:2503.12908 ,2025. Johnson, A. E. W., Bulgarelli, L., Pollard, T. J., Horng, S., Celi, L. A., and Mark, R. G. Mimic-iv, a freely accessible electronic health record dataset. Scientific Data , 10(1): 1–13, 2023. Joseph, S. A., Chen, L., Trienes, J., G ¨oke, H. L., Coers, M., Xu, W., Wallace, B. C., and Li, J. J. Factpico: Factuality evaluation for plain language summarization of medical evidence. arXiv preprint arXiv:2402.11456 , 2024. Ke, Y. H., Yang, R., Lie, S. A., Lim, T. X. Y., Abdullah, H. R., Ting, D. S. W., and Liu, N. Enhancing diagnos-tic accuracy through multi-agent conversations: using large language models to mitigate cognitive bias. arXiv preprint arXiv:2401.14589 , 2024. Kim, Y., Jeong, H., Chen, S., Li, S. S., Lu, M., Alhamoud, K., Mun, J., Grau, C., Jung, M., Gameiro, R., et al. Medi-cal hallucinations in foundation models and their impact on healthcare. arXiv preprint arXiv:2503.05777 , 2025. Kry ´sci ´nski, W., McCann, B., Xiong, C., and Socher, R. Eval-uating the factual consistency of abstractive text summa-rization. In Proceedings of the 2020 Conference on Empir-ical Methods in Natural Language Processing (EMNLP) ,2020. Li, Y., Chen, L., Liu, A., Yu, K., and Wen, L. Chatcite: Llm agent with human workflow guidance for comparative literature summary. In Proceedings of the 31st Inter-national Conference on Computational Linguistics , pp. 3613–3630, 2025. Lin, C.-Y. Rouge: A package for automatic evaluation of summaries. In Text summarization branches out , pp. 74–81, 2004. Lin, Z., Gou, Z., Gong, Y., Liu, X., Shen, Y., Xu, R., Lin, C., Yang, Y., Jiao, J., Duan, N., et al. Rho-1: Not all tokens are what you need. arXiv preprint arXiv:2404.07965 ,2024. Lou, C., Jia, Z., Zheng, Z., and Tu, K. Sparser is faster and less is more: Efficient sparse attention for long-range transformers. arXiv preprint arXiv:2406.16747 , 2024. Luo, R., Sun, L., Xia, Y., Qin, T., Zhang, S., Poon, H., and Liu, T.-Y. Biogpt: generative pre-trained transformer for biomedical text generation and mining. Briefings in bioinformatics , 23(6):bbac409, 2022. Lyu, M., Peng, C., Li, X., Balian, P., Bian, J., and Wu, Y. Automatic summarization of doctor-patient encounter dialogues using large language model through prompt tuning. arXiv preprint arXiv:2403.13089 , 2024. Ma, X., Fang, G., and Wang, X. Llm-pruner: On the struc-tural pruning of large language models. Advances in neural information processing systems , 36:21702–21720, 2023. Madaan, A., Tandon, N., Gupta, P., Hall, E., Gao, S., Sing-hal, S., Jang, K., and Choudhury, M. Self-refine: Iterative refinement with self-feedback. In Proceedings of the Annual Meeting of the Association for Computational Linguistics (ACL) , 2023. Magister, L. C., Mallinson, J., Adamek, J., Malmi, E., and Severyn, A. Teaching small language models to reason. 
+
+arXiv preprint arXiv:2212.08410 , 2022. Maynez, J., Narayan, S., Bohnet, B., and McDonald, R. On faithfulness and factuality in abstractive summariza-tion. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics (ACL) , 2020. McKenna, N., Li, T., Cheng, L., Hosseini, M. J., John-son, M., and Steedman, M. Sources of hallucination by large language models on inference tasks. arXiv preprint arXiv:2305.14552 , 2023. Meligonis, C., Hattingh, L., and Alcorn, S. Junior doc-tors’ perspectives on the hospital discharge process: A qualitative study exploring preparation of discharge sum-maries and medication reconciliation. Health Information Management Journal , pp. 18333583251344975, 2025. Neupane, S. Soap summary dataset, 2024. URL 
+
+https://huggingface.co/datasets/ SubashNeupane/dataset_SOAP_summary .11 AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+Pagnoni, A., Balachandran, V., and Tsvetkov, Y. Under-standing factuality in abstractive summarization. In Pro-ceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics (NAACL) , 2021. Papineni, K., Roukos, S., Ward, T., and Zhu, W.-J. Bleu: a method for automatic evaluation of machine transla-tion. In Proceedings of the 40th annual meeting of the Association for Computational Linguistics , pp. 311–318, 2002. Piya, F. L. and Beheshti, R. Advancing feature extrac-tion in healthcare through the integration of knowledge graphs and large language models. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pp. 29293–29294, 2025a. Piya, F. L. and Beheshti, R. Contextual: Improving clini-cal text summarization in llms with context-preserving token filtering and knowledge graphs. arXiv preprint arXiv:2504.16394 , 2025b. Piya, F. L., Karim, R., and Arefin, M. S. Bdfn: a bilingual model to detect online fake news using machine learning technique. In Soft Computing for Security Applications: Proceedings of ICSCS 2021 , pp. 799–816. Springer, 2022. Piya, F. L., Gupta, M., and Beheshti, R. Healthgat: Node classifications in electronic health records using graph attention networks. In 2024 IEEE/ACM Conference on Connected Health: Applications, Systems and Engineer-ing Technologies (CHASE) , pp. 132–141. IEEE, 2024. Rajkomar, A., Oren, E., Chen, K., Dai, A. M., Hajaj, N., Hardt, M., Liu, P. J., Liu, X., Marcus, J., Sun, M., Sund-berg, P., Yee, H., Zhang, K., Zhang, Y., Flores, G., Dug-gan, G. E., Irvine, J., Le, Q. V., Litsch, K., Mossin, A., Tansuwan, J., Wang, D., Wexler, J., Wilson, J., Ludwig, D., Volchenboum, S. L., Chou, K., Pearson, M., Mad-abushi, S., Shah, N. H., Butte, A. J., Howell, M. D., Cui, C., Corrado, G. S., and Dean, J. Scalable and accurate deep learning with electronic health records. The New England Journal of Medicine , 379(14):1347–1358, 2018. Ren, L., Ng, Y. M., and Han, L. Malei at multiclinsum: Summarisation of clinical documents using perspective-aware iterative self-prompting with llms. arXiv preprint arXiv:2509.07622 , 2025. URL https://arxiv. org/abs/2509.07622 .Saadat, S., Khalilizad Darounkolaei, M., Qorbani, M., Hem-mat, A., and Hariri, S. Enhancing clinical documentation with ai: reducing errors, improving interoperability, and supporting real-time note-taking. Infoscience Trends , 2 (3):1–13, 2025. Shinn, N., Cassano, F., Gopinath, A., Narasimhan, K., and Yao, S. Reflexion: Language agents with verbal rein-forcement learning. Advances in Neural Information Processing Systems , 36:8634–8652, 2023. Singh, J. Figshare. Journal of pharmacology & pharma-cotherapeutics , 2(2):138, 2011. Slobodkin, A., Bohnet, B., and Tsipras, D. Attribution is not verification: On the limitations of retrieval-augmented generation. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing (EMNLP) , 2024a. Slobodkin, A., Hirsch, E., Cattan, A., Schuster, T., and Dagan, I. Attribute first, then generate: Locally-attributable grounded text generation. arXiv preprint arXiv:2403.17104 , 2024b. Tinn, R., Cheng, H., Gu, Y., Usuyama, N., Liu, X., Nau-mann, T., Gao, J., and Poon, H. Fine-tuning large neural language models for biomedical natural language process-ing. Patterns , 4(4), 2023. Wan, D., Sinha, K., Iyer, S., Celikyilmaz, A., Bansal, M., and Pasunuru, R. Acueval: Fine-grained hallucina-tion evaluation and correction for abstractive summariza-tion. In Findings of the Association for Computational Linguistics: ACL 2024 , pp. 10036–10056, 2024. doi: 10.18653/v1/2024.findings-acl.597. Wilcoxon, F. Individual comparisons by ranking methods. 
+
+Biometrics Bulletin , 1(6):80–83, 1945. Yang, E.-W. and Velazquez-Villarreal, E. Ai-hope: An ai-driven conversational agent for enhanced clinical and genomic data integration in precision medicine research. 
+
+Bioinformatics , 41(7):btaf359, 2025. Yao, S., Zhao, J., Yu, D., Du, N., Shafran, I., Narasimhan, K., and Cao, Y. React: Synergizing reasoning and acting in language models. In Proceedings of the International Conference on Learning Representations (ICLR) , 2023. Zhang, T., Kishore, V., Wu, F., Weinberger, K. Q., and Artzi, Y. Bertscore: Evaluating text generation with bert. arXiv preprint arXiv:1904.09675 , 2019. 12 AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+# A. Algorithm AgenticSum 
+
+This appendix provides a formal algorithmic specification of AgenticSum , detailing the supervised agentic inference procedure used for clinical summarization. The algorithm explicitly delineates the roles of each agent and the control flow governing iterative refinement, complementing the high-level framework description in Section 3. 
+
+Algorithm 1 AgenticSum: Supervised Agentic Inference for Faithful Clinical Summarization 
+
+1: Input: Clinical document D, model parameters θ, retention ratio r, grounding threshold τ , tolerance ϵ, max steps Tmax 
+
+2: Output: Final grounded summary S∗
+
+3: FocusAgent: Input Compression 
+
+4: Partition D into sentences {u1, . . . , u m}
+
+5: Compute salience scores {βj }
+
+6: Select top-k = ⌊r · m⌋ sentences 7: Dreduced ← selected sentences 8: DraftAgent: Initial Generation 
+
+9: S(0) ← Generate (Dreduced ; θ)
+
+10: Compute span set {z1, . . . , z M } from S(0) 
+
+11: for each span zj do 
+
+12: Compute grounding score aj
+
+13: Compute hallucination label hj
+
+14: end for 
+
+15: ¯A(0) ← 1
+
+> M
+
+PMj=1 aj
+
+16: H(0) ← { zj | hj = 1 or aj < τ }
+
+17: for t = 0 to Tmax − 1 do 
+
+18: if H(t) = ∅ then 
+
+19: return S(t)
+
+20: end if 
+
+21: FixAgent: Targeted Revision 
+
+22: S(t+1) ← Fix (Dreduced , S (t), H(t); θ)
+
+23: Segment S(t+1) into spans {z1, . . . , z M }
+
+24: for each span zj do 
+
+25: Compute aj , h j
+
+26: end for 
+
+27: ¯A(t+1) ← 1
+
+> M
+
+PMj=1 aj
+
+28: H(t+1) ← { zj | hj = 1 or aj < τ }
+
+29: if | ¯A(t+1) − ¯A(t)| < ϵ then 
+
+30: return S(t+1) 
+
+31: end if 
+
+32: if H(t+1) \ H (t) = ∅ then 
+
+33: return S(t+1) 
+
+34: end if 
+
+35: end for 
+
+36: return S(Tmax )
+
+Algorithm 1 summarizes the end-to-end inference process. Given a clinical document D, the FocusAgent first performs deterministic sentence-level input compression using attention-based salience estimates, producing a reduced context 
+
+Dreduced . The DraftAgent then generates an initial summary S(0) conditioned solely on the compressed input. Subsequent refinement proceeds through a supervised loop. At each iteration, the HallucinationDetectorAgent evaluates the current summary by combining attention-to-underlying-reference alignment (AURA) scores with entailment-based verification to identify unsupported spans. The FixAgent selectively revises only the spans flagged as hallucinated, preserving supported content and avoiding full regeneration. Refinement is governed by the ClinicalSupervisorAgent , which monitors convergence via changes in aggregate grounding statistics and enforces a bounded refinement budget. This modular formulation makes explicit how generation, verification, correction, and supervisory control are decoupled during inference, enabling targeted hallucination mitigation while maintaining fluency and clinical relevance. 13 AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+# B. Hallucination Annotation Prompt 
+
+To identify hallucinated spans in model-generated clinical summaries, we employ a structured evaluation prompt grounded in strict textual entailment. The task requires a language model to verify whether each statement in a generated summary is verifiably supported by the source document meaning the information must be explicitly stated and unambiguous in the document text. This prompt is adapted from the Lookback Lens (Chuang et al., 2024) framework, but incorporates additional guardrails specific to clinical applications. Crucially, it includes explicit instructions to prevent confirmation bias (Adiba et al., 2025), discourage plausible sounding inferences, and eliminate reliance on domain knowledge not grounded in the text. PROMPT TEMPLATE 
+
+You will be provided with: • A clinical source document • A machine-generated summary Your task is to assess whether the summary is strictly entailed by the source document. 
+
+Definition of Entailment: A statement is entailed only if it is explicitly and unambiguously stated in the document. Any statement that requires inference, clinical reasoning, or prior medical knowledge should be treated as Not Entailed .
+
+Key Instructions: 
+
+• DO NOT infer or assume missing information. • DO NOT use clinical knowledge, reasoning, or common sense. • DO NOT validate based on plausibility, typicality, or tone. • DO NOT guess what the author likely meant. You must treat the document as the only source of ground truth .
+
+Document: {document }
+
+Proposed Summary: {summary }
+
+Output Format: 
+
+• Entailment Label: Entailed or Not Entailed 
+
+• Explanation: Justify your label with direct references to the document. • Problematic Spans (if any): List the summary phrases not directly supported by the source. 
+
+Example Output: Entailment Label: Not Entailed 
+
+Explanation: The summary states ”Patient has a history of diabetes,” but the document does not mention diabetes explicitly. No evidence is found. 
+
+Problematic Spans: [“history of diabetes”] This formal structure ensures consistent and reproducible hallucination annotations. In downstream experiments, we use this prompt to elicit model judgments on the factual alignment between document-summary pairs. Results are treated as a proxy for factual faithfulness under zero-shot conditions. 
+
+# C. LLM-as-a-Judge Evaluation Prompt 
+
+The following instruction prompt is used to evaluate generated clinical summaries against their corresponding source documents using an instruction-tuned large language model acting in an evaluative role. The model is instructed to assess summaries strictly with respect to the provided source document, without relying on external medical knowledge or plausible inference. 14 AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization Task: Evaluate the generated medical summary against the source clinical document. Assign an integer score from 1 to 5 for each criterion defined below. 
+
+Source Document: 
+
+{SOURCE_DOCUMENT} 
+
+Generated Summary: 
+
+{GENERATED_SUMMARY} 
+
+Evaluation Criteria (1–5 scale): 
+
+• Hallucination: Degree of unsupported or fabricated content (1 = no hallucination; 5 = major fabrications) • Factual Consistency: Faithfulness of statements to the source document (1 = highly inaccurate; 5 = fully accurate) • Completeness: Coverage of core clinical information (1 = key information missing; 5 = fully comprehensive) • Coherence: Fluency and logical organization of the summary (1 = poorly written; 5 = highly coherent) 
+
+Output Format: Return the scores using the following strict key–value format, with no additional text: 
+
+Hallucination: XFactual: XComplete: XCoherent: X
+
+Evaluation uses a low decoding temperature (0.3) and a maximum output length of 150 tokens; all scores are validated to lie within the 1–5 range, yielding a reproducible and fully automated large-scale assessment protocol. 
+
+# D. Ablation 
+
+To assess the contribution of individual components in the proposed framework, we conduct a module-wise ablation study that incrementally adds input filtering (FOCUS), post-generation correction (FixAgent), and supervisory control to a vanilla LLM baseline. This analysis isolates the effect of each component on lexical overlap and semantic similarity metrics, and clarifies how the full AgenticSum design yields cumulative performance gains across datasets. 
+
+Table 4. Ablation study on MIMIC-IV and SOAP summaries. Module-wise contributions of FOCUS and FixAgent over the vanilla LLM.                                                                                                                 
+
+> Model MIMIC-IV SOAP Summary BLEU-1 BLEU-2 BERT F1 ROUGE-L BLEU-1 BLEU-2 BERT F1 ROUGE-L (↑)(↑)(↑)(↑)(↑)(↑)(↑)(↑)
+> Vanilla LLM 15 .54 ±6.55 7.17 ±3.22 81 .90 ±1.60 10 .65 ±3.78 13 .12 ±9.35 8.10 ±6.17 83 .99 ±2.34 12 .53 ±5.31
+> DraftAgent (FOCUS+LLM) 14 .01 ±8.01 5.61 ±3.92 80 .92 ±1.70 11 .30 ±3.08 11 .55 ±5.50 6.09 ±4.20 83 .60 ±2.20 10 .70 ±4.50
+> FixAgent (W/out Supervisor) 16 .78 ±5.80 7.85 ±2.90 82 .45 ±1.50 11 .42 ±3.20 13 .94 ±7.20 8.92 ±5.40 84 .67 ±2.10 11 .21 ±4.80
+> AgenticSum (Final, w/ Clinical Supervisor) 18 .37 ±5.80 12 .61 ±2.90 84 .50 ±3.50 21 .62 ±3.20 23 .94 ±7.20 15 .80 ±5.40 86 .32 ±2.10 24 .99 ±4.80
+
+Table 4 presents module-wise ablation results on MIMIC-IV and SOAP summaries using Llama-3.2-3B as the baseline. On MIMIC-IV, incorporating FOCUS yields mixed lexical effects, with BLEU-2 decreasing from 7.17 to 5.61 and BLEU-1 from 15 .54 to 14 .01 , while ROUGE-L improves modestly ( 10 .65 → 11 .30 ). Semantic similarity remains largely stable (BERT F1: 81 .90 → 80 .92 ). Adding FixAgent without supervisory control produces consistent gains across all MIMIC-IV metrics, improving BLEU-2 ( 5.61 → 7.85 ), BLEU-1 ( 14 .01 → 16 .78 ), and BERT F1 ( 80 .92 → 82 .45 ). The full 
+
+AgenticSum pipeline with Clinical Supervisor achieves the strongest performance, yielding the highest scores across lexical and semantic measures on MIMIC-IV. A similar cumulative trend is observed on the SOAP Summary dataset. While FOCUS alone provides moderate performance, FixAgent improves both lexical overlap and semantic alignment, and the complete AgenticSum system attains the best overall SOAP results. Overall, the ablation results indicate that input filtering alone is insufficient for reliable performance gains, whereas post-generation correction and supervisory refinement are critical for achieving robust improvements in both lexical fidelity and semantic alignment. 15 AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+# E. Hallucination Detection by H ALLUCINATION DETECTOR AGENT 
+
+We present a representative hallucination annotation example generated by our H ALLUCINATION DETECTOR AGENT module. The summary is evaluated using our factuality prompt protocol (see Appendix B), inspired by Lookback Lens (Chuang et al., 2024), which flags spans not explicitly supported by the source document. 
+
+Source Document (Excerpt) 
+
+Patient was in good health until 10 days ago, when he began experiencing gradually worsening headaches. Head CT revealed an intracranial mass lesion. An enhancing focus in the left parapharyngeal region likely represents an abnormally enlarged lymph node, though it is not fully visualized. The imaging raises the possibility of a benign neoplasm (question neurogenic tumor), and pathology is pending. Discharge medications include atenolol, phenytoin, docusate sodium, and dexamethasone. 
+
+Generated Summary 
+
+The patient is a 10-year-old male who was experiencing worsening headaches. A CT scan revealed an intracra-nial mass lesion, which was found to be an abnormally enlarged lymph node representing metastatic involvement . The 
+
+pathology pending at the time of discharge is a benign neurogenic tumor . The patient was prescribed atenolol, phenytoin, do-cusate sodium, and dexamethasone. 
+
+HALLUCINATION DETECTOR AGENT Analysis Factuality Verdict: UNSUPPORTED Explanation: The patient’s age and gender are unspecified. The lymph node is described as potentially benign, not definitively metastatic. Pathology is still pending at discharge. The hallucinated spans introduce unwarranted specificity and certainty. 
+
+Detected Hallucinations: 
+
+- "10-year-old male" — Demographics not provided - "representing metastatic involvement" — No mention of metastasis - "pathology... benign neurogenic tumor" — Pathology result is pending 
+
+Error Types: Demographic fabrication, diagnostic certainty inflation, temporal misalignment 
+
+Table 5. Example of hallucination detection using H ALLUCINATION DETECTOR AGENT with span-level grounding analysis. 
+
+# F. Human Evaluation and Statistical Analysis Details 
+
+This appendix provides additional details regarding the human evaluation protocol and statistical analyses summarized in Table 3. Each participant evaluated three clinical note scenarios spanning psychiatric, cardiopulmonary, and oncology domains. For each scenario, participants were presented with two summaries: one generated by a vanilla large language model (LLM) and one produced by AgenticSum. Presentation order was randomized to mitigate ordering effects. Participants were asked to (i) identify which summary contained more hallucinated content (forced-choice preference task), and (ii) independently rate the hallucination severity of each summary on a five-point ordinal scale, where lower values indicate fewer hallucinations. 
+
+Hallucination Severity and Paired Testing. Hallucination severity was measured on an ordinal scale ranging from 1 (no hallucinations; all content supported by the original note) to 5 (severe hallucinations; extensive fabricated or contradictory information). Let H(V ) 
+
+> i
+
+and H(A) 
+
+> i
+
+denote the severity ratings assigned by participant i to the vanilla LLM summary and the AgenticSum summary, respectively. Because ratings are ordinal and paired at the participant level, differences in hallucination severity were assessed using the paired Wilcoxon signed-rank test (Wilcoxon, 1945). Specifically, we evaluated whether the median of the paired differences 
+
+∆i = H(V ) 
+
+> i
+
+− H(A)
+
+> i
+
+was significantly greater than zero, indicating reduced hallucination severity for AgenticSum. Statistical significance was evaluated at α = 0 .05 .16 AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+Effect Size and Preference Dominance Testing. In addition to significance testing, we report rank-biserial correlation (rrb ) as an effect size measure appropriate for paired ordinal data (Cliff, 1993), defined as 
+
+rrb = n+ − n−
+
+n+ + n−
+
+,
+
+where n+ and n− denote the number of positive and negative paired differences, respectively. Observed effect sizes across all clinical domains were large ( rrb ∈ [0 .80 , 0.91] ). To assess annotator preference consistency, we conducted preference dominance tests using a binomial test. Correct-guess accuracy reflects the proportion of participants who identified the same summary as more hallucinated within a given clinical domain. Dominance tests evaluated whether the observed preference rate for AgenticSum exceeded chance under a null hypothesis of random selection (probability p = 0 .5). Dominance p-values reported in Table 3 indicate that annotator preferences for AgenticSum were significantly above chance across all domains. 
+
+# G. Practical Implications for Clinical Documentation Workflows 
+
+AgenticSum aligns with standard clinical documentation workflows by introducing an automated verification and targeted correction stage prior to clinician sign-off. Operating entirely at inference time with a frozen language model, the framework selectively revises weakly supported spans without modifying EHR systems or requiring task-specific fine-tuning. We do not claim to replace clinician oversight; rather, AgenticSum provides structured support for identifying and mitigating unsupported content before human review. 
+
+# H. Illustrative Example: Sentence-Level Filtering via F OCUS AGENT 
+
+We present a representative example demonstrating how F OCUS AGENT performs sentence-level filtering to produce a concise and clinically coherent subset of the input document. This example is drawn from the MIMIC-IV dataset and illustrates the type of input compression used to guide downstream summarization. The compressed representation is passed to D RAFT AGENT for initial summary generation. 
+
+# I. Illustrative Example: Generation and Correction via A GENTIC SUM 
+
+We demonstrate the full A GENTIC SUM pipeline using a real-world clinical note. This example illustrates how hallucinations introduced during draft generation by D RAFT AGENT are detected and corrected by F IX AGENT . While the note is concise for presentation purposes, the system generalizes to longer, multi-page clinical documents. 
+
+# J. Additional Analysis of Ablation Results 
+
+This appendix provides additional context for the ablation results reported in Table 4. In particular, we clarify the role of the FOCUS module and its interaction with downstream correction components. As shown in Table 4, applying FOCUS alone does not uniformly improve all lexical or semantic metrics relative to the baseline model. This behavior reflects the trade-off inherent in sentence-level context filtering: while FOCUS reduces redundant or weakly relevant input, it may also remove surface-level cues that contribute to n-gram overlap metrics such as BLEU. As a result, FOCUS should not be interpreted as a standalone optimization step, but rather as a preparatory mechanism that constrains generation to a more focused context. Subsequent ablation stages demonstrate that post-generation correction plays a critical role in recovering and improving summary quality. The FixAgent consistently improves both lexical alignment and semantic similarity across datasets, indicating that targeted revision is necessary to address unsupported or incomplete content introduced during initial generation. The inclusion of supervisory refinement further amplifies these gains, yielding the strongest and most stable performance across all evaluated metrics. Together, these results suggest that hallucination mitigation in clinical summarization is most effective when context selection, generation, and correction are jointly considered, rather than optimized in isolation. 17 AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization Source Document (Clinical Note) 
+
+<SEX> F
+
+<SERVICE> SURGERY 
+
+<ALLERGIES> Iodine / contrast dye allergy. The patient reports persistent abdominal pain that has worsened over the past week. She states that despite taking her medications, the pain has not resolved. She denies fever, chills, cough, or shortness of breath. She has experienced episodes of vomiting but denies diarrhea. She has a history of GERD and has been taking omeprazole regularly. Her labs were reviewed and remain stable. She is alert, oriented, and ambulatory without assistance. 
+
+FocusAgent Output (Compressed Input) 
+
+[...] 
+
+The patient reports persistent abdominal pain that has worsened over the past week. She states that despite taking her medications, the pain has not resolved. She denies fever, chills, cough, or shortness of breath. She has experienced episodes of vomiting but denies diarrhea. She has a history of GERD and has been taking omeprazole regularly. Her labs were reviewed and remain stable. 
+
+DraftAgent Summary (Generated from Compressed Input) 
+
+The patient reports worsening abdominal pain despite medication use. She denies fever, chills, cough, or shortness of breath. She has experienced episodes of vomiting but denies diarrhea. Her history is notable for GERD, and she continues to take omeprazole. Laboratory results were reviewed and found to be stable. She remains alert, oriented, and ambulatory. 
+
+Table 6. Example of sentence-level input filtering performed by F OCUS AGENT , illustrating how clinically informative sentences are retained while low-information content is omitted. 
+
+18 AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization Source Document (Clinical Note) 
+
+Male patient with major depressive disorder presents with chronic, intractable nausea that began in childhood and is associated with his depression. Last night, he experienced the worst nausea of his life, leading to suicidal ideation with a plan for carbon monoxide poisoning. He is currently undergoing ECT treatment (2 sessions completed). The patient reports anxiety exacerbates his nausea, and he describes himself as a ”worrier.” He no longer has active suicidal thoughts but worries about future episodes. Physical exam shows psychomotor retardation, depressed affect, slow speech with pauses, and fine tremor. Lab results are within normal limits. He is alert, oriented, and ambulatory. Current medications include: omeprazole, ranitidine, phenelzine, clonazepam, tamsulosin, and aripiprazole. 
+
+DraftAgent Summary (Initial) 
+
+The patient is a male who has been experiencing intractable nausea associated with depressive symptoms. He has a history of car accidents and has been prescribed ECT treatments. The patient reports that he is 
+
+upset about his inability to throw up and is experiencing anxiety. He has a history of depression and anxiety, and has been taking medication for both conditions. The patient’s plan is to try the first round of ECT, and he is being treated by Dr. Stern .The patient’s physical examination reveals normal findings . The patient’s speech is slow and with many pauses, and his behavior is cooperative with psychomotor retardation. The patient’s thought process is linear and goal-directed. The patient is currently taking several medications, including omeprazole, ranitidine, phenelzine, clonazepam, tamsulosin, and aripiprazole. The patient is alert and interactive, and is ambulatory and independent. 
+
+FixAgent Summary (Corrected) 
+
+The patient is a male with major depressive disorder and persistent nausea. He has undergone two ECT sessions. The patient reports distress due to the intractable nausea, which is worsened by anxiety. He is undergoing ECT under medical supervision. The physical exam shows psychomotor retardation, slow speech, and cooperative behavior. The patient’s thought process is linear and goal-directed. He is currently taking omeprazole, ranitidine, phenelzine, clonazepam, tamsulosin, and aripiprazole. He is alert, interactive, and ambulatory. 
+
+FixAgent Analysis Detected Hallucinations: 4 total 
+
+Corrections: 
+
+- "history of car accidents" — REMOVED : Not supported by source - "inability to throw up" — REFINED : Rephrased as ”inability to alleviate nausea” - "being treated by Dr. Stern" — REMOVED : No provider name in source - "normal findings" — CORRECTED : Replaced with actual clinical observations 
+
+Improvement Metrics: Hallucination score: 4.2 → 1.8; Factual consistency: 2.1 → 4.3 
+
+Table 7. End-to-end example of hallucination detection and correction using the A GENTIC SUM pipeline. 
+
+# K. Joint Commission Standard IM.6.10 (EP 7) 
+
+Joint Commission Standard IM.6.10 (Element of Performance 7) concerns the completion and authentication of discharge summaries in accredited hospital settings. It requires that discharge summaries be completed and authenticated by the responsible practitioner within a time frame defined by institutional policy, supporting accountability, continuity of care, and patient safety during transitions of care. The standard is primarily applicable to inpatient discharge documentation and does not prescribe uniform requirements for other note types, which are typically governed by local institutional and payer policies. IM.6.10 (EP 7) specifies expectations for documentation workflows rather than prescribing how documentation content is produced. In practice, discharge summaries may be drafted by trainees or non-physician practitioners but are reviewed and authenticated by the responsible clinician prior to finalization. The standard therefore emphasizes supervisory sign-off and responsibility rather than automated verification or correctness guarantees. In this work, IM.6.10 (EP 7) is cited as a motivating example of supervisory authorization in discharge documentation workflows. Our method adopts the workflow analogue through an explicit supervisory release gate that determines when iterative refinement terminates, without treating the standard as an algorithmic specification or as a guarantee of content 19 AgenticSum: Agentic Inference-Time Framework for Faithful Clinical Summarization 
+
+correctness. The ClinicalSupervisorAgent therefore governs termination and release of the automated draft, rather than regulatory compliance or clinical validation. 
+
+# L. Use Case: Clinical Handoff Documentation 
+
+Clinical handoffs (handover) are structured transitions in which patient information and clinical responsibility are transferred between providers during shift changes, unit transfers, or discharge. These transitions often require rapid synthesis of complex EHR data under time pressure, which motivates summarization systems that prioritize factual consistency and traceability to the source record. We include clinical handoff documentation as a motivating use case for AgenticSum because it emphasizes two requirements that are central to our framework. First, the summary must remain faithful to documented evidence, as unsupported statements can plausibly mislead downstream decision-making during care transitions. Second, the summarization process benefits from explicit control signals that indicate when content is weakly supported and when refinement should stop. AgenticSum addresses these requirements through a staged inference-time procedure that separates drafting from verification and targeted repair. Given an input document D, the system first performs input compression to retain handoff-relevant context, generates an initial draft summary, evaluates the draft using the grounding signal defined in the main method (AURA) to identify weakly supported content, and then applies targeted revision restricted to the flagged spans. A supervisory release gate terminates refinement when stabilization criteria indicate diminishing returns or when a fixed iteration budget is reached, consistent with the termination rule described in the Methodology. In this setting, the output of the framework can be interpreted not only as a finalized handoff summary but also as an auditable refinement trace consisting of flagged spans and their corresponding revisions. This use case therefore highlights how decomposing summarization into explicit generation, verification, and targeted correction stages can support faithful clinical summarization in high-stakes transitions of care. 20

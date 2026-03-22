@@ -1,0 +1,478 @@
+Title: Momentum Memory for Knowledge Distillation in Computational Pathology
+
+URL Source: https://arxiv.org/pdf/2602.21395v2
+
+Published Time: Thu, 05 Mar 2026 02:10:27 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# Momentum Memory for Knowledge Distillation in Computational Pathology 
+
+## Yongxin Guo 1*, Hao Lu 1, Onur C. Koyun 1, Zhengjie Zhu 1, Muhammet F. Demir 1, Metin N. Gurcan 11Wake Forest University School of Medicine, Winston-Salem, NC, USA 
+
+{Hao.Lu, Onur.Koyun, muhammet.demir }@advocatehealth.org 
+
+{Yongxin.Guo, Zhengjie.Zhu, Metin.Gurcan }@wfusm.edu 
+
+## Abstract 
+
+Multimodal learning that integrates genomics and histopathology has shown strong potential in cancer diagnosis, yet its clinical translation is hindered by the limited availability of paired histology–genomics data. Knowledge distillation (KD) offers a practical solution by transferring genomic supervision into histopathology models, enabling accurate inference using histology alone. However, existing KD methods rely on batch-local alignment, which introduces instability due to limited within-batch comparisons and ultimately degrades per-formance. To address these limitations, we propose Momentum Memory Knowledge Distillation (MoMKD), a cross-modal distillation framework driven by a momentum-updated memory. This memory aggregates genomic and histopathology information across batches, effectively enlarging the supervisory context available to each mini-batch. Furthermore, we decouple the gradients of the genomics and histology branches, preventing genomic signals from dominating histology feature learning during training and eliminating the modality-gap issue at infer-ence time. Extensive experiments on the TCGA-BRCA benchmark (HER2, PR, and ODX classification tasks) and an independent in-house testing dataset demonstrate that MoMKD consistently outperforms state-of-the-art MIL and multimodal KD baselines, delivering strong performance and generalization under histology-only inference. Overall, MoMKD establishes a robust and generalizable knowledge distillation paradigm for computational pathology. 
+
+## 1. Introduction 
+
+Deep multiple instance learning (MIL) models trained solely on histopathology slides have achieved strong per-formance [15, 16, 27, 31, 43], yet their predictive ceiling remains constrained by the limited information in the im-   
+
+> *Corresponding author: Yongxin.Guo@wfusm.edu. Code: https://github.com/CAIR-LAB-WFUSM/MoMKD Teacher Model
+> Student Model
+> Knowledge
+> Distill
+> Transfer
+> Knowledge
+> Correlation Logits
+> Sub -task
+> (a). (b).
+> (c).
+> Inference
+> Momentum Update
+> Genomics info
+> Logits
+> Morphology info
+> Inference
+> Feature Space
+> …
+> Momentum Memory
+
+Figure 1. a. the classical teacher-student knowledge distillation (KD) method. b. the correlation-based KD method. c. the pro-posed momentum memory KD method. Compared with a and b, the proposed method uses momentum memory for knowledge dis-tillation to solve the batch-local problem. 
+
+age representation. Many clinically important biomarkers, for example, molecular subtypes, gene-expression signa-tures, or recurrence risk scores, are defined not by visual appearance but by underlying molecular signals [38]. High-throughput transcriptomic assays can capture this informa-tion directly [3, 26]. Multimodal learning that integrates genomics with histopathology has shown improved perfor-mance by combining these complementary sources of in-formation [9, 10, 37]. However, genomic data are expensive and slow, especially in resource-limited settings. To circum-vent this limitation, recent studies have explored knowledge distillation (KD) to inject genomic information into histol-ogy models during training, enabling histology-only infer-ence while retaining molecular predictive power. Existing KD frameworks transfer supervision from a multimodal teacher (e.g., histology with omics) to a uni-modal student (histology-only) [7, 19, 25, 36]. However, most existing frameworks in pathology domain operational-
+
+> arXiv:2602.21395v2 [cs.CV] 4 Mar 2026
+
+ize KD as batch-local, continuous feature matching : ei-ther forcing heterogeneous modalities map into the same latent space [21, 25, 36] (Fig. 1a) or regressing auxiliary cross-modal targets and treating them as distilled knowl-edge [33, 44] (Fig. 1b). Such intra-batch supervision is in-herently fragile. Its supervision signal is transient, which defined only by the current mini-batch, and offers limited negative sample diversity. This forces an unstable, direct alignment between asymmetric modalities (e.g., genomics data and pathology image). This fragility is further ampli-fied in the pathological MIL setting. The information redun-dancy of gigapixel images, where noisy background regions dominate the mini-batch, simply overwhelms the distilla-tion signal, leading to brittle generalization under domain shift. We address these limitations by reframing cross-modal KD into a memory-based alignment framework, where fea-tures are matched to the consistent memory instead of re-lying on unstable batch-level regression. We propose Mo-mentum Memory for Knowledge Distillation (MoMKD), which maintains a slowly evolving, label-conditioned mo-mentum memory. Similarly to dynamic dictionaries in con-trastive learning [18], the memory aggregates genomics-histopathology information across the entire training tra-jectory. It simultaneously serves as an information bottle-neck that compresses redundant histology features and as an distillation mediator that injects genomic semantics into histology representations (Fig. 1c). MoMKD’s operates through two key mechanisms. First, a soft angle-based loss aligns both modalities to the shared memory space, enlarg-ing the supervisory context across each mini-batch. Second, a gradient-decoupled update strategy isolates the genomic and histology branches, preventing genomic gradients from overwhelming histology features during training and elimi-nating the modality gap in the uni-modal inference stage. We validate MoMKD across three classification tasks (HER2, PR, and Oncotype DX) on the TCGA-BRCA benchmark and an independent institutional cohort. MoMKD consistently outperforms state-of-the-art MIL and multimodal KD baselines, demonstrating superior cross-domain generalization. Overall, MoMKD introduces a new cross-modal distillation paradigm that replaces high-variance batch-level alignment with a stable, compact mo-mentum memory, enabling robust multimodal knowledge distillation. In summary, our contributions are threefold: 1. Momentum memory for cross-modal distillation: 
+
+A label-conditioned, dynamically evolving dictionary that accumulates genomics-histopathology statistics, re-placing stochastic batch-local matching with stable dictionary-based alignment. 2. Gradient-decoupled optimization: A decoupling strat-egy that isolates genomics and histology gradients, pre-venting modality-gap issues between multimodal train-ing and unimodal inference. 3. Extensive validation and analysis: Demonstrating strong performance and generalization across datasets, with visualizations showing that the learned memory captures meaningful biological structures. 
+
+## 2. Related Works 
+
+2.1. Application of MIL in WSIs 
+
+Multiple Instance Learning (MIL) is the prevailing paradigm in computational pathology: a WSI is treated as a bag of instances with slide-level supervision, enabling weakly supervised prediction. Early and influential meth-ods like ABMIL [20] introduced attention mechanisms to learn the importance of each instance for the slide-level prediction. Subsequent work such as CLAM [24], improv-ing the attention mechanism for better interpretability, and transformer-based architectures leveraging self-attention to model long-range dependencies between patches [4, 29]. To better capture the tumor microenvironment, recent approaches have shifted towards graph-based MIL [2, 23]. This has led to improved performance on tasks that rely on contextual information. However, a fundamental limitation persists across all WSI-only frameworks: their performance is bounded by the morphological information present in the H&E stain. For tasks inherently defined by molecular state (e.g ., gene expression-based risk scores), the visual signal is often insufficient, creating a performance ceiling that moti-vates integrating privileged molecular data. 
+
+2.2. Multi-modal Knowledge Distillation for WSI analysis 
+
+To break the performance ceiling of WSI-only models, the Knowledge Distillation (KD) which leverages paired histo-genomic data during training while keeps inference WSI-only has emerged as a pragmatic solution [14, 42]. In the domain of pathology image analysis, teacher-student method is one of the most popular streams [5, 30, 32]. For example, Xing et al. [36] proposed a gradient-based teacher-student framework for the tumor grading task. Com-pared with this two-stage KD method, Zhang et al. [40] proposed an online learning paradigm based on a multi-teacher framework for biomarker prediction. Additionally, G-HANet [33] reconstructed functional genomic informa-tion from WSI via the cross-modal learning and conducted distillation for survival analysis. Despite progress, batch-local feature regression lim-its cross-modal KD: supervision hinges on mini-batch id-iosyncrasies, limited-class samples are confined in-batch, and heterogeneous geometries are forced to match, which yields brittle generalization under shift. This exact chal-lenge was a critical hurdle in self-supervised representation Gene expression 
+
+Whole slide image 
+
+…
+
+> Projector
+
+O-Normalizer 
+
+W-Normalizer 
+
+Cross -modal 
+
+Alignment 
+
+WSI 
+
+Encoder 
+
+Omics 
+
+Encoder 
+
+Omics 
+
+Decoder 
+
+𝐹 𝑁 −𝑜𝑚𝑖𝑐𝑠 
+
+𝐹 𝑤𝑠𝑖 
+
+Classifier  𝑃𝑟𝑒𝑑 
+
+𝐹 𝑁 −𝑤𝑠𝑖 
+
+Alignment Embedding Space 
+
+…
+
+> O-Normalizer
+> W-Normalizer
+
+…
+
+𝑳 𝒂𝒍𝒊𝒈𝒏  𝑳 𝒂𝒍𝒊𝒈𝒏 
+
+b). Cross -modal Alignment 
+
+a). M ultimodal knowledge distillation 
+
+c). Inference 
+
+𝐹 𝑃 −𝑤𝑠𝑖  𝐹 𝐶 −𝑤𝑠𝑖 
+
+WSI 
+
+Encoder 
+
+Aggregation 
+
+Gradient Stop 
+
+×
+
+> Similarity Matrix
+
+× Classifier 
+
+> Pos
+> Neg
+
+𝑃𝑟𝑒𝑑 
+
+…
+
+…
+
+𝑳 𝒎𝒔𝒆 
+
+Memory 
+
+𝑳 𝒄𝒆 
+
+𝑳 𝒎𝒆𝒎 
+
+𝐹 𝑁 −𝑜𝑚𝑖𝑐𝑠 
+
+𝐹 𝑁 −𝑤𝑠𝑖 
+
+…
+
+Interpretation 
+
+Projector 
+
+Aggregation 
+
+> G-Encoder
+
+G-Encoder 
+
+…
+
+> Positive
+> memory
+> Negative
+> memory
+
+𝐹 𝑤𝑠𝑖 
+
+𝐹 𝑤𝑠𝑖 𝐹 𝑃 −𝑤𝑠𝑖 Figure 2. The overall framework of the proposed momentum memory knowledge distillation framework. a) presents the multi-modal KD training process; b) indicates the proposed cross-modal alignment. Here we assume the input is a positive case so that the alignment loss is aiming to push it closer to the positive memory set (blue triangle) and pull it away to the negative memory set (yellow star); c) presents the uni-modal inference stage, and the visual interpretation on the memory. 
+
+learning. The field’s evolution provides a clear blueprint: SimCLR demonstrated the need for massive batches [12], while memory banks [35] and dynamic dictionaries, such as MoCo [18] and lots of variations [17, 41] showed that a large and consistent dictionary is the key to stable learn-ing and robust transferability. Inspired by this, we introduce MoMKD, which adapts the memory look-up concept to the cross-modal KD challenge. The momentum memory acts as a dynamic, global dictionary, accumulating genomics-histopathology statistics over the entire training trajectory which allows MoMKD to align modalities via a stable, shared semantic space, rather than through direct and noisy feature matching. 
+
+## 3. Methodology 
+
+3.1. Overview 
+
+Computational pathology faces an intrinsic asymmetry in cross-modal distillation: global transcriptomic embeddings versus local histopathology representations. Direct and batch-local feature alignment magnifies modality noise and leads to unstable optimization. To overcome this, we reformulate cross-modal align-ment by learning a momentum memory as the distilla-tion mediator rather than forcing direct feature matching. Specifically, both modalities interact through a compact and information-rich memory which capturing canonical ge-nomics–histopathology joint concepts (Fig. 2). In the fol-lowing section, we will introduce more details of the pro-posed method. 
+
+3.2. Dual-Branch Encoding 
+
+MoMKD employs a graph-based WSI encoder to model the tumor microenvironment [8, 23], integrated with a fully connected omics encoder. Both modalities are projected into a shared, L2-normalized latent space for cross-modal alignment while preserving modality-specific structure. Graph-based WSI encoder. For a given WSI xi, we use a frozen encoder (e.g., UNI v2 [11]) to obtain patch embeddings. Then, each WSI is represented as a spa-tial graph G = ( V, E ), where nodes V = {v1, . . . , v I }
+
+correspond to image patches and edges E connect each node to its k-nearest neighbors ( k=8 ) based on centroid distance. A two-layer GATv2 (Refered to the G-Encoder in Fig. 2a) [6] encodes contextualized patch embeddings 
+
+Fwsi = fwsi (xi) ∈ RI×D (D=256 ). The projected fea-tures FP-wsi = Wproj · Fwsi ∈ RI×D are compared with the memory C to produce similarity scores. Aggregating these patch-level similarities yields a slide-level representa-tion FC-wsi . For the cross-modal alignment, FC-wsi will be linearly projected onto a spherical space as the WSI repre-sentation: 
+
+FN-wsi = WC-wsi · FC-wsi 
+
+∥WC-wsi · FC-wsi ∥2
+
+∈ RDN (1) where WC-wsi denotes learnable weights, DN =128. 
+
+Omics encoder. A lightweight MLP first projects the omics vector into the same latent space: Fomics =
+
+fomics (omics ) ∈ RD . The Fomics is then transformed and 
+
+L2-normalized: 
+
+FN-omics = Womics · Fomics 
+
+∥Womics · Fomics ∥2
+
+∈ RDN (2) 
+
+3.3. Momentum Knowledge-distillation via Cross-Modal Alignment 
+
+3.3.1. Momentum Memory as Knowledge Mediator 
+
+A fundamental challenge in multi-modal learning is the modality gap. To solve this problem, we introduced a mo-mentum memory. This compact set of class-conditional memory setting: C+ and C− represent positive class and negative class with n memory components ( c+ 
+
+> j
+
+and c− 
+
+> j
+
+,
+
+j = [1 , ..., n ]) serve as the distillation mediator and anchor both modalities to a common decision geometry. Within the training progress, more information from both omics and WSI will be compressed and accumulated to this memory, which represents the global semantic representa-tion rather than a simple instance cache. Consequently, the model aligns heterogeneous features with this highly-compressed, slowly-evolving mediator, rather than chasing a noisy, rapidly-updating intra-batch distribution. 
+
+3.3.2. Indirect Memory-based Distillation 
+
+Our distillation is an indirect process: omics and WSI fea-tures do not teach each other directly. Instead, both modali-ties are forced to align with the shared momentum memory. The overall workflow can be explained as below: Before training, we let the memory have a quick look at the image data: we randomly collect 10000 patches and perform K-means clustering for the initialization. By doing this, the starting epoch can be more stable and meaningful. 
+
+Semantic Anchoring via Omics Alignment. This step injects the visually initialized memory with genomics-grounded semantics. To ensure the omics representation it-self is biologically faithful during training, we introduced a self-supervised reconstruction task to constrain the omics encoder. With a robust omics embedding thus guaranteed, the omics projection FN-omics is pushed to align with its cor-responding memory (e.g., C+) and rather than the other (C−). This process anchors memory to well-defined ge-nomics concepts. For instance, C+ transitions from being merely a cluster of visual patterns to representing a sta-ble archetype of the omics-defined pattern. This two-fold omics alignment objective, maintaining biological stability through reconstruction while learning separability, ensures the memory is accurate and discriminative. 
+
+Knowledge Transfer via WSI Alignment. Simultane-ously, the aggregated WSI projection, FN-wsi , is forced to align with the omics-calibrated geometry. This forces the WSI encoder to learn modality correlations that are defined by the omics. Since the features from both branch have been normalized: ∥FN-wsi ∥2 = ∥FN-omics ∥2 = 1 , the align-ment process can be seen as in a spherical space and the inner product between both modalities with memory, for example, F T
+
+> N-wsi
+
+C+ is equivalent to the cosine of the an-gle between vectors. Based on this, we introduced a soft angle-based loss for the alignment Lalign . Let ϕ(F, C ) ag-gregate similarities over the entire memory for any F ∈{FN-wsi , F N-omics }:
+
+ϕ(F, C ) = 1
+
+τagg 
+
+ln 
+
+> n
+
+X
+
+> j=1
+
+exp( τagg F T cj )
+
+ϕ(F, C ) ∈
+
+
+
+−1 + ln nτagg 
+
+, 1 + ln nτagg 
+
+ (3) with the temperature τagg = 5 , the LogSumExp function here smoothly approximates the max similarity while en-abling the gradient flow within all memory. We then define the memory differential as: 
+
+∆( F ; C+, C −) = ϕ(F, C +) − ϕ(F, C −) ∈ [−2, 2]  (4) For a label y ∈ {0, 1}, the Lalign for any F ∈{FN-wsi , F N-omics } is: 
+
+Lalign (F, y ) = 
+
+(
+
+softplus (β(margin − ∆( F ; C+, C −))) , if y = 1 
+
+softplus (β(margin + ∆( F ; C+, C −))) , if y = 0 
+
+(5) Table 1. Internal comparison on the TCGA-BRCA dataset. The best performance is in bold, and the second-best performance is underlined. 
+
+Methods HER2(%) PR(%) ODX(%) 
+
+AUC ACC F1 AUC ACC F1 AUC ACC F1 ABMIL [20] 72.9 ±3.1 77.1 ±1.8 64.8 ±2.9 84.5 ±2.3 78.8 ±1.6 75.0 ±2.1 79.3 ±2.5 83.8 ±2.6 68.8 ±1.6 DSMIL [22] 71.3 ±4.3 76.2 ±2.8 63.5 ±4.1 81.6 ±2.8 76.4 ±2.0 72.7 ±2.2 78.7 ±2.0 83.9 ±1.9 70.8 ±1.4 TransMIL [29] 69.8 ±2.8 75.6 ±1.9 61.1 ±5.2 85.2 ±1.0 79.0 ±1.2 76.1 ±1.6 77.9 ±3.5 83.5 ±3.7 66.8 ±5.0 DTFDMIL [39] 74.4 ±1.9 76.2 ±1.0 61.7 ±5.4 83.9 ±2.4 79.6 ±3.1 76.3 ±2.9 79.1 ±2.1 82.2 ±3.1 68.9 ±2.0 WIKG [23] 75.5 ±5.0 77.1 ±3.1 53.7 ±4.4 84.9 ±3.0 79.2 ±3.3 76.1 ±4.1 78.3 ±3.7 84.1 ±1.2 71.1 ±2.5 TDC [36] 76.2 ±2.1 76.7 ±3.9 63.3 ±1.1 84.7 ±5.3 73.1 ±2.1 72.3 ±3.1 81.0 ±2.2 81.6 ±3.3 70.9 ±2.4 MKD [40] 77.1 ±2.3 77.2 ±5.3 59.9 ±1.2 85.1 ±1.2 80.1 ±1.1 76.2 ±2.3 80.1 ±1.5 80.0 ±4.2 70.8 ±3.9 G-HANET [33] 76.1 ±5.6 71.2 ±6.8 62.4 ±4.0 85.0 ±2.3 79.1 ±3.1 75.9 ±5.3 80.5 ±1.3 81.5 ±4.2 71.0 ±5.9 
+
+MoMKD 79.6 ±0.7 77.9 ±4.5 67.8 ±3.3 87.9 ±0.9 81.0 ±2.3 78.8 ±1.9 82.3 ±2.3 85.6 ±0.8 74.9 ±1.9 
+
+with β = 20 as an amplifier factor, and margin = 0 .3 as a lower-bound of the angle differential between F and C. By enforcing this minimum tolerance, we avoid the ill posed objective of forcing perfect alignment, which could lead to overfitting. The small-batch-stable function pulls F toward the correct memory while pushing it away from false ones, encoding the class boundary in memory geometry without relying on large contrastive batches. Throughout the train-ing progress, the memory receives information from both modalities and serves as a semantic bottleneck, forcing the WSI encoder to filter out intra-batch noise and retain only the core semantics relevant to the omics modality. 
+
+Memory Evolution via Gradient Decoupling. A core challenge is the fundamental asymmetry between modali-ties: omics data is often a dominant predictor for biomark-ers, while WSI features are high-dimensional and sparse. The direct joint-training approach would allow the power-ful omics gradient to overwhelm the WSI branch. We there-fore decouple branches: there is no direct gradient flow be-tween WSI and omics. Their only interaction is indirect, mediated exclusively by the memory via the alignment loss. Furthermore, we must shield the memory itself from the strong, task-specific gradients of the classification head. Al-lowing the classifier’s loss to backpropagate into the mem-ory would cause memory collapse, as this dominant signal would corrupt the memory being accumulated. In short, the memory evolution is governed by (i) the Lmem which regularizes and maintains orthogonality (introduced in Sec-tion 3.5); (ii) the Lalign keeps the memory shaped by mean-ingful cross-modal alignment; (iii) the reconstruction loss 
+
+Lmse maintain its internal genomics structure. Even after ag-gregating all loss terms, their magnitude remains lower than the dominant signal from the classification head. Through the gradient decoupling, we ensure that the memory under-goes a slowly-evolving, momentum-like update. 
+
+3.4. Memory-guided Uni-modal Inference 
+
+During uni-modal inference, the accumulated memory is re-trieved. Each patch-level projection FP -wsi ,i is evaluated by its differential affinity to memory representations: 
+
+Score i = max  
+
+> j
+
+(F ⊤ 
+
+> P-wsi ,i
+
+c+ 
+
+> j
+
+) − max  
+
+> j
+
+(F ⊤ 
+
+> P-wsi ,i
+
+c− 
+
+> j
+
+), (6) This difference reflects how strongly each patch aligns with the omics-positive visual concept. The resulting attention weights are computed with a temperature τ = 0 .2:
+
+αi = eScore i/τ 
+
+P 
+
+> j
+
+eScore j /τ  (7) so that patches more consistent with omics-defined patterns receive higher attention. The final slide-level representation is obtained as a weighted aggregation: 
+
+FC-wsi =
+
+> I
+
+X
+
+> i=1
+
+αiFwsi ,i ∈ RD , D = 128  (8) which is subsequently passed through the final linear layer 
+
+g(·) to generate the slide-level prediction g(FC-wsi ). Ac-cording to this, the momentum memory acts as a set of global genomics anchors that guide the attention mecha-nism, providing robust predictions. 
+
+3.5. Training Objective 
+
+The final objective combines cross-entropy loss Lce , recon-struction loss Lmse , cross-modal alignment Lalign , and mem-ory regularization Lmem :
+
+Ltotal = λce Lce (g(FC-wsi ), y )+ λmse Lmse (omics, Decoder (Fomics )) + αwsi Lalign (FN-wsi , y ) + αomics Lalign (FN-omics , y )+ λmem Lmem 
+
+(9) Table 2. External validation results for the ODX prediction task on the independent in-house dataset. The best performance is in bold, and the second-best performance is underlined. 
+
+Methods In-house dataset(%) 
+
+AUC ACC F1 ABMIL 75.1 ±1.7 86.1 ±0.2 60.9 ±3.7 DSMIL 74.3 ±2.8 86.1 ±0.7 61.2 ±3.2 TransMIL 71.7 ±2.4 85.0 ±1.7 60.5 ±4.1 DTFDMIL 76.2 ±2.2 86.5 ±1.5 63.5 ±3.9 WIKG 75.9 ±3.5 86.7 ±1.4 58.3 ±5.3 TDC 76.5 ±2.1 86.2 ±3.0 63.5 ±3.2 MKD 76.2 ±2.0 86.1 ±2.9 61.0 ±6.3 G-HANET 76.1 ±1.3 86.4 ±2.2 63.1 ±6.4 
+
+MoMKD 79.4 ±0.8 87.1 ±1.7 68.0 ±3.0 
+
+Here, Lmem is defined as: 
+
+Lmem = 1
+
+I
+
+> I
+
+X
+
+> i=1
+
+∥FN-wsi ,i − sg( ck∗ 
+
+> i
+
+)∥22
+
++
+
+> n
+
+X
+
+> i=1
+> n
+
+X 
+
+> j̸=i
+
+ c⊤ 
+
+> i
+
+cj
+
+∥ci∥2∥cj ∥2
+
+2 (10) where k∗ 
+
+> i
+
+= arg min j ∥FN-wsi ,i − cj ∥2 denotes the index of the memory closest to the i-th patch feature, and ck∗ 
+
+> i
+
+repre-sents the corresponding centroid retrieved from the memory bank. The operator sg( ·) indicates the stop-gradient func-tion, which treats its argument as a constant during back-propagation to prevent the memory bank from being up-dated via direct gradient flow. For the hyperparameters in 
+
+Ltotal , we apply λce = 0 .5, λmse = 0 .01 , αomics = 0 .05 ,
+
+αwsi = 0 .2, and λmem = 0 .1.
+
+## 4. Experiments and Results 
+
+4.1. Experimental Setup 
+
+Datasets. To demonstrate the effectiveness of the pro-posed QKD method, we conduct extensive experiments on three different tasks based on the TCGA-BRCA dataset [34] for HER2, PR, Oncotype-DX (ODX) score classification. This dataset contains a multi-omics resource. For each task, we build the cohort based on labels provided in the official documentation; the overall label distribution: HER2: 141 (positive): 668 (negative), PR: 649 (positive): 351 (neg-ative), ODX: 282 (positive): 715 (negative). To evaluate the generalizability of the method, we collected an in-house dataset which provides 1127 breast cancer pathology slides with an ODX score distribution of 162 (positive): 961 (neg-ative). More information for each dataset can be found in supplementary materials. 
+
+Table 3. Ablation study on the proposed method. All settings are trained on the TCGA-BRCA dataset for the HER2 classification.               
+
+> Model Variant Active Components AUC (%)
+> Baseline WSI solely 73.9 ±3.1 MoMKD ( αomics = 0 )WSI + OMICS Recon + WSI Alignment 75.2 ±2.4 MoMKD ( αwsi = 0 )WSI + OMICS Recon + OMICS Alignment 75.7 ±2.5 MoMKD (w/o Recon) WSI + Joint Alignment (WSI & OMICS) 78.0 ±3.6
+> MoMKD (Proposed) WSI + OMICS Recon + Joint Alignment 79.6 ±0.7
+
+Implementation Details. For the TCGA-BRCA dataset, we performed patient-level five-fold stratified splitting with the ratio of 7:1:2 for each task and reported the average test metrics across five folds. The in-house dataset serves as the external validation set for the ODX task, which is tested by five models trained on the TCGA-BRCA dataset with the average results reported. The UNIv2 [11] is been used as the frozen backbone in this work. More details are available in the supplementary material. For the evalua-tion, we collected five WSI-only MIL approaches (ABMIL [20], DSMIL [22], TransMIL [29], DTFDMIL [39], WIKG [23]) and three multimodal knowledge distillation methods (TDC [36], MKD [40], G-HANet [33]) for the comprehen-sive comparison. 
+
+4.2. Experimental Results 
+
+Internal Comparison. Table 1 shows the results of dif-ferent classification tasks (HER2, PR, and ODX) on the TCGA-BRCA dataset. As shown in the table, our method consistently outperformed alternative models across all three tasks. Compared with the best-performing WSI-only MIL model (WIKG), our method achieved AUC improve-ments of +7 .0% , +3 .5% , and +5 .1% on the HER2, PR, and ODX tasks, respectively. Compared to SOTA mul-timodal method (MKD), our model still yielded notable gains, achieving AUCs of 79 .6% , 87 .9% , and 82 .3% for three tasks. These results highlight the effectiveness of the momentum memory distillation design, which enables more discriminative feature alignment between pathology and transcriptomic modalities, thereby improving perfor-mance across genomics-sensitive prediction tasks. 
+
+External Comparison. To further assess the generaliz-ability of the proposed MoMKD framework, we conducted experiments on the in-house dataset for the ODX prediction task. As summarized in Table 2, our method consistently outperformed all competing approaches. Specifically, our method achieved the highest AUC of 79 .4% , accuracy of 
+
+87 .1% , and F1-score of 68 .0% , surpassing the best multi-modal competitor (TDC, AUC = 76 .5% ) by 3.8% in AUC and 7.1% in F1-score. These results confirmed that the ac-cumulated memory alignment enhances cross-domain sta-bility, supporting our hypothesis that momentum-updated memory provides robust data representation for the distri-Table 4. Fixed memory vs. momentum memory. 
+
+Task AUC (%) Fixed Momentum 
+
+HER2 75.2 ±3.0 79.6 ±0.7 
+
+PR 84.7 ±2.1 87.9 ±0.9 
+
+ODX 81.9 ±2.3 82.3 ±2.3 
+
+In-house dataset 73.5 ±3.7 79.4 ±0.8 
+
+bution shift problem. 
+
+4.3. Ablation Study 
+
+Effects on each component To evaluate the distillation performance within the proposed MoMKD framework, we conducted a series of ablation experiments based on the HER2 task, as summarized in Table 3. The WSI-only base-line model achieved an AUC of 73 .9 ± 3.1% . First, to isolate the memory’s effect as a visual regularizer, we set 
+
+αomics = 0 , forcing the memory to be shaped only by WSI features; this configuration alone improved performance to 
+
+75 .2 ± 2.4% , which indicates the momentum memory can increase the learning capacity of the model. Conversely, in-corporating the omics alignment objective alone ( αwsi = 0 ), in other words, the omics data actively shapes the geom-etry of the memory, but the WSI branch only ”sees” this genetic-calibrated memory for the final aggregation. This resulted in an AUC of 75 .7 ± 2.5% , strongly indicating that the primary performance gain stems from aligning with a stable, genomics-defined memory rather than simple vi-sual consistency. Furthermore, the importance of a stable omics prior was confirmed, as removing the omics self-reconstruction task degraded performance to 78 .0 ± 3.6% .Finally, the complete MoMKD framework, optimizing both WSI and omics alignment objectives jointly, achieved the highest performance of 79 .6±0.7% , demonstrating the syn-ergistic effect of all components. 
+
+Fixed memory bank v.s. momentum memory To iso-late the critical contribution of our dynamic memory up-date, we compared MoMKD against a fixed memory bank baseline. This baseline uses the exact same K-means ini-tialization, but the memory is subsequently frozen through-out training, reducing it to a static dictionary. As shown in Table 4, our momentum-driven approach yields superior performance across all tasks, including significant gains on HER2 ( +4 .5% ) and the in-house ODX dataset ( +5 .9% ). The crucial limitation of the fixed approach is revealed un-der domain shift. While the fixed setting achieved a high AUC ( 81 .1 ± 2.7% ) on the public ODX cohort, its per-formance collapsed to 73 .5 ± 3.7% on the in-house data, indicating severe overfitting to the source domain’s initial visual representation. In contrast, MoMKD, with its mo-mentum memory, maintained strong cross-cohort robust-ness ( 79 .4 ± 0.8% ). This provides clear evidence that the momentum update is essential: it transforms the memory from a static target into a dynamic semantic center. By con-tinuously tracking the global data distribution and smooth-ing batch-level noise, our method builds a robust semantic representation that generalizes effectively. 
+
+Momentum memory update across tasks. Fig. 3 sum-marizes the training dynamics of the memory storage across three prediction tasks. In all cases, the active memory ratio remains above 0.75, indicating that most memory compo-nents participate in the training trajectory. The perplexity profiles show task-specific differences: As the most diffi-cult task, HER2 statues majorly be identified by IHC stain instead of H&E stain [1, 28], it maintains a larger num-ber of active memory components to represent the sparse signal, while PR and ODX converge to lower values since the model can identify more visual signals from the im-age [13]. These observations highlight that momentum memory adapts its effective capacity to task complexity, achieving both stability and compactness. Detailed defini-tions of these metrics and additional analyses within the in-house dataset are provided in Supplementary Material Sec-tion S3. 
+
+Effects on the memory size Fig S1 in the supplementary material presents the variation of memory size in different tasks, and the MoMKD framework performs consistently. 
+
+4.4. Visualization and Interpretation 
+
+To interprete the memory behavior, we visualized the spatial distribution of memory activations on WSIs and examined the corresponding patch-level patterns under the guidance of experienced pathologists. Here we randomly collect four memory components in each memory set with the top three corresponding patches based on the ODX task, as shown in Fig. 4. Under expert pathological review, it showed the top-ranked image patches (right panel) demonstrate that the positive memory are predominantly activated within tumor-rich and stromal interaction regions, capturing dense ep-ithelial clusters, nuclear pleomorphism, and desmoplastic stroma, which are histopathology consistent with aggres-sive tumor behavior. In contrast, negative memory respond primarily to benign-appearing structures such as adipose tissue, normal ducts, and fibrous stroma. The top-ranked image patches further confirm that each memory part con-sistently encodes an interpretable histologic pattern. These findings validate that the learned memory indeed capture bi-ologically meaningful features. Furthermore, an analysis of the misclassified cases (shown in Supplementary Fig. S3) Figure 3. Memory dynamics across biomarker prediction tasks. Each column corresponds to one task ( HER2 , PR , and ODX ), while each row depicts one statistic of the memory storage: ( upper ) Active memory Ratio , and ( bottom ) Perplexity . The active memory ratio quantifies the proportion of memory components utilized during training, ensuring that no dead memory components emerge. The corresponding perplexity represents the effective number of active memory components ( c+        
+
+> jand c−
+> j). Across all tasks, the momentum memory maintains high active ratios ( >0.75 ) and perplexity, indicating stable and interpretable utilization of the memory storage. Positive memory Negative memory
+> Figure 4. The visualization result based on memory with the mapped patches in WSI. The upper figure is the positive case with the lower one is negative based on Oncotype DX test. For each memory component, we present the top-3 mapped patches here.
+
+indicates a critical need for more robust filtering methods, as the memory components tend to erroneously concentrate on non-informative white background regions. 
+
+## 5. Discussion 
+
+Overall, our findings demonstrate that the momentum mem-ory plays a central role in stabilizing cross-modal distilla-tion between histopathology and genomics. The memory maintains highly semantic diversity, avoids global collapse, and adapts its usage patterns to the morphological complex-ity of each biomarker prediction task. Comparisons with static memory further highlight that dynamic, momentum-driven updates are essential for resisting domain shift and constructing a robust semantic representation. These ob-servations suggest that momentum memory is not merely a storage mechanism, but a dynamic semantic aggregator that balances expressivity and compactness. This provides a principled foundation for future multimodal distillation frameworks and opens new possibilities for interpretable and generalizable computational pathology models. 
+
+## 6. Conclusion 
+
+The cross-modal distillation between histopathology and genomics is hindered by fragile, batch-local alignments. This work presents MoMKD, a Momentum Memory for Knowledge Distillation framework that reframes this prob-lem as alignment to a stable and class-conditioned mo-mentum memory. Across multiple biomarker prediction tasks (HER2, PR, ODX) on TCGA-BRCA and an inde-pendent in-house validation cohort, the proposed method consistently outperforms both WSI-only and multimodal baselines, demonstrating strong generalization and robust-ness under domain shift. It further indicates that the pro-posed method successfully bridges the asymmetry between genomics and histopathology modalities. In summary, MoMKD introduces a cross-batch multimodal paradigm for computational pathology, establishing a generalizable prin-ciple for stable and interpretable knowledge distillation. 7. Acknowledgements 
+
+The project described was supported in part by R21 CA273665 (PIs: Gurcan) from the National Cancer Insti-tute, R01 CA276301 (PIs: Niazi, Chen) from the National Cancer Institute, and R21 EB029493 (PIs: Niazi, Segal) from the National Institute of Biomedical Imaging and Bio-engineering. The content is solely the responsibility of the authors and does not necessarily represent the official views of the National Institutes of Health, the National Institute of Biomedical Imaging and Bioengineering, or the National Cancer Institute. 
+
+## References 
+
+[1] HER2 Testing in Breast Cancer - 2023 Guideline Up-date. https://www.cap.org/protocols-and-guidelines/cap-guidelines/current-cap-guidelines/recommendations-for-human-epidermal-growth-factor-2-testing-in-breast-cancer. 7[2] David Ahmedt-Aristizabal, Mohammad Ali Armin, Simon Denman, Clinton Fookes, and Lars Petersson. A survey on graph-based deep learning for computational histopathology. 
+
+Computerized Medical Imaging and Graphics , 95:102027, 2022. 2 [3] Alev Baysoy, Zhiliang Bai, Rahul Satija, and Rong Fan. The technological landscape and applications of single-cell multi-omics. Nature Reviews. Molecular Cell Biology , pages 1–19, 2023. 1 [4] Qi Bi, Xu Sun, Shuang Yu, Kai Ma, Cheng Bian, Munan Ning, Nanjun He, Yawen Huang, Yuexiang Li, Hanruo Liu, and Yefeng Zheng. MIL-ViT: A multiple instance vision transformer for fundus image classification. Journal of Vi-sual Communication and Image Representation , 97:103956, 2023. 2 [5] Gianpaolo Bontempo, Federico Bolelli, Angelo Porrello, Si-mone Calderara, and Elisa Ficarra. A Graph-Based Multi-Scale Approach With Knowledge Distillation for WSI Clas-sification. IEEE Transactions on Medical Imaging , 43(4): 1412–1421, 2024. 2 [6] Shaked Brody, Uri Alon, and Eran Yahav. How Attentive are Graph Attention Networks?, 2022. 4 [7] Cheng Chen, Qi Dou, Yueming Jin, Quande Liu, and Pheng Ann Heng. Learning With Privileged Multimodal Knowledge for Unimodal Segmentation. IEEE Transactions on Medical Imaging , 41(3):621–632, 2022. 1 [8] Richard J Chen, Ming Y Lu, Muhammad Shaban, Chengkuan Chen, Tiffany Y Chen, Drew FK Williamson, and Faisal Mahmood. Whole slide images are 2d point clouds: Context-aware survival prediction using patch-based graph convolutional networks. In Medical Image Computing and Computer Assisted Intervention – MICCAI 2021 , pages 339–349. Springer International Publishing, 2021. 3 [9] Richard J Chen, Ming Y Lu, Wei-Hung Weng, Tiffany Y Chen, Drew FK Williamson, Trevor Manz, Maha Shady, and Faisal Mahmood. Multimodal co-attention transformer for survival prediction in gigapixel whole slide images. In Pro-ceedings of the IEEE/CVF international conference on com-puter vision , pages 4015–4025, 2021. 1 [10] Richard J Chen, Ming Y Lu, Drew FK Williamson, Tiffany Y Chen, Jana Lipkova, Zahra Noor, Muhammad Shaban, Maha Shady, Mane Williams, Bumjin Joo, et al. Pan-cancer in-tegrative histology-genomic analysis via multimodal deep learning. Cancer cell , 40(8):865–878, 2022. 1 [11] Richard J. Chen, Tong Ding, Ming Y. Lu, Drew F. K. Williamson, Guillaume Jaume, Andrew H. Song, Bowen Chen, Andrew Zhang, Daniel Shao, Muhammad Shaban, Mane Williams, Lukas Oldenburg, Luca L. Weishaupt, Judy J. Wang, Anurag Vaidya, Long Phi Le, Georg Ger-ber, Sharifa Sahai, Walt Williams, and Faisal Mahmood. To-wards a general-purpose foundation model for computational pathology. Nature Medicine , 30(3):850–862, 2024. 4, 6 [12] Ting Chen, Simon Kornblith, Mohammad Norouzi, and Ge-offrey Hinton. A Simple Framework for Contrastive Learn-ing of Visual Representations. In Proceedings of the 37th In-ternational Conference on Machine Learning , pages 1597– 1607. PMLR, 2020. 3 [13] Melina B. Flanagan, David J. Dabbs, Adam M. Brufsky, Sushil Beriwal, and Rohit Bhargava. Histopathologic vari-ables predict Oncotype DX™ Recurrence Score. Modern Pathology , 21(10):1255–1261, 2008. 7 [14] Rushin H. Gindra, Giovanni Palla, Mathias Nguyen, Sophia J. Wagner, Manuel Tran, Fabian J. Theis, Dieter Saur, Lorin Crawford, and Tingying Peng. A Large-Scale Bench-mark of Cross-Modal Learning for Histology and Gene Ex-pression in Spatial Transcriptomics. In Proceedings of the IEEE/CVF International Conference on Computer Vision ,pages 1182–1192, 2025. 2 [15] Yongxin Guo, Ziyu Su, Onur C. Koyun, Hao Lu, Robert Wesolowski, Gary Tozbikian, M. Khalid Khan Niazi, and Metin N. Gurcan. BPMambaMIL: A bio-inspired prototype-guided multiple instance learning for oncotype DX risk as-sessment in histopathology. Computer Methods and Pro-grams in Biomedicine , 272:109039, 2025. 1 [16] Metin N. Gurcan, Laura E. Boucheron, Ali Can, Anant Mad-abhushi, Nasir M. Rajpoot, and B. Yener. Histopathological image analysis: A review. IEEE reviews in biomedical engi-neering , 2:147–171, 2009. 1 [17] Jiabang He, Jia Liu, Lei Wang, Xiyao Li, and Xing Xu. Mo-CoSA: Momentum Contrast for Knowledge Graph Comple-tion with Structure-Augmented Pre-trained Language Mod-els. In 2024 IEEE International Conference on Multimedia and Expo (ICME) , pages 1–6, 2024. 3 [18] Kaiming He, Haoqi Fan, Yuxin Wu, Saining Xie, and Ross Girshick. Momentum Contrast for Unsupervised Visual Rep-resentation Learning, 2020. 2, 3 [19] Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. Distilling the Knowledge in a Neural Network, 2015. 1 [20] Maximilian Ilse, Jakub Tomczak, and Max Welling. Attention-based Deep Multiple Instance Learning. In Pro-ceedings of the 35th International Conference on Machine Learning , pages 2127–2136. PMLR, 2018. 2, 5, 6 [21] Sajid Javed, Arif Mahmood, Talha Qaiser, and Naoufel Werghi. Knowledge Distillation in Histology Landscape by Multi-Layer Features Supervision. IEEE Journal of Biomed-ical and Health Informatics , 27(4):2037–2046, 2023. 2 [22] Bin Li, Yin Li, and Kevin W. Eliceiri. Dual-stream multiple instance learning network for whole slide image classifica-tion with self-supervised contrastive learning. In Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 14318–14328, 2021. 5, 6 [23] Jiawen Li, Yuxuan Chen, Hongbo Chu, Qiehe Sun, Tian Guan, Anjia Han, and Yonghong He. Dynamic Graph Repre-sentation with Knowledge-Aware Attention for Histopathol-ogy Whole Slide Image Analysis. In 2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 11323–11332, Seattle, WA, USA, 2024. IEEE. 2, 3, 5, 6 [24] Ming Y. Lu, Drew F. K. Williamson, Tiffany Y. Chen, Richard J. Chen, Matteo Barbieri, and Faisal Mahmood. Data-efficient and weakly supervised computational pathol-ogy on whole-slide images. Nature Biomedical Engineering ,5(6):555–570, 2021. 2 [25] Jiabo Ma, Zhengrui Guo, Fengtao Zhou, Yihui Wang, Yingxue Xu, Jinbang Li, Fang Yan, Yu Cai, Zhengjie Zhu, Cheng Jin, Yi Lin, Xinrui Jiang, Chenglong Zhao, Danyi Li, Anjia Han, Zhenhui Li, Ronald Cheong Kin Chan, Jiguang Wang, Peng Fei, Kwang-Ting Cheng, Shaoting Zhang, Li Liang, and Hao Chen. A generalizable pathology founda-tion model using a unified knowledge distillation pretrain-ing framework. Nature Biomedical Engineering , pages 1–20, 2025. 1, 2 [26] Rajeev Nema. An omics-based tumor microenvironment ap-proach and its prospects. Reports of Practical Oncology and Radiotherapy , 29(5):649–650, 2024. 1 [27] Muhammad Khalid Khan Niazi, Anil V. Parwani, and Metin N. Gurcan. Digital pathology and artificial intelli-gence. The lancet oncology , 20(5):e253–e261, 2019. 1 [28] Gil Shamai, Ran Schley, Alexandra Cretu, Tal Neoran, Ed-mond Sabo, Yoav Binenbaum, Shachar Cohen, Tal Gold-man, Ant´ onio Pol´ onia, Keren Drumea, Karin Stoliar, and Ron Kimmel. Clinical utility of receptor status prediction in breast cancer and misdiagnosis identification using deep learning on hematoxylin and eosin-stained slides. Commu-nications Medicine , 4(1):276, 2024. 7 [29] Zhuchen Shao, Hao Bian, Yang Chen, Yifeng Wang, Jian Zhang, Xiangyang Ji, and yongbing zhang. TransMIL: Transformer based Correlated Multiple Instance Learning for Whole Slide Image Classification. In Advances in Neural Information Processing Systems , pages 2136–2147. Curran Associates, Inc., 2021. 2, 5, 6 [30] Tong Shu, Jun Shi, Dongdong Sun, Zhiguo Jiang, and Yushan Zheng. SlideGCD: Slide-Based Graph Collaborative Training with Knowledge Distillation for Whole Slide Im-age Classification. In Medical Image Computing and Com-puter Assisted Intervention – MICCAI 2024 , pages 470–480, Cham, 2024. Springer Nature Switzerland. 2 [31] Ziyu Su, Yongxin Guo, Robert Wesolowski, Gary Tozbikian, Nathaniel S. O’Connell, M. Khalid Khan Niazi, and Metin N. Gurcan. Computational Pathology for Accurate Prediction of Breast Cancer Recurrence: Development and Validation of a Deep Learning-based Tool, 2024. 1 [32] Kang Wang, Feiyang Zheng, Dayan Guan, Jia Liu, and Jing Qin. Distilling heterogeneous knowledge with aligned bio-logical entities for histological image classification. Pattern Recognition , 160:111173, 2025. 2 [33] Zhikang Wang, Yumeng Zhang, Yingxue Xu, Seiya Imoto, Hao Chen, and Jiangning Song. Histo-Genomic Knowl-edge Distillation For Cancer Prognosis From Histopathology Whole Slide Images, 2024. 2, 5, 6 [34] John N. Weinstein, Eric A. Collisson, Gordon B. Mills, Kenna R. Mills Shaw, Brad A. Ozenberger, Kyle Ellrott, Ilya Shmulevich, Chris Sander, and Joshua M. Stuart. The Cancer Genome Atlas Pan-Cancer analysis project. Nature Genetics ,45(10):1113–1120, 2013. 6 [35] Zhirong Wu, Yuanjun Xiong, Stella X. Yu, and Dahua Lin. Unsupervised Feature Learning via Non-Parametric Instance Discrimination. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , pages 3733– 3742, 2018. 3 [36] Xiaohan Xing, Meilu Zhu, Zhen Chen, and Yixuan Yuan. Comprehensive learning and adaptive teaching: Distilling multi-modal knowledge for pathological glioma grading. 
+
+Medical Image Analysis , 91:102990, 2024. 1, 2, 5, 6 [37] Yingxue Xu and Hao Chen. Multimodal optimal transport-based co-attention transformer with global structure con-sistency for survival prediction. In Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , pages 21241–21251, 2023. 1 [38] Yunfang Yu, Gengyi Cai, Ruichong Lin, Zehua Wang, Yongjian Chen, Yujie Tan, Zifan He, Zhuo Sun, Wen-hao Ouyang, Herui Yao, and Kang Zhang. Multimodal data fusion AI model uncovers tumor microenvironment im-munotyping heterogeneity and enhanced risk stratification of breast cancer. MedComm , 5(12):e70023, 2024. 1 [39] Hongrun Zhang, Yanda Meng, Yitian Zhao, Yihong Qiao, Xiaoyun Yang, Sarah E. Coupland, and Yalin Zheng. DTFD-MIL: Double-Tier Feature Distillation Multiple Instance Learning for Histopathology Whole Slide Image Classifica-tion, 2022. 5, 6 [40] Qibin Zhang, Xinyu Hao, Qiao Chen, Rui Xu, Fengyu Cong, Cheng Lu, and Hongming Xu. Multi-modal Knowledge De-composition based Online Distillation for Biomarker Predic-tion in Breast Cancer Histopathology, 2025. 2, 5, 6 [41] Yan Zhang, Zhong Ji, Di Wang, Yanwei Pang, and Xuelong Li. USER: Unified Semantic Enhancement With Momentum Contrast for Image-Text Retrieval. IEEE Transactions on Image Processing , 33:595–609, 2024. 3 [42] Yupei Zhang, Xiaofei Wang, Anran Liu, Lequan Yu, and Chao Li. Disentangled Multi-modal Learning of Histology and Transcriptomics for Cancer Characterization, 2025. 2 [43] Wenhui Zhu, Xiwen Chen, Peijie Qiu, Aristeidis Sotiras, Abolfazl Razi, and Yalin Wang. DGR-MIL: Exploring Di-verse Global Representation in Multiple Instance Learning for Whole Slide Image Classification. In Computer Vision – ECCV 2024 , pages 333–351, Cham, 2025. Springer Nature Switzerland. 1 [44] Wenxuan Zou, Xingqun Qi, Zhuojie Wu, Zijian Wang, Muyi Sun, and Caifeng Shan. CoCo DistillNet: A Cross-layer Cor-relation Distillation Network for Pathological Gastric Cancer Segmentation. In 2021 IEEE International Conference on Bioinformatics and Biomedicine (BIBM) , pages 1227–1234, 2021. 2

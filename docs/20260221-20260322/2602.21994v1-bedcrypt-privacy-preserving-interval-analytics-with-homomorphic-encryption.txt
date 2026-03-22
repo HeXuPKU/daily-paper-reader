@@ -1,0 +1,224 @@
+Title: BEDCrypt: Privacy-preserving interval analytics with homomorphic encryption
+
+URL Source: https://arxiv.org/pdf/2602.21994v1
+
+Published Time: Thu, 26 Feb 2026 02:05:05 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# BEDCrypt: Privacy-preserving interval analytics with homomorphic encryption 
+
+# Kimon Antonios Provatas Ilias Georgakopoulos-Soares 
+
+# Abstract 
+
+Motivation. Genomic data and derived interval datasets can carry sensitive information, and the analysis itself can reveal an analyst’s intent. As genomic workloads are increasingly outsourced to third-party infrastructure, there is a need for privacy-preserving technologies that protect both the data and the queried loci. 
+
+Results. We present BEDCrypt , a privacy-preserving system for genomic interval analytics based on homomorphic encryption in an honest-but-curious server setting. The server operates only on encrypted data and returns encrypted answers that the client decrypts locally, enabling core functionalities such as coverage summaries, interval intersections, proximity (window-style) queries, and set-similarity statistics, without revealing plaintext intervals or query genomic locations to the server. 
+
+# 1 Introduction 
+
+Interval-based primitives such as coverage summaries, overlap and proximity queries, and set-similarity statistics are foundational to modern genomics work-flows. They appear throughout quality control, an-notation, and comparative analyses, and are widely accessed through tools such as bedtools [1]. However, genomic coordinates and derived interval tracks can reveal sensitive information, and the ana-lyst’s queries can themselves expose research intent. As practitioners increasingly rely on shared clusters and cloud platforms, there is a growing need for sys-tems that enable genomic interval analytics while  
+
+> 1* Corresponding author: ilias@austin.utexas.edu
+
+keeping both the underlying data and the queried loci private. Homomorphic encryption (HE) provides one princi-pled path to this goal by enabling computation over ciphertexts, so that an untrusted server can process encrypted data and return encrypted results for client-side decryption [ 2 , 3, 4, 5 ]. Recent surveys position HE as a core privacy-enhancing technology for biomedical data science [ 31 ]. Prior work has successfully applied HE to several genomics workloads, including private variant presence queries, encrypted sequence search (e.g., we previously introduced private k-mer search in KmerCrypt ) [ 24 ], and large-scale statistical ge-netics pipelines such as GWAS [ 41 , 42 ], polygenic risk scores [ 32 ], and privacy-preserving genotype imputa-tion [ 33 ]. However, these methods largely focus on fixed-position variant vectors or sequence-comparison tasks rather than the interval-algebra primitives used in BED-style workflows, motivating HE-friendly con-structions specialized for coverage, intersection, and proximity queries. Yet applying HE to interval al-gebra is challenging because interval operations are naturally data-dependent and are often implemented via index traversals and branching. Related lines of work in encrypted query process-ing illustrate alternative design points. CryptDB [ 34 ]targets SQL analytics over relational databases via a proxy that rewrites queries over adjustable encryp-tion layers (including property-preserving encryption), rather than performing homomorphic computation on an HE-encrypted dataset. Subsequent work has shown that property-preserving techniques can admit pow-erful inference attacks [ 35 ], and the underlying prim-itives (e.g., order-preserving encryption (OPE) [ 36 ]and order-revealing encryption (ORE) [ 37 , 38 ]) inher-1
+
+> arXiv:2602.21994v1 [q-bio.GN] 25 Feb 2026
+
+ently expose order information—a particularly poor fit for genomic coordinates, which are ordered by con-struction. In contrast, BEDCrypt avoids server-side order comparisons and instead uses IND-CPA-secure HE to keep values confidential, while hiding the map-ping from accesses to genomic loci via a client-secret permutation and relegating semantic reconstruction to the client. At the level of interval primitives, Wüller et al. [ 22 ]study privacy-preserving interval operations using homomorphic encryption and secret sharing. BED-Crypt differs in its emphasis on a reusable, per-muted SIMD-chunk database representation and an extraction-oriented protocol in which the server exe-cutes a fixed rotate-and-mask circuit to return only encrypted scalars needed for client-side reconstruction of bedtools -style outputs. Secure set intersection has also been studied exten-sively, for example via OT-extension-based private set intersection (PSI) [ 39 ] and high-throughput OPRF-based variants [ 40 ]. For genomic range-constrained in-tersection, specialized schemes such as PriRanGe have been proposed [ 23 ]. While PSI is a useful neighboring primitive for positioning “intersection” queries, BED-style interval analytics additionally requires range arithmetic (e.g., prefix-sum differences), overlap logic, and proximity constraints over an ordered coordi-nate line, which motivates different encodings and an extraction-oriented execution model. Finally, prior HE-for-genomics systems have focused primarily on statistical genetics workloads such as encrypted GWAS pipelines [ 41 , 42 ], which involve substantial arithmetic over genotype/phenotype ma-trices. BEDCrypt targets a different core data type and access pattern—interval tracks and queried loci— and optimizes around selectively extracting encrypted boundary scalars needed for interval primitives (cov-erage/intersect/window/depth/Jaccard), rather than evaluating large linear-algebra models homomorphi-cally. We present BEDCrypt , a privacy-preserving sys-tem that supports common interval queries over en-crypted genomic datasets in an honest-but-curious server setting. BEDCrypt adopts a permuted-chunk 
+
+architecture: the client first preprocesses the refer-ence interval dataset into compact linear signals (e.g., prefix-sum style arrays for range queries and a depth array for point queries), partitions these signals into fixed-size SIMD batches, applies a client-secret ran-dom permutation over the batches, and encrypts each permuted batch under BFV [ 3, 4] (as implemented in Microsoft SEAL [5]). Queries are answered via a blind extraction proto-col rather than genome-wide masked multiplication. For each scalar needed to reconstruct an output, the client sends only a permuted batch identifier and an intra-batch offset. The server performs a small, fixed sequence of homomorphic operations (rotation and masking) to extract that encrypted scalar and returns it. The client decrypts and combines extracted val-ues locally to produce standard results for coverage summaries, interval intersections, proximity (window-style) queries, and set-similarity statistics, without revealing plaintext intervals or query locations to the server. This design makes the server-side work propor-tional to the number of values requested, not the full genome representation, and it supports database reuse across multiple analyses once the encrypted permuted database is uploaded. The main residual leakage is through coarse metadata such as query volume and which permuted batches are accessed. 
+
+# 2 Problem Definition and Threat Model 
+
+# 2.1 Interval analytics model 
+
+We formalize the genomic coordinate space for a single chromosome as a discrete domain x ∈ { 0, 1, . . . , L −1},and extend to whole genomes by treating chromo-somes independently with their respective lengths. 
+
+Database intervals ( B). The client designates one BED-like interval set B = {(sj , e j )}mj=1 as the refer-ence database that is preprocessed once and hosted (in encrypted form) on the server. 
+
+Database preprocessing (logical, per-array). 
+
+All preprocessing is performed in logical genomic or-der before any permutation. From B we build discrete 2arrays over the chromosome coordinate domain: (i) 
+
+Coverage prefix sum Pcov (x), obtained by converting coverage to a binary array IB (x) and prefix-summing it, enabling covered-bases range queries via boundary differences; (ii) Starts prefix sum Pstart (x), the prefix sum of an indicator that is 1 at each start coordinate of an interval in B; (iii) Ends prefix sum Pend (x), the (shifted) prefix sum of an indicator that is 1 at each end coordinate of an interval in B; and (iv) Depth array DB (x), where each entry equals the number of intervals in B covering x.
+
+Query intervals ( A). For each analysis run, the client provides a query set A = {(si, e i)}ni=1 whose loci must remain private from the server. 
+
+Query selectors and permutation (physical ad-dressing). The logical database arrays are con-catenated, partitioned into fixed-size chunks aligned with the HE batching capacity, and then permuted by a client-secret shuffle before encryption and up-load. Given a logical coordinate request (e.g., “read 
+
+Pcov (s)”), the client computes the corresponding log-ical chunk index and intra-chunk offset, maps the chunk through the secret permutation to a physical chunk identifier, and emits a compact selector de-scribing (physical chunk id, slot offset). The server uses these selectors only to perform blind extraction of encrypted scalars and cannot map them back to genome coordinates. 
+
+Supported query classes. Using the extracted boundary values, the client reconstructs: (i) coverage summaries (covered bases and overlap counts); (ii) 
+
+intersection existence (any overlap vs. none); (iii) 
+
+proximity (window) queries with margin W ; and (iv) 
+
+set similarity (Jaccard) aggregated over the query set. 
+
+# 2.2 Threat model 
+
+We assume an honest-but-curious (semi-honest) server that follows the prescribed protocol but attempts to learn information about the client’s data and analytic intent from the transcript and its local state [6]. 
+
+Server observations. The server observes: (i) pub-lic cryptographic parameters and evaluation material (BFV parameters N, t, q and the client’s public and Galois keys); (ii) the encrypted, permuted database ciphertexts encoding B; and (iii) the permuted access pattern induced by blind extraction, namely which physical chunk identifiers and intra-chunk slot offsets are requested. 
+
+Server non-observations. Under IND-CPA secu-rity of BFV, the server does not observe plaintext values (e.g., it cannot distinguish different coverage or depth values from ciphertexts) [ 3 , 4]. Moreover, be-cause chunks are permuted with a client-secret Fisher– Yates shuffle, the server cannot map a physical chunk identifier back to a logical genomic region (e.g., a specific chromosome coordinate range). Finally, be-cause all supported features are decomposed into the same blind-extraction primitive, the server cannot di-rectly infer whether a request corresponds to coverage, window/intersect, or Jaccard semantics. 
+
+# 2.3 Leakage discussion 
+
+To avoid the overhead of full-fledged oblivious RAM (ORAM) while retaining practical performance, BED-Crypt accepts a coarse and explicitly modeled leak-age profile [7, 8]. 
+
+Leakage and protection. bedCrypt provides se-mantic security for the hosted database: under IND-CPA security of BFV, the server learns no plain-text information about the database intervals B or the derived arrays it stores (coverage, starts, ends, depth) [ 3, 4 ]. However, bedCrypt does not imple-ment a fully oblivious access mechanism (e.g., ORAM) for query processing [ 7, 8]. The server learns coarse query-side metadata, including the total number of extracted scalars and which permuted chunks are ac-cessed (and how often) during a session. While the client-secret permutation prevents mapping these ac-cesses to logical genomic loci, repeated or highly non-uniform query workloads may still yield statistical pat-terns about the query set A through access frequencies, consistent with known leakage-abuse and inference 3attacks when access patterns or query repetitions are observable [ 9, 10 ]. As a practical mitigation, the client may periodically refresh the hosted database by re-randomizing the chunk permutation and re-encrypting the permuted chunks, thereby rotating the physical layout visible to the server and reducing the long-term utility of frequency-based access-pattern observations across sessions. 
+
+# 3 System Overview 
+
+BEDCrypt is implemented as a two-component sys-tem: a client executable that performs preprocessing, encryption, query compilation, and output reconstruc-tion, and a server executable that hosts the encrypted database and executes query requests. Figure 1 sum-marizes the high-level encrypted database layout, and Fig. 2 shows the end-to-end protocol and extraction kernel. The core operational idea is to (i) build and upload a reusable encrypted database once, then (ii) answer each subsequent analysis by extracting only the small set of encrypted scalars needed to recon-struct a BEDTools -style result, rather than scanning or reprocessing the full encrypted genome at query time (Fig. 2C). Figure 2B summarizes the mapping between supported interval operations and the under-lying encrypted segments/arrays they access. 
+
+Figure 1: Encrypted database layout (high level). 
+
+The client converts the database intervals into linear plaintext arrays (coverage/start/end/depth), concate-nates them into a logical vector, partitions the vec-tor into fixed-size chunks (one BFV ciphertext per chunk), applies a client-secret permutation over chunk order, and encrypts each chunk for server-side storage. Query evaluation uses selectors that reference a per-muted chunk identifier and an intra-chunk slot offset, enabling blind extraction without revealing logical genomic coordinates. 4A B
+
+> C
+
+Figure 2: BEDCrypt System Design. (A) Archi-tecture: The end-to-end protocol separating client-side logic (setup, query compilation, and decryp-tion) from server-side storage and processing. (B) Functionality-to-Data Mapping: The relationship between genomic operations (e.g., Coverage, Depth, Jaccard) and the underlying encrypted segments (S1– S4), defining which arrays are accessed and the specific scalar payloads (e.g., prefix sums vs. exact values) returned. (C) Server-Side Computation: The oblivious extraction kernel that processes requests by loading specific ciphertext chunks, rotating target values to the zero-th slot, and masking the remaining slots to isolate the result. 
+
+# 3.1 Client-side responsibilities 
+
+Database layout (high level). The client materi-alizes the interval database B into a small number of linear arrays over the chromosome coordinate space (coverage, start counts, end counts, and depth). These arrays are concatenated into a single logical vector, partitioned into fixed-size chunks aligned with the BFV batching capacity (one ciphertext per chunk), and then permuted by a client-secret shuffle before encryption. The server therefore stores a permuted sequence of ciphertext chunks that is reusable across queries, while the client maintains the permutation map and a lightweight manifest that maps each log-ical index (array type and coordinate) to a physical (chunk id, slot offset) selector. 
+
+Database build (one-time per B). The client parses the database BED file B and constructs the interval-derived arrays used by the supported com-mands (prefix-sum arrays and a depth array). It concatenates these arrays into a single logical “global” vector per chromosome and records a layout manifest (segment offsets and lengths) so that later queries can refer to values by logical index. 
+
+SIMD packing and permuted chunks. The client partitions each logical global vector into fixed-size SIMD batches, where each batch fits into one BFV ciphertext (one chunk per ciphertext), enabling SIMD-style processing via batching in lattice-based HE [ 11 , 4 ]. It then applies a client-side permutation to the chunk order and encrypts the permuted chunks (Fig. 1). The resulting encrypted database is provi-sioned to the server once and can be reused across many query sessions. 
+
+Key material and protocol metadata. The client generates the public key and the rotation (Ga-lois) keys needed for server-side slot rotations, and stores the secret key locally [ 12 , 5 ]. It also prepares a compact request description that specifies the cho-sen operation and references the encrypted database needed by the server. 5Query compilation. For each query run, the client parses the query BED file A and compiles the re-quested operation into a list of scalar reads from the logical global vectors. Each scalar read is translated into a physical address in the permuted representation (permuted chunk id and intra-chunk slot offset) and annotated with ordering information so decrypted scalars can be reassembled into the final output. 
+
+Result reconstruction. After receiving the server response, the client decrypts the returned ciphertext scalars, reorders them according to the query compi-lation step, and performs lightweight plaintext post-processing to emit outputs matching the correspond-ing bedtools command and flags (e.g., per-interval coverage summaries, window/intersect filtering, depth tables, or a single Jaccard summary). 
+
+# 3.2 Server-side responsibilities 
+
+Encrypted database hosting. The server stores the encrypted database as a collection of ciphertext chunks and provides indexed access to individual chunks for query processing. 
+
+Blind extraction kernel. For each extraction re-quest, the server loads the referenced ciphertext chunk and executes the same fixed sequence of homomorphic operations: a slot rotation that moves the requested offset into a canonical slot, followed by multiplication with a plaintext mask that zeroes all other slots. The output is a ciphertext that contains exactly the re-quested scalar in a known slot, and this ciphertext is appended to the result stream. 
+
+Streaming execution and packaging. Because each extraction is independent, the server can pro-cess requests in a streaming manner (load chunk, ro-tate+mask, write output) and parallelize across CPU cores. The server returns the extracted ciphertexts together with minimal metadata needed for the client to decode and assemble them. 
+
+# 3.3 End-to-End Query Workflow 
+
+An end-to-end run consists of three stages. 
+
+Stage 1: One-time setup. The client builds the encrypted database from B, generates keys, and pro-visions the server with the encrypted database and evaluation keys. This stage is amortized across many queries and is repeated only when the database or cryptographic parameters change. 
+
+Stage 2: Per-query execution. Given A and a selected command, the client emits a batched extrac-tion request containing the physical addresses of all needed scalars. The server executes the rotate-and-mask kernel once per requested scalar and returns the extracted ciphertext bundle. 
+
+Stage 3: Client-side post-processing. The client decrypts the extracted ciphertexts, maps them back to the logical indices referenced by the query compi-lation step, and reconstructs the final bedtools -style output. The subsequent sections describe the encrypted data layout and global-vector segmentation, the blind extraction protocol and its SEAL-level realization (rotations and masking), and the query compilation rules for each supported bedtools operation. 
+
+# 4 Evaluation 
+
+We evaluate BEDCrypt on a representative genomic interval analysis workload to measure end-to-end per-formance, ciphertext expansion overhead, and scala-bility characteristics. All experiments use the BFV ho-momorphic encryption scheme with polynomial mod-ulus degree N = 8192 and plaintext modulus of 30 bits, providing 128-bit security [ 5]. The client and server executables run on a macOS workstation with 12 CPU cores, and all measurements reflect wall-clock time, peak resident set size (RSS), and I/O band-width as captured by the benchmark instrumentation described in Section 1. 
+
+# 4.1 Experimental Setup 
+
+Dataset. We generated a synthetic BED workload consisting of a query file A and a database file B (10.86 MB total plaintext) on chr1 with coordinate space 6L = 100 ,000 ,000 bases. This dataset is intended to stress-test the system with a realistic interval-analytics workload while remaining small enough for rapid iter-ation during development. 
+
+Measured operations. We benchmark five core 
+
+bedtools [1]-equivalent operations: Coverage (over-lap counts and base-pair coverage per interval), 
+
+Depth (per-base depth values within query inter-vals), Window (proximity-based overlap detection with configurable window size w = 5 , tested with 
+
+-c , -u , and -v modes), Intersect (set-based intersec-tion with -u and -v flags), and Jaccard (statistical similarity metric). Each operation exercises a differ-ent query compilation pattern and accesses distinct segments of the encrypted global database (Fig. 2B). 
+
+Metrics. For each operation, we report: 
+
+• Encryption phase: Wall-clock time, peak RAM usage, and total I/O (ciphertext database size, representing client upload bandwidth in a net-work deployment). 
+
+• Server compute phase: Wall-clock time, peak RAM usage, and output I/O (size of extracted ciphertexts returned to client, representing client download bandwidth). 
+
+• Decryption phase: Wall-clock time and peak RAM usage. No additional I/O is reported, as bandwidth is accounted in the server phase. 
+
+# 4.2 End-to-End Performance Results 
+
+Table 1 summarizes the measured time, peak RAM, and I/O per phase for each operation on the 10.86 MB dataset. 
+
+Noise management and feasibility. We use BFV parameters at polynomial modulus degree N = 8192 
+
+with coefficient modulus close to 218 bits (SEAL 
+
+BFVDefault ), which is consistent with 128-bit secu-rity targets used in standard HE parameter selec-tion guidance. The extraction circuit is intentionally shallow—one ciphertext rotation followed by one plain-text multiplication (masking)—so noise growth is mod-est and does not require relinearization (no ciphertext– ciphertext multiplication) or bootstrapping. For this evaluation, we additionally instrumented the server to report the noise budget along the extraction circuit. Empirically, a server-side noise-budget simulation re-ports an initial budget of 136 bits, decreasing to 133 bits after rotation and 98 bits after masking, confirm-ing a substantial remaining margin for correctness under our extraction kernel. 
+
+End-to-end analysis. The workload exhibits a clear separation between a one-time provisioning cost and per-query costs. Coverage includes the database build/encryption step (24.7 s and 24,420 MB upload), which dominates its end-to-end time (71.8 s) and total I/O. Once provisioned, subsequent operations reuse the encrypted database and are driven primarily by server processing and decryption latency. Across reused queries, total time ranges from 26.5 s (Depth) to 44.9 s (Jaccard). Server processing times (16.3– 34.7 s) exceed client-side decryption (10.0–10.2 s), indicating that the dominant per-query cost lies in server-side homomorphic evaluation and response gen-eration rather than local decryption. Server peak RAM remains constant at 14 MB across all opera-tions, consistent with a streaming execution model. Client peak RAM is highest for Coverage due to the one-time encryption phase (7.8 GB), and for Depth due to output reconstruction over dense per-base re-sults (1.9 GB); other operations remain below 120 MB during decryption. 7Table 1: Benchmark results (10.86 MB dataset). 
+
+Measured wall-clock time (s), peak RAM (MB), and I/O (MB) per phase for each supported operation. “Encryption” is a one-time cost for provisioning the encrypted database and is reused across subsequent queries. 
+
+Operation Phase Time (s) RAM (MB) I/O (MB) 
+
+Coverage Encryption 24.7 7,846 24,420 (upload) Server processing 36.9 14 24,420 (download) Decryption 10.3 117 10 (results) 
+
+Total 71.8 7,977 48,850 
+
+Depth Encryption (reused) — 6,488 336 Server processing 16.3 14 -Decryption 10.2 1,871 336 (results) 
+
+Total 26.5 8,373 672 
+
+Window ( -c )Encryption (reused) — 7,428 -Server processing 19.4 14 -Decryption 10.0 91 6
+
+Total 29.5 7,533 6
+
+Window ( -u ) Decryption (reused server) 10.2 88 1Window ( -v ) Decryption (reused server) 10.2 88 4Intersect ( -u )Encryption (reused) — 6,637 1Server processing 27.6 14 -Decryption 10.1 90 1
+
+Total 37.6 6,741 2
+
+Intersect ( -v )Encryption (reused) — 6,678 —Server processing 26.8 14 —Decryption 10.2 90 4
+
+Total 37.0 6,782 4
+
+Jaccard Encryption (reused) — 6,413 -Server processing 34.7 14 -Decryption 10.1 100 -
+
+Total 44.9 6,527 -
+
+85 Discussion 
+
+In this work, we achieve privacy-preserving 
+
+BEDTools [ 1]-style genome interval analytics by let-ting an untrusted server operate only on an en-crypted, reusable interval database and return en-crypted scalars that the client reconstructs into stan-dard outputs without disclosing plaintext loci. Our key contribution is that core interval primitives (cov-erage summaries, intersections, window/proximity queries, and set-similarity via Jaccard) can be sup-ported without genome-wide encrypted scans, which are typically the dominant barrier to practicality. A central design decision is to answer queries via blind extraction from permuted, SIMD-packed ciphertext chunks—so server work scales with the number of requested boundary values—rather than evaluating interval logic over an encrypted genome-wide repre-sentation or deploying heavier fully oblivious access mechanisms. This “extract-only-what-you-need” ex-ecution model matches how interval tools are used in practice—many analyses request a relatively small set of boundary values per query interval—and there-fore naturally targets settings where sensitive cohorts or proprietary tracks must be analyzed on shared compute or cloud infrastructure. The discussion of privacy should be framed around what is and is not protected. Under standard BFV IND-CPA security, the hosted database contents re-main confidential, and the server cannot distinguish one depth/coverage value from another; additionally, the client-secret permutation prevents the server from directly mapping a requested chunk back to a genomic coordinate range. At the same time, the system in-tentionally accepts access-pattern leakage at the level of which permuted chunks and offsets are touched, and the total number of extractions per session; in a genomics setting, this motivates careful operational guidance (e.g., batching, query normalization, and avoiding highly distinctive repetitive queries) and pro-vides a clear basis for future extensions that add stronger obliviousness when needed. Finally, it is useful to consider how bedCrypt 
+
+could fit into real analysis pipelines and what limita-tions should shape future work. The current approach is most compelling for repeated querying against a stable reference track (or collection of tracks) where the one-time preprocessing/encryption cost can be amortized, and where returning compact summaries is sufficient for downstream steps. Challenging direc-tions include supporting richer multi-track operations, scaling across whole genomes and many samples with-out overwhelming key material or bandwidth, and hardening against active/malicious behavior (e.g., in-correct server responses) through lightweight verifi-cation. Overall, bedCrypt bridges the gap between local-only analysis and fully oblivious protocols by providing strong confidentiality for interval data with a familiar, bedtools -style user experience and ade-quate performance for realistic workloads. 
+
+# Code availability 
+
+The code used in this study is available at https: //github.com/Georgakopoulos-Soares-lab/ bedCrypt . “ 
+
+# Acknowledgements 
+
+We thank Ioannis Mouratidis for helpful discussions and support. 
+
+# Funding 
+
+Research reported in this publication was supported by the National Institute of General Medical Sciences of the National Institutes of Health under award num-ber R35GM155468. 
+
+# References 
+
+[1] A. R. Quinlan and I. M. Hall. BEDTools: aflexible suite of utilities for comparing genomic features. Bioinformatics , 26(6):841–842, 2010. [2] C. Gentry. Fully homomorphic encryption using ideal lattices. In STOC , 2009. 9[3] Z. Brakerski. Fully homomorphic encryp-tion without modulus switching from classical GapSVP. In CRYPTO , 2012. [4] J. Fan and F. Vercauteren. Somewhat practical fully homomorphic encryption. IACR Cryptology ePrint Archive , 2012. [5] K. Laine. Simple Encrypted Arithmetic Library (SEAL). Microsoft Research, 2017. [6] O. Goldreich. Foundations of Cryptography, Vol-ume 2: Basic Applications . Cambridge University Press, 2004. [7] O. Goldreich and R. Ostrovsky. Software protec-tion and simulation on oblivious RAMs. J. ACM ,43(3):431–473, 1996. [8] E. Stefanov, M. van Dijk, E. Shi, C. Fletcher, L. Ren, X. Yu, and S. Devadas. Path ORAM: an extremely simple oblivious RAM protocol. In 
+
+CCS , 2013. [9] D. Cash, P. Grubbs, J. Perry, and T. Risten-part. Leakage-abuse attacks against searchable encryption. In CCS , 2015. [10] M. S. Islam, M. Kuzu, and M. Kantarcioglu. Inference attack against encrypted range queries on outsourced databases. In ICDE , 2014. [11] N. P. Smart and F. Vercauteren. Fully homo-morphic SIMD operations. Designs, Codes and Cryptography , 71(1):57–81, 2014. [12] S. Halevi and V. Shoup. Algorithms in HElib. In 
+
+CRYPTO , 2014. [13] R. A. Popa, C. M. S. Redfield, N. Zeldovich, and H. Balakrishnan. CryptDB: Protecting confiden-tiality with encrypted query processing. In SOSP ,2011. [14] M. Naveed, S. Kamara, and C. V. Wright. In-ference attacks on property-preserving encrypted databases. In CCS , 2015. [15] A. Boldyreva, N. Chenette, Y. Lee, and A. O’Neill. Order-preserving symmetric encryp-tion. In EUROCRYPT , 2009. [16] D. Boneh, K. Lewi, M. Raykova, A. Sahai, M. Zhandry, and J. Zimmerman. Semantically secure order-revealing encryption: Multi-input functional encryption without obfuscation. In 
+
+EUROCRYPT , 2015. [17] K. Lewi and D. J. Wu. Order-revealing encryp-tion: New constructions, applications, and lower bounds. In CCS , 2016. [18] B. Pinkas, T. Schneider, G. Segev, and M. Zohner. Faster private set intersection based on OT ex-tension. In USENIX Security , 2014. [19] S. Wüller, D. Mayer, F. Förg, and S. Katzen-beisser. Designing privacy-preserving interval op-erations based on homomorphic encryption and secret sharing techniques. Journal of Computer Security , 25:59–81, 2017. [20] Y. Yang, Y. Zhang, C. Wang, J. Li, et al. Pri-RanGe: Privacy-preserving range-constrained in-tersection query over genomic data. IEEE Trans-actions on Cloud Computing , 11(3):2379–2391, 2023. [21] K. Provatas, I. Mouratidis, and I. Georgakopoulos-Soares. KmerCrypt: private k-mer search with homomorphic encryption. 
+
+Briefings in Bioinformatics , 2025. [22] S. Wüller, D. Mayer, F. Förg, and S. Katzen-beisser. Designing privacy-preserving interval op-erations based on homomorphic encryption and secret sharing techniques. Journal of Computer Security , 25:59–81, 2017. [23] Y. Yang, Y. Zhang, C. Wang, J. Li, et al. Pri-RanGe: Privacy-preserving range-constrained in-tersection query over genomic data. IEEE Trans-actions on Cloud Computing , 11(3):2379–2391, 2023. [24] K. Provatas, I. Mouratidis, and I. Georgakopoulos-Soares. KmerCrypt: private k-mer search with homomorphic encryption. 
+
+Briefings in Bioinformatics , 2025. 10 [25] V. Kolesnikov, R. Kumaresan, M. Rosulek, and N. Trieu. Efficient batched oblivious PRF with applications to private set intersection. In CCS ,2016. [26] J.-S. Sim, S. Kim, and J. H. Cheon. Achieving GWAS with homomorphic encryption. BMC Medical Genomics , 2020. [27] M. Blatt, A. Gusev, Y. Polyakov, K. Rohloff, and V. Vaidya. Secure large-scale genome-wide asso-ciation studies using homomorphic encryption. 
+
+PNAS , 2020. [28] H. Cho et al. Privacy-enhancing technologies in biomedical data science. Annual Review of Biomedical Data Science , 2024. [29] H. Knight et al. Homomorphic encryption enables privacy preserving polygenic risk scores. Cell Reports Methods , 2026. [30] G. Gürsoy et al. Privacy-preserving genotype imputation with fully homomorphic encryption. 
+
+Cell Systems , 2022. [31] H. Cho et al. Privacy-enhancing technologies in biomedical data science. Annual Review of Biomedical Data Science , 2024. [32] H. Knight et al. Homomorphic encryption enables privacy preserving polygenic risk scores. Cell Reports Methods , 2026. [33] G. Gürsoy et al. Privacy-preserving genotype imputation with fully homomorphic encryption. 
+
+Cell Systems , 2022. [34] R. A. Popa, C. M. S. Redfield, N. Zeldovich, and H. Balakrishnan. CryptDB: Protecting confiden-tiality with encrypted query processing. In SOSP ,2011. [35] M. Naveed, S. Kamara, and C. V. Wright. In-ference attacks on property-preserving encrypted databases. In CCS , 2015. [36] A. Boldyreva, N. Chenette, Y. Lee, and A. O’Neill. Order-preserving symmetric encryp-tion. In EUROCRYPT , 2009. [37] D. Boneh, K. Lewi, M. Raykova, A. Sahai, M. Zhandry, and J. Zimmerman. Semantically secure order-revealing encryption: Multi-input functional encryption without obfuscation. In 
+
+EUROCRYPT , 2015. [38] K. Lewi and D. J. Wu. Order-revealing encryp-tion: New constructions, applications, and lower bounds. In CCS , 2016. [39] B. Pinkas, T. Schneider, G. Segev, and M. Zohner. Faster private set intersection based on OT ex-tension. In USENIX Security , 2014. [40] V. Kolesnikov, R. Kumaresan, M. Rosulek, and N. Trieu. Efficient batched oblivious PRF with applications to private set intersection. In CCS ,2016. [41] J.-S. Sim, S. Kim, and J. H. Cheon. Achieving GWAS with homomorphic encryption. BMC Medical Genomics , 2020. [42] M. Blatt, A. Gusev, Y. Polyakov, K. Rohloff, and V. Vaidya. Secure large-scale genome-wide asso-ciation studies using homomorphic encryption. 
+
+PNAS , 2020. 11

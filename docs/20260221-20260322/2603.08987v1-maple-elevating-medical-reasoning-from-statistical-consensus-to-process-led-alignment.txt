@@ -1,0 +1,279 @@
+Title: MAPLE: Elevating Medical Reasoning from Statistical Consensus to Process-Led Alignment
+
+URL Source: https://arxiv.org/pdf/2603.08987v1
+
+Published Time: Wed, 11 Mar 2026 00:17:39 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# MAPLE: Elevating Medical Reasoning from Statistical Consensus to Process-Led Alignment 
+
+Kailong Fan 1,3⋆, Anqi Pu 2 ⋆, Yichen Wu 3†, Wanhua Li 2, Yicong Li 2,Hanspeter Pfister 2, Huafeng Liu 1, Xiang Li 3, Quanzheng Li 3, and Ning Guo 3 
+
+> 1
+
+Zhejiang University, 2 Harvard University, 3 Harvard Medical School 
+
+> †
+
+Corresponding author: yiwu6@mgh.harvard.edu 
+
+Abstract. Recent advances in medical large language models have ex-plored Test-Time Reinforcement Learning (TTRL) to enhance reason-ing. However, standard TTRL often relies on majority voting (MV) as a heuristic supervision signal, which can be unreliable in complex med-ical scenarios where the most frequent reasoning path is not necessarily the clinically correct one. In this work, we propose a novel and unified training paradigm that integrates medical process reward models with TTRL to bridge the gap between test-time scaling (TTS) and paramet-ric model optimization. Specifically, we advance the TTRL framework by replacing the conventional MV with a fine-grained, expert-aligned supervision paradigm using Med-RPM. This integration ensures that re-inforcement learning is guided by medical correctness rather than mere consensus, effectively distilling search-based intelligence into the model’s parametric memory. Extensive evaluations on four different benchmarks have demonstrated that our developed method consistently and signifi-cantly outperforms current TTRL and standalone PRM selection. Our findings establish that transitioning from stochastic heuristics to struc-tured, step-wise rewards is essential for developing reliable and scalable medical AI systems. 
+
+Keywords: Medical Reasoning · Test-time Reinforcement Learning 
+
+## 1 Introduction 
+
+Large language models (LLMs) are increasingly studied for medical decision support, including radiology interpretation [1, 15, 24], clinical question answer-ing [17, 19], and multi-step diagnostic reasoning [2, 4]. In these safety-critical settings, errors are not merely utility-degrading but can translate into clinically inappropriate decisions [10, 7], so improving reasoning reliability is a primary requirement rather than an optional enhancement. Medical reasoning further differs from many general-domain tasks because correct answers often depend on a sequence of clinically grounded intermediate judgements, where early mis-takes can cascade and become difficult to recover from.  
+
+> ⋆
+
+Equal contribution.  
+
+> arXiv:2603.08987v1 [cs.LG] 9 Mar 2026 2Fan, Pu et al.
+
+A common approach to improve reliability is TTS [27, 9], where the model samples multiple reasoning trajectories and aggregates them using self-consistency, typically implemented as MV. This strategy can reduce variance when errors are mostly independent, but it has a structural limitation: frequency is not a proxy for clinical correctness when the sampled trajectories share correlated miscon-ceptions or systematically omit key evidence. In medical problems, such a cor-relation is plausible because many trajectories are produced by the same model, share the same bind spots, and can converge to the same incorrect but internally coherent explanation [5]. As a result, the most frequent reasoning path can still be wrong even when it appears consistent. Recent works therefore move from outcome-only aggregation to process-level verification [12, 21], using external or auxiliary verifiers to judge intermediate steps. Medical process reward models, such as Med-PRM [23], provide a clinically aligned signal by evaluating the cor-rectness of intermediate reasoning and using these scores to rerank candidate trajectories. However, verification-based methods are largely selection-only [26, 20]. They improve final answers by choosing the best candidate from a sampled pool, while leaving the underlying generator unchanged. This creates two practical constraints. First, performance gains must be repeatedly paid for with sampling and reranking at inference time, which limits scalability under tight latency or cost budgets. Second, systematic errors can persist because the model’s proposal distribution is not corrected; the verifier can filter mistakes but cannot prevent the generator from repeatedly producing them. In parallel, TTRL has been pro-posed as a mechanism to improve the generator directly on unlabeled test inputs [29, 13, 25]. The key idea is to define a proxy supervision signal from the model’s own samples, then perform small policy updates so that future generations are more likely to match that signal. This paper argues that the missing piece is a medically grounded supervision signal that can replace voting inside TTRL. If process verifiers can reliably dis-tinguish clinically correct reasoning from plausible but incorrect reasoning at test time, then their preferences should be used not only to select outputs but also to guide policy improvement. Motivated by this observation, we propose MAPLE 
+
+(Medical Alignment via Process-Led Evolution), a test-time training paradigm that integrates medical process reward models with TTRL to bridge TTS and parametric optimization. Concretely, MAPLE replaces MV pseudo-supervision with fine-grained, expert-aligned step-wise rewards produced by a medical pro-cess reward model (Med-RPM). Instead of optimizing toward what the model most frequently says, MAPLE optimizes toward what the medical verifier judges as correct along the reasoning process, thereby aligning test-time learning with clinical validity rather than consensus. In summary, our main contributions are: 
+
+– We introduce a unified paradigm that bridges TTS and TTRL, enabling generate-and-improve on unlabeled medical queries. 
+
+– We propose MAPLE, which replaces vote-based supervision in TTRL with step-wise rewards to guide medically grounded test-time updates. MAPLE 3
+
+– We conduct extensive experiments on four medical reasoning benchmarks, demonstrating consistent improvements over vote-based TTRL and PRM-only test-time selection, with additional studies confirming the benefit of process-led rewards for stable and effective test-time adaptation. 
+
+## 2 Background 
+
+TTS and Self-Evolution. Increasing computation at inference time has be-come a practical way to elicit stronger reasoning from LLMs, often comple-menting or even rivaling gains from scaling model size [18, 8]. A dominant line of work samples multiple solutions and aggregates them via consensus (e.g., Self-Consistency) or selection (e.g., Best-of-M with a reward model) [20, 18]. Be-yond selection-only schemes, TTRL enables parameter adaptation on unlabeled inputs by deriving proxy rewards from repeated sampling and MV, yielding 
+
+self-evolution at test time [29]. While recent frontier reasoning models leverage outcome-verifiable rewards or expensive human annotations for RL [6, 3], unla-beled test-time adaptation is particularly appealing in medical settings where real-time gold standards are rarely available [7]. 
+
+Inference-Time Verification: From Outcome to Process Rewards. Test-Time Scaling improves output quality without updating model parameters, typ-ically by exploring multiple reasoning trajectories and selecting the most reliable one. Outcome-based reward models score whole solutions but can misjudge tra-jectories due to spurious reasoning that happens to reach the correct answer or correct early steps that later derail [22, 11]. Process reward models address this by providing stepwise supervision to evaluate intermediate reasoning va-lidity [12, 28]. In medicine, stepwise verification is challenging due to the lack of symbolic verifiers; Med-PRM tackles this by grounding step evaluations in retrieved clinical guidelines and medical literature (RAG-as-a-judge), enabling stronger verifier-based selection in medical reasoning [23, 14]. 
+
+## 3 The Proposed MAPLE Method 
+
+We propose the MAPLE algorithm, a PRM-guided TTRL framework for medical reasoning. Concretely, it combines process-level verification with test-time opti-mization, so the model can learn from the verifier feedback at inference rather than relying only on post-hoc reranking. 
+
+3.1 Preliminary 
+
+Given a medical question x, a policy model πθ samples M reasoning trajectories 
+
+{yi}Mi=1 , yi ∼ πθ (· | x), (1) where each trajectory yi contains a step-by-step rationale followed by a final pre-dicted answer ai ∈ A . Following prior work on medical process verification [23], 4 Fan, Pu et al. Step1 Step 2 ··· 𝑦 !   
+
+> System Prompt: Solve the following question step -by -step…
+> Question: A 44 -year -old male visited the hospital…
+> Options: (A) Anemia \n(B) Atrial fibrillation \n…
+> Test Data
+> Policy Model
+> Process Reward
+> Model
+
+···   
+
+> Step1 Step 2
+
+·· · 𝑦 "  
+
+> Step1 Step 2
+
+·· · 𝑦 #
+
+> 𝑠 !,!𝑠 !,"
+
+·· ·𝑦 !
+
+> 𝑠 ",!𝑠 ","
+
+·· ·𝑦 "
+
+> 𝑠 #,!𝑠 #,"
+
+·· ·𝑦 %
+
+···     
+
+> #𝒚
+> 𝑅 (𝑦 !,(𝑦 )
+> 𝑅 (𝑦 ",(𝑦 )
+> 𝑅 (𝑦 #,(𝑦 )
+
+···  
+
+> Policy Optimization
+> Pseudo Label
+> Reward Label Estimation
+> PRM -based
+> scoring
+> SC+RM Reward
+> Calculation
+> Multi -Sampl e
+> Generation
+
+Fig. 1. Overview of the MAPLE framework. Given a test question, the policy model generates M candidate reasoning chains via multi-sample generation. Each chain is evaluated by a PRM, which assigns step-level scores si,j to every intermediate reason-ing step. The scored candidates are aggregated through a Self-Consistency with Re-ward Model reranking (SC+RM) mechanism to produce a pseudo label ˆy. Per-sampel rewards R(yi, ˆy) are then computed by the candidate and pseudo label, and the result-ing reward signals are used to update the policy model online via policy optimization. 
+
+we constrain the number of reasoning steps to a moderate range ( 2 < T i < 10 )to discourage degenerate or overly shallow rationales. 
+
+Process reward model. We employ a medical process reward model that evaluates the intermediate steps of each trajectory and outputs step-level scores, 
+
+{si,t }Ti
+
+> t=1
+
+, 2 < T i < 10 , (2) where larger si,t indicates higher medical correctness and logical validity at step 
+
+t. To obtain a conservative trajectory-level confidence, we aggregate step scores via a worst-step rule: 
+
+Si = min  
+
+> t
+
+si,t . (3) This design reflects the safety-critical nature of medical reasoning, where a single incorrect intermediate step may invalidate the final conclusion. 
+
+3.2 MAPLE: PRM-Guided Test-Time Reinforcement Learning 
+
+As shown in Fig. 1, the proposed MAPLE method is a PRM-guided ttrl frame-work to improve medical reasoning without additional supervised annotations. At a high level, MAPLE consists of three stages executed at test time for each input x: (1) sample multiple trajectories from πθ and score them with the PRM; (2) estimate a pseudo label ˆa using PRM-guided self-consistency; (3) update πθMAPLE 5
+
+with a reinforcement learning objective that encourages trajectories consistent with ˆa. This procedure distills verifier-guided selection signals into the model parameters, turning repeated sampling into persistent policy improvement. 
+
+Label Estimation via PRM. Given {(yi, a i, S i)}Mi=1 , we first map PRM con-fidences to soft weights, 
+
+wi = σ(α(Si − β)) = 11 + exp( −α(Si − β)) , (4) where α > 0 controls sharpness and β sets the midpoint. This mapping sup-presses low-confidence trajectories while retaining graded preferences among high-confidence candidates, leading to more stable pseudo-label estimation. We then group trajectories by their predicted answers and compute an ag-gregated confidence for each answer: 
+
+R(a) = X
+
+> i∈G (a)
+
+wi, G(a) = {i | ai = a}. (5) The pseudo-label is selected as 
+
+ˆa = arg max  
+
+> a∈A
+
+R(a). (6) When all wi are equal, this reduces to standard MV; otherwise, it strategically prioritizes answers supported by higher-quality reasoning trajectories that ex-hibit superior clinical logical consistency as judged by the PRM. 
+
+Reward and TTRL Update. Given the pseudo label ˆa, we define a trajectory-level reward based on answer agreement: 
+
+ri =
+
+(
+
+1, if ai = ˆ a, 
+
+0, otherwise . (7) Intuitively, PRM-guided self-consistency provides a medically grounded pseudo-supervision target ˆa, and reinforcement learning internalizes this target by shift-ing probability mass toward trajectories that yield ˆa.We optimize the expected reward under πθ :
+
+max  
+
+> θ
+
+Ey∼πθ (·| x) [r(y; ˆ a)] , (8) and update θ using GRPO [16] with a small learning rate to ensure conservative test-time adaptation: 
+
+θ ← θ + η ∇θ Ey∼πθ (·| x) [r(y; ˆ a)] . (9) 6 Fan, Pu et al. 
+
+## 4 Experimental Results 
+
+4.1 Experiment Settings Baselines. We compare against three complementary baseline categories: (i) strong LLMs including Llama-3.1-8B-Instruct as well as larger reasoning-oriented models (DeepSeek-R1, QwQ-32B) and a medical-specialized model (HuatuoGPT-o1); (ii) test-time inference scaling baselines represented by Med-PRM [23], which improves performance via PRM-guided reranking/aggregation without updating model parameters; and (iii) test-time reinforcement learning baselines represented by TTRL [29], which performs unlabeled test-time policy updates using proxy rewards derived from repeated sampling. 
+
+Benchmark. We evaluate medical reasoning and diagnostic capability on four representative benchmarks: 1) MedQA. Professional-level multiple-choice ques-tions sourced from the USMLE, requiring multi-step clinical reasoning. We re-port results on the English 4-option and 5-option subsets. 2) MedMCQA. 
+
+Large-scale multi-subject medical QA from Indian entrance exams, covering 21 subjects and thousands of topics to assess both factual knowledge and clinical reasoning. 3) DDXPlus. Differential diagnosis benchmark constructed from patient antecedents and structured symptoms (categorical/multi-choice with hi-erarchical organization), requiring identification of the correct pathology from candidate diagnoses. 4) MMLU-Med (Medical Subset). Medical categories from MMLU in a standardized multiple-choice format. 
+
+Evaluation Protocol. We adopt multiple decoding and selection strategies for evaluation. Pass@1 measures the accuracy of a single sampled response under non-zero temperature sampling. To evaluate test-time scaling behavior, we con-sider three inference-time strategies: MV selects the most frequent answer among 
+
+M sampled responses; Best-of-M (BoM) chooses the candidate with the highest PRM score; and SC+RM groups responses by final answer and selects the group with the highest summed PRM score. 
+
+4.2 Experimental Analysis Main Results. Table 1 and Fig. 2 present a comprehensive comparison of MAPLE against representative baselines across four medical QA benchmarks. By leveraging BOM, MAPLE achieves SOTA performance among all 8B models, obtaining 73.02% on MedQA, 66.00% on MedMCQA, and 83.00% on DDXPlus. MAPLE demonstrates consistent advantages across four comparison axes: i) Backbone baselines. it exceeds its backbone Llama3.1 (MV) by 4.77%, 6.00%, 9.00%, and 1.86% on the four benchmarks, showing that Med-PRM-guided test-time policy optimization delivers meaningful gains without additional training data, with Fig. 2 further indicating larger improvements on MedMCQA, DDX-Plus, and MMLU-Med under MV where structured step-by-step reasoning is rewarded; ii) Reasoning-distilled models. at the same 8B scale, MAPLE substantially outperforms R1-Distill-Llama (MV) and surpasses HuatuoGPT-o1 (MV) on all benchmarks, while the sharp drop of domain-agnostic distillation MAPLE 7
+
+Table 1. Performance comparison on medical QA benchmarks. Results are reported on MedQA (USMLE-style), MedMCQA, DDXPlus, and MMLU-Med. Model Size MedQA MedMCQA DDXPlus MMLU-Med Llama3.1 (pass@1) 8B 62.79 57.44 66.41 78.33 Llama3.1 (MV) 8B 68.25 60.00 74.00 83.33 Gemma 2 (pass@1) 9B 52.90 50.97 63.80 79.63 Gemma 2 (MV) 9B 54.76 52.00 69.00 79.63 R1-Distill-Llama(pass@1) 8B 47.10 42.63 49.22 70.25 R1-Distill-Llama (MV) 8B 61.90 44.00 80.00 78.70 R1-Distill-Qwen (pass@1) 7B 18.20 29.81 28.90 38.95 R1-Distill-Qwen (MV) 7B 34.13 38.00 62.00 59.26 HuatuoGPT-o1 (pass@1) 8B 65.89 54.93 58.33 72.87 HuatuoGPT-o1 (MV) 8B 65.11 52.83 58.33 74.00 UltraMedical (pass@1) 8B 57.53 50.61 63.59 66.72 UltraMedical (MV) 8B 68.25 64.00 72.00 81.48 Med-PRM (BoM) 8B 71.43 63.00 79.00 78.70 Med-PRM (SC+RM) 8B 69.84 62.00 78.00 83.33 MAPLE (BoM) 8B 73.02 66.00 83.00 85.19 Table 2. Ablation study on model components across four benchmarks. TTRL: base policy optimized without any PRM guidance; MAPLE-Med S3: TTRL augmented with Med S3 as the process reward model. Model Size MedQA MedMCQA DDXPlus MMLU-Med TTRL 8B 69.84 62.00 73.00 85.71 TTRL-Med S3 (MV) 8B 69.05 59.87 74.99 80.95 TTRL-Med S3 (BoM) 8B 69.05 61.00 78.00 82.41 TTRL-Med S3 (SC+RM) 8B 69.05 60.00 75.00 82.41 MAPLE (MV) 8B 68.25 63.00 78.00 90.48 
+
+MAPLE (BoM) 8B 73.02 66.00 83.00 85.19 MAPLE (SC+RM) 8B 71.13 63.00 79.00 85.19 
+
+(e.g., R1-Distill-Qwen variants reaching only 18.20% on MedQA) underscores a risk that MAPLE avoids via test-time adaptation; iii) PRM-based methods. 
+
+compared to the most direct baseline Med-PRM (BoM), MAPLE achieves fur-ther gains of 1.59%, 3.00%, 4.00%, and 6.49%, suggesting its benefit comes not only from improved candidate selection but from online policy updates that en-hance generated reasoning chains beyond what static reranking can exploit; and 
+
+iv) Larger models. despite being 4 × smaller, MAPLE (8B) surpasses QwQ (32B) on DDXPlus (78.0% vs. 75.0%) and MMLU-Med (90.5% vs. 89.8%), high-lighting the parameter efficiency of scaling test-time compute. 8 Fan, Pu et al. MedQA MedMCQA DDXPlus MMLU-Med 
+
+> 50
+> 60
+> 70
+> 80
+> 90
+> 100
+> Accuracy (%)
+> 68.2
+> 60.0
+> 74.0
+> 83.3
+> 68.2
+> 63.0
+> 78.0
+> 90.5
+> 84.9
+> 65.0
+> 75.0
+> 89.8
+> +0.00
+> +3.00
+> +4.00
+> +7.15
+> Italic: MAPLE gain over Llama3.1
+> Llama3.1 (MV, 8B)
+> MAPLE (MV, 8B)
+> QwQ (MV, 32B)
+
+Fig. 2. Performance comparison across four medical QA benchmarks. Built on Llama3.1 (8B) as backbone, MAPLE consistently outperforms its base model and sur-passes QwQ (32B) on DDXPlus and MMLU-Med despite being 4 × smaller in model size. Italic green values indicate MAPLE’s absolute accuracy gain over the Llama3.1 (MV) backbone. 1 2 4 8 16 32 64               
+
+> Number of Rollouts (M)
+> 56.0
+> 58.0
+> 60.0
+> 62.0
+> 64.0
+> Accuracy (%)
+> Majority Voting
+> 124816 32 64
+> Number of Rollouts (M)
+> 57.0
+> 58.5
+> 60.0
+> 61.5
+> 63.0 Best-of-M
+> 124816 32 64
+> Number of Rollouts (M)
+> 58.0
+> 60.0
+> 62.0
+> 64.0 SC + RM
+
+Llama3.1-8B MAPLE 
+
+Fig. 3. Test-time scaling curves on MedMCQA under : MV, BoM, and SC+RM. MAPLE (red) consistently outperforms the Llama3.1-8B backbone (blue) across dif-ferent rollout budgets M , with the shaded region highlighting the performance gap. 
+
+4.3 Ablation Study Effect of MedPRM. As shown in Table 2, comparing TTRL (69.84% on MedQA) against MAPLE (BoM) (73.02%), incorporating MedPRM-guided re-ward during test-time optimization yields consistent improvements across all benchmarks, confirming that process-level medical reward is essential. 
+
+Test-time Scaling Behavior. Fig. 3 shows that as rollouts M increase from 1 to 64, MAPLE consistently outperforms the Llama3.1-8B backbone under all decoding strategies, indicating robust gains across inference budgets. Accuracy for both models rises with M and plateaus around M = 16 –32 , after which improvements diminish and BoM may slightly degrade, likely due to reward model noise at large M . Notably, the MAPLE–backbone gap widens at larger 
+
+M under MV and SC+RM, suggesting MAPLE produces higher-quality, more diverse reasoning chains that benefit more from aggregation. MAPLE 9
+
+## 5 Conclusion 
+
+We propose MAPLE, a test-time training method for medical reasoning that replaces MV pseudo-supervision with step-wise rewards from a medical process reward model, delivering consistent and robust gains across rollout budgets on four medical QA benchmarks. MAPLE achieves state-of-the-art performance among 8B models, outperforming its Llama3.1 backbone, reasoning-distilled and PRM-only baselines, and even surpassing QwQ (32B) on DDXPlus and MMLU-Med despite being 4 × smaller in parameter scale. 
+
+## References 
+
+1. Bhayana, R.: Chatbots and large language models in radiology: A practical primer for clinical and research applications. Radiology 310 1 , e232756 (2024). https://doi.org/10.1148/radiol.232756 2. Dinc, M.T., Bardak, A., Bahar, F., Noronha, C.: Comparative analy-sis of large language models in clinical diagnosis: performance evalua-tion across common and complex medical cases. JAMIA Open 8 (2025). https://doi.org/10.1093/jamiaopen/ooaf055 3. El-Kishky, A.: Openai o1 system card. ArXiv abs/2412.16720 (2024). https://doi.org/10.48550/arxiv.2412.16720 4. Goh, E., Gallo, R.J., Hom, J., Strong, E., Weng, Y., Kerman, H., et al.: Large language model influence on diagnostic reasoning. JAMA Network Open 7 (2024). https://doi.org/10.1001/jamanetworkopen.2024.40969 5. Gu, L., Zhu, Y., Sang, H., Wang, Z., Sui, D., Tang, W., Harrison, E.M., Gao, J., Yu, L., Ma, L.: Medagentaudit: Diagnosing and quantifying collaborative failure modes in medical multi-agent systems. ArXiv abs/2510.10185 (2025). https://doi.org/10.48550/arxiv.2510.10185 6. Guo, D., Yang, D., Zhang, H., Song, J.M., et al.: Deepseek-r1 incentivizes rea-soning in llms through reinforcement learning. Nature 645 , 633 – 638 (2025). https://doi.org/10.1038/s41586-025-09422-z 7. Hager, P., Jungmann, F., Holland, R., Bhagat, K., Hubrecht, I., Knauer, M., Viel-hauer, J., Makowski, M., Braren, R., Kaissis, G., Rueckert, D.: Evaluation and mit-igation of the limitations of large language models in clinical decision-making. Na-ture Medicine 30 , 2613 – 2622 (2024). https://doi.org/10.1038/s41591-024-03097-1 8. Huang, X., Wu, J., Liu, H., Tang, X., Zhou, Y.: m1: Unleash the potential of test-time scaling for medical reasoning with large language models. ArXiv 
+
+abs/2504.00869 (2025). https://doi.org/10.48550/arxiv.2504.00869 9. Ji, Y., Li, J., Ye, H., Wu, K., Xu, J., Mo, L., Zhang, M.: A survey of test-time compute: From intuitive inference to deliberate reasoning (2025) 10. Kim, J., Podlasek, A., Shidara, K., Liu, F., Alaa, A., Bernardo, D.: Limitations of large language models in clinical problem-solving arising from inflexible reasoning. Scientific Reports 15 (2025). https://doi.org/10.1038/s41598-025-22940-0 11. Lee, D.B., Lee, S., Kang, M., Baek, J., et al.: Rethinking reward mod-els for multi-domain test-time scaling. ArXiv abs/2510.00492 (2025). https://doi.org/10.48550/arxiv.2510.00492 12. Lightman, H., Kosaraju, V., Burda, Y., et al.: Let’s verify step by step. ArXiv 
+
+abs/2305.20050 (2023). https://doi.org/10.48550/arxiv.2305.20050 10 Fan, Pu et al. 13. Liu, J., He, C., Lin, Y., Yang, M., Shen, F., Liu, S.: Ettrl: Balancing exploration and exploitation in llm test-time reinforcement learning via entropy mechanism. ArXiv abs/2508.11356 (2025). https://doi.org/10.48550/arxiv.2508.11356 14. Liu, S., McCoy, A.B., Wright, A.: Improving large language model ap-plications in biomedicine with retrieval-augmented generation: a systematic review, meta-analysis, and clinical development guidelines. Journal of the American Medical Informatics Association : JAMIA 32 , 605 – 615 (2025). https://doi.org/10.1093/jamia/ocaf008 15. Nam, Y., Kim, D.Y., Kyung, S., Seo, J., et al.: Multimodal large language models in medical imaging: Current state and future directions. Korean Journal of Radiology 
+
+26 , 900 – 923 (2025). https://doi.org/10.3348/kjr.2025.0599 16. Shao, Z., Wang, P., Zhu, Q., et al.: Deepseekmath: Pushing the limits of mathemat-ical reasoning in open language models. arXiv preprint arXiv:2402.03300 (2024) 17. Singhal, K., Tu, T., Gottweis, J., et al.: Toward expert-level medical question answering with large language models. Nature Medicine 31 , 943 – 950 (2025). https://doi.org/10.1038/s41591-024-03423-7 18. Snell, C., Lee, J., Xu, K., Kumar, A.: Scaling llm test-time compute optimally can be more effective than scaling model parameters. ArXiv abs/2408.03314 (2024). https://doi.org/10.48550/arxiv.2408.03314 19. Wang, D., Zhang, S.: Large language models in medical and healthcare fields: applications, advances, and challenges. Artificial Intelligence Review 57 (2024). https://doi.org/10.1007/s10462-024-10921-0 20. Wang, X., Wei, J., Schuurmans, D., Le, Q., Chi, E.H., Zhou, D.: Self-consistency improves chain of thought reasoning in language models. ArXiv abs/2203.11171 
+
+(2022) 21. Wang, Z., Li, Y., Wu, Y., Luo, L., Hou, L., Yu, H., Shang, J.: Multi-step prob-lem solving through a verifier: An empirical analysis on model-induced process supervision pp. 7309–7319 (2024). https://doi.org/10.48550/arxiv.2402.02658 22. Yuan, Y., Mang, Q., et al.: Curing miracle steps in llm mathemat-ical reasoning with rubric rewards. ArXiv abs/2510.07774 (2025). https://doi.org/10.48550/arxiv.2510.07774 23. Yun, J., Sohn, J., Park, J., Kim, H., Tang, X., Shao, Y., Koo, Y., Ko, M., Chen, Q., Gerstein, M., Moor, M., Kang, J.: Med-prm: Medical reasoning models with stepwise, guideline-verified process rewards. ArXiv abs/2506.11474 (2025). https://doi.org/10.48550/arxiv.2506.11474 24. Zhang, A., Zhao, E., Wang, R., Zhang, X., Wang, J., Chen, E.: Mul-timodal large language models for medical image diagnosis: Challenges and opportunities. Journal of biomedical informatics 169 , 104895 (2025). https://doi.org/10.1016/j.jbi.2025.104895 25. Zhang, H., Guo, J., Iwasawa, Y., Matsuo, Y.: Aqa-ttrl: Self-adaptation in audio question answering with test-time reinforcement learning (2025) 26. Zhang, L., Hosseini, A., Bansal, H., Kazemi, M., Kumar, A., Agarwal, R.: Genera-tive verifiers: Reward modeling as next-token prediction. ArXiv abs/2408.15240 
+
+(2024). https://doi.org/10.48550/arxiv.2408.15240 27. Zhang, Q., Lyu, F., Sun, Z., Wang, L., Zhang, W., Guo, Z., Wang, Y., King, I., Liu, X., Ma, C.: A survey on test-time scaling in large language models: What, how, where, and how well? (2025) 28. Zheng, C., Zhu, J., Ou, Z., et al.: A survey of process reward models: From outcome signals to process supervisions for large language models. ArXiv abs/2510.08049 
+
+(2025). https://doi.org/10.48550/arxiv.2510.08049 MAPLE 11 29. Zuo, Y., Zhang, K., Qu, S., Sheng, L., Zhu, X., Zhang, Y., Qi, B., Sun, Y., Cui, G., Ding, N., Zhou, B.: Ttrl: Test-time reinforcement learning. ArXiv 
+
+abs/2504.16084 (2025). https://doi.org/10.48550/arxiv.2504.16084

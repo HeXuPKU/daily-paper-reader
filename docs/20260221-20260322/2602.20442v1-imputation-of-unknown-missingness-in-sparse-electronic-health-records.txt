@@ -1,0 +1,785 @@
+Title: Imputation of Unknown Missingness in Sparse Electronic Health Records
+
+URL Source: https://arxiv.org/pdf/2602.20442v1
+
+Published Time: Wed, 25 Feb 2026 01:22:39 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Imputation of Unknown Missingness in Sparse Electronic Health Records 
+
+## Jun Han * Josue Nassar * Sanjit Singh Batra *
+
+## Aldo Cordova-Palomera Vijay Nori Robert E. Tillman  
+
+> *
+
+Equal Contribution Optum AI 
+
+{jun han, josue nassar, sanjit.batra, aldocp, vijay.nori, rob.tillman }@optum.com 
+
+Abstract 
+
+Machine learning holds great promise for advancing the field of medicine, with electronic health records (EHRs) serving as a primary data source. However, EHRs are often sparse and contain missing data due to various challenges and lim-itations in data collection and sharing between healthcare providers. Existing techniques for imputing missing values predominantly focus on known unknowns , such as missing or unavailable values of lab test results; most do not explicitly ad-dress situations where it is difficult to distinguish what is miss-ing. For instance, a missing diagnosis code in an EHR could signify either that the patient has not been diagnosed with the condition or that a diagnosis was made, but not shared by a provider. Such situations fall into the paradigm of unknown unknowns . To address this challenge, we develop a general pur-pose algorithm for denoising data to recover unknown missing values in binary EHRs. We design a transformer-based denois-ing neural network where the output is thresholded adaptively to recover values in cases where we predict data are missing. Our results demonstrate improved accuracy in denoising med-ical codes within a real EHR dataset compared to existing imputation approaches and leads to increased performance on downstream tasks using the denoised data. In particular, when applying our method to a real world application, predicting hospital readmission from EHRs, our method achieves statisti-cally significant improvement over all existing baselines. 
+
+## Introduction 
+
+Previous work has demonstrated the potential of applying machine learning to the medical domain for tasks such as disease prediction, clinical trial design, and health economics and outcome research (Deng et al. 2021; Liu et al. 2021; Padula et al. 2022). A standard data source for ML in the medical domain is electronic health records (EHRs). Addi-tionally, many existing disease prediction models primarily utilize tabular formats, often transforming longitudinal EHR data into binary or categorical forms, rather than employing time-series forecasting methods (Lee et al. 2022; Huang et al. 2021; Rao et al. 2023; Debal and Sitote 2022). In practice however, EHRs, upon being binarized, are prone to having missing values due to a variety of reasons such as recording issues (Goldstein et al. 2017) and under-reporting (Chen et al. 2023). Moreover, the lack of data shar-
+
+Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+ing between providers and the heterogeneity of EHR coding across institutions (Hur et al. 2022) amplifies this problem as EHR records for the same patient can vary across providers and institutions. Training on EHR data in the presence of missingness can negatively impact model performance at test time. Therefore, to ensure the efficacy of trained models, it is beneficial to pre-process the data by replacing missing values. The de facto approach for replacing missing values in data is via imputation (Rubin 1978; Gelman et al. 2004; Mazumder, Hastie, and Tibshirani 2010), where missing val-ues are replaced with imputed values computed using avail-able data. Generally, imputation techniques are designed for the known unknown scenario where it is known which fields are missing (Figure 1A). For instance, a lab test was ordered by the physician, but the value was not recorded or made available in the EHR. In practice, missing fields are com-monly encoded with a special symbol to indicate that the value is missing, e.g., NaN (Li et al. 2021) or −1 for binary data that is otherwise 0 or 1.In contrast, clinical codes in EHRs encoded as tabular data are typically represented as 1 in the presence of a diagno-sis code and represented as 0 in the absence of a diagnosis code. This binary representation can be ambiguous as a 0
+
+corresponding to a specific diagnosis code may indicate that the patient does not have the diagnosis or they do, but it is missing. For example, suppose that the ICD code correspond-ing to diabetes is represented as 0 in a tabular encoding of a patient’s EHR. Without additional supporting evidence, this could mean either: 1) that the patient has not been diagnosed with diabetes, i.e., a negative diagnosis or 2) that the patient 
+
+was diagnosed with diabetes by a physician, but this diag-nosis was not recorded by the physician or made available in the EHR. Thus, unlike the known unknowns paradigm, it is unclear when data are missing. We therefore refer to this scenario as unknown unknowns (Figure 1B). This ambiguity makes the problem of imputation significantly more challeng-ing, as it necessitates determining whether an absent code should be treated as missing or not, significantly increasing the complexity of the solution space (Figure 1B). Moreover, recent works have shown that the missingness of negative diagnosis is a much more common issue in EHRs compared to the missingess of positive diagnosis codes (Wu et al. 2023; Chen et al. 2023). While one could treat all codes of value 0
+
+> arXiv:2602.20442v1 [cs.LG] 24 Feb 2026
+
+as missing and apply traditional imputation approaches, the sparsity of EHRs prevents such a strategy from being a viable solution. In this work, we propose an approach, Denoise2Impute, based on denoising, that allows for better recovery of un-known unknowns compared to SOTA imputation-based ap-proaches. Denoise2Impute, is a denoising neural network parameterized by a SetTransformer (Lee et al. 2019) that allows the model to learn relationships between different ICD codes, e.g., a positive diabetes diagnosis is correlated with high glucose. While Denoise2Impute performs well, to increase its ability to distinguish whether a 0 corresponds to a negative diagnosis or a missing diagnosis code, we system-atically formulate this challenge of unknown unknowns in EHRs as a denoising problem and theoretically derive the optimal denoising function. Inspired by the theory, we in-troduce an extension of Denoise2Impute, which we denote as Denoise2Impute-T, where data-dependent thresholds are computed to help stabilize the output of the network. To assess the efficacy of our proposed approach, we compute the accuracy of the resulting denoising as well as perform comprehensive evaluations on a variety of downstream tasks using the denoised data. We demonstrate that our proposed approach outperforms baselines by ∼ 2% AUPRC in de-noising clinical codes within a large EHR dataset and the denoised EHRs outperform baseline approaches on a variety of clinical prediction tasks by ∼ 0.5%. 
+
+## Related Work 
+
+Imputation and Denoising The process of denoising data sources has been extensively investigated with numerous domain-specific methods proposed (Brown and Hwang 1997; Buades, Coll, and Morel 2005; Mazumder, Hastie, and Tibshi-rani 2010; Stekhoven and B ¨uhlmann 2012; Jarrett et al. 2022; You et al. 2020; Peis, Ma, and Hern ´andez-Lobato 2022), par-ticularly in the medical domain (Chowdhury, Islam, and Khan 2017; Liu et al. 2023). When it is known which entries are corrupted or missing, the denoising problem reduces to im-putation, for which various techniques have been developed. In particular, K-nearest neighbor methods (Beretta and San-taniello 2016; Bai, Mangathayaru et al. 2022; Faisal and Tutz 2021), deep generative modeling approaches like variational autoencoders (Beaulieu-Jones, Moore, and CONSORTIUM 2017; Ma et al. 2018), and generative adversarial networks (Yoon, Jordon, and Schaar 2018; Luo et al. 2018). Tech-niques for imputation of time series medical data have been developed using diffusion models (Alcaraz and Strodthoff 2022; Lee and Park 2022; Zheng and Charoenphakdee 2022), and for the imputation of medical records using graph-based methods (Vivar et al. 2020; Vinas, Zheng, and Hayes 2021). These methods have been further refined by incorporating attention-based approaches, which leverage learned correla-tions among known features to impute missing data (Lewis et al. 2021; Yıldız, Ko c¸ , and Ko c¸ 2022; Wang et al. 2022; Festag and Spreckelsen 2023). In (Chen et al. 2023), an impu-tation algorithm based on interpretable machine learning was devised to allow for performant and interpretable imputation algorithms. 
+
+Unknown Unknowns The problem of unknown unknowns has been studied in various domains, where it has also been re-ferred to as latent missingess (Wu et al. 2023), under-reported variables (Sechidis et al. 2017) and data with positive and unlabeled data (Lazkecka, Mielniczuk, and Teisseyre 2021). In Wu et al. (2023), an active learning procedure for unknown unknowns in EHRs was proposed that takes into account the cost of checking if an absent diagnosis code is missing or negative. Sechidis et al. (2017) and Lazkecka, Mielniczuk, and Teisseyre (2021) both focus on the classification setting where the label and/or the features can have unknown un-knowns. While similar in spirit to our proposed approach, these approaches are not scalable as they rely on computing conditional probabilities which is infeasible for EHRs as they can have ∼1,000 diagnosis codes. In (Suleiman et al. 2020), domain knowledge from expert clinicians is used to devise a recommender-system approach for imputing unknown un-knowns in EHR data; we consider this work complimentary to ours. In Wu et al. (2016), a recommender-based system built on denoising autoencoders was to handle the cases of unknown unknowns in user preferences; we consider this work complimentary to ours. Another domain that deals with unknown unknowns is genomics, One class of approaches utilizes multiple noisy instances of a DNA sequence to build a denoised consensus sequence (Edgar and Flyvbjerg 2015; Wenger et al. 2019). Another class of denoising approaches for DNA sequences utilizes additional covariates to perform denoising (Wang et al. 2020). In this paper, however, we focus on denoising when there is a single noisy data point where it is not known a priori which fields of the data point are corrupted or missing. 
+
+## Denoise2Impute: Denoising Unknown Unknowns in EHRs 
+
+Background and Notation We begin by introducing notation and reviewing the goal of denoising. Let x denote noiseless data, where x ∼ p(x), x ∈ X . Let ˜x ∼ p(˜x | x), ˜x ∈ ˜X
+
+denote the corresponding noisy data where p(˜x | x) is the noise distribution that describes the corruption process, e.g., 
+
+p(˜x | x) = N (˜x | x, σ 2I). The goal of denoising is to learn a function, gθ : ˜X → X , with parameters θ, that can recover x from ˜x, i.e., ˆxθ = gθ (˜x). Given a dataset of noisy and noiseless pairs, D = {(˜xi, xi)}Ni=1 , we train gθ by minimizing a loss function that is appropriate for the data modality. EHRs are commonly represented as binary vectors, ˜x =[˜ x1, . . . , ˜xd, . . . , ˜xT ], and x = [ x1, . . . , x d, . . . , x T ], where 
+
+˜xd, x d ∈ { 0, 1}. Given an ICD code from the noisy patient EHR, ˜xd, there are two possible scenarios when performing imputation of unknown unknowns. If ˜xd = 1 , then we pre-serve it as we assume that there is no ambiguity for positive diagnosis. If ˜xd = 0 , then denoising is done to infer whether the 0 is a negative diagnosis or a missing positive diagnosis. When a clean EHR dataset is available, we propose to train a transformer-based denoising neural network, gθ , tak-ing noisy EHR of a patient as input during training, which can be obtained by masking the clean data, and predicting the complete EHR. The transformer-based denoising neural 1 0 0 1 0.8 0.4                           
+
+> 10.5 0.7 Patient EHR Set Transformer-based denoising network
+> 100Thresholding network
+> 10.8 0Patient EHR Imputed Patient EHR Proposed Approach: Denoise2Impute-T
+> Imputing Known Unknowns Imputing Unknown Unknowns
+> 100Patient EHR Possible Imputed Patient EHR
+> 100
+> 101
+> 110
+> 111
+> 10NaN Patient EHR ICD 1 ICD 2 ICD 3
+> 100
+> 101Possible Imputed Patient EHR
+> thresholds
+
+# A BCFigure 1: A) An example of imputing known unknowns. In the patient EHR, there is NaN in ICD 3. Thus, there are only two possible choices for ICD 3: 0 or 1. B) An example of imputing unknown unknowns. In the patient EHR, there is a 0 in ICD 2 and ICD 3. Due to reporting issues, it is unclear whether a 0 represents a negative diagnosis (0) or a missing diagnosis (1). Due to this ambiguity, there are 4 possibilities after imputing: i) ICD 2 and 3 are both negative diagnoses, thus they both are 0. ii) ICD 2 was missing, thus it is 1. ICD 3 was a negative diagnosis, thus it is a 0. iii) ICD 2 was a negative diagnosis, thus it is a 0. ICD 3 was missing, thus it is 1. iv) Both ICD 2 and 3 are missing, thus they both are 1. C) Our proposed approach, Denoise2Impute-T, comprises 2 components. A patient EHR is input into a Set Transformer based denoiser that outputs a denoised patient EHR. The EHR is also input into a Thresholding network that outputs thresholds for each ICD code. A greater than or equal to 
+
+element-wise comparison is performed between the denoised EHR and the thresholds, that leads to the final imputed EHR. network learns the correlation between different dimensions of EHRs in order to predict the true missing values in EHRs; we call our proposed approach Denoise2Impute. We begin by discussing the motivation for the choice of the Set Transformer for parametrizing gθ . As mentioned previously, a 0 for an ICD code in the noisy EHR could mean that the same ICD code in the noiseless EHR could either be a 0 or a 1. Thus, to perform well, it is crucial for the network to learn and leverage relationships between diagnosis codes. As an example, suppose that in a patient’s EHR we see there is a 0 for the diabetes ICD code. Patients with obesity and high glucose are also likely to have diabetes. Thus, if a 1 is present for both the obesity and high glucose ICD codes, but a 0 is present for the diabetes code, then it is likely that there is a missing diabetes diagnosis. In contrast, if the patient has a clean bill of health and there is a 0 present for the diabetes code, it is likely that there is not a missing diabetes diagnosis. For learning this relationship, we parameterize gθ with a Set Transformer (Lee et al. 2019), as they have been shown to be able to learn pairwise and higher-order interactions be-tween the dimensions of an input. Moreover, unlike standard transformers, the Set Transformer architecture is agnostic to the order of the input, alleviating the need to design a posi-tional encoding scheme for ICD codes (which is non-trivial). For binary data, a natural choice for the loss function is the element-wise cross entropy (CE) loss 
+
+ℓCE (gθ (˜xi), xi) = 
+
+> T
+
+X
+
+> d=1
+
+ℓce (gθ (˜xi)d, x i,d ), (1) where gθ (˜xi)d is the d-th dimension of gθ (˜xi) and 
+
+ℓce (gθ (˜xi)d, x i,d ) = xi,d log gθ (˜xi)d
+
++ (1 − xi,d ) log(1 − gθ (˜xi)d).
+
+We found that when using (1) for training, the network under-performed on examples where ˜xi,d = 0 and xi,d = 1 . Thus, we modified the loss function to put more weight on these instances 
+
+˜ℓCE (gθ (˜xi), xi; λ) = 
+
+> T
+
+X
+
+> d=1
+
+I[˜ xi,d = xi,d ]ℓce (gθ (˜xi)d, x i,d )+ λI[˜ xi,d ̸ = xi,d ]ℓce (gθ (˜xi)d, x i,d ),
+
+where λ is a hyperparameter that dictates how much emphasis we should place on training examples where ˜xi,d = 0 and 
+
+xi,d = 1 .
+
+## Denoise2Impute-T: A theoretically motivated extension 
+
+While Denoise2Impute was generally effective at imputing unknown unknowns, we found instances where it struggled to discern whether a 0 was missing or a negative diagnosis. We hypothesized that this is in part due to the difficulty of the problem. Classically, when performing denoising we of-ten assume–implicitly or explicitly–that we can discriminate between noiseless data, x, and noisy data, ˜x. Intuitively, this makes sense; we only perform denoising if the data is noisy, i.e., ˜x̸ = x. If a data point is not noisy, i.e., ˜x = x, then no denoising is performed, i.e., gθ is the identity function. In the unknown unknowns scenario, it is no longer easy to discriminate between ˜x and x. For example, in the case of EHRs it is difficult to discriminate between ˜x and x as 1) EHRs are generally very sparse and 2) the absence of a code can either mean that the patient was not diagnosed with that disease or that the patient was diagnosed but the code was not recorded or is unavailable in the EHR. Thus, given a sparse EHR vector it is difficult to discern whether it is noiseless or whether it should be denoised. Intuitively, we would expect denoising in the unknown unknowns scenario to be difficult as now we must discern which points need to be denoised. While in principle, we could denoise every 0, this may introduce artifacts into the data, especially when the data are sparse (Tanner, Morgan-Short, and Luck 2015) and lead to suboptimal performance. To formalize the intuition presented above, we begin by restricting ourselves to the case where X ⊆ RT and ˜X ⊆ RT
+
+and write the noise distribution, p(˜x | x), as follows: 
+
+p(˜x | x) = βδ (˜x = x) + (1 − β)q(˜x | x), (2) where δ(·) is the Dirac delta function and β ∈ [0 , 1] . With (2) we attempt to model the unknown unknowns setting, where with probability β no noise is added, i.e., ˜x = x, and with probability 1 − β noise is introduced via q(˜x | x). (2) demon-strates the difficulty of the problem: if β is large then with high probability, ˜x = x, making it impossible to discriminate between the two. Moreover, the form of q(˜x | x) can also make the problem difficult as noise can be injected that can make ˜x likely under the data distribution, p(x).Given (2) , we seek to derive the optimal denoising function, 
+
+f⋆ : ˜X → X . Specifically, we seek the optimal denoising function that minimizes the expected mean squared error (MSE) 
+
+f⋆(·) = argmin  
+
+> f(·)
+
+Ep(x)p(˜x|x)
+
+(f (˜x) − x)⊤(f (˜x) − x) .
+
+Using calculus of variations, we can derive the functional form of f⋆. Due to space, we state an informal theorem below, which we prove in the Appendix. 
+
+Theorem 1. Let p(x) be the data distribution, let p(˜x | x)
+
+the noise distribution as defined in (2) and let q(˜x) = R q(˜x |
+
+x)p(x)dx the marginal distribution of the noisy data. With respect to MSE, the optimal denoising function is 
+
+f⋆(˜x) = ω(˜x)˜x + (1 − ω(˜x)) g⋆(˜x), (3) 
+
+where 
+
+g⋆(˜x) ≜ Eq(x|˜x)[x], ω (˜x) ≜ p(˜x)
+
+p(˜x) + γ ˜q(˜x) , γ ≜ 1 − ββ .
+
+From (3) , we see that the optimal denoising function f⋆ is a convex combination of the identity function and the mini-mum MSE, g⋆ (Casella and Berger 2021), where the weight is determined by ω(˜x) ∈ [0 , 1] . Specifically, ω(˜x) measures how likely ˜x is under the data distribution p(x), compared to the scaled marginal distribution of the noisy data γ ˜q(˜x). De-noising known unknowns corresponds to the case where it is easy to discriminate between p(x) and γ ˜q(˜x), corresponding to ω(˜x) ≈ 0 and ω(˜x) ≈ 1. Denoising unknown unknowns corresponds to the scenario where it is hard to discriminate between p(x) and ˜q(˜x), corresponding to p(x) ≈ ˜q(x); this leads to ω(˜x) ≈ 11+ γ . Thus, γ can be interpreted as a regu-larizer that allows us to choose how much weight f⋆ puts on the identity function or on the MMSE estimator which can lead to better behaved estimators. Inspired by Theorem 1, we aim to extend Denoise2Impute. We cannot straightforwardly use Theorem 1 as (i) it requires knowledge of p(x), β, and q(˜x | x), which is usually not known and (ii) is designed for the MSE loss function, which assumes real-valued data, while we consider binary EHR data in this study. However, we conjecture that for many popular loss functions, ℓ, the optimal denoising function can be written as 
+
+f⋆(˜x) = ω(˜x)˜x + (1 − ω(˜x)) gℓ(˜x), (4) where the functional form of gℓ : ˜X → X , depends on the choice of ℓ, i.e, if ℓ is MSE then gℓ becomes the MMSE. Inspired by (4) , we can extend Denoise2Impute, gθ , by in-troducing a function that determines which codes to denoise. Specifically, given a trained denoiser, gθ , and a function, ωϕ,we can combine them to create a new denoising function, f ,which we can be expressed as 
+
+f (˜x) = ωϕ(˜x)˜x + (1 − ωϕ(˜x)) gθ (˜x). (5) We call (5) Denoise2Impute-T. While there are many ways to parameterize ωϕ, we found the following to work well 
+
+ωϕ(˜x) = I[gψ (˜x) < ϕ], (6) where I[·] is the indicator function and ϕ = [ ϕ1, . . . , ϕ T ] are learnable thresholds. The use of ϕ allows Denoise2Impute-T to adaptively choose when to use the identity function or gψ
+
+for each individual dimension of ˜x. While the output of ω
+
+in (3) is a scalar, we found that making it vector-valued, i.e, having a separate threshold for each dimension of ˜x, led to better empirical performance. To train ωϕ we use a continuous relaxation of the indicator function and use () to compute the loss with respect to f (5) 
+
+˜ℓCE (f (˜xi), xi; λ) = 
+
+> T
+
+X
+
+> d=1
+
+I[xi,d = ˜ xi,d ]ℓce (f (˜xi)d, x i,d )+ λI[xi,d ̸ = ˜ xi,d ]ℓce (f (˜xi)d, x i,d ),
+
+where gθ is kept fixed and only the parameters of ωϕ are updated. More details in training can be found in Appendix . 
+
+## Results 
+
+We include comprehensive experiments to demonstrate the accuracy and utility of our proposed methodology. First, we evaluate the denoising accuracy on a large EHR dataset. Next, the denoised EHRs are used in downstream prediction tasks. Below we provide brief details on the datasets and baselines. More details regarding data sources, model architectures and hyperparameters can be found in Appendix . Datasets Payer companies and care delivery organiza-tions (CDOs) commonly have overlapping patient population but have unique coding practices, i.e., the same patient’s EHR can differ between the payer company and the CDO. Thus, for training the denoising model, we begin with two sources of EHR data with overlapping patient populations from a large healthcare institute, D1 = {˜x1, . . . , ˜xN } and 
+
+D2 = {˜y1, . . . , ˜yM }. Each data point is a vector of binary indicators for the presence of ICD-10 diagnosis codes in a patient’s EHR, where we set the number of codes to be 993, i.e., T = 993 . We leverage the overlapping patient popula-tions of D1 and D2 to construct a dataset D of size 445,345 patients. More details can be found in Appendix . In Figure 2, we provide descriptive statistics for D1 and D2.Figure 2A demonstrates that a majority of the 993 diagnosis codes have a prevalence of less than ∼ 3% for both D1 and 
+
+D2. Additionally, codes tend to have higher prevalence in D2
+
+than in D1. Figure 2B demonstrates the sparsity of patient EHRs, where for both D1 and D2, a majority of patient EHRs have less than 6% of the ICD codes present. Furthermore, since each dot corresponds to a patient whose EHR is ana-lyzed in D1 and D2, we can compare the sparsity across the two datasets for each patient. We can therefore conclude that 
+
+D1 has a higher degree of sparsity in patient EHRs than D2.While both D1 and D2 are very sparse, Figure 2C and 2D demonstrate a peak in eigenvalues of the covariance matrix of 
+
+D1 and D2 compared to eigenvalues of the covariance matrix of random binary matrices (with prevalence matched to D1
+
+and D2, respectively). This suggests that D1 and D2 com-prise higher-order structure across their dimensions which can then be leveraged by imputation methods to learn re-lationships between ICD-10 codes. Therefore, D1 and D2
+
+provides versatile benchmarks to evaluate different methods. In the final, we employ a real world dataset to evaluate our method on a popular healthcare prediction task from the literature, predicting hospital readmission from ICD-10 codes (Kansagara et al. 2011; Huang, Altosaar, and Ran-ganath 2019; Mahmoudi et al. 2020; Jiang et al. 2023). The size of the dataset is 1,670,347 of which the size of train-ing dataset is 1,124,550 and the size of the testing dataset is 545,797. For the hospital readmission task, the trained de-noising model is used to denoise a population of 1,670,347 patients which comes from the same source as D1.
+
+Baselines We compare our two proposed approaches, De-noise2Impute and Denoise2Impute-T, against popular impu-tation methods wherein, for the imputation approaches all 0’s are treated as missing values. Specifically, we compare against the following imputation approaches: 1) replacing all 0’s with the prevalence computed by calculating mean for each dimension in D1, 2) k-nearest neighbor (k-NN) (with k = 5) and 3) softImpute (Mazumder, Hastie, and Tibshirani 2010) using the implementation from Rubinsteyn and Feld-man. We also compare the performance of Denoise2Impute but parametrized gθ with a feedforward neural network as opposed to a Set Transformer; this is denoted as MLP . We also compare against a denoising auto-encoder (DAE) and the collaborative denoising auto-encoders (CDAE) from Wu et al. (2016). We note that we attempted to compare against the recommender-system based approach of (Suleiman et al. 2020), but their code was not publicly available. Training and architecture details can be found in Appendix . 
+
+Benchmarking Imputation Performance To investigate the imputation performance of all the methods, we compute the AUPRC between the imputed values and D for each dimension. Table 1 summarizes the AUPRC averaged across all 993 dimensions. We observe that both Denoise2Impute and Denoise2Impute-T outperform the other methods, with Denoise2Impute-T achieving the the highest AUPRC and also improves upon using the original noisy data, D1.In Figure 3, we investigate the performance of De-noise2Impute for denoising individual ICD codes. Specif-ically, we compare the dimension-wise AUPRC of the De-noise2Impute method against the prevalence (Figure 3A), not applying imputation and using D1 as is (Figure 3B), and an MLP-parameterized Denoise2Impute (Figure 3C). In Fig-ure 3A, we observe that the AUPRC of the denoised data us-ing the Denoise2Impute is higher than the column mean (also referred to as prevalence ) for each of the 993 dimensions. In Figure 3B, we observe that Denoise2Impute achieves higher AUPRC across all 993 dimensions than using the noisy data 
+
+D1 itself as the denoised data. In Figure 3C, we observe that using a Set Transformer to parametrize gθ in Denoise2Impute achieves higher AUPRC than using a feedforward neural net-work (referred to as MLP) in 866 ( ∼ 87% ) out of the 993 dimensions. Furthermore, to investigate how the noise distribution af-fects the performance of models, we created a synthetic noisy dataset from D, where the noise was distributed such that the prevalence of the synthetic noisy dataset matches that of D1.The result on synthetic data in Figure 6 in Appendix shows consistent results with that of Figure 3. Together, both real and synthetic data experiments provide empirical support for the use of a Set Transformer within Denoise2Impute. 
+
+Benchmarking Imputation on Downstream Tasks We in-vestigate how imputation performance can affect downstream task prediction, by benchmarking on two downstream tasks. Specifically, we first use the trained Denoise2Impute mod-els to denoise the noisy data D1 and then feed the denoised values into a downstream classifier (Ke et al. 2017). To investigate whether the proposed approach was able to learn the relationship between diagnosis codes, we aim to predict a particular ICD code among the T codes given the others. To avoid information leakage, the target ICD code is set to 0 in the patient EHR before it is passed to the imputation methods. We begin by selecting six ICD codes for common chronic diseases and compute the difference in AUPRC with respect to using the original data, D1, along with 95% confidence intervals (Figure 4A). We observe that both Denoise2Impute and Denoise2Impute-T outperform all other methods for all six diseases, where Denoise2Impute-T tends to outperform Denoise2Impute. Interestingly, we found that softImpute often led to worse performance compared to using the original data, D1. The performance of softImpute suggests that treating all 0s as missing and performing impu-tation may lead to suboptimal performance in downstream tasks. In Figure 4B, we repeated the above experiment for 0.00 0.01 0.02 0.03  
+
+> Fraction of Patients with ICD Code in D1
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> Fraction of Patients with ICD Code in  D2
+
+A        
+
+> y=x
+> 0.02 0.04 0.06 0.08 0.10 0.12 0.14 0.16
+> Fraction of ICD Codes in Patient in D1
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> 0.12
+> 0.14
+> 0.16
+> Fraction of ICD Codes in Patient in  D2
+
+B     
+
+> y=x
+> 020 40 60 80 100
+> Eigenvalue Index
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> 0.05
+> Proportion of Explained Variance by Eigenvalue
+
+C D1      
+
+> D1Prevalence-matched random binary matrices
+> 020 40 60 80 100
+> Eigenvalue Index
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> 0.05
+> Proportion of Explained Variance by Eigenvalue
+
+D D2             
+
+> D2Prevalence-matched random binary matrices
+> 0.00 0.01 0.02 0.03
+> 0
+> 100
+> # ICD Codes
+> 0100
+> # ICD Codes
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> 0.02 0.04 0.06 0.08 0.10 0.12 0.14 0.16
+> 0
+> 50000
+> # Patients
+> 0100000
+> # Patients
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> 0.12
+> 0.14
+> 0.16
+
+Figure 2: Descriptive statistics for both datasets used in this paper. A) Comparison of the prevalence of ICD codes in D1 vs D2.
+
+B) Comparison of the sparsity of patient EHRs in D1 vs D2. C) The eigenvalue spectra of the covariance matrix of D1 (blue) with respect to 100 prevalence-matched random binary matrices (red). D) The eigenvalue spectra of the covariance matrix of D2
+
+(blue) with respect to 100 prevalence-matched random binary matrices (red). Methods D1 Prevalence MLP DAE CDAE D2Impute D2Impute-T Avg. AUPRC 51.86 52.37 61.91 62.05 62.17 64.90 65.53 
+
+Table 1: Average of dimension-wise AUPRC (higher is better) on the test set where noisy vectors were obtained from D1.D2Impute is short for Denoise2Impute. eight additional randomly chosen ICD codes where we see the same trend as before; the description for the ICD codes can be found in Table 3 in Appendix . Finally, we evaluate the performance on predicting hospi-tal readmission, which is a popular clinical prediction task in the literature (Jiang et al. 2023; Kansagara et al. 2011; Huang, Altosaar, and Ranganath 2019; Mahmoudi et al. 2020). While ICD-10 codes can be used to predict hospital readmission, the fact that readmission prediction is not an ICD-10 code itself enhances its credibility as a benchmarking dataset since we no longer need to set a dimension to all 0s before per-forming denoising. In Figure 4C, we observe that both De-noise2Impute and Denoise2Impute-T achieve the highest AUPRC compared to the other methods in prediction of hos-pital readmission and that this increase is statistically signifi-cant based on the 95% confidence intervals. Moreover, we see that the Denoise2Impute-T leads to a slight performance gain compared to Denoise2Impute but that this improvement is not statistically significant. Taken together, Denoise2Impute and Denoise2Impute-T outperform all existing imputation approaches on both, imputation and prediction tasks. 
+
+## Discussion 
+
+Missing data presents a substantial challenge for machine learning in the medical domain, as it can negatively impact performance and perpetuate existing disparities in health-care (Vyas, Eisenstein, and Jones 2020; Pierson et al. 2021). The problem becomes even more complex when the presence of missing entries is unclear. In response to this challenge, we introduced Denoise2Impute, a denoising-based approach ABCFigure 3: Dimension-wise AUPRC for T = 993 computed on the test data. A) Comparison between AUPRC of the De-noise2Impute and the column mean ( prevalence ) for each dimension of the noisy data D1. B) Comparison between AUPRC of the Denoise2Impute and that of the D1. C) Comparison between AUPRC of the Denoise2Impute and AUPRC of the MLP. T2D AFib Asthma COPD CKD Osteoarthritis               
+
+> 1
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> AUPRC Improvement
+> ICD Prediction V22 Z34 Z37 Z00 Z12 M54 Z23 Z01
+> 1
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5ICD Prediction
+> softImpute
+> k-NN
+> MLP
+> DAE
+> CDAE
+> Denoise2Impute
+> Denoise2Impute-T 0.0 0.1 0.2 0.3 0.4 0.5 0.6
+> 2.5
+> 2.0
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> AUPRC Improvement
+> Hopistal Readmission
+> softImpute
+> k-NN
+> MLP
+> DAE
+> CDAE
+> Denoise2Impute
+> Denoise2Impute-T
+
+(A) Diseases (B) ICD codes (C) Downstream Task Figure 4: Results for ICD code prediction for six common chronic conditions (A) and eight randomly chosen ICD codes (B). Results for Hospital Readmission task (C). Difference in AUPRC relative to using D1 and 95% confidence intervals are plotted. The common chronic conditions in (A) and the description of ICD codes in (B) are provided in Table 3 in Appendix . that utilizes relationships between diagnosis codes to identify and impute missing codes effectively. While our empirical evidence highlights Denoise2Impute’s effectiveness, we observed that certain diagnosis codes posed challenges for the approach. These difficulties may arise due to the extreme sparsity of some codes or insufficient train-ing examples, making it hard for the model to learn useful dependencies between diagnosis codes. In such cases, De-noise2Impute’s output could introduce noise into the data, as the network struggles to differentiate between missing and existing diagnosis codes. To enhance the model’s per-formance, we developed a theoretically motivated extension called Denoise2Impute-T, which employs learned thresholds to regularize the model’s output. Our empirical results show that using learned thresholds with Denoise2Impute-T leads to performance gains over the original Denoise2Impute. Despite these encouraging findings, there are limitations to our approach and opportunities for improvement. First, training Denoise2Impute necessitates a noiseless and noisy training set; while this may seem challenging, their are a number of ways to obtain such a dataset. First, insurance com-panies and care delivery organizations (CDOs) commonly have overlapping patient population where an EHR for the same patient can differ between the insurance company and the CDO. Having access to these two dataset can allow for the creation of a noiseless dataset which can be used to train the model. Another approach is to create an artificial noisy dataset given a dataset of EHR’s via 0-1 binary masking, which is commonly employed in large language models (De-vlin et al. 2018). Lastly, the approach of (Wu et al. 2023) can be used to allow for a cost-effective construction of a dataset of noisy and clean EHRs. Additionally, incorporating other tabular information, such as medications and laboratory results, could further enhance performance. Expanding the model to include multiple data modalities, like clinical text and the time-series component of EHR data, could provide a more comprehensive representation of patient history and lead to improved performance. For example, the threshold function ωϕ could be refined by considering additional infor-mation sources, allowing for patient-specific thresholding. References 
+
+Alcaraz, J. L.; and Strodthoff, N. 2022. Diffusion-based Time Series Imputation and Forecasting with Structured State Space Models. Transactions on Machine Learning Research .Bai, B. M.; Mangathayaru, N.; et al. 2022. Modified K-Nearest Neighbour Using Proposed Similarity Fuzzy Mea-sure for Missing Data Imputation on Medical Datasets (MKN-NMBI). International Journal of Fuzzy System Applications (IJFSA) , 11(3): 1–15. Beaulieu-Jones, B. K.; Moore, J. H.; and CONSORTIUM, P. R. O.-A. A. C. T. 2017. Missing data imputation in the electronic health record using deeply learned autoencoders. In Pacific symposium on biocomputing 2017 , 207–218. World Scientific. Beretta, L.; and Santaniello, A. 2016. Nearest neighbor im-putation algorithms: a critical evaluation. BMC medical informatics and decision making , 16(3): 197–208. Brown, R. G.; and Hwang, P. Y. 1997. Introduction to ran-dom signals and applied Kalman filtering: with MATLAB exercises and solutions. Introduction to random signals and applied Kalman filtering: with MATLAB exercises and solu-tions .Buades, A.; Coll, B.; and Morel, J.-M. 2005. A non-local algorithm for image denoising. In 2005 IEEE computer soci-ety conference on computer vision and pattern recognition (CVPR’05) , volume 2, 60–65. Ieee. Casella, G.; and Berger, R. L. 2021. Statistical inference .Cengage Learning. Chen, Z.; Tan, S.; Chajewska, U.; Rudin, C.; and Caruna, R. 2023. Missing Values and Imputation in Healthcare Data: Can Interpretable Machine Learning Help? In Conference on Health, Inference, and Learning , 86–99. PMLR. Chowdhury, M. H.; Islam, M. K.; and Khan, S. I. 2017. Impu-tation of missing healthcare data. In 2017 20th International Conference of Computer and Information Technology (IC-CIT) , 1–6. IEEE. Debal, D. A.; and Sitote, T. M. 2022. Chronic kidney disease prediction using machine learning techniques. Journal of Big Data , 9(1): 109. Deng, Y.; Lu, L.; Aponte, L.; Angelidi, A. M.; Novak, V.; Karniadakis, G. E.; and Mantzoros, C. S. 2021. Deep trans-fer learning and data augmentation improve glucose levels prediction in type 2 diabetes patients. NPJ Digital Medicine ,4(1): 109. Devlin, J.; Chang, M.-W.; Lee, K.; and Toutanova, K. 2018. Bert: Pre-training of deep bidirectional transformers for lan-guage understanding. arXiv preprint arXiv:1810.04805 .Edgar, R. C.; and Flyvbjerg, H. 2015. Error filtering, pair assembly and error correction for next-generation sequencing reads. Bioinformatics , 31(21): 3476–3482. Faisal, S.; and Tutz, G. 2021. Imputation methods for high-dimensional mixed-type datasets by nearest neighbors. Com-puters in Biology and Medicine , 135: 104577. Festag, S.; and Spreckelsen, C. 2023. Medical multivari-ate time series imputation and forecasting based on a recur-rent conditional Wasserstein GAN and attention. Journal of Biomedical Informatics , 139: 104320. Gelman, A.; Carlin, J. B.; Stern, H. S.; and Rubin, D. B. 2004. 
+
+Bayesian Data Analysis . Chapman and Hall/CRC. Goldstein, B. A.; Navar, A. M.; Pencina, M. J.; and Ioannidis, J. P. 2017. Opportunities and challenges in developing risk prediction models with electronic health records data: a sys-tematic review. Journal of the American Medical Informatics Association: JAMIA , 24(1): 198. Huang, K.; Altosaar, J.; and Ranganath, R. 2019. Clinicalbert: Modeling clinical notes and predicting hospital readmission. 
+
+arXiv preprint arXiv:1904.05342 .Huang, Y.; Talwar, A.; Chatterjee, S.; and Aparasu, R. R. 2021. Application of machine learning in predicting hospi-tal readmissions: a scoping review of the literature. BMC medical research methodology , 21: 1–14. Hur, K.; Lee, J.; Oh, J.; Price, W.; Kim, Y.; and Choi, E. 2022. Unifying heterogeneous electronic health records systems via text-based code embedding. In Conference on Health, Inference, and Learning , 183–203. PMLR. Jarrett, D.; Cebere, B.; Liu, T.; Curth, A.; and van der Schaar, M. 2022. HyperImpute: Generalized Iterative Imputation with Automatic Model Selection. Jiang, L. Y.; Liu, X. C.; Nejatian, N. P.; Nasir-Moin, M.; Wang, D.; Abidin, A.; Eaton, K.; Riina, H. A.; Laufer, I.; Punjabi, P.; et al. 2023. Health system-scale language models are all-purpose prediction engines. Nature , 1–6. Kansagara, D.; Englander, H.; Salanitro, A.; Kagen, D.; Theobald, C.; Freeman, M.; and Kripalani, S. 2011. Risk pre-diction models for hospital readmission: a systematic review. 
+
+Jama , 306(15): 1688–1698. Ke, G.; Meng, Q.; Finley, T.; Wang, T.; Chen, W.; Ma, W.; Ye, Q.; and Liu, T.-Y. 2017. Lightgbm: A highly efficient gra-dient boosting decision tree. Advances in neural information processing systems , 30. Lazkecka, M.; Mielniczuk, J.; and Teisseyre, P. 2021. Es-timating the class prior for positive and unlabelled data via logistic regression. Advances in Data Analysis and Classifi-cation , 15(4): 1039–1068. Lee, C.; Jo, B.; Woo, H.; Im, Y.; Park, R. W.; and Park, C. 2022. Chronic disease prediction using the common data model: development study. JMIR AI , 1(1): e41030. Lee, J.; Lee, Y.; Kim, J.; Kosiorek, A.; Choi, S.; and Teh, Y. W. 2019. Set transformer: A framework for attention-based permutation-invariant neural networks. In International con-ference on machine learning , 3744–3753. PMLR. Lee, J.; and Park, C. 2022. Restoration of Time-Series Medi-cal Data with Diffusion Model. In 2022 IEEE International Conference on Consumer Electronics-Asia (ICCE-Asia) , 1–4. IEEE. Lewis, S.; Matejovicova, T.; Li, Y.; Lamb, A.; Zaykov, Y.; Allamanis, M.; and Zhang, C. 2021. Accurate imputation and efficient data acquisition with transformer-based vaes. In 
+
+NeurIPS 2021 Workshop on Deep Generative Models and Downstream Applications .Li, J.; Yan, X. S.; Chaudhary, D.; Avula, V.; Mudiganti, S.; Husby, H.; Shahjouei, S.; Afshar, A.; Stewart, W. F.; Yeasin, M.; et al. 2021. Imputation of missing values for electronic health record laboratory data. NPJ digital medicine , 4(1): 147. Liberzon, D. 2011. Calculus of variations and optimal con-trol theory: a concise introduction . Princeton university press. Liu, J.; Allen, P. J.; Benz, L.; Blickstein, D.; Okidi, E.; and Shi, X. 2021. A Machine Learning Approach for Recruit-ment Prediction in Clinical Trial Design. arXiv preprint arXiv:2111.07407 .Liu, M.; Li, S.; Yuan, H.; Ong, M. E. H.; Ning, Y.; Xie, F.; Saffari, S. E.; Shang, Y.; Volovici, V.; Chakraborty, B.; et al. 2023. Handling missing values in healthcare data: A sys-tematic review of deep learning-based imputation techniques. 
+
+Artificial Intelligence in Medicine , 102587. Loshchilov, I.; and Hutter, F. 2017. Decoupled weight decay regularization. arXiv preprint arXiv:1711.05101 .Luo, Y.; Cai, X.; Zhang, Y.; Xu, J.; et al. 2018. Multivariate time series imputation with generative adversarial networks. 
+
+Advances in neural information processing systems , 31. Ma, C.; Tschiatschek, S.; Palla, K.; Hern ´andez-Lobato, J. M.; Nowozin, S.; and Zhang, C. 2018. Eddi: Efficient dynamic discovery of high-value information with partial vae. arXiv preprint arXiv:1809.11142 .Mahmoudi, E.; Kamdar, N.; Kim, N.; Gonzales, G.; Singh, K.; and Waljee, A. K. 2020. Use of electronic medical records in development and validation of risk prediction models of hospital readmission: systematic review. bmj , 369. Mazumder, R.; Hastie, T.; and Tibshirani, R. 2010. Spec-tral regularization algorithms for learning large incomplete matrices. The Journal of Machine Learning Research , 11: 2287–2322. Padula, W. V.; Kreif, N.; Vanness, D. J.; Adamson, B.; Rueda, J.-D.; Felizzi, F.; Jonsson, P.; IJzerman, M. J.; Butte, A.; and Crown, W. 2022. Machine learning methods in health eco-nomics and outcomes research—the PALISADE checklist: a good practices report of an ISPOR task force. Value in health ,25(7): 1063–1080. Peis, I.; Ma, C.; and Hern ´andez-Lobato, J. M. 2022. Miss-ing data imputation and acquisition with deep hierarchical models and hamiltonian monte carlo. Advances in Neural Information Processing Systems , 35: 35839–35851. Pierson, E.; Cutler, D. M.; Leskovec, J.; Mullainathan, S.; and Obermeyer, Z. 2021. An algorithmic approach to reduc-ing unexplained pain disparities in underserved populations. 
+
+Nature Medicine , 27(1): 136–140. Rao, P. K.; Chatterjee, S.; Nagaraju, K.; Khan, S. B.; Al-musharraf, A.; and Alharbi, A. I. 2023. Fusion of Graph and Tabular Deep Learning Models for Predicting Chronic Kidney Disease. Diagnostics , 13(12): 1981. Rubin, D. B. 1978. Multiple imputations in sample surveys-a phenomenological Bayesian approach to nonresponse. In 
+
+Proceedings of the survey research methods section of the American Statistical Association , volume 1. American Statis-tical Association Alexandria, VA, USA. Rubinsteyn, A.; and Feldman, S. ???? fancyimpute: An Imputation Library for Python. Sechidis, K.; Sperrin, M.; Petherick, E. S.; Luj ´an, M.; and Brown, G. 2017. Dealing with under-reported variables: An information theoretic solution. International Journal of Approximate Reasoning , 85: 159–177. Stekhoven, D. J.; and B ¨uhlmann, P. 2012. MissForest—non-parametric missing value imputation for mixed-type data. 
+
+Bioinformatics , 28(1): 112–118. Suleiman, M.; Demirhan, H.; Boyd, L.; Girosi, F.; and Ak-sakalli, V. 2020. A clinical coding recommender system. 
+
+Knowledge-Based Systems , 210: 106455. Tanner, D.; Morgan-Short, K.; and Luck, S. J. 2015. How inappropriate high-pass filters can produce artifactual effects and incorrect conclusions in ERP studies of language and cognition. Psychophysiology , 52. Vinas, R.; Zheng, X.; and Hayes, J. 2021. A Graph-based Im-putation Method for Sparse Medical Records. arXiv preprint arXiv:2111.09084 .Vivar, G.; Kazi, A.; Burwinkel, H.; Zwergal, A.; Navab, N.; and Ahmadi, S.-A. 2020. Simultaneous imputation and disease classification in incomplete medical datasets using Multigraph Geometric Matrix Completion (MGMC). arXiv preprint arXiv:2005.06935 .Vyas, D. A.; Eisenstein, L. G.; and Jones, D. S. 2020. Hidden in plain sight—reconsidering the use of race correction in clinical algorithms. Wang, L.; Qu, L.; Yang, L.; Wang, Y.; and Zhu, H. 2020. NanoReviser: an error-correction tool for nanopore sequenc-ing based on a deep learning algorithm. Frontiers in Genetics ,11: 900. Wang, Y.; Xu, H.; Xu, Z.; Gao, J.; Wu, Y.; and Zhang, Z. 2022. Multivariate Time Series Imputation Based on Masked Autoencoding with Transformer. In 2022 IEEE 24th Interna-tional Conference , 2110–2117. IEEE. Wenger, A. M.; Peluso, P.; Rowell, W. J.; Chang, P.-C.; Hall, R. J.; Concepcion, G. T.; Ebler, J.; Fungtammasan, A.; Kolesnikov, A.; Olson, N. D.; et al. 2019. Accurate circular consensus long-read sequencing improves variant detection and assembly of a human genome. Nature biotechnology ,37(10): 1155–1162. Wu, K.; Dahlem, D.; Hane, C.; Halperin, E.; and Zou, J. 2023. Collecting data when missingness is unknown: a method for improving model performance given under-reporting in patient populations. In Conference on Health, Inference, and Learning , 229–242. PMLR. Wu, Y.; DuBois, C.; Zheng, A. X.; and Ester, M. 2016. Col-laborative denoising auto-encoders for top-n recommender systems. In Proceedings of the ninth ACM international conference on web search and data mining , 153–162. Yıldız, A. Y.; Ko c¸ , E.; and Ko c¸ , A. 2022. Multivariate time series imputation with transformers. IEEE Signal Processing Letters , 29: 2517–2521. Yoon, J.; Jordon, J.; and Schaar, M. 2018. Gain: Missing data imputation using generative adversarial nets. In International conference on machine learning , 5689–5698. PMLR. You, J.; Ma, X.; Ding, Y.; Kochenderfer, M. J.; and Leskovec, J. 2020. Handling missing data with graph representation learning. Advances in Neural Information Processing Sys-tems , 33: 19075–19087. Zheng, S.; and Charoenphakdee, N. 2022. Diffusion models for missing value imputation in tabular data. arXiv preprint arXiv:2210.17128 .Proof of Theorem 1 
+
+For ease of presentation, we rewrite the theorem below. 
+
+Theorem 2. Let p(x), x ∈ X ⊆ RT , be the distribution over the data and let p(˜x | x), ˜x ∈ ˜X ⊆ RT , be the noise distribution, which we assume is of the following form 
+
+p(˜x | x) = βδ (˜x = x) + (1 − β)q(˜x | x). (7) 
+
+Moreover, let q(˜x) be 
+
+q(˜x) = 
+
+Z
+
+q(˜x | x)p(x)dx, (8) 
+
+be the marginal distribution of the noisy data. With respect to mean squared error, the optimal denoising function is 
+
+f⋆(˜x) = ω(˜x)˜x + (1 − ω(˜x)) g⋆(˜x) (9) 
+
+where 
+
+g⋆(˜x) ≜ Eq(x|˜x)[x], (10) 
+
+ω(˜x) ≜ p(˜x)
+
+p(˜x) + γ ˜q(˜x) , ω(˜x) : ˜X → [0 , 1] , (11) 
+
+and γ ≜ 1−ββ .Proof. To solve for f⋆, we use calculus of variations (Liberzon 2011) but first, we will expand the loss function to make it easier to work with. We start by expanding the MSE and absorbing terms that are not a function of f into a constant, C,
+
+Z
+
+(f (˜x) − x)⊤(f (˜x) − x)p(x, ˜x)dxd˜x (12) 
+
+=
+
+Z
+
+f (˜x)⊤f (˜x)p(x, ˜x)dxd˜x − 2
+
+Z
+
+f (˜x)⊤x p(x, ˜x)dxd˜x +
+
+Z
+
+x⊤x p(x, ˜x)dxd˜x (13) 
+
+=
+
+Z
+
+f (˜x)⊤f (˜x)p(x, ˜x)dxd˜x − 2
+
+Z
+
+f (˜x)⊤x p(x, ˜x)dxd˜x + C. (14) Dropping the constant, C, and using the chain rule of probability (Casella and Berger 2021) to rewrite the joint distribution 
+
+p(˜x, x) as p(˜x, x) = p(x)p(˜x | x), we have 
+
+L(f ) ≜
+
+Z
+
+f (˜x)⊤f (˜x)p(x)p(˜x | x)dxd˜x − 2
+
+Z
+
+f (˜x)⊤x p(x)p(˜x | x)dxd˜x. (15) We will first simplify the left term of (15) where we plug in the definition of the noise distribution, p(˜x | x) = βδ (˜x =
+
+x) + (1 − β)q(˜x | x)
+
+Z
+
+f (˜x)⊤f (˜x)p(x)p(˜x | x)dxd˜x (16) 
+
+=
+
+Z
+
+f (˜x)⊤f (˜x)p(x) [ βδ (˜x = x) + (1 − β)q(˜x | x)] dxd˜x, (17) 
+
+= β
+
+Z
+
+f (˜x)⊤f (˜x)p(x)δ(˜x = x)dxd˜x + (1 − β)
+
+Z
+
+f (˜x)⊤f (˜x)p(x)q(˜x | x)dxd˜x, (18) 
+
+= β
+
+Z
+
+f (x)⊤f (x)p(x = ˜x)dx + (1 − β)
+
+Z
+
+f (˜x)⊤f (˜x)q(˜x)d˜x, (19) 
+
+= β
+
+Z
+
+f (˜x)⊤f (˜x)p(˜x)d˜x + (1 − β)
+
+Z
+
+f (˜x)⊤f (˜x)q(˜x)d˜x. (20) We now move on to the right term of (15) 
+
+2
+
+Z
+
+f (˜x)⊤x p(x)p(˜x | x)dxd˜x (21) 
+
+= 2 
+
+Z
+
+f (˜x)⊤x p(x) [ βδ (˜x = x) + (1 − β)q(˜x | x)] dxd˜x, (22) 
+
+= 2 β
+
+Z
+
+f (˜x)⊤x p(x)δ(˜x = x)dxd˜x + 2(1 − β)
+
+Z
+
+f (˜x)⊤x p(x)q(˜x | x)dxd˜x, (23) 
+
+= 2 β
+
+Z
+
+f (x)⊤x p(x = ˜x)dx + 2(1 − β)
+
+Z
+
+f (˜x)⊤x q(˜x)p(x | ˜x)dxd˜x, (24) 
+
+= 2 β
+
+Z
+
+f (˜x)⊤˜x p(˜x)d˜x + 2(1 − β)
+
+Z
+
+f (˜x)⊤g⋆(˜x) q(˜x)d˜x, (25) 
+
+= 2 β
+
+Z
+
+f (˜x)⊤˜x p(˜x)d˜x + 2(1 − β)
+
+Z
+
+f (˜x)⊤g⋆(˜x) q(˜x)d˜x, (26) where g⋆(˜x) ≜ Eq(x|˜x)[x].Plugging (20) and (26) into (15), we get 
+
+L(f ) = β
+
+Z
+
+f (˜x)⊤f (˜x)p(˜x)d˜x + (1 − β)
+
+Z
+
+f (˜x)⊤f (˜x)q(˜x)d˜x
+
+− 2β
+
+Z
+
+f (˜x)⊤˜x p(˜x)d˜x − 2(1 − β)
+
+Z
+
+f (˜x)⊤g⋆(˜x) q(˜x)d˜x.
+
+(27) Using the Euler Lagrange equation (Liberzon 2011), we solve for f⋆ by taking a variational gradient of (27) with respect to f
+
+and setting it equal to 0. 
+
+∂L(f )
+
+∂f = 0 (28) 
+
+2βf (˜x)p(˜x) + 2(1 − β)f (˜x)q(˜x) − 2β˜xp(˜x) − 2(1 − β)g⋆(˜x) q(˜x) = 0 (29) 
+
+2βf (˜x)p(˜x) + 2(1 − β)f (˜x)q(˜x) = 2 β˜xp(˜x) + 2(1 − β)g⋆(˜x) q(˜x) (30) 
+
+βf (˜x)p(˜x) + (1 − β)f (˜x)q(˜x) = β˜xp(˜x) + (1 − β)g⋆(˜x) q(˜x) (31) 
+
+f (˜x)p(˜x) + 1 − ββ f (˜x)q(˜x) = ˜xp(˜x) + 1 − ββ g⋆(˜x) q(˜x) (32) 
+
+f (˜x)
+
+
+
+p(˜x) + 1 − ββ q(˜x)
+
+
+
+= ˜xp(˜x) + 1 − ββ g⋆(˜x) q(˜x) (33) 
+
+f⋆(˜x) = p(˜x)
+
+p(˜x) + 1−ββ q(˜x) ˜x + 
+
+> 1−ββ
+
+q(˜x)
+
+p(˜x) + 1−ββ q(˜x) g⋆(˜x) (34) Letting γ ≜ 1−ββ , ω(˜x) ≜ p(˜x) 
+
+> p(˜x)+ γq (˜x)
+
+and plugging in the definition of g⋆(˜x), we get 
+
+f⋆(˜x) = ω(˜x)˜x + (1 − ω(˜x)) Eq(x|˜x)[x], (35) completing the proof. 
+
+## Training procedure for Denoise2Impute-T 
+
+We train Denoise2Impute-T in a two-stage fashion. First, we train Denoise2Impute, gθ , by minimizing the cross-entropy loss, L,
+
+ℓCE (gθ (˜x), x) = 
+
+> T
+
+X
+
+> d=1
+
+ℓce (gθ (˜x)d, x d), (36) 
+
+ℓce (gθ (˜x)d, x d) = xd log gθ (˜x)d + (1 − xd) log(1 − gθ (˜x)d)) , (37) where xd is the d-th dimension of x and gθ (˜x)d is the d-th dimension of gθ (˜x). To place more emphasis on instances where a 0 must be changed to a 1, we modify the cross-entropy loss to be 
+
+ℓCE (gθ (˜x), x) = 
+
+> T
+
+X
+
+> d=1
+
+I[˜ xd = xd]ℓce (gθ (˜x)d, x d) + λI[˜ xd̸ = xd]ℓce (gθ (˜x)d, x d), (38) where I[˜ xd̸ = xd] corresponds to the case where where ˜xd = 0 and xd = 1 . In all experiments, we use λ = 2 .0. During training, we also randomly mask out dimensions of ˜x with probability p = 0 .3 as we found it helped with performance. Fixing gθ , we construct Denoise2Impute-T by introducing a weighting function, ωϕ
+
+f (˜x) = ωϕ(˜x)x + (1 − ωϕ(˜x)) gθ (˜x) (39) and optimize (38) for f , i.e., 
+
+ℓCE (fθ (˜x), x) = 
+
+> T
+
+X
+
+> d=1
+
+I[˜ xd = xd]ℓce (fθ (˜x)d, x d) + λI[˜ xd̸ = xd]ℓce (fθ (˜x)d, x d), (40) where only ϕ is updated. As ωϕ is not differentiable due to the indicator function, we approximate it during training via the following continuous relaxation 
+
+ωϕ(˜x) ≈ σ(α ∗ (gθ (˜x) − ϕ)) , (41) where σ(·) denotes the sigmoid function and α is a temperature parameter to modulate this approximation. In all experiments, we set α = 100 . Let m00  
+
+> j
+
+be the average of p00  
+
+> ij
+
+and m01  
+
+> j
+
+be the average of p01  
+
+> ij
+
+on the training data, for j = 1 , · · · , T . In principle, we want m00  
+
+> j
+
+to be close to zero and m01  
+
+> j
+
+to be close to one on the testing data. When optimizing ϕ, we constrain the learned parameters to satisfy 0 ≤ ϕj ≤ m00  
+
+> j
+
+.
+
+## Hyperparameters and Architecture Details 
+
+Details of Datasets 
+
+For training the denoising model, we begin with two sources of EHR data with overlapping patient populations from a large healthcare institute 1, D1 = {˜x1, . . . , ˜xN } and D2 = {˜y1, . . . , ˜yM }. Each data point is a vector of binary indicators for the presence of ICD-10 diagnosis codes in a patient’s EHR, where we set the number of codes to be 993, i.e., T = 993 . As D1
+
+and D2 have overlapping patient populations, we construct the dataset as follows: for patient i in the common population, we treat the corresponding code vector from D1 as the noisy data point, ˜xi. To construct the target code vector, xi, we perform an element-wise OR operation between ˜xi and the same patient’s code vector from D2, ˜yi; the OR operation merges any diagnoses that may be unshared between the two data sources. Using the above procedure, a dataset D of size 445,345 patients is constructed where 356,276 patients are used for training and 89,069 are used for testing. 
+
+k-NN Details 
+
+Let B be a subset of patients from the training set of the clean dataset, D, that will be used as a buffer. In our implementation, we set k = 5 in all experiments and specify a tolerance τ . Given an EHR vector, ˜x, we use the Hamming distance to find the closest neighbor in B, which we denote by xn. If the Hamming distance between ˜x and xn is less than τ then all the dimensions in ˜x
+
+that have a 0 are replaced by the corresponding value in xn. If the Hamming distance between ˜x and xn is greater than τ , then we keep ˜x as is. 
+
+MLP Architecture Details 
+
+For the MLP, we used 4 hidden layers, each of width 512, and ReLU activations where a skip connection is added between consecutive layers. The output of the network is then passed through a sigmoid function to ensure they are valid probabilities. For training, we used the AdamW optimizer (Loshchilov and Hutter 2017) with learning rate 3.0 × 10 −4 and a weight decay of 1.0 × 10 −5 with a batch size of N = 128 .
+
+DAE Architecture Details 
+
+For the encoder model in denoising auto encoder (DAE), we used 4 fully connected layers, each of width 512, and ReLU activations where a ResNet module is added in the second layer, third layer and fourth layer. The latent dimension of the encoder is 512. For the decoder model of DAE, we used a symmetric architecture as the encoder. The output of the network is then passed through a sigmoid function to ensure they are valid probabilities. We follow the same training method as that for MLP to train the DAE. 
+
+CDAE Architecture Details 
+
+We apply the collaborative denoising auto-encoder (CDAE) from Wu et al. (2016) to our noisy data as one baseline. For the encoder model in CDAE, we used 4 fully connected layers, each of width 512, and Tanh activations where an ResNet module is added in the second layer, third layer and fourth layer. The latent dimension of the encoder is 512. The embedding dimension of each patient is 512. For the decoder model of CDAE, we used a symmetric architecture as the encoder. The output of the network is then passed through a sigmoid function to ensure they are valid probabilities. We follow the original implementation of CDAE to set the hyperparameters in our experiment. The corruption ratio is set as 0.5. The learning rate is 1.0 × 10 −3. Adam optimizer is employed to optimize CDAE. The batch size is N = 128 . The number of epochs for training is 50. 
+
+> 1To comply with the double-blind submission policy, we withhold the name of the institution providing the datasets; should the paper be accepted, these details will be provided.
+
+Set Transformer Architecture Details 
+
+The shape of input to the Set Transformer is (N, T, 1), where N is the batch size and T is the number of codes for each patient. We introduce T learnable embeddings, one for each dimension of ˜x, where each embedding is of dimension D. The embeddings are appended with the input leading to a tensor of shape (N, T, D + 1). L layers of the set attention blocks (SABs) are then applied followed by a parallel linear block that maps the output from attention blocks to a tensor of dimension (N, T, 1). Finally, a sigmoid function outputs the probability of each code being present. The neural network architecture of gθ is detailed in the Figure 5. 
+
+Figure 5: Neural Network Architecture of the denoising model gθ , where one of the key modules is the set attention block (SAB). The tensor shape of outputs in each layer is provided. We apply L layers of the SAB. In all our experiments, we set D = 200 and L = 4 , where for each SAB, we set the number of heads to be 10. We use the AdamW optimizer (Loshchilov and Hutter 2017) with learning rate 3.0 × 10 −4 and a weight decay of 1.0 × 10 −5 with a batch size of N = 48 . All methods in this paper is trained with 50 epochs. Methods D1 Prevalence MissForest MLP CDAE D2Impute D2Impute-T Micro AUPRC 62.67 70.39 64.14 79.10 79.13 81.28 81.64 
+
+## Macro AUPRC 51.86 52.37 52.23 61.91 62.16 64.89 65.53 
+
+Table 2: Micro AUPRC and Macro AUPRC (higher is better) on the test set where noisy vectors were obtained from D1.D2Impute is short for Denoise2Impute. 
+
+Gradient Boosted Tree Details 
+
+For the downstream tasks, we used a light gradient boosting decision tree model (LGBM) (Ke et al. 2017) as it had robust downstream prediction performance. In all experiments, we set the hyperparameters of LGBM as follows: n estimators = 1000 ,
+
+learning rate = 0 .05 max depth = 10 , reg alpha = 0 .5, reg lambda = 0 .5, scale pos weight = 1 , min data in bin = 128 .
+
+## Supplementary Experiments 
+
+In the following section, we provide additional experimental results where we also investigate how the performance changes when we treat D2 as the noisy input instead of D1.Details for ICD code prediction task 
+
+Given the training set D, which consists of 356,276 patients, we used 222,672 patients to train Denoise2Impute and Denoise2Impute-T and the other 133,604 patients are used to train the LGBM model. We selected ICD codes corresponding to seven common chronic conditions: Type-II Diabetes (T2D), Atrial Fibrillation (AFib), Asthma, Chronic Obstructive Pul-monary Disease (COPD), Chronic Kidney Disease (CKD), Hypertensive Heart Disease (HTN-Heart) and Osteoarthritis. We also randomly selected eight additional ICD codes for testing, where we ensured that their prevalence was greater than 6%. The description for the eight randomly selected ICD codes are shown below (Table 3). Here we present detailed results on both, the seven common chronic diseases (Table 4) and the eight randomly chosen codes (Table 5), which correspond to Figure 4A and Figure 4B, respectively. ICD-10 codes Description of Diagnosis ICD-10 codes Z37 Outcome of delivery Z00 Encounter for general examination without CSRD Z12 Encounter for screening for malignant neoplasms M54 Dorsalgia Z23 Encounter for immunization Z01 Encounter for other special examination without CSRD V22 Motorcycle rider injured in collision with two- or three-wheeled motor vehicle Z34 Encounter for supervision of normal pregnancy Table 3: Description of additional ICD codes from Fig. 4. CSRD is short for without complaint, suspected or reported diagnosis. T2D AFib Asthma COPD CKD HTN Osteoarthritis Ground Truth 90.77 58.40 73.63 71.59 80.03 44.77 48.76 
+
+± 0.14 ± 0.50 ± 0.29 ± 0.46 ± 0.44 ± 0.64 ± 0.32 
+
+D1 78.47 40.85 47.26 58.08 61.90 32.29 38.13 
+
+±0.14 ± 0.50 ±0.29 ± 0.46 ± 0.47 ±0.58 ±0.31 softImpute 77.28 40.06 46.43 58.15 61.78 32.46 37.89 
+
+± 0.16 ± 0.48 ± 0.31 ± 0.48 ± 0.51 ± 0.63 ± 0.36 k-NN 78.36 41.09 47.42 58.31 61.94 32.23 38.23 
+
+± 0.15 ± 0.53 ± 0.17 ± 0.24 ± 0.44 ± 0.64 ± 0.25 MLP 78.71 41.32 47.69 58.55 62.28 32.02 38.59 
+
+± 0.13 ± 0.60 ± 0.22 ± 0.38 ± 0.27 ± 0.54 ± 0.24 MLP-T 79.04 41.59 47.93 58.79 62.75 32.23 38.87 
+
+± 0.16 ± 0.57 ± 0.26 ± 0.37 ± 0.32 ± 0.59 ± 0.27 DAE 78.66 41.38 47.67 58.71 62.41 32.07 38.67 
+
+± 0.12 ± 0.55 ± 0.24 ± 0.38 ± 0.33 ± 0.61 ± 0.29 CDAE 78.74 41.45 47.64 58.83 62.51 32.11 38.62 
+
+± 0.14 ± 0.53 ± 0.27 ±0.38 ± 0.33 ± 0.42 ± 0.30 D2Impute 79.35 42.11 47.81 59.55 63.05 32.39 39.05 
+
+± 0.14 ± 0.52 ± 0.2 ± 0.29 ± 0.42 ± 0.49 ± 0.30 D2Impute-T 79.73 42.74 48.47 60.07 63.85 32.96 39.36 
+
+± 0.10 ± 0.51 ± 0.29 ± 0.38 ± 0.42 ± 0.52 ± 0.26 Table 4: Results for 7 ICD codes corresponding to common chronic conditions. Mean AUPRC and 95% confidence interval (CI) are provided. We bootstrap 80% of the test data and repeat 50 times to compute CI. ”T2D”: type-II diabetes. ”AFib”: atrial fibrillation. ”COPD”: chronic obstructive pulmonary disease. ”CKD”: chronic kidney disease. ”HTN”: hypertensive heart disease. D2Impute is short for Denoise2Impute. Z37 Z00 Z12 M54 Z23 Z01 V22 Z34 Ground Truth 93.86 90.29 89.15 82.5 78.06 79.38 94.81 93.62 
+
+± 0.15 ± 0.07 ± 0.06 ± 0.12 ± 0.09 ± 0.13 ± 0.09 ± 0.16 
+
+D1 80.95 81.70 79.81 82.00 72.08 72.28 75.16 86.17 
+
+± 0.31 ± 0.09 ± 0.10 ± 0.09 ± 0.1 ± 0.09 ± 0.31 ± 0.21 softImpute 80.41 80.56 79.32 81.35 71.87 72.41 75.69 86.58 
+
+± 0.33 ± 0.10 ± 0.11 ± 0.10 ± 0.14 ± 0.11 ± 0.32 ± 0.26 k-NN 80.84 81.53 79.95 82.06 72.22 72.43 75.84 86.46 
+
+± 0.32 ± 0.09 ± 0.09 ± 0.10 ± 0.10 ± 0.14 ± 0.29 ± 0.20 MLP 81.41 81.71 80.86 82.44 72.86 72.82 76.27 87.0 
+
+± 0.28 ± 0.08 ± 0.07 ± 0.08 ± 0.07 ± 0.14 ± 0.30 ± 0.21 MLP-T 81.67 82.06 81.02 82.51 72.98 73.05 76.83 87.54 
+
+± 0.31 ± 0.11 ± 0.09 ± 0.07 ± 0.11 ± 0.16 ± 0.35 ± 0.24 DAE 81.36 81.83 80.79 82.25 72.79 72.73 76.35 87.12 
+
+± 0.31 ± 0.08 ± 0.09 ± 0.08 ± 0.08 ± 0.14 ± 0.32 ± 0.25 CDAE 81.32 81.89 80.81 82.31 72.75 72.86 76.39 87.08 
+
+± 0.32 ± 0.09 ± 0.10 ± 0.09 ± 0.11 ± 0.12 ± 0.34 ± 0.24 D2Impute 81.42 82.54 81.27 82.4 73.17 73.37 77.36 87.89 
+
+± 0.30 ± 0.07 ± 0.08 ± 0.09 ± 0.14 ± 0.10 ± 0.28 ± 0.23 D2Impute-T 82.46 82.75 81.56 82.75 73.54 73.52 78.48 88.47 
+
+± 0.30 ± 0.07 ± 0.08 ± 0.09 ± 0.07 ± 0.09 ± 0.38 ± 0.18 Table 5: Results for eight randomly chose ICD code predictions, where each ICD code has a prevalence larger than 6%. Mean AUPRC and 95% confidence intervals (CI) are provided. We bootstrap 80% of the test data and repeat 50 times to compute CI. D2Impute is short for Denoise2Impute. 
+
+Benchmarking ICD Code Prediction Tasks using D2
+
+To investigate how the performance on the ICD code prediction task varies as a function of which noisy dataset we use, we present results for imputation methods where D2 is used as the noisy dataset instead of D1. The corresponding AUPRCs are reported in Tables 6 & 7. Compared with Tables 4 & 5, we observe that the absolute value of AUPRC increased across most ICD-10 codes and methods suggesting that D2 contains more information that is predictive of D, as compared to D1.T2D AFib Asthma COPD CKD HTN Osteoarthritis Ground Truth 90.77 58.40 73.63 71.59 80.03 44.77 48.76 
+
+± 0.14 ± 0.50 ± 0.29 ± 0.46 ± 0.42 ± 0.54 ± 0.32 
+
+D2 88.71 55.38 71.77 67.24 76.02 41.87 45.07 
+
+± 0.07 ± 0.32 ± 0.18 ± 0.38 ± 0.27 ± 0.68 ± 0.23 softImpute 86.98 54.62 70.06 66.13 74.06 40.14 43.29 
+
+± 0.14 ± 0.39 ± 0.21 ± 0.41 ± 0.29 ± 0.41 ± 0.24 k-NN 88.16 54.95 71.21 66.88 75.17 40.83 44.26 
+
+± 0.11 ± 0.38 ± 0.19 ± 0.36 ± 0.33 ± 0.67 ± 0.23 MLP 88.82 55.88 71.69 67.82 76.11 43.49 45.78 
+
+± 0.10 ± 0.39 ± 0.15 ± 0.34 ± 0.28 ± 0.47 ± 0.32 MLP-T 89.04 56.31 71.95 68.14 76.53 43.72 46.11 
+
+± 0.15 ± 0.41 ± 0.19 ± 0.37 ± 0.32 ± 0.51 ± 0.34 DAE 88.79 55.97 71.76 68.06 76.24 43.38 45.92 
+
+± 0.12 ± 0.41 ± 0.13 ± 0.36 ± 0.29 ± 0.45 ± 0.35 CDAE 88.87 56.01 71.72 68.24 76.35 43.41 46.03 
+
+± 0.14 ± 0.45 ± 0.14 ± 0.33 ± 0.31 ± 0.52 ± 0.35 D2Impute 89.36 57.32 72.37 69.75 78.11 44.51 47.31 
+
+± 0.13 ± 0.36 ± 0.15 ± 0.22 ± 0.25 ± 0.53 ± 0.33 D2Impute-T 89.22 57.49 72.45 69.99 77.95 44.50 47.07 
+
+± 0.12 ± 0.43 ± 0.18 ± 0.35 ± 0.34 ± 0.54 ± 0.36 Table 6: Results for 7 ICD codes corresponding to common chronic conditions. Mean AUPRC and 95% confidence intervals (CI) are provided. We bootstrap 80% of the test data and repeat 50 times to compute CI. ”T2D”: type-II diabetes. ”AFib”: atrial fibrillation. ”COPD”: chronic obstructive pulmonary disease. ”CKD”: chronic kidney disease. ”HTN”: hypertensive heart disease. D2Impute is short for Denoise2Impute. Z37 Z00 Z12 M54 Z23 Z01 V22 Z34 Ground Truth 93.86 90.29 89.15 82.5 78.06 79.38 94.81 93.62 
+
+± 0.15 ± 0.07 ± 0.06 ± 0.12 ± 0.09 ± 0.13 ± 0.09 ± 0.16 
+
+D2 91.98 89.36 87.11 78.28 75.92 75.20 93.95 90.91 
+
+± 0.14 ± 0.06 ± 0.07 ± 0.09 ± 0.10 ± 0.11 ± 0.08 ± 0.15 softImpute 89.74 87.25 86.33 76.44 73.18 74.46 90.16 88.17 
+
+± 0.21 ± 0.09 ± 0.10 ± 0.11 ± 0.14 ± 0.16 ± 0.11 ± 0.18 k-NN 90.22 88.84 86.78 77.83 76.14 74.62 92.75 90.68 
+
+± 0.16 ± 0.07 ± 0.08 ± 0.10 ± 0.13 ± 0.12 ± 0.09 ± 0.16 MLP 92.43 89.44 87.44 78.54 76.26 75.47 93.99 91.10 
+
+± 0.17 ± 0.06 ± 0.07 ± 0.13 ± 0.08 ± 0.11 ± 0.12 ± 0.21 MLP-T 92.78 89.49 87.76 78.95 76.41 75.84 94.11 91.75 
+
+± 0.18 ± 0.08 ± 0.11 ± 0.12 ± 0.10 ± 0.14 ± 0.13 ± 0.19 DAE 92.54 89.32 87.49 78.65 76.21 75.56 93.87 91.34 
+
+± 0.19 ± 0.09 ± 0.06 ± 0.18 ± 0.11 ± 0.15 ± 0.14 ± 0.19 CDAE 92.61 89.37 87.56 78.79 76.28 75.74 93.96 91.55 
+
+± 0.16 ± 0.07 ± 0.09 ± 0.16 ± 0.14 ± 0.17 ± 0.13 ± 0.21 D2Impute 93.41 89.60 87.88 79.79 76.34 76.42 94.48 92.78 
+
+± 0.17 ± 0.05 ± 0.06 ± 0.11 ± 0.10 ± 0.12 ± 0.13 ± 0.14 D2Impute-T 93.44 89.64 87.93 79.86 76.61 76.50 94.40 92.77 
+
+± 0.12 ± 0.06 ± 0.08 ± 0.12 ± 0.07 ± 0.14 ± 0.12 ± 0.15 Table 7: Results for eight randomly chose ICD code predictions, where each ICD code has a prevalence larger than 6%. Mean AUPRC and 95% confidence intervals (CI) are provided. We bootstrap 80% of the test data and repeat 50 times to compute CI. D2Impute is short for Denoise2Impute. 
+
+Benchmarking Denoising on Hospital Readmission Prediction 
+
+We also benchmark the denoising models on a popular healthcare prediction task from the literature, predicting hospital readmission from ICD-10 codes (Kansagara et al. 2011; Huang, Altosaar, and Ranganath 2019; Mahmoudi et al. 2020; Jiang et al. 2023). While ICD-10 codes can be used to predict hospital readmission, the fact that readmission prediction is not an ICD-10 code itself enhances its credibility as a benchmarking dataset since we no longer need to set a dimension to all 0s before performing denoising. The size of the training dataset is 1,124,550, which is used to train a LGBM model, and the size of the testing dataset is 545,797, which is used to evaluate the performance the LGBM model. We observe that our proposed methods, Denoise2Impute and Denoise2Impute-T, statistically significantly outperform existing imputation methods (Table 8). Methods D1 softImpute MLP DAE CDAE D2Impute D2Impute-T Mean 20.74 18.58 20.81 20.87 20.89 21.47 21.51 
+
+CI ± 0.15 ± 0.16 ± 0.13 ± 0.12 ± 0.14 ± 0.10 ± 0.10 Table 8: Hospital readmission prediction on D1 dataset. Mean AUPRC and 95% confidence intervals (CI). We bootstrap 80% of the test data and repeat 50 times to compute CI. D2Impute is short for Denoise2Impute. Benchmarking ICD Code Predictions using Synthetic D1
+
+To investigate how the noise distribution affects the performance of the models, we created an artificial noisy dataset, Noisy D1,from D, where the noise was distributed such that the prevalence of Noisy D1 matches that of D1. Specifically, a binary mask was randomly sampled per patient and per ICD code and was multiplied with D. Results are demonstrated in Figure 6. A B C
+
+Figure 6: Results on ICD code prediction where the denoising models are trained using Noisy D1. We compare the per ICD code AUPRC of ImputEHR with those of A) imputing 0’s with prevalence B) using Noisy D1 and C) denoising using an MLP.

@@ -1,0 +1,784 @@
+Title: PrivMedChat: End-to-End Differentially Private RLHF for Medical Dialogue Systems
+
+URL Source: https://arxiv.org/pdf/2603.03054v1
+
+Published Time: Wed, 04 Mar 2026 02:29:38 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+> 1
+
+# PrivMedChat: End-to-End Differentially Private RLHF for Medical Dialogue Systems 
+
+Sudip Bhujel 
+
+Abstract —Large language models are increasingly used for patient-facing medical assistance and clinical decision support, but adapting them to clinical dialogue often requires supervision derived from doctor–patient conversations that may contain sensitive information. Conventional supervised fine-tuning and reinforcement learning from human feedback (RLHF) can am-plify memorization risks, enabling empirical membership infer-ence and extraction of rare training-set content. We present PrivMedChat, an end-to-end framework for differentially private RLHF (DP-RLHF) for medical dialogue. Our design enforces differential privacy at every training stage that directly accesses dialogue-derived supervision: (i) Differential Private Stochastic Gradient Descent (DP-SGD) for medical SFT and (ii) DP-SGD for reward model learning from preference pairs. To limit additional privacy expenditure during alignment, we apply DP-SGD to the PPO actor and critic when operating on dialogue-derived prompts, while the reward model remains fixed after DP training. We also introduce an annotation-free preference construction strategy that pairs physician responses with filtered non-expert generations to produce scalable preference data without clinician labeling. Experiments on medical dialogue benchmarks show that PrivMedChat at ε = 7 achieves the highest ROUGE-L of 0.156 among all DP models, reduces clinical hallucinations to 1.4% and harmful advice to 0.4%, and obtains the highest overall score of 2.86 in a 3-model LLM-jury evaluation, while producing membership-inference signals that are near chance (AUC 0.510–0.555). We open-source our code at https://github. com/sudip-bhujel/privmedchat. 
+
+Index Terms —Differential privacy, Reinforcement Learning from Human Feedback (RLHF), medical large language models, privacy-preserving fine-tuning, reward modeling, membership inference attacks, Proximal Policy Optimization (PPO), Low Rank Adaptation (LoRA). 
+
+I. I NTRODUCTION 
+
+Large Language Models (LLMs) are increasingly used for clinical decision support and patient-facing assistance, ranging from diagnosis and symptoms to care navigation and patient education. Recent medical-domain systems such as Med-PaLM [1], ChatDoctor [2], and BioMixtral [3] demonstrate that adapting general-purpose LLMs to biomedical knowledge and clinical dialogue can improve response helpfulness, do-main fluency, and adherence to medical communication norms. These capabilities make medical chatbots promising tools for scaling access to health information and reducing clinician burden, especially in resource-constrained settings. State-of-the-art alignment of such systems commonly fol-lows a Reinforcement Learning from Human Feedback (RLHF) [4] pipeline. Training a medical LLM entirely from scratch is both time-consuming and ineffective; instead, it 
+
+Sudip is a Graduate Student in the Department of Computer Science, University of Kentucky, Lexington, KY, USA (email: sudipbhujel@uky.edu) Target   
+
+> Patient
+> High -Confidence
+> Leak: “Patient likely
+> In training set”
+> Patient Data
+> (Rare Symptoms)
+> Standard
+> Chatbot
+> (No DP)
+> MIA Attacker
+> Target
+> Patient
+> PriMedChat
+> Chatbot
+> (DP -Protected)
+> MIA Attacker (Rare
+> Symptoms)
+> Defense Success:
+> Attack fails due to DP
+> noise (indistinguishable)
+> PrivMedChat (Protected)
+> Standard Chatbot
+
+Fig. 1: A standard medical LLM that is fine-tuned without pri-vacy safeguards may disclose the membership for patients with rare symptoms in its training set. In contrast, PrivMedChat’s application of differential privacy prevents high-confidence inferences. is common practice to fine-tune a strong pre-trained model dialogue LLM. The process begins by adapting the base model through Supervised Fine-Tuning (SFT) on high-quality clinical interactions to learn domain style and conversational structure. Next, a reward model is trained on ranked preference pairs to approximate expert judgments of clinical utility and safety. Finally, the SFT model is optimized to maximize reward, typically via Proximal Policy Optimization (PPO) [5] or related preference-optimization methods. This preference-based stage is often critical for improving safety behavior (e.g., appropriate escalation) and for reducing unhelpful or overly generic responses. Despite these advances, effective medical adaptation and personalization often rely on training signals derived from doctor-patient dialogues, which can contain protected health information (PHI) and other sensitive attributes governed by regulations such as the Health Insurance Portability and Accountability Act (HIPAA) and the General Data Protection Regulation (GDPR). Conventional fine-tuning and RLHF may inadvertently memorize training records, enabling membership inference attacks (MIA) [6], attribute inference, or verbatim leakage of rare patient details [7]. Importantly, even datasets released in de-identified or “public” form can remain sensitive in an adversarial setting: rare strings, uncommon symptom 
+
+> arXiv:2603.03054v1 [cs.CL] 3 Mar 2026 2
+
+combinations, or residual identifiers may still be memorized and later recoverable. In high-stakes clinical contexts, such leakage risks patient re-identification and undermines trust in deployment. Differential privacy (DP) provides a rigorous framework for limiting the influence of any single training record on model parameters [8]. Prior work has successfully applied DP to language model pre-training and supervised fine-tuning (DP-SFT) [9], [10], [11], showing that nontrivial utility can be re-tained under meaningful privacy budgets. However, extending DP to the full RLHF pipeline remains challenging. Preference modeling and policy optimization are often highly sensitive to noise, and naive DP mechanisms can substantially degrade alignment quality—a particularly acute issue in healthcare, where correctness, safety, and calibrated uncertainty are essen-tial. As a result, existing privacy-preserving LLMs frequently exhibit pronounced performance drops at privacy levels that meaningfully reduce empirical leakage risk [12]. This paper addresses the challenge of extending differen-tial privacy (DP) beyond supervised fine-tuning to the full preference-based alignment pipeline for medical dialogue. We propose PrivMedChat, an end-to-end differentially private RLHF framework that applies DP-SGD to (i) supervised fine-tuning (SFT) on dialogue-derived supervision, (ii) reward model training on preference pairs, and (iii) PPO policy optimization. Because the PPO stage also accesses dialogue-derived prompts, we apply DP-SGD to both the PPO actor and critic, accounting for their privacy cost in εtotal . The DP-trained reward model is kept fixed during alignment so that its privacy budget is not further consumed. Although some medical dialogue datasets are publicly re-leased in de-identified form, we treat dialogue-derived super-vision as sensitive due to residual identifiers, rare symptom combinations, and adversarial linkage risks. Accordingly, the DP guarantees reported in this work are stated with respect to the training records used for SFT and reward modeling, and should be interpreted as a formal limitation on the influence of any single training example on the released model param-eters—not as a standalone claim of regulatory compliance. To avoid costly clinician annotation, we construct prefer-ence pairs using an expert-versus-non-expert strategy from medical dialogue corpora (e.g., MedDialog [13]). Specifically, we treat real physician responses as “chosen” outputs and generate “rejected” alternatives using a base LLM prompted to respond as a non-expert assistant; we apply similarity and quality filtering to ensure informative preference margins. This produces scalable, high-signal preference data for reward modeling without requiring additional human labeling. Our primary contributions are as follows: 1) Annotation-free medical preference construction. We present a scalable strategy to form preference pairs for medical dialogue alignment by pairing physician re-sponses with filtered non-expert generations, producing reward-model training data without clinician labeling. 2) End-to-end DP-RLHF. We introduce a DP-protected training pipeline that applies DP-SGD to all three stages—SFT, reward modeling, and PPO—ensuring for-TABLE I: Summary of key notation used in PrivMedChat.                
+
+> Symbol Meaning
+> DSFT priv Private SFT corpus
+> Dpref priv Private preference pairs
+> Xpub Public/synthetic prompts (PPO)
+> εSFT Privacy cost of DP-SFT
+> εRM Privacy cost of reward model
+> εtotal Total privacy cost (composed)
+> CDP-SGD clip norm
+> σDP-SGD noise multiplier
+> rϕ(x, y )Reward model score
+> πref Reference policy (SFT)
+> βKL penalty weight
+> (x, y w, y l)Preference triple (win/lose)
+> εclip PPO clipping parameter
+
+mal (ε, δ ) privacy guarantees across the full alignment pipeline. 3) Utility–safety–privacy evaluation under DP. We eval-uate utility with automatic metrics, safety with targeted heuristic checks, and privacy with membership inference and canary-style probing, and we report results across multiple privacy budgets using consistent accounting across training stages. Table I summarizes the primary notation employed through-out the paper. The remainder of the paper is organized as follows. Section II outlines the methodology and the PrivMed-Chat training pipeline. Section III describes the implemen-tation, and Section IV presents the experimental evaluation, including analyses of utility, safety, and privacy. Section VI re-views related work on medical LLMs, alignment, and privacy. Section V discusses limitations and ethical considerations, and Section VII concludes the paper. Appendix A presents the preliminaries on differential privacy, efficient fine-tuning techniques, and RLHF. Appendix B describes the differential privacy accounting of the system, and Appendix C compares the qualitative results of the base model (without fine-tuning), physician responses, and PrivMedChat (fine-tuned with pri-vacy). II. M ETHODS 
+
+We propose PrivMedChat, a differentially private framework for medical dialogue generation and alignment that enforces differential privacy across the RLHF pipeline. Figure 2b sum-marizes the architecture, organized into three zones. Zone 1
+
+contains the private dataset and all DP-protected training procedures (DP-SFT, DP reward modeling, and DP-PPO); Zone 2 handles evaluation and deployment; and Zone 3
+
+assesses both privacy and downstream utility. Algorithm 1 summarizes the overall procedure. Let DSFT priv denote the (potentially sensitive) supervised fine-tuning corpus derived from doctor–patient conversations, and let Dpref priv = {(x, y w, y l)} denote the preference-pair dataset used for reward modeling, where yw is the physician (chosen) response and yl is the rejected response. Let Xpub denote a set of public or synthetic prompts that contain no real patient information. In PrivMedChat, DP guarantees are enforced for training procedures that access DSFT priv or Dpref priv (Zone 1 ), while 3Patient Query ( 𝑥 )          
+
+> Medical
+> Dialog
+> Source
+> Semantic
+> Similarity
+> Filter
+> Heuristic
+> Judge Filter
+> Pair Construction
+> 𝑥 ,𝑦 !,𝑦 "
+> Chosen
+> (𝑦 !)
+> Final RM
+> Training Dat a
+> Expert Source Pathway
+> Base LLM
+> 𝑀 #$%&
+> Heuristic
+> Validation
+> Rejected
+> (𝑦 ")
+> System
+> Prompt
+> Generate
+> Non -Expert Generation Pathway
+> Lookup
+> Original
+> Drop
+> (Too Similar)
+> Drop
+> (Low Quality)
+> If cos <0.9If margin >0.9
+> Expert Doctor Generic AI
+
+(a) Pre-processing of data Private      
+
+> Medical
+> Dialogues
+> Medical
+> Preference
+> Data
+> DP -SFT
+> (Opacus + LoRA)
+> DP -Reward
+> Modeling
+> Private SFT
+> Base Model
+> Private
+> Reward
+> Model
+> Public/Synthetic
+> Medical Prompts
+> Adversarial
+> MIA
+> Simulation
+> Clinical
+> Evaluation
+> Set
+> Privacy
+> Metrics
+> LLM -as -a-
+> Judge
+> Utility
+> Metrics
+> Privacy Guarantee
+> (𝜖 !,𝛿 )
+> Privacy Guarantee
+> (𝜖 ",𝛿 )
+> Zone 1: Private Data & Training
+> (The “Safe Zone”)
+> Zone 2: Alignment & RL Loop Zone 3: Evaluation & Deployment
+> Differential
+> Privacy Firewall
+> Fine -
+> Tuned
+> Model
+> RLHF
+> Alignment
+> Loop
+> (PPO/DPO)
+> Membership Inquiry
+> (Target Record)
+> Generated
+> Responses
+> & Prompts
+> Goal:
+> High Clinical
+> Safety
+> Goal:
+> Low MIA
+> Success
+> Privacy
+> Accountant
+> Reward
+> Signal
+> Policy
+> Update
+> (Ranked
+> Pairs)
+> Experts
+> (PHI)
+
+(b) System architecture of PrivMedChat 
+
+Fig. 2: Data pre-processing and system overview of PrivMedChat. (a) methodology for annotation-free medical preference pair construction (b) illustrates the three-zone design separating DP-protected training (Zone 1) from evaluation and deployment (Zones 2–3). policy alignment uses only Xpub together with a fixed DP-trained reward model (Zone 2 ). We initialize our SFT and RM from 
+
+Meta-Llama-3-8B-Instruct and use it as the starting checkpoint for all subsequent fine-tuning; we refer to this checkpoint as the base model hereafter. 
+
+A. Dataset and Preprocessing 
+
+We utilize the medical dialogue corpus OpenMed/MedDia-log , which has been de-identified using Presidio [14]. This pro-cess replaces sensitive information with placeholders, such as the removal of email or phone number patterns and signature-like text. The DP guarantees are defined with respect to in-dividual training examples derived from these dialogues. Raw dialogues are converted into structured input–output pairs for SFT and preference learning. In addition, we apply lightweight text normalization and perform group-aware dataset splitting based on conversation identifiers to prevent cross-split leakage. To support reward modeling without human annotation, we generate “rejected” responses using a general-purpose lan-guage model (e.g., Llama-3-8B) prompted to emulate a non-expert medical assistant. We then apply heuristic quality filter-ing to remove low-quality samples, discarding outputs shorter than 10 words, containing explicit refusal patterns (e.g., “I am an AI”), or exhibiting substantial repetition. Because reward modeling benefits from a clear margin between preferred and dispreferred outputs, we further deduplicate preference pairs by semantic similarity. Specifically, each response is embedded using a sentence transformer ( all-MiniLM-L6-v2 ), and we remove pairs whose chosen (expert) and rejected (gen-erated) responses exceed a cosine similarity threshold of 0.90 .Finally, we partition the dataset into training ( 80% ), validation (10% ), and test ( 10% ) splits using a group-aware strategy keyed by source conversation identifiers, ensuring that turns from the same multi-turn session do not appear across multiple splits. The resulting corpus yields high-quality, de-duplicated supervision and preference pairs that clearly separate expert medical advice from generic assistant responses. 
+
+B. Preference Pair Construction 
+
+Reward model training relies on ranked preference pairs 
+
+(x, y w, y l) constructed via an expert-versus-non-expert strat-egy that avoids manual annotation. The chosen response yw is the original physician response provided in the dataset, while the rejected response yl is generated by prompting a general-purpose generator model (e.g., Llama-3-8B) to behave as a non-expert assistant. Concretely, we condition the generator model on the patient query and a system instruction to provide concise, high-level guidance while explicitly avoiding detailed differential diagnosis. The prompt takes the following form: 
+
+[System]: ... Avoid detailed differential diagnosis ... [Patient]: {patient_text} [Doctor]: 
+
+We sample with nucleus sampling ( p = 0 .95 ) at temperature 
+
+0.7, and we constrain outputs to matched lengths (maximum 256 tokens) so that rejected responses remain plausible yet systematically less specific than the expert reference. To ensure the constructed pairs contain a meaningful pref-erence signal, we apply a multi-stage filtering pipeline. We first remove degenerate generations using heuristic criteria (minimum length, refusal-pattern detection, and repetition filtering). We then apply semantic filtering by embedding both the physician response and the generated response with sentence-transformers/all-MiniLM-L6-v2 
+
+and discarding pairs whose cosine similarity is ≥ 0.90 . Op-tionally, we apply a heuristic judge that computes a composite score based on length penalties, medical terminology density, and safety-refusal detection, retaining only pairs where the chosen response exceeds the rejected response by at least 
+
+0.20 . In practice, this procedure yields approximately 10 k– 
+
+50 k preference pairs and encourages the reward model to prefer clinically grounded, expert-level responses over generic or hedged alternatives. 4
+
+Algorithm 1: End-to-End DP-RLHF (PrivMedChat) 
+
+Input: Sensitive corpus Dpriv , Base model πbase , LLM Evaluator, Targets (ε, δ )
+
+Output: Privacy-aligned medical LLM policy πθ
+
+/* Stage 1: Preference Pair Construction (Zone 1) */  
+
+> 1
+
+Initialize Dpref ← ∅ ; 
+
+> 2
+
+foreach xi ∈ Dpriv do  
+
+> 3
+
+Sample candidate responses from πbase (·| xi); 
+
+> 4
+
+Score candidates via LLM Evaluator to find (ywi , y li); 
+
+> 5
+
+Dpref ← Dpref ∪ { (xi, y wi , y li)};
+
+/* Stage 2: DP-SFT (Zone 1) */  
+
+> 6
+
+Initialize θsft from πbase ; 
+
+> 7
+
+for t = 1 to Tsft do  
+
+> 8
+
+Sample batch B ∼ Dpriv ; 
+
+> 9
+
+Compute per-sample gradients gi = ∇L (i)
+
+> SFT
+
+(θsft ); 
+
+> 10
+
+Clip and aggregate: 
+
+gt = 1
+
+> |B|
+
+P 
+
+> i∈B
+
+gi/ max 
+
+
+
+1, ∥gi∥2
+
+> Csft
+
+
+
+; 
+
+> 11
+
+Add noise: ˜gt = gt + N (0 , σ 2
+
+> sft
+
+C2
+
+> sft
+
+I); 
+
+> 12
+
+Update θsft using ˜gt;
+
+/* Stage 3: DP-RM (Zone 1) */  
+
+> 13
+
+Initialize reward model ϕ from θsft ; 
+
+> 14
+
+for t = 1 to Trm do  
+
+> 15
+
+Sample batch B ∼ Dpref ; 
+
+> 16
+
+Compute per-sample gradients gi = ∇L (i)
+
+> RM
+
+(ϕ); 
+
+> 17
+
+Clip and aggregate: 
+
+gt = 1
+
+> |B|
+
+P 
+
+> i∈B
+
+gi/ max 
+
+
+
+1, ∥gi∥2
+
+> Crm
+
+
+
+; 
+
+> 18
+
+Add noise: ˜gt = gt + N (0 , σ 2
+
+> rm
+
+C2
+
+> rm
+
+I); 
+
+> 19
+
+Update ϕ using ˜gt;
+
+/* Stage 4: DP-PPO Policy Optimization */  
+
+> 20
+
+Initialize πθ from θsft ; 
+
+> 21
+
+Sample dialogue-derived prompts Dppo ; 
+
+> 22
+
+for t = 1 to Tppo do  
+
+> 23
+
+Sample prompts x ∼ Dppo ; 
+
+> 24
+
+Generate responses y ∼ πθ (·| x); 
+
+> 25
+
+Evaluate rewards R(x, y ) = rϕ(x, y ) − βDKL [πθ ∥πsft ]; 
+
+> 26
+
+Update πθ via PPO with DP-SGD on actor and critic;  
+
+> 27
+
+return πθ ;
+
+C. Supervised Fine-Tuning 
+
+We adapt the base model to the medical dialogue domain via supervised fine-tuning on the processed conversations. Because these data may contain sensitive patient information, we perform DP-SFT using DP-SGD. Our implementation uses 
+
+Opacus for privacy accounting and PEFT for parameter-efficient training. We freeze the backbone model parameters and train only LoRA [15] adapters inserted into the query, key, value, and output projection modules, with r=16 , α=32 , and dropout 0.1. For the reward model and PPO stages, we use adapters on the query and value projections only, with r=8 
+
+(see Table II). 
+
+Privacy Guarantees. We enforce per-example gradient norm bounds using DP-SGD with “ghost clipping,” constrain-ing the ℓ2 norm of each per-sample gradient to at most 1.0.We then add Gaussian noise to the aggregated gradients to achieve a strict privacy target budget, tracking privacy loss using a R´ enyi Differential Privacy (RDP) [16] accountant. This mechanism limits the influence of any single training example on the learned parameters, reducing the likelihood that the model memorizes identifiable patient content while still learning general medical dialogue patterns. 
+
+D. Differentially Private RLHF 
+
+Preference-based alignment is performed in two DP-protected phases within the secure environment of Zone 1 ,providing end-to-end privacy with respect to the sensitive training corpus. 
+
+1) DP-Reward Modeling: We train a reward model by fine-tuning a separate copy of the base model on the constructed preference pairs using the same DP-SGD stack (Opacus [17] + LoRA [15]) employed in DP-SFT. The reward model learns to assign higher scalar scores to expert physician responses 
+
+yw than to non-expert generations yl. Concretely, we optimize a standard pairwise preference loss (Bradley–Terry / logistic form): 
+
+LRM (ϕ) = −E(x,y w ,y l) [log σ (rϕ(x, y w) − rϕ(x, y l))] ,
+
+where rϕ(x, y ) is the scalar reward assigned to response 
+
+y under prompt x and σ(·) is the sigmoid. The privacy expenditure for this stage, denoted εRM , is accounted for independently from SFT. 
+
+2) Policy Optimization with Firewall: We align the DP-SFT policy using PPO [5]. We initialize the PPO actor from the DP-SFT checkpoint and use the same DP-SFT checkpoint as the reference policy πref for KL regularization. The private reward model—trained under DP in the previous phase—provides the optimization signal. We additionally regularize the policy to remain close to a reference model πref (typically the SFT model) via an explicit KL penalty:           
+
+> max
+> θEx, y ∼πθ(·| x)
+> rϕ(x, y )−βEx
+> h
+> KL
+> 
+> πθ(· | x)πref (· | x)
+> i
+> .
+
+Because the PPO prompts are derived from the same dia-logue corpus used for SFT and reward modeling, this stage also accesses dialogue-derived data. To maintain end-to-end privacy, we therefore apply DP-SGD to both the PPO actor and critic, with separate per-component privacy budgets. The total privacy cost of the system is thus the composition of all three stages: εtotal = εSFT + εRM + εPPO , with δ tracked analogously using the same RDP accountant [16]. 
+
+E. Evaluation and Deployment 
+
+Zone 3 (Evaluation and Deployment) operates outside the DP-protected training pipeline and accesses no private patient data or preference pairs. Evaluations are performed on held-out test prompts and generated responses, while deployment uses only user-provided inputs at inference time. 5
+
+1) Evaluation: We evaluate PrivMedChat along three axes: utility, safety, and privacy. Automatic utility metrics (ROUGE-L, BERTScore, entity overlap, and perplexity) are computed on a larger held-out subset (5,000 prompts) to reduce variance in aggregate reporting. For safety checks and privacy attacks, we use a focused evaluation subset of n = 500 prompts and report 1,000-iteration paired bootstrap confidence intervals. All evaluation prompts are drawn from held-out test data and are not used during training. No private corpus is touched during these assessments; all prompts are non-sensitive. 
+
+2) Deployment Considerations: In deployment, PrivMed-Chat processes only real-time user prompts, inheriting the formal (ε, δ )-DP guarantees from the DP-protected training stages. Practical safeguards include real-time monitoring for out-of-distribution inputs, human-in-the-loop escalation for high-risk queries, audit logging, and uncertainty-aware re-fusal mechanisms. The DP-SGD framework applied across all training stages provides formal privacy-by-design guarantees. We do not frame DP guarantees as a standalone compliance claim; real deployments still require institutional governance, monitoring, and clinical safety processes. III. I MPLEMENTATION 
+
+We implement PrivMedChat in Python. The codebase sup-ports DP-SFT, DP reward modeling, and PPO-based RLHF with LoRA [15] and is publicly available 1. Differential privacy is enforced in all training stages that utilize dialogue-derived supervision through DP-SGD, implemented with Opacus [17]. We train PrivMedChat on 1–4 NVIDIA H200 GPUs. All components are initialized from the base model to lever-age its general-purpose dialogue and reasoning capabilities. We use parameter-efficient fine-tuning via LoRA [15] adapters throughout. The DP-SFT stage inserts adapters on the query, key, value, and output projection layers with r=16 , α=32 , and dropout 0.1. The reward model uses adapters on the query and value projections with r=8 , α=16 , and dropout 0.2. The PPO [5] actor and critic use adapters on the query and value projections with r=8 , α=32 , and dropout 0.1.
+
+Training hyperparameters and DP accounting. Hyper-parameters are chosen to maintain stable optimization under per-sample clipping and noise injection. We adopt a staged learning-rate schedule, using a conservative learning rate dur-ing PPO [5] to mitigate policy collapse when combining RLHF with DP noise. Noise multipliers for DP-SGD are computed with an RDP-based accountant to ensure that cumulative privacy loss remains within the target ε budget across all three private training stages (DP-SFT, DP reward modeling, and DP-PPO). Table II summarizes the principal settings. 
+
+DP accounting details. For each DP run, we record the dataset size n, sampling rate q, number of optimization steps 
+
+T , clipping norm C, and noise multiplier σ used by Opacus for both DP-SFT and DP reward modeling, and convert RDP to the reported (εSFT , δ ) and (εRM , δ ). We report the per-stage budgets and their composition in Appendix B. 
+
+> 1https://github.com/sudip-bhujel/privmedchat
+
+TABLE II: Hyperparameter configurations for the PrivMed-Chat training stages. Parameters were selected to balance con-vergence stability with differential privacy noise requirements.                          
+
+> Parameter SFT Reward Model PPO [5] (Actor/Critic)
+> Effective Batch Size 16 – 64 16 – 64 16 – 64 Learning Rate 2×10 −55×10 −55×10 −6
+> Training Duration 3 Epochs 3 Epochs 10 Iterations Epochs per Iteration ––3Optimization Steps ––≈1,000
+
+A. Experimental Setup 
+
+We evaluate PrivMedChat on the held-out test split with em-phasis on three desiderata: clinical utility, safety, and privacy protection. Across all conditions, we use the base model as the common backbone and keep the LoRA [15] configuration fixed to control for capacity and optimization differences. This design isolates the effects of (i) the training objective (SFT vs. RLHF) and (ii) the privacy mechanism and privacy budget. 
+
+Model variants and baselines. Our comparisons include five families of models. We first report results for the off-the-shelf base model (no adaptation), which provides a ref-erence point for zero-adaptation behavior. We then train non-private baselines using standard SFT and PPO [5]-based RLHF without differential privacy; these models serve as a practical upper bound on achievable utility under our training setup. We additionally train a non-private SFT model for 17 epochs as a deliberate Overfit SFT baseline (PPL ≈198.6), which amplifies memorization and provides a stress test for MIA sensitivity. To characterize the utility–privacy trade-off under private learning, we train DP-SFT models with privacy budgets 
+
+ε ∈ { 1, 3, 5, 7} at fixed δ = 10 −5. Finally, we instantiate PrivMedChat using our full DP-RLHF pipeline—where a DP-SFT policy is aligned via PPO using a separately trained DP reward model—and match the cumulative privacy budget to the DP-SFT settings (same ε set, same δ), enabling a direct assessment of whether the RLHF stage improves performance at equivalent privacy cost. 
+
+1) Evaluation Metrics: We quantify response quality using complementary lexical, semantic, and domain-specific metrics computed on the held-out test set. Unless otherwise stated, all metrics are computed by comparing generated responses to the reference physician responses. 
+
+a) ROUGE-L: We compute ROUGE-L [22], which mea-sures longest common subsequence (LCS) overlap between the generated response and the reference. We report ROUGE-L (F1) with standard tokenization. 
+
+b) BERTScore: We compute BERTScore (F1) [23], a semantic similarity metric that uses contextual embeddings to align tokens between candidate and reference texts and combines precision and recall into an F1 score. We report the mean F1 value across the test set. 
+
+c) Perplexity (PPL): Perplexity is computed by con-ditioning on the prompt and evaluating only the reference response under teacher forcing, using the tokenizer of the model being assessed. 6
+
+TABLE III: Utility and privacy results on the held-out test set. Bold denotes the best result per metric among DP models. ε
+
+denotes the cumulative privacy budget ( δ=10 −5). Utility metrics (ROUGE-L, BERTScore, Entity F1, PPL) are computed on 5,000 prompts. PubMedQA [18] accuracy is evaluated on 500 biomedical questions. Privacy columns report AUC-ROC of six membership inference attacks; values near 0.50 indicate random-guessing (ideal).                                                                                                                                                                      
+
+> Utility Privacy (MIA AUC ↓)Model εROUGE-L BERTScore Entity F1 PPL ↓PubMedQA [18] Loss [19] Ref Min-K% [20] Min-K%++ [21] Zlib [7] Lowercase [7] Base –0.133 0.830 0.112 37.34 0.554 0.518 0.500 0.513 0.505 0.513 0.502 SFT –0.163 0.829 0.096 19.95 0.642 0.532 0.542 0.535 0.548 0.532 0.515 Overfit SFT –0.162 0.823 0.093 198.61 0.536 0.527 0.518 0.528 0.531 0.523 0.505 PPO –0.148 0.825 0.102 20.13 0.636 0.532 0.543 0.534 0.547 0.533 0.516 DP-SFT 10.149 0.831 0.093 25.27 0.554 0.522 0.519 0.521 0.519 0.517 0.555 DP-SFT 30.152 0.831 0.092 24.82 0.534 0.521 0.513 0.520 0.517 0.517 0.544 DP-SFT 50.149 0.830 0.092 24.95 0.544 0.519 0.511 0.514 0.514 0.515 0.540 DP-SFT 70.154 0.833 0.094 24.34 0.550 0.520 0.513 0.515 0.514 0.517 0.546 PrivMedChat 10.146 0.839 0.086 25.27 0.552 0.522 0.520 0.521 0.519 0.517 0.555 PrivMedChat 30.154 0.838 0.096 24.81 0.536 0.521 0.512 0.519 0.517 0.517 0.544 PrivMedChat 50.152 0.837 0.097 25.04 0.546 0.519 0.510 0.514 0.514 0.515 0.539 PrivMedChat 70.156 0.836 0.103 24.46 0.546 0.520 0.513 0.515 0.514 0.516 0.545
+
+d) Medical entity F1: To capture clinically salient con-tent that may not be reflected by surface overlap, we extract medical entities (e.g., conditions, medications, procedures, anatomy) from generated and reference texts using a domain-specific named entity recognizer and compute entity-level precision, recall, and F1. Unless otherwise noted, we use exact string matching after normalization (case-folding and whitespace cleanup). 
+
+2) Safety Evaluation: To assess safety, we apply targeted heuristic checks designed to capture common failure modes in medical dialogue, including inappropriate diagnostic certainty, potentially harmful instructions, and missing escalation for ur-gent symptoms. These checks are not a substitute for clinician evaluation, but they provide a consistent proxy for comparing model variants under matched prompts and decoding settings. We therefore interpret safety results as comparative signals within our experimental setup, and we discuss remaining limitations and failure cases in Sec. V. 
+
+3) Privacy Evaluation: We evaluate privacy leakage using two empirical attack protocols that capture complementary notions of memorization and membership inference. First, we conduct MIA using both loss-based signals and reference-based variants. We report the Area Under the ROC Curve (AUC) and the true positive rate at 1% false positive rate (TPR@1%,FPR), which summarizes an attacker’s ability to distinguish training members from non-members. Second, we measure verbatim memorization via canary exposure [7], where synthetic canary strings are inserted into training data and we test whether the trained model can reproduce them under targeted prompting. IV. E VALUATION 
+
+We evaluate PrivMedChat through four research questions designed to determine whether differentially private RLHF can produce a medical chatbot that remains clinically useful, safe, and privacy-preserving: 1 How much clinical utility does differential privacy cost, and can RLHF recover the gap? 
+
+2 Does the DP training pipeline resist empirical privacy attacks relative to non-private fine-tuning? 3 Does privacy-preserving training maintain or improve the safety profile of generated medical responses? 4 At a fixed privacy budget, does preference alignment via RLHF deliver measurable gains over DP-SFT alone? 
+
+Utility and privacy metrics appear in Table III; safety and PubMedQA [18] correctness results appear in Tables VI and IV, respectively. All metrics are computed on the held-out test set ( n = 5 ,000 for automatic utility metrics; n = 500 
+
+for PubMedQA and safety). We report 1,000-iteration paired bootstrap 95% confidence intervals where relevant. 
+
+A. Utility–Privacy Trade-off 
+
+Table III reveals a modest privacy-induced utility cost that RLHF largely mitigates. All adapted models reduce perplex-ity relative to the base model (PPL = 37.34). Non-private SFT achieves the lowest PPL (19.95), whereas DP-SFT and PrivMedChat settle at 24.34–25.27. Despite the noise from DP-SGD, lexical and semantic quality remain competitive: DP-SFT at ε = 7 reaches ROUGE-L = 0.154 and BERTScore = 0.833 (Entity F1 = 0.094), while non-private SFT scores 0.163 / 0.829 / 0.096. Paired bootstrap tests confirm no statistically significant differences ( p > 0.05 ) between the strongest DP-SFT variant and non-private SFT on ROUGE-L or BERTScore, demonstrating that LoRA + DP-SGD preserves core aspects of medical dialogue quality even at stringent privacy levels. Utility does not scale monotonically with privacy bud-get. Across DP-SFT models ( ε ∈ {1, 3, 5, 7}), ROUGE-L varies narrowly between 0.149–0.154 and BERTScore be-tween 0.830–0.833. The same pattern holds for PrivMedChat, where the ε = 7 variant attains the highest ROUGE-L (0.156) and Entity F1 (0.103) among all DP models. PubMedQA [18] accuracy remains stable (0.534–0.554) but exhibits a majority-class bias toward “yes” answers (Table IV), a known side-effect of DP noise that warrants further mitigation in future work. Complementing these automatic and task-specific metrics, we conduct a holistic LLM-as-a-Judge evaluation using a 3-model G-EVAL [24] jury consisting of Qwen/Qwen2.5-32B-Instruct ,7
+
+TABLE IV: PubMedQA [18] correctness evaluation ( n=500 ). Per-class accuracy shows the model’s ability to distinguish “yes,” “no,” and “maybe” answers. Non-DP models achieve balanced predictions while DP models exhibit majority-class bias.                                                                               
+
+> Model εAccuracy Yes No Maybe Unans.
+> Base –0.554 1.000 0.006 0.000 0SFT –0.642 0.833 0.526 0.000 61 Overfit SFT –0.536 0.533 0.699 0.000 8PPO –0.636 0.826 0.520 0.000 60 DP-SFT 10.554 0.975 0.046 0.000 3DP-SFT 30.534 0.884 0.121 0.039 45 DP-SFT 50.544 0.935 0.075 0.020 30 DP-SFT 70.550 0.953 0.058 0.039 10 PrivMedChat 10.552 0.971 0.046 0.000 5PrivMedChat 30.536 0.880 0.127 0.059 43 PrivMedChat 50.546 0.935 0.081 0.020 23 PrivMedChat 70.546 0.953 0.046 0.039 14
+
+TABLE V: LLM-Jury Evaluation Results (3-model G-EVAL [24] jury on 400 held-out test prompts). Higher scores are better.                             
+
+> Model εFact. Safety Helpful. Concise. Empathy Overall SFT –2.76 2.53 2.32 2.36 2.04 2.4 DP-SFT 72.93 2.57 2.36 2.38 2.14 2.48 PrivMedChat 73.18 3.1 2.62 2.99 2.41 2.86
+
+mistralai/Mistral-Small-24B-Instruct-2501 ,and google/gemma-2-27b-it on 400 held-out test prompts (Table V). Each response is scored on six clinically relevant dimensions: Factuality, Safety, Helpfulness, Conciseness, Empathy, and Overall quality. PrivMedChat at 
+
+ε = 7 achieves the highest overall score (2.86), outperforming both non-private SFT (2.40) and DP-SFT (2.48). Gains are most pronounced in factuality, safety, and empathy, confirming that the DP-RLHF stage produces responses judged superior in overall clinical quality by strong LLM evaluators. 
+
+B. Privacy Protection 
+
+We assess empirical privacy via six MIAs following the SOFT [25] framework: loss [19], reference-model ratio, Min-K% [20], Min-K%++ [21], zlib [7], and lowercase [7] normal-ization. As shown in Table III, every DP model yields AUC-ROC values between 0.510–0.555—statistically indistinguish-able from random guessing (0.50). The strongest signal (Min-K% AUC = 0.521 for PrivMedChat at ε = 1 ) remains within the range expected under the null. Lowercase normalization consistently inverts the signal (AUC < 0.50 ), further confirm-ing that members and non-members are indistinguishable. Non-private baselines also exhibit near-chance MIA per-formance under our limited-epoch, LoRA regime; this does not imply general privacy for non-private fine-tuning but highlights that our training scale limits overfitting. DP models nevertheless provide the only formal (ε, δ = 10 −5) guarantee. Targeted canary extraction succeeded on zero of 25 inserted canaries across all models, indicating no detectable verbatim memorization. TABLE VI: Safety evaluation results ( n=500 ). All rates are reported as percentages (%).                                                                  
+
+> Model εHalluc. Harmful Med. Valid. Emerg. Esc.
+> Base –1.0 0.2 0.2 5.0 SFT –2.2 0.2 0.4 4.6 Overfit SFT –1.4 0.0 0.6 3.8 PPO –0.8 1.2 1.4 4.8 DP-SFT 11.2 0.2 1.4 3.8 DP-SFT 32.2 0.2 0.4 5.0 DP-SFT 53.2 0.4 0.8 4.6 DP-SFT 72.6 0.2 0.4 3.8 PrivMedChat 11.6 0.2 0.0 4.4 PrivMedChat 33.0 0.8 0.0 4.2 PrivMedChat 51.6 0.6 0.2 3.8 PrivMedChat 71.4 0.4 0.2 4.4
+
+C. Safety 
+
+Safety results (Table VI) indicate that DP-RLHF improves safety margins beyond both non-private baselines and DP-SFT. Hallucination rates for DP-SFT range 1.2–3.2%, exceeding non-private SFT (2.2%). In contrast, PrivMedChat achieves the lowest hallucination rates overall (1.4–3.0%), with the 
+
+ε=7 variant at 1.4%. Harmful advice remains low across all PrivMedChat variants (0.2–0.8%), comparable to non-private baselines (0.2–1.2%). Medication validation and emergency escalation rates stay low and stable ( ≤ 0.6% and 3.8–5.0%, respectively), showing that DP noise does not impair recogni-tion of urgent clinical scenarios. 
+
+D. RLHF Benefit under DP 
+
+At matched ε, PrivMedChat (DP-RLHF) outperforms DP-SFT on multiple utility axes while preserving privacy. The ε=7 
+
+PrivMedChat variant achieves the highest ROUGE-L (0.156) and Entity F1 (0.103) among all DP models. BERTScore remains uniformly strong (0.836–0.839). Safety gains are no-table: mean hallucination drops from 2.3% (DP-SFT) to 1.9% (PrivMedChat). Harmful advice rates remain near-zero across all models, with DP-SFT averaging 0.25% and PrivMed-Chat averaging 0.50%—both well within confidence interval overlap. MIA AUC values for PrivMedChat are statistically indistinguishable from DP-SFT at the same ε, consistent with DP-SGD being applied across all training stages. These results collectively demonstrate that DP-RLHF recov-ers most of the utility lost to privacy noise, strengthens safety alignment, and delivers formal privacy guarantees—advancing the feasibility of privacy-preserving medical LLMs. 
+
+E. Ablation Studies 
+
+DP noise in the reward model does not degrade downstream policy quality; the resulting PPO policies match or exceed non-private PPO on ROUGE-L and BERTScore, underscoring the robustness of pairwise preference learning. Varying ε
+
+within {1, 3, 5, 7} produces only narrow performance bands (ROUGE-L 0.146–0.156, BERTScore 0.836–0.839), allowing practitioners to prioritize stronger privacy with minimal utility penalty. The consistency of near-chance MIA performance across six attack families confirms that observed privacy is not attacker-specific. 8
+
+V. D ISCUSSION 
+
+Our findings establish DP-RLHF as a viable framework for training privacy-preserving medical dialogue models. PrivMedChat maintains competitive automatic utility met-rics, delivers measurable safety improvements over both non-private and DP-SFT baselines, and exhibits near-chance perfor-mance under a comprehensive suite of membership inference attacks. Among the evaluated privacy budgets, the ε = 7 vari-ant of PrivMedChat provides the strongest overall operating point, achieving the highest ROUGE-L (0.156) and Entity F1 (0.103) among all DP models while preserving formal 
+
+(ε, δ = 10 −5) guarantees and near-random MIA AUC values. 
+
+Privacy–Utility Trade-off. Utility metrics remain stable across privacy budgets ( ε ∈ {1, 3, 5, 7}), with ROUGE-L varying only between 0.146–0.156 and BERTScore between 0.836–0.839 for PrivMedChat. This narrow performance band indicates that moderate DP noise, when combined with LoRA and preference alignment, acts as effective regularization with-out proportionally degrading downstream response quality. Crucially, increasing the privacy budget does not yield mono-tonic gains, suggesting that practitioners can select lower ε
+
+values with minimal expected utility loss in this domain. 
+
+Safety and Clinical Relevance. DP-RLHF yields consis-tent safety gains. PrivMedChat reduces hallucination rates to 1.4–3.0% (versus 1.2–3.2% for DP-SFT) and maintains low harmful advice rates across all budgets (0.2–0.8%). These improvements demonstrate that the RLHF stage successfully internalizes preference-based safety constraints even under dif-ferential privacy. Medication validation and emergency escala-tion behaviors remain stable across all variants, indicating that DP noise does not impair critical clinical reasoning capabili-ties. Such enhancements are particularly relevant for clinician-assistive tools and patient-facing applications where factual accuracy and conservative risk management are paramount. 
+
+Privacy Guarantees. All DP models achieve AUC-ROC values between 0.510–0.555 across six distinct MIA families, statistically indistinguishable from random guessing. DP-SGD applied consistently across all training stages ensures com-prehensive privacy protection, as confirmed by identical MIA performance between DP-SFT and PrivMedChat at matched ε.Zero canary extractions across 25 inserted sequences further corroborate the absence of detectable verbatim memorization. While non-private baselines also show near-chance MIA sig-nals under our limited-epoch regime, only DP models provide the formal (ε, δ ) guarantee that bounds worst-case influence independent of attack strategy. 
+
+Limitations. Several limitations should be noted. First, DP-SGD incurs non-trivial computational overhead from per-sample gradient clipping and noise addition, as well as multi-stage privacy accounting. Second, preference data construc-tion still relies on proxy reward models and limited expert annotation. Third, our evaluation, while extensive, remains benchmark-driven and may not fully reflect real-world clinical distribution shifts or workflow integration. Fourth, our privacy analysis, although broad, is necessarily empirical and finite-sample; theoretical guarantees hold, but adaptive or future attacks could warrant continued scrutiny. 
+
+Ethical and Deployment Considerations. Differential pri-vacy substantially reduces memorization risk but does not con-stitute a complete solution. Responsible deployment requires complementary safeguards including human oversight, con-tinuous monitoring, explicit escalation protocols, institutional review board (IRB) approval where applicable, and governance frameworks. Formal privacy accounting should be viewed as one pillar within a broader safety, compliance, and clinical validation stack rather than a standalone certification. 
+
+Future Work. Promising directions include stage-specific privacy budget allocation, development of adaptive or stronger membership inference attacks, extension to multimodal med-ical inputs, and prospective studies with clinician-in-the-loop evaluation. Enhancing uncertainty quantification and refusal mechanisms under DP noise remains a critical step toward safer real-world deployment of privacy-preserving medical LLMs. VI. R ELATED WORK 
+
+We review prior work along three axes motivating PrivMed-Chat: (i) medical dialogue systems and domain adaptation of large language models, (ii) preference-based alignment meth-ods such as RLHF, and (iii) formal privacy mechanisms for language modeling. Existing medical chatbots focus on utility and safety without end-to-end privacy guarantees. Conversely, differentially private fine-tuning for LLMs rarely addresses preference optimization and reward modeling. This gap mo-tivates our end-to-end DP-RLHF formulation for medical dialogue alignment, combining scalable preference construc-tion with rigorous privacy accounting and empirical leakage evaluation. 
+
+A. Medical Dialogue Systems and LLM Fine-Tuning 
+
+The development of medical dialogue systems has advanced significantly with the adaptation of LLMs to clinical do-mains. Early efforts focused on task-specific models trained on doctor-patient conversation datasets, such as MedDialog [13], which provides large-scale de-identified dialogues for supervised fine-tuning. Subsequent works, including MedAl-paca [26] and ChatDoctor [2], demonstrated that domain-adaptive pre-training or instruction fine-tuning on medical corpora (e.g., PubMed abstracts, clinical notes, and online consultations) substantially improves diagnostic reasoning and response quality. More recent models, such as BioMistral [3] and OpenBioLLMs [27], leverage open-source bases (Mistral, Llama-3) fine-tuned on biomedical literature and synthetic dialogues, achieving strong performance on benchmarks like MedQA [28] and HealthSearchQA [29]. These systems emphasize personalization by conditioning responses on patient history and symptoms, but rely heavily on SFT or instruction tuning on potentially sensitive data, raising privacy concerns that remain largely unaddressed. 
+
+B. RLHF in Healthcare 
+
+RLHF has become a cornerstone of LLM alignment, en-abling models to produce helpful, safe, and preference-aligned 9
+
+outputs [4], [30]. In general domains, RLHF pipelines— comprising reward modeling from human preferences and policy optimization via PPO or DPO-have powered models like InstructGPT [4] and Llama-3 [31]. In healthcare, RLHF adoption is limited due to the high cost and ethical challenges of collecting clinician preferences. Alternatives include reward modeling from synthetic preferences [32] or rule-based sig-nals, as in ClinicalCamel [33], and RLAIF approaches that use LLM-as-judge for ranking [34]. Works such as PMC-LLaMA [35] and CareBot [36] incorporate preference optimization on medical instruction data, improving safety and empathy, yet none apply formal privacy guarantees during the preference-based alignment stage. 
+
+C. Differential Privacy in Language Models 
+
+DP offers a principled defense against memorization and inference attacks in machine learning [8]. In LLMs, DP-SGD has been successfully applied during pre-training [9] and fine-tuning [10], with ghost clipping and parameter-efficient methods (e.g., LoRA) mitigating utility loss [37]. Recent advances explore DP at various granularities (example-level, user-level) and stages, showing viable privacy-utility trade-offs in general text tasks [38], [11]. However, extending DP to the full RLHF pipeline—particularly reward modeling and PPO/DPO—remains underexplored due to heightened noise sensitivity in preference optimization [39]. To our knowledge, no prior work has applied end-to-end DP-RLHF in the medical domain. 
+
+D. Privacy Attacks and Defenses in Health Informatics 
+
+LLMs trained on private data are vulnerable to MIA [40], [7], attribute inference, and training data extraction [7], with demonstrated risks in biomedical text [41]. In health infor-matics, these threats are amplified by regulatory requirements (HIPAA, GDPR) and the sensitivity of protected health in-formation [42]. Defenses beyond DP include redaction, syn-thetic data generation [43], and auditing frameworks [44], but empirical evaluations in medical dialogue systems are sparse. Recent benchmarks highlight substantial memorization in domain-adapted medical LLMs [12], underscoring the need for rigorous privacy mechanisms during both fine-tuning and alignment. Our work bridges these areas by introducing the first dif-ferentially private RLHF framework tailored for personalized medical dialogue, with scalable annotation-free preference construction and comprehensive clinical evaluation. VII. C ONCLUSION 
+
+We introduced PrivMedChat, an end-to-end differentially private RLHF framework for privacy-preserving medical di-alogue alignment. By applying DP-SGD to all three training stages—supervised fine-tuning, reward modeling, and PPO policy optimization—PrivMedChat delivers formal (ε, δ ) guar-antees alongside competitive utility and markedly improved safety. On the held-out test set, the ε=7 variant of PrivMed-Chat achieves the strongest overall privacy–utility–safety bal-ance among all DP models, with the highest ROUGE-L and Entity F1 scores under differential privacy, reduced halluci-nation rates, near-zero harmful advice, and robust empirical privacy (near-chance performance across six membership in-ference attacks and zero canary extractions). These findings demonstrate that privacy-preserving align-ment of clinical LLMs is both practical and effective, re-covering most utility lost to DP noise while strengthening safety-critical behaviors. The framework is readily extensible to private preference optimization in other high-stakes do-mains. Future work includes stage-specific budget allocation, evaluation against adaptive attacks, multimodal extensions, and prospective clinician-in-the-loop validation. ACKNOWLEDGMENT 
+
+We would thank the University of Kentucky Center for Computational Sciences and Information Technology Services Research Computing for their support and use of the Lipscomb Compute Cluster and associated research computing resources. REFERENCES [1] K. Singhal, T. Tu, J. Gottweis, R. Sayres, E. Wulczyn, M. Amin, L. Hou, K. Clark, S. R. Pfohl, H. Cole-Lewis et al. , “Toward expert-level medical question answering with large language models,” Nature Medicine , vol. 31, no. 3, pp. 943–950, 2025. [2] Y. Li, Z. Li, K. Zhang, R. Dan, S. Jiang, and Y. Zhang, “Chatdoctor: A medical chat model fine-tuned on a large language model meta-ai (llama) using medical domain knowledge,” Cureus , vol. 15, no. 6, 2023. [3] Y. Labrak, A. Bazoge, E. Morin, P.-A. Gourraud, M. Rouvier, and R. Du-four, “Biomistral: A collection of open-source pretrained large language models for medical domains,” arXiv preprint arXiv:2402.10373 , 2024. [4] L. Ouyang, J. Wu, X. Jiang, D. Almeida, C. Wainwright, P. Mishkin, C. Zhang, S. Agarwal, K. Slama, A. Ray et al. , “Training language models to follow instructions with human feedback,” Advances in neural information processing systems , vol. 35, pp. 27 730–27 744, 2022. [5] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Prox-imal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 ,2017. [6] M. Duan, A. Suri, N. Mireshghallah, S. Min, W. Shi, L. Zettlemoyer, Y. Tsvetkov, Y. Choi, D. Evans, and H. Hajishirzi, “Do membership inference attacks work on large language models?” arXiv preprint arXiv:2402.07841 , 2024. [7] N. Carlini, F. Tramer, E. Wallace, M. Jagielski, A. Herbert-Voss, K. Lee, A. Roberts, T. Brown, D. Song, U. Erlingsson et al. , “Extracting training data from large language models,” in 30th USENIX security symposium (USENIX Security 21) , 2021, pp. 2633–2650. [8] C. Dwork, A. Roth et al. , “The algorithmic foundations of differential privacy,” Foundations and trends® in theoretical computer science ,vol. 9, no. 3–4, pp. 211–407, 2014. [9] M. Abadi, A. Chu, I. Goodfellow, H. B. McMahan, I. Mironov, K. Talwar, and L. Zhang, “Deep learning with differential privacy,” in                           
+
+> Proceedings of the 2016 ACM SIGSAC conference on computer and communications security , 2016, pp. 308–318. [10] D. Yu, S. Naik, A. Backurs, S. Gopi, H. A. Inan, G. Kamath, J. Kulkarni, Y. T. Lee, A. Manoel, L. Wutschitz et al. , “Differentially private fine-tuning of language models,” arXiv preprint arXiv:2110.06500 , 2021. [11] X. Li, R. Zmigrod, Z. Ma, X. Liu, and X. Zhu, “Fine-tuning language models with differential privacy through adaptive noise allocation,”
+> arXiv preprint arXiv:2410.02912 , 2024. [12] M. Singarajah, “Benchmarking differentially private transformer based medical llms,” Ph.D. dissertation, Toronto Metropolitan University, 2023. [13] S. Chen, Z. Ju, X. Dong, H. Fang, S. Wang, Y. Yang, J. Zeng, R. Zhang, R. Zhang, M. Zhou et al. , “Meddialog: a large-scale medical dialogue dataset,” arXiv preprint arXiv:2004.03329 , vol. 3, 2020. [14] O. Mendels, C. Peled, N. Vaisman Levy, S. Hart, T. Rosenthal, L. Lahiani et al. , “Microsoft Presidio: Context aware, pluggable and customizable pii anonymization service for text and images,” Microsoft, 2018. [Online]. Available: [https://microsoft.github.io/presidio 10
+
+[15] E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang, W. Chen et al. , “Lora: Low-rank adaptation of large language models.” 
+
+ICLR , vol. 1, no. 2, p. 3, 2022. [16] I. Mironov, “R´ enyi differential privacy,” in 2017 IEEE 30th computer security foundations symposium (CSF) . IEEE, 2017, pp. 263–275. [17] A. Yousefpour, I. Shilov, A. Sablayrolles, D. Testuggine, K. Prasad, M. Malek, J. Nguyen, S. Ghosh, A. Bharadwaj, J. Zhao et al. , “Opacus: User-friendly differential privacy library in pytorch,” arXiv preprint arXiv:2109.12298 , 2021. [18] Q. Jin, B. Dhingra, Z. Liu, W. Cohen, and X. Lu, “Pubmedqa: A dataset for biomedical research question answering,” in Proceedings of the 2019 conference on empirical methods in natural language processing and the 9th international joint conference on natural language processing (EMNLP-IJCNLP) , 2019, pp. 2567–2577. [19] S. Yeom, I. Giacomelli, M. Fredrikson, and S. Jha, “Privacy risk in machine learning: Analyzing the connection to overfitting,” in 2018 IEEE 31st computer security foundations symposium (CSF) . IEEE, 2018, pp. 268–282. [20] W. Shi, A. Ajith, M. Xia, Y. Huang, D. Liu, T. Blevins, D. Chen, and L. Zettlemoyer, “Detecting pretraining data from large language models,” arXiv preprint arXiv:2310.16789 , 2023. [21] J. Zhang, J. Sun, E. Yeats, Y. Ouyang, M. Kuo, J. Zhang, H. F. Yang, and H. Li, “Min-k%++: Improved baseline for detecting pre-training data from large language models,” arXiv preprint arXiv:2404.02936 , 2024. [22] C.-Y. Lin, “Rouge: A package for automatic evaluation of summaries,” in Text summarization branches out , 2004, pp. 74–81. [23] T. Zhang, V. Kishore, F. Wu, K. Q. Weinberger, and Y. Artzi, “Bertscore: Evaluating text generation with bert,” arXiv preprint arXiv:1904.09675 ,2019. [24] Y. Liu, D. Iter, Y. Xu, S. Wang, R. Xu, and C. Zhu, “G-eval: Nlg evaluation using gpt-4 with better human alignment,” in Proceedings of the 2023 conference on empirical methods in natural language processing , 2023, pp. 2511–2522. [25] K. Zhang, S. Cheng, H. Guo, Y. Chen, Z. Su, S. An, Y. Du, C. Fleming, A. Kundu, X. Zhang et al. , “ {SOFT }: Selective data obfuscation for protecting {LLM } fine-tuning against membership inference attacks,” in 34th USENIX Security Symposium (USENIX Security 25) , 2025, pp. 8135–8154. [26] T. Han, L. C. Adams, J.-M. Papaioannou, P. Grundmann, T. Oberhauser, A. L¨ oser, D. Truhn, and K. K. Bressem, “Medalpaca–an open-source collection of medical conversational ai models and training data,” arXiv preprint arXiv:2304.08247 , 2023. [27] M. S. Ankit Pal, “Openbiollms: Advancing open-source large language models for healthcare and life sciences,” https://huggingface.co/aaditya/ OpenBioLLM-Llama3-70B, 2024. [28] D. Jin, E. Pan, N. Oufattole, W.-H. Weng, H. Fang, and P. Szolovits, “What disease does this patient have? a large-scale open domain question answering dataset from medical exams,” arXiv preprint arXiv:2009.13081 , 2020. [29] K. Singhal, S. Azizi, T. Tu, S. S. Mahdavi, J. Wei, H. W. Chung, N. Scales, A. Tanwani, H. Cole-Lewis, S. Pfohl, P. Payne, M. Senevi-ratne, P. Gamble, C. Kelly, A. Babiker, N. Sch¨ arli, A. Chowdhery, P. Mansfield, D. Demner-Fushman, B. Ag¨ uera y Arcas, D. Webster, G. S. Corrado, Y. Matias, K. Chou, J. Gottweis, N. Tomasev, Y. Liu, A. Rajkomar, J. Barral, C. Semturs, A. Karthikesalingam, and V. Natara-jan, “Large language models encode clinical knowledge,” Nature , vol. 620, no. 7972, pp. 172–180, 2023. [30] P. F. Christiano, J. Leike, T. Brown, M. Martic, S. Legg, and D. Amodei, “Deep reinforcement learning from human preferences,” Advances in neural information processing systems , vol. 30, 2017. [31] A. Dubey, A. Jauhri, A. Pandey, A. Kadian, A. Al-Dahle, A. Letman, A. Mathur, A. Schelten, A. Yang, A. Fan et al. , “The llama 3 herd of models,” arXiv e-prints , pp. arXiv–2407, 2024. [32] C. Y. Liu, L. Zeng, Y. Xiao, J. He, J. Liu, C. Wang, R. Yan, W. Shen, F. Zhang, J. Xu et al. , “Skywork-reward-v2: Scaling preference data curation via human-ai synergy,” arXiv preprint arXiv:2507.01352 , 2025. [33] A. Toma, P. R. Lawler, J. Ba, R. G. Krishnan, B. B. Rubin, and B. Wang, “Clinical camel: An open expert-level medical language model with dialogue-based knowledge encoding,” arXiv preprint arXiv:2305.12031 ,2023. [34] Y. Bai, S. Kadavath, S. Kundu, A. Askell, J. Kernion, A. Jones, A. Chen, A. Goldie, A. Mirhoseini, C. McKinnon et al. , “Constitutional ai: Harmlessness from ai feedback,” arXiv preprint arXiv:2212.08073 ,2022. [35] C. Wu, W. Lin, X. Zhang, Y. Zhang, W. Xie, and Y. Wang, “Pmc-llama: toward building open-source language models for medicine,” Journal of the American Medical Informatics Association , vol. 31, no. 9, pp. 1833–1843, 2024. [36] L. Zhao, W. Zeng, X. Shi, and H. Zhou, “Carebot: A pioneering full-process open-source medical language model,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 39, no. 24, 2025, pp. 26 039–26 047. [37] X.-Y. Liu, R. Zhu, D. Zha, J. Gao, S. Zhong, M. White, and M. Qiu, “Differentially private low-rank adaptation of large language model us-ing federated learning,” ACM Transactions on Management Information Systems , vol. 16, no. 2, pp. 1–24, 2025. [38] Z. Charles, A. Ganesh, R. McKenna, H. B. McMahan, N. Mitchell, K. Pillutla, and K. Rush, “Fine-tuning large language models with user-level differential privacy,” arXiv preprint arXiv:2407.07737 , 2024. [39] F. Wu, H. A. Inan, A. Backurs, V. Chandrasekaran, J. Kulkarni, and R. Sim, “Privately aligning language models with reinforcement learning,” arXiv preprint arXiv:2310.16960 , 2023. [40] R. Shokri, M. Stronati, C. Song, and V. Shmatikov, “Membership inference attacks against machine learning models,” in 2017 IEEE symposium on security and privacy (SP) . IEEE, 2017, pp. 3–18. [41] E. Lehman, S. Jain, K. Pichotta, Y. Goldberg, and B. C. Wallace, “Does bert pretrained on clinical notes reveal sensitive data?” arXiv preprint arXiv:2104.07762 , 2021. [42] M. Nasr, N. Carlini, J. Hayase, M. Jagielski, A. F. Cooper, D. Ippolito, C. A. Choquette-Choo, E. Wallace, F. Tram` er, and K. Lee, “Scalable extraction of training data from (production) language models,” arXiv preprint arXiv:2311.17035 , 2023. [43] A. Halterman, “Synthetically generated text for supervised text analysis,” 
+
+Political Analysis , vol. 33, no. 3, pp. 181–194, 2025. [44] T. Steinke, M. Nasr, and M. Jagielski, “Privacy auditing with one (1) training run,” Advances in Neural Information Processing Systems ,vol. 36, pp. 49 268–49 280, 2023. 
+
+APPENDIX APRELIMINARIES 
+
+This section reviews the privacy and alignment concepts underlying PrivMedChat. 
+
+A. Differential Privacy 
+
+Let D = {zi}ni=1 denote a dataset of n records. In our setting, each record zi corresponds to a training example de-rived from a doctor–patient dialogue (e.g., a single supervised input–output pair or a single preference pair). Two datasets 
+
+D and D′ are adjacent if they differ in exactly one record. Unless stated otherwise, we consider example-level adjacency; we discuss conversation-level adjacency in Sec. A-A2. 
+
+Definition 1 (( ε, δ)-Differential Privacy [8]) . A randomized mechanism M : D → R satisfies (ε, δ )-DP if for all adjacent datasets D, D ′ and all measurable sets S ⊆ R ,
+
+Pr[ M(D) ∈ S] ≤ eε Pr[ M(D′) ∈ S] + δ. 
+
+Intuitively, (ε, δ )-DP upper-bounds how much the presence of any single record can change the distribution of the mecha-nism’s output. Smaller ε implies stronger privacy; δ is typically set to a negligible value (e.g., δ = 10 −5 in our experiments). 
+
+1) DP-SGD for neural network training: We train our models with differential privacy using DP-SGD [9]. In each iteration, DP-SGD computes per-example gradients, clips each gradient to an ℓ2 norm bound (clipping norm C) to control sensitivity, then adds Gaussian noise proportional to C (scaled by the noise multiplier σ) to the aggregated minibatch gradient before applying the update. We use Opacus [17] for the DP-SGD implementation and privacy accounting, and report (ε, δ )
+
+using an RDP accountant [16]. 11 
+
+2) Adjacency choices and clinical data granularity: While our default definition uses example-level adjacency, health-care deployments may demand stronger notions such as 
+
+conversation-level or user-level DP, where adjacency corre-sponds to adding/removing all examples from a single patient or a single dialogue session. Formally, let D = Smu=1 Du be a partition of records by user/session u. User-level adjacency treats D and D′ as adjacent if one entire group Du is added or removed. This setting typically increases effective sensitivity and thus requires either larger noise or fewer training steps to achieve the same ε. In PrivMedChat, we mitigate cross-session leakage in evaluation by split construction (group-aware partitioning) and reserve user-level accounting as a direct extension when deployment requirements demand it. 
+
+B. Reinforcement Learning from Human Feedback 
+
+RLHF [4] aligns a generative policy πθ (y | x) with human or clinical preferences. Let x denote an input prompt (e.g., patient message plus context) and y a candidate response. Standard RLHF [4] proceeds via (i) supervised fine-tuning (SFT), (ii) reward modeling from preference pairs, and (iii) policy optimization with a KL-regularized RL objective. 
+
+1) Supervised fine-tuning: SFT initializes the policy by maximizing the conditional likelihood of reference responses: 
+
+max  
+
+> θ
+
+E(x,y )∼DSFT [log πθ (y | x)] .
+
+In medical dialogue, SFT primarily teaches domain style, common clinical reasoning patterns, and appropriate tone. 
+
+2) Preference modeling and reward learning: Reward mod-eling uses preference pairs (x, y w, y l) where yw is preferred over yl (“winner” vs. “loser”). A reward model rϕ(x, y ) ∈ R is trained to satisfy rϕ(x, y w) > r ϕ(x, y l). A common objective is the logistic (Bradley–Terry) loss: 
+
+LRM (ϕ) = −E(x,y w ,y l) [log σ (rϕ(x, y w) − rϕ(x, y l))] ,
+
+where σ(·) is the sigmoid. The learned reward model in-duces an ordering over responses that approximates clinical preferences (e.g., safety, correctness, empathy, appropriate escalation). 
+
+3) Policy optimization with PPO: Given a fixed reward model rϕ, we optimize the policy to maximize expected reward while constraining deviation from a reference policy 
+
+πref (typically the SFT model). This constraint is critical in medical settings to prevent reward hacking and regressions in safety. A standard objective is the KL-regularized expected reward:             
+
+> max
+> θEx∼X , y ∼πθ(·| x)
+> rϕ(x, y )−βEx
+> KL  πθ(· | x)∥πref (· | x) ,
+
+where β > 0 controls the strength of regularization. In practice, we use Proximal Policy Optimization (PPO) [5]. Let ρt(θ) = πθ (at|st)  
+
+> πθold (at|st)
+
+denote the policy ratio at token step 
+
+t, and ˆAt an advantage estimate computed from reward and (optionally) a learned value function. PPO maximizes the clipped surrogate:         
+
+> LPPO (θ) = E
+> h
+> min
+> 
+> ρt(θ) ˆAt,clip  ρt(θ),1−εclip ,1 + εclip
+> ˆAt
+> i
+> .
+
+often augmented with a KL penalty to πref and an entropy bonus to maintain exploration. 
+
+C. Parameter-Efficient Fine-Tuning 
+
+Large medical LLMs are expensive to fine-tune under DP because DP-SGD requires per-example gradients and introduces noise. We therefore adopt Low-Rank Adaptation (LoRA) [15] to reduce the number of trainable parameters while preserving expressivity. For a linear projection with weight matrix W ∈ Rdout ×din ,LoRA re-parameterizes updates as 
+
+W ′ = W + ∆ W, ∆W = BA, 
+
+where A ∈ Rr×din , B ∈ Rdout ×r , and r ≪ min( din , d out ) is the rank. The pretrained W is frozen and only (A, B ) are trained. 
+
+1) LoRA under DP-SGD: Training only LoRA parameters reduces (i) memory footprint, (ii) per-step compute for per-example gradients, and (iii) the dimensionality of the pa-rameter space into which DP noise is injected. While DP guarantees are independent of parameter count, in practice LoRA can improve the privacy–utility trade-off by enabling larger effective batch sizes and more stable optimization under clipping and noise. We implement DP training using Opacus [17] with per-sample gradient computation and “ghost clipping” to effi-ciently bound ℓ2 norms at the example level. Across SFT and reward modeling, we apply the same DP-SGD mechanism to the LoRA parameters and account for privacy loss with the same RDP accountant. APPENDIX BDP A CCOUNTING DETAILS 
+
+We report the full DP accounting configuration for each stage in Table VII, including dataset size n, sampling rate q,steps T , clipping norm C, noise multiplier σ, and the resulting 
+
+(ε, δ ) after RDP conversion. This appendix also specifies the allocation (εSFT , ε RM , ε PPO ) used for each target εtotal .APPENDIX CQUALITATIVE GENERATION EXAMPLES 
+
+To complement aggregate metrics, we report representative generations from the best-performing DP model in Table III, i.e., PrivMedChat at ε=7 . We also show responses from the base (non-finetuned) model to illustrate the effect of DP-RLHF alignment. Examples are drawn from the held-out test predictions. 
+
+Case A (Cardiology / Critical Care). Prognosis after cardiac arrest and induced coma 
+
+> Patient Query
+> My father suffered a heart attack (male, normal weight) and his heart stopped beating. He was placed in a medical induced coma. He had 3 prior heart attacks in the past. The doctors have taken him off the medication to bring him out of the coma. His eyes are open. I noticed his finger twitching. He is breathing on a machine. Can you predict a prognosis? 12
+
+TABLE VII: Differential Privacy Accounting Parameters per Stage. Total budget εtotal is obtained via composition over the three stages at fixed δ = 10 −5.
+
+Budget Stage n q T C σ ε δεtotal =1 
+
+SFT 174,957 2.2863 × 10 −5 131,217 1.0 0.5640 1.00 10 −5
+
+RM 27,410 7.2966 × 10 −5 41,115 1.0 0.7642 1.00 10 −5
+
+PPO 25,968 3.9063 × 10 −3 7,680 1.0 3.7891 1.00 10 −5
+
+εtotal =3 
+
+SFT 174,957 2.2863 × 10 −5 131,217 1.0 0.4660 3.00 10 −5
+
+RM 27,410 7.2966 × 10 −5 41,115 1.0 0.5847 3.00 10 −5
+
+PPO 25,968 3.9063 × 10 −3 7,680 1.0 1.5625 3.00 10 −5
+
+εtotal =5 
+
+SFT 174,957 2.2863 × 10 −5 131,217 1.0 0.4134 5.00 10 −5
+
+RM 27,410 7.2966 × 10 −5 41,115 1.0 0.5072 5.00 10 −5
+
+PPO 25,968 3.9063 × 10 −3 7,680 1.0 1.1316 5.00 10 −5
+
+εtotal =7 
+
+SFT 174,957 2.2863 × 10 −5 131,217 1.0 0.3793 7.00 10 −5
+
+RM 27,410 7.2966 × 10 −5 41,115 1.0 0.4547 7.00 10 −5
+
+PPO 25,968 3.9063 × 10 −3 7,680 1.0 0.9485 7.00 10 −5
+
+Base Model Response (no fine-tuning) 
+
+I’m so sorry to hear about your father’s condition. Given his his-tory of heart attacks and the severity of his current condition, it’s essential to understand that his prognosis is uncertain. However, I can provide you with some general information about what you can expect during his recovery. Firstly, it’s great to hear that he’s coming out of the induced coma, and his eyes are open. This is a positive sign, indicating that his brain is starting to recover. The twitching you’ve observed is likely due to the sedatives and medications used to keep him comfortable during his coma. As he continues to recover, these medications will... 
+
+PrivMedChat Response ( ε=7 )
+
+Hello, Thank you for your query. I have reviewed your query and understand your concerns. Your father has had a cardiac arrest and has been in a coma. He has had 3 prior heart attacks and has significant heart damage. He is now coming out of the coma and is breathing on his own with the help of a machine. The prognosis is poor. He may not survive. He may have significant brain damage and may not be able to recover. He may need to be in the intensive care unit for a long time. He may need to be on a ventilator for a long time. 
+
+Reference Physician Response 
+
+Hi there, see to be very true prognosis is poor. But never stop believing in hope because miracles happen. As per the information provided, your father has major heart attack. After a single heart attack, heart muscles got damage and start recovering very slowly after revascularisation. Considering your father has three MI and he is on ventilator for long time, he is going to recover slowly. But life expectancy will not be more. Wish him Luck. Good Luck. 
+
+Case B (Oncology). Newly diagnosed breast cancer without symptoms 
+
+Patient Query 
+
+I was not having pain but still I have come to know that I have breast cancer. But I never had any problem. What do you think, should I go for other opinion? Should I consult some other doctor? 
+
+Base Model Response (no fine-tuning) 
+
+Hi there, I understand your concern and it’s completely normal to feel overwhelmed when you receive a diagnosis of breast cancer, especially if you didn’t have any symptoms. First of all, congratulations on taking the first step by seeking medical attention. It’s great that you’re considering getting a second opinion. In general, it’s a good idea to get a second opinion, especially when it comes to a diagnosis like breast cancer. A second opinion can help you feel more confident in your treatment plan and ensure that you’re getting the best possible care. Here are a few things you can do: 1. Ask your primary care physician or the doctor... 
+
+PrivMedChat Response ( ε=7 )
+
+Hello, I understand your concern. I would like to reassure you that breast cancer is a treatable condition. It is not necessary to have symptoms to have breast cancer. Many women are diagnosed with breast cancer without any symptoms. If you have been diagnosed with breast cancer, it is essential to follow the treatment plan recommended by your doctor. It is not necessary to consult another doctor unless you have any concerns about your treatment plan. In addition to your treatment plan, you can also consider the following: 1. Follow a healthy diet: Eat a balanced diet rich in fruits, vegetables, and whole grains. 2. Exercise regularly: Engage in... 
+
+Reference Physician Response 
+
+A lump or thickening in or near the breast, nipple tenderness. A change in the size or shape of the breast. A nipple turned inward into the breast. The skin of the breast, areola, or nipple may be scaly, red, or swollen. It may have ridges or pitting so that it looks like the skin of an orange. Nipple discharge (fluid). They conducted some special classes in our office regarding breast cancer... that is how I know about this breast cancer. 13 
+
+Case C (Orthopedics / Pain Management). Disc herniation with severe leg pain 
+
+Patient Query 
+
+I have been diagnosed with a disc hernia through MRI L4L5. I have an apt. to see an ortho Dr. on the 27th but have developed new symptoms. Please advice: Fever, body aches and stiffness in my back, numbness down my left leg accompanied by extreme pain. I am crying as I am in so much pain. What should I do? 
+
+Base Model Response (no fine-tuning) 
+
+I’m so sorry to hear that you’re experiencing such severe symp-toms. It’s understandable that you’re worried and in pain. I’ll do my best to provide you with some guidance and advice until you see your orthopedic doctor on the 27th. Firstly, it’s essential to understand that a disc hernia can cause a range of symptoms, including pain, numbness, and stiffness. The pain and numbness you’re experiencing in your left leg are likely due to the compression of the nerve roots in your lower back. To manage your symptoms, I recommend the following: 1. Pain relief medication : You can... 
+
+PrivMedChat Response ( ε=7 )
+
+Hi, I understand your concern. You should take pain relief medication like acetaminophen or ibuprofen. You should also take muscle re-laxants like cyclobenzaprine or carisoprodol. You should also take anti-inflammatory medication like naproxen or indomethacin. You should also take a warm bath or use a heating pad to relieve the pain. You should also avoid heavy lifting and bending. 
+
+Reference Physician Response 
+
+Hi, your symptoms are due to pinched nerve in the lower back region. For relief of pain, you can take pregabalin or gabapentin capsules. Also, you should be on complete bed rest. If pain does not subside, you may benefit from taking epidural injections. 
+
+Case D (Allergy / Immunology). Chronic hives from dust allergy 
+
+Patient Query 
+
+I have a friend who has been suffering with hives for approxi-mately two years, and her eyes get real red and she just doesn’t feel good when these hives come on. She had allergy testing done and is barely allergic to dust/dust mites, and has cleaned home from top to bottom. What do you think? 
+
+Base Model Response (no fine-tuning) 
+
+Hi there! I’m happy to help you with your friend’s concerns. Hives can be a frustrating and uncomfortable symptom, especially when they’re triggered by an allergy. Based on your friend’s diagnosis of a dust allergy, I’ll provide some suggestions for treatment and management. 
+
+Treatment Options: 
+
+1. Antihistamines: Over-the-counter (OTC) or prescription anti-histamines can help relieve itching, redness, and swelling associ-ated with hives. Examples include diphenhydramine (Benadryl), loratadine (Claritin), and cetirizine (Zyrtec). 
+
+PrivMedChat Response ( ε=7 )
+
+Hi, I understand your concern. Hives are a common symptom of allergy. In your friend’s case, it is likely that the hives are caused by dust mites. Here are some suggestions: 1. Use a HEPA air purifier in the home to remove dust mites from the air. 2. Use a HEPA vacuum cleaner to remove dust mites from the carpets and furniture. 3. Wash all bedding and clothing in hot water and dry them in a hot dryer. 4. Use a dehumidifier to reduce the moisture in the home. 5. Use a dust mite spray on the mattress and pillows. 
+
+Reference Physician Response 
+
+Allergy is a challenge for patient and sometimes doctor too. Please observe a few precautions: if you are allergic to house dust please cover your nose with handkerchief when you enter your home from outside visit. Regular dusting of carpets, curtains, bed covers, sofa covers, and keep your pet away. Wet mopping of floor etc. or vacuum cleaning to be done. As a medical part, keep some antiallergic at hand at all times as you may need it any time, and please rush to the ER if you happen to get extensive allergy. If possible visit an allergist and if possible get desensitization done. 
+
+Observation. Across all four cases, PrivMedChat ( ε=7 ) gen-erates more direct, clinically structured responses compared to the base model. The base model typically begins with empathetic but non-specific phrasing (“I’m so sorry to hear...”, “Hi there! I’m happy to help...”) and often defers with follow-up questions rather than providing actionable guidance. In con-trast, PrivMedChat offers concrete recommendations—specific medication names (Case C), environmental control measures (Case D), realistic prognosis assessment (Case A), and reas-surance with practical advice (Case B)—more closely mir-roring the reference physician responses. Notably, in Case A, PrivMedChat correctly conveys a guarded prognosis consistent with the physician reference, whereas the base model provides overly optimistic framing.

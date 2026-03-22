@@ -1,0 +1,436 @@
+Title: PaReGTA: An LLM-based EHR Data Encoding Approach to Capture Temporal Information
+
+URL Source: https://arxiv.org/pdf/2602.19661v2
+
+Published Time: Tue, 03 Mar 2026 02:43:43 GMT
+
+Number of Pages: 32
+
+Markdown Content:
+# PaReGTA: An LLM-based EHR Data Encoding Approach to Capture Temporal Information 
+
+## Kihyuk Yoon a, Lingchao Mao b, Catherine Chong c, Todd J. Schwedt c,Chia-Chun Chiang c, Jing Li a∗
+
+> a
+
+## Georgia Institute of Technology, bMeta, cMayo Clinic March 3, 2026 
+
+Abstract 
+
+Temporal information in structured electronic health records (EHRs) is often lost in sparse one-hot or count-based representations, while sequence models can be costly and data-hungry. We propose PaReGTA, an LLM-based encoding framework that (i) converts longitudinal EHR events into visit-level templated text with explicit temporal cues, (ii) learns domain-adapted visit embeddings via lightweight contrastive fine-tuning of a sentence-embedding model, and (iii) ag-gregates visit embeddings into a fixed-dimensional patient representation using hybrid temporal pooling that captures both recency and globally informative visits. Because PaReGTA does not require training from scratch but instead utilizes a pre-trained LLM, it can perform well even in data-limited cohorts. Furthermore, PaReGTA is model-agnostic and can benefit from future EHR-specialized sentence-embedding models. For interpretability, we introduce PaReGTA-RSS (Representation Shift Score), which quantifies clinically defined factor importance by recomput-ing representations after targeted factor removal and projecting representation shifts through a machine learning model. On 39,088 migraine patients from the All of Us Research Program, PaReGTA outperforms sparse baselines for migraine type classification while deep sequential models were unstable in our cohort. 
+
+# 1 Introduction 
+
+Electronic health records (EHRs) capture diagnoses, prescriptions, test results, comorbidities, and patient-reported outcomes over extended periods, often spanning years [45, 15]. This longitudinal structure provides a unique opportunity to model disease trajectories, forecast clinical progression and healthcare utilization, evaluate real-world treatment effects, and analyze care processes across diverse populations [40, 33]. However, realizing these benefits depends critically on how to encode the EHR data, particularly on whether the encoding strategy preserves temporal information in a form that downstream models can effectively leverage [45]. 
+
+> ∗
+
+Corresponding author. Email: jli3175@gatech.edu 
+
+1
+
+> arXiv:2602.19661v2 [cs.LG] 1 Mar 2026
+
+Despite the inherent sequential nature of EHRs, many practical prediction pipelines still rely on simplified patient-level representations that discard the temporal information in EHRs. Com-mon approaches include one-hot encodings and aggregated count vectors constructed over fixed observation windows [45, 48]. These representations are attractive because they are standardized and integrate easily with conventional machine learning models. However, they collapse visit-level records into unordered summaries and discard clinically meaningful temporal dynamics. As a re-sult, distinct clinical narratives (e.g., the emergence of one disease followed another) may become indistinguishable, even when their prognostic implications differ. This limitation is repeatedly noted as a central barrier to fully leveraging EHRs for longitudinal modeling and decision support [45]. Prior work has primarily explored two directions for preserving temporal information. The first direction is time-aware feature engineering, where temporal dynamics are approximated through hand-crafted variables such as counts within predefined windows, recency indicators, time-since-last-event measures, or gap-based features [45, 49]. Although widely adopted, this approach has several inherent limitations. It requires substantial manual effort and domain expertise to design clinically meaningful temporal features, making it difficult to scale across different clinical contexts [6, 33]. The hand-crafted features are inherently task-specific and may not generalize across diseases or prediction objectives [25, 12]. Moreover, predefined aggregation windows (e.g., 30-day, 90-day counts) impose rigid temporal granularity, potentially losing fine-grained patterns that fall outside these boundaries or masking clinically relevant variations within them [28, 52]. Feature selection is also inherently subjective, which may reduce reproducibility and comparability across studies [24]. Simple aggregation-based features struggle to capture complex temporal dependencies such as nonlinear trends, variable-length patterns, or multi-scale interactions between events [9, 5]. The second direction is sequence modeling, which directly encodes visit sequences using Re-current Neural Networks (RNN), attention mechanisms, or related architectures. Representative approaches include recurrent models for predicting when the next visit will occur [11], memory-augmented approaches for irregular long-term dependencies [38], convolutional architectures that learn motifs from episodic records [36], attention-based models for diagnosis prediction [31], and interpretable attention mechanisms for visit- and code-level attributions [10]. Handling irregu-lar sampling and missingness often requires additional architectural machinery [5, 9]. Although sequence-based models can represent temporal information more faithfully, they often incur higher computational and deployment costs and can be sensitive to data sparsity and the heterogeneity common in real-world EHRs. Transformer-based approaches further enhance modeling capacity for long-range dependencies [50] and have been adapted to structured EHR sequences [27, 41]. In particular, CEHR-BERT in-troduced artificial time tokens inserted between visits to explicitly encode temporal intervals within the BERT framework [37], demonstrating that temporal-aware tokenization can improve predic-tion performance over standard BERT adaptations [37]. In parallel, autoregressive EHR foundation models have been proposed to improve robustness and mitigate temporal distribution shift [48, 20]. 2A recent survey of these deep learning approaches [15] highlights persistent challenges, including identifying temporal irregularity and data heterogeneity. These advances highlight the promise of representation learning for temporally structured EHRs, but practical barriers to clinical adop-tion remain non-trivial: long sequences, irregular timing, site-specific vocabularies, and the need to maintain specialized deep architectures beyond conventional clinical machine learning pipelines [45]. Beyond model design considerations, data normalization of semi-structured EHR tables is a practical barrier. In many EHR systems, medication records are stored at the product name level with heterogeneous naming conventions. Standardization through vocabularies such as RxNorm and common data models such as OMOP/OHDSI [35, 22] improves interoperability, yet consis-tent enforcement at the point of data entry is difficult in practice. Each institution typically maintains only limited-scale datasets and cross-institution inconsistencies in coding practices can hinder harmonization. Recent work on embedding harmonization has attempted to address this issue by aligning medical event representations learned from different data sources into a common embedding space [29], though such approaches still require shared vocabularies or correspondences between sources. Moreover, legacy EHR data collected before standardization was implemented are costly to curate retrospectively. Consequently, obtaining large-scale EHR datasets with uniformly standardized concepts remains challenging. These data constraints further limit the use of deep learning architectures, which typically require substantial volumes of consistently normalized data to achieve robust performance. When data are fragmented across sites, inconsistently mapped, or restricted to small cohorts, these data requirements become a practical barrier to deploying deep models in real-world clinical settings. Large language models (LLMs) and sentence-embedding methods offer an alternative encoding route. Because LLMs are pretrained on massive and diverse text corpora, they encode broad seman-tic knowledge that can generalize across heterogeneous terminologies and naming conventions. This built-in knowledge allows converting heterogeneous clinical records into embedded dense vectors, reducing dependence on rigid code taxonomies and manual feature design [26, 3, 53, 42, 18]. Early work demonstrated that converting medical codes into text descriptions enables unified EHR rep-resentations across heterogeneous coding systems [23]. More recently, general-purpose LLMs used as EHR encoders have shown superior performance compared to domain-specific models across diverse clinical prediction tasks [21], and an LLM-based medical concept mapping [46] has im-proved transferability of EHR-based predictions across different countries. Recent studies also explore prompting strategies and transforming tabular EHR into “pseudo-notes” [56] and discuss opportunities and caveats for language-model-based risk prediction [1]. However, several methodological challenges remain for modeling structured longitudinal EHR: (i) how to clinically meaningfully textualize the EHR data while preserving the temporal informa-tion, (ii) how to adapt embedding models to cohort-specific vocabularies without requiring costly labeled sentence pairs, and (iii) how to aggregate multiple visit-level embeddings into a patient-level representation that preserves temporal cues while remaining compatible with conventional predic-3tive models [45, 42, 18]. While concurrent work addresses (i) by serializing entire patient records as Markdown documents [21], it processes the full longitudinal record in a single pass, which limits scalability for the records and does not account for different temporal importance across visits. Furthermore, prediction performance alone is insufficient for clinical adoption: models must support meaningful explanations. Yet LLM-based encoding makes conventional feature-importance analysis difficult. Model-intrinsic measures (e.g., linear coefficients) correspond to latent embedding dimensions after multiple stages of text construction, sentence encoding, and pooling, and therefore cannot be interpreted directly in terms of clinical variables. Perturbation-based tools such as SHAP [30] or LIME [43] are also challenging here: applying them faithfully would require repeatedly perturbing the raw clinical factor, re-running the entire text →embedding →pooling pipeline, and recomputing predictions, which is expensive and sensitive to perturbation design [30, 43]. In this study, we propose PaReGTA (Patient Representation Generation with Temporal Aggre-gation), an end-to-end LLM-based encoding framework for longitudinal EHR datasets. PaReGTA converts structured EHR events into templated visit-level sentences, fine-tunes a sentence-embedding model using a contrastive objective [42, 18], and aggregates visit embeddings into patient-level rep-resentation using a temporally aware pooling scheme that emphasizes both recency and globally important visits. This hierarchical design is grounded in established principles for learning from sets and hierarchically structured sequences through pooling/attention mechanisms [55, 54]. To en-able interpretability of the embeddings, we further introduce PaReGTA-RSS (Representation Shift Score), a factor importance method tailored to LLM-based encoders that quantifies the contribu-tion of each clinical factor to the prediction task, allowing both patient-level as well as cohort-level attributions. We validate PaReGTA on the All of Us (AoU) Research Program [2], one of the largest harmo-nized, multi-institutional EHR datasets available for biomedical research. AoU aggregates longitu-dinal and structured EHR data from hospitals, clinics, and home-based clinical care settings across the United States under a harmonized common data model. As of October 1, 2023, AoU includes 644,540 participants with data from the 1980s–2023 across four domains—EHR, genomics, mea-surements/wearables, and surveys. Leveraging this large-scale dataset, we evaluate PaReGTA on a migraine phenotype classification task, demonstrating its effectiveness in modeling longitudinal EHR while remaining robust to real-world heterogeneity in clinical records. In summary, this work makes the following contributions: 
+
+• PaReGTA: a temporally aware LLM-based EHR encoding pipeline. We propose an end-to-end framework that converts longitudinal structured EHR data into visit-level tem-plated text, learns domain-adapted visit embeddings via lightweight contrastive fine-tuning, and aggregates visits into fixed-dimensional patient representations with hybrid temporal pooling that preserves recency cues while remaining compatible with conventional machine-learning models. 
+
+• Temporal tokenization ablations for structured EHR textualization. We systemat-ically evaluate multiple ways of injecting temporal cues into visit text (e.g., absolute date, 4inter-visit gap, and recency-to-last-visit) to characterize which temporal representations are most effective for downstream prediction. 
+
+• Practical modeling with heterogeneous medication strings. We demonstrate that PaReGTA can directly encode product-level medication names as recorded in EHRs, reducing reliance on costly medication concept mapping and rigid taxonomies while remaining robust when medication information is missing or potentially confounded. 
+
+• PaReGTA-RSS: a factor importance method for PaReGTA. We introduce PaReGTA-RSS (Representation Shift Score), a factor-importance method tailored to PaReGTA. It quantifies the contribution of clinically defined factors by measuring how the model’s out-put changes when each factor is removed from origin data. 
+
+• Real-world validation on a large longitudinal cohort. We validate PaReGTA on the All of Us (AoU; All of Us Research Program Investigators [2]) dataset, showing substantial improvements over sparse baselines and analyzing the roles of temporal cues and modalities in driving performance. 
+
+# 2 Methods 
+
+## 2.1 Dataset and cohort construction 
+
+Although EHR data are typically organized in a tabular format, they often contain textual infor-mation rather than purely numerical values, and their structure is often inconsistent. In addition, patient visits are often recorded without filtering by specific diseases. Therefore, when conducting disease-specific tasks using EHR data, cohort construction and record curation are often necessary before data preprocessing for model training. The AoU dataset, a large and harmonized resource built on the OMOP Common Data Model, also exhibits these characteristics and needs such cohort constructions. In this study, we selected migraine as the target disease and constructed a migraine specific cohort; migraine diagnosis encounters are used as anchor points for the disease-centric record filtering described below. Table 1 presents a simplified illustration of the AoU data structure. In AoU, data are typically extracted by first selecting patients who meet a target diagnostic criterion. Subsequently, all associated medication and diagnosis records for those patients are retrieved. As a result, medication queries return prescriptions regardless of their original indication. For instance, acetaminophen records may includes migraine unrelated conditions (e.g., influenza), as illustrated by the 2021-07-01 record in Table 1. Consequently, when retrieving medication and comorbidity histories for a target disease, it is not appropriate to assume that every extracted record is clinically attributable to the target disease. Furthermore, we identified numerous records in which a migraine diagnosis was documented, but no medication was prescribed on the same day. To address this issue, we defined migraine-related records as those occurring within a ±3 days window around each migraine diagnosis date, under the assumption that prescriptions and co-5Table 1: Example of AoU EHR data. Note: AoU does not allow exporting patient-level records; thus, this table is provided for illustration only. ID Age Sex Race Visit date Medication Diagnosis 1 33 Male Asian 2021-06-01 - Unspecified migraine 1 33 Male Asian 2021-06-01 acetaminophen 325 MG Oral Tablet -1 33 Male Asian 2021-06-03 - Depression 1 33 Male Asian 2021-07-01 - Flu 1 33 Male Asian 2021-07-02 acetaminophen 325 MG Oral Tablet -1 33 Male Asian 2021-09-01 - Migraine without Aura 1 33 Male Asian 2021-09-01 - Depression 1 33 Male Asian 2021-09-02 lasmiditan 100 MG Oral Tablet -1 33 Male Asian 2021-09-02 - Insomnia 1 33 Male Asian 2021-12-01 - Chronic Migraine without Aura 1 33 Male Asian 2021-12-01 lasmiditan 100 MG Oral Tablet -1 33 Male Asian 2021-12-02 ibuprofen -1 33 Male Asian 2021-12-01 - Depression 1 33 Male Asian 2021-12-01 - Insomnia Table 2: Example of preprocessed AoU EHR data ID Age Sex Race Visit date Medication Comorbidities Migraine type 1 33 Male Asian 2021-07-01 acetaminophen 325 MG Oral Tablet Depression Episodic 1 33 Male Asian 2021-09-01 lasmiditan 100 MG Oral Tablet Depression, Insomnia Episodic 1 33 Male Asian 2021-12-01 lasmiditan 100 MG Oral Tablet, ibuprofen Depression, Insomnia Chronic 6Figure 1: Overview of PaReGTA. morbidities documented in close temporal proximity to a migraine encounter are more likely to be clinically relevant to that diagnosis. After filtering records using this criterion, we augmented each patient’s data with basic demographic information, including age, biological sex, and race. Since we constructed the data at the patient-level, we used the age from the most recent record for each patient. We then organized the resulting patient-level data into a single tabular format, as illustrated in Table 2. 
+
+## 2.2 PaReGTA: proposed encoding method for EHR dataset 
+
+2.2.1 Framework overview 
+
+Given a constructed cohort as input, the goal of our approach, PaReGTA, is to transform it into fixed-dimensional patient representations while preserving the natural patient →visit →event hier-archy and temporal cues, which remains compatible with standard downstream machine-learning models. To achieve the goal, PaReGTA comprises of three main stages: (i) Visit-level text construction : raw EHR records are first partitioned into clinically meaningful factors (e.g. med-ications and comorbidities) and converted into short templated visit-level sentences; (ii) Domain adaptation via contrastive learning : we obtain visit-level embeddings using a pretrained sentence-embedding LLM and perform lightweight domain adaptation via SimCSE fine-tuning on cohort-specific visit texts. (iii) Hybrid temporal pooling into patient representations : visit-level embeddings of each patients are aggregated into a single patient-level representation using hybrid temporal pooling that combines time-decay weighting to emphasize recency and attention-based weighting to emphasize globally informative visits. The resulting patient representations are used as inputs to conventional classifiers for downstream prediction tasks. An overview is provided in Figure 1. 72.2.2 Visit-level textualization of EHR dataset 
+
+PaReGTA starts with the textualization of the EHR dataset. For this, we first divide the datasets into clinically meaningful concepts such as medication and comorbidities records. Separating the data into concept is motivated by downstream fine-tuning: training separate encoders or encoder heads for each concept allows the representation to specialize to the vocabulary and distribution of that concept, which in turn can improve embedding quality. For each concept, we then converted the corresponding records into short, templated sentences and grouped them at the visit level. As the base sentence-embedding model, we used GTE-base-v1.5, a general text embedding model released by Alibaba. We selected GTE-base-v1.5 for three reasons. First, it is optimized for producing high-quality, length-independent embeddings suitable for retrieval and classification tasks, and has demonstrated strong performance on various benchmark suites such as Massive Text Embedding Benchmark (MTEB; Muennighoff et al. [34]). Second, it is relatively lightweight compared with larger instruction-tuned LLMs, which makes fine-tuning and large-scale inference computationally feasible on our hardware. Third, it is available under a permissive license and integrates easily with standard HuggingFace tooling, which simplifies deployment within PaReGTA. 
+
+2.2.3 Domain adaptation via SimCSE 
+
+To adapt the base model to the clinical context of migraine, we further fine-tuned the pretrained LLM using unsupervised SimCSE. Unsupervised SimCSE is a contrastive fine-tuning method that constructs positive pairs by applying standard dropout noise to the same input sentence and treats other sentences in the minibatch as negatives [18]. Given a minibatch of visit-level texts {xi}Bi=1 ,unsupervised SimCSE constructs a positive pair for each instance by encoding the same input twice under two independent dropout masks (i.e., two stochastic forward passes). Concretely, let fθ(·)denote the encoder and let m(1)  
+
+> i
+
+and m(2)  
+
+> i
+
+be two dropout realizations. Then, two embeddings 
+
+z(1)  
+
+> i
+
+= fθ(xi; m(1)  
+
+> i
+
+) and z(2)  
+
+> i
+
+= fθ(xi; m(2)  
+
+> i
+
+) are obtained, which form a positive pair. All other instances in the minibatch (across both views) are treated as in-batch negatives. Cosine similarity sim( u, v ) = u⊤v 
+
+> ∥u∥∥ v∥
+
+and optimize an InfoNCE-style contrastive loss with temperature τ is utilized for the loss function: 
+
+ℓ
+
+
+
+z(1)  
+
+> i
+
+, z (2) 
+
+> i
+
+
+
+= − log exp 
+
+
+
+sim 
+
+
+
+z(1)  
+
+> i
+
+, z (2) 
+
+> i
+
+
+
+/τ 
+
+PBk=1 
+
+P 
+
+> v∈{ 1,2}
+
+I[( k, v )̸ = ( i, 1)] exp 
+
+
+
+sim 
+
+
+
+z(1)  
+
+> i
+
+, z (v)
+
+> k
+
+
+
+/τ 
+
+ . (1) The full objective is symmetrized across the two views: 
+
+L = 12B
+
+> B
+
+X
+
+> i=1
+
+h
+
+ℓ(z(1)  
+
+> i
+
+, z (2)  
+
+> i
+
+) + ℓ(z(2)  
+
+> i
+
+, z (1)  
+
+> i
+
+)
+
+i
+
+. (2) Intuitively, this training signal pulls together embeddings that should be semantically identical while pushing apart unrelated visit texts within the same minibatch, improving the alignment and 8separability of the embedding space without requiring manual sentence-pair annotations [18]. This fine-tuning design has two key advantages for our setting. It does not require manually labeled sentence pairs. Any collection of in-domain sentences can be used directly for training. It also encourages the model to produce stable embeddings for semantically similar sentences while pushing apart unrelated ones, thereby improving the geometry of the embedding space without changing the downstream task labels. We applied the unsupervised SimCSE objective to visit-level texts sampled from our cohort, producing a fine-tuned, domain-adapted encoder for each concept configuration. 
+
+2.2.4 Encoding visit-level representations 
+
+We used the fine-tuned sentence-embedding LLM to encode the textualized data for each concept at the visit level. In other words, rather than encoding all textualized visit data of a patient di-rectly into a patient-level representation, we adopted a hierarchical strategy, in which low-level units (visits) are first embedded and then pooled at the patient level. This is because prior work on hierarchical document modeling has shown that encoding sentences or paragraphs separately and aggregating them through a higher-level mechanism often yields better performance and inter-pretability than encoding the entire document in one pass [54]. Similar ideas have been applied in the medical domain, where clinical reports or notes are first encoded individually and then pooled to generate patient-level representations. This hierarchical design respects the natural structure of EHR data (patients, visits, and events) and allows pooling mechanisms to modulate the relative importance of different visits. The key difference between sparse encoding approaches and PaReGTA lies in how medica-tion information is encoded: baseline methods utilized higher-level medication concepts (e.g., drug classes), whereas our method directly used medication names exactly as recorded in the EHR with-out any concept mapping. This choice is beneficial because it allows the model to exploit the general knowledge embedded in large language models [44], where drug names carry rich semantic asso-ciations (e.g., pharmacological families, typical indications, and related clinical contexts) learned during pretraining. Consequently, using raw medication strings can preserve clinically meaningful nuances that may be lost when collapsing medications into coarse concepts, while also reducing dependence on curated ontologies or mapping rules. 
+
+2.2.5 Hybrid temporal pooling into patient representations 
+
+To obtain patient-level representations, we combined two complementary pooling strategies over visit embeddings: a time-weighted scheme and an attention-based scheme. The time-weighted component assigns larger weights to more recent visits, reflecting the intuition that recent clinical events are often more relevant to current risk. The attention component identifies visits that are globally important for prediction, regardless of their recency, and amplifies their contribution. Let 
+
+vi denote the embedding of the i-th visit, ti the time of that visit, and tN the time of the most recent visit for a given patient. We define the time-decay factor and the normalized time-weighted 9coefficient are respectively 
+
+ri = exp  −γ · (tN − ti), wtime-weighted  
+
+> i
+
+= ri
+
+PNj=1 rj
+
+, (3) where γ > 0 is a hyperparameter (or learnable scalar) controlling how quickly the influence of older visits decays. For the attention component, we first compute an unnormalized attention score that combines similarity to a global context with the same time-decay factor. Let 
+
+c = 1
+
+N
+
+> N
+
+X
+
+> j=1
+
+vj
+
+∥vj ∥2
+
+(4) be the mean of L2-normalized visit embeddings, and define the attention score as ˜si =
+
+ vi
+
+∥vi∥2
+
+, c 
+
+
+
+· ri, (5) where ⟨· , ·⟩ denotes the dot product. We then subtract the mean score m = 1
+
+> N
+
+PNj=1 ˜sj for numerical stability and apply a softmax with temperature τ > 0: 
+
+wattention  
+
+> i
+
+= softmax 
+
+ ˜si − mτ
+
+
+
+. (6) Here, wattention  
+
+> i
+
+is the attention-based weight assigned to visit i, τ controls how peaked or diffuse the attention distribution is, and both γ and τ can be treated as tunable or learnable parameters. Intuitively, visits that are both similar to the global context and relatively recent receive higher attention scores. In practice, we form a hybrid pooling weight by combining the two components, for example as a convex combination 
+
+whybrid  
+
+> i
+
+= α w time-weighted  
+
+> i
+
++ (1 − α) wattention  
+
+> i
+
+, (7) where α ∈ [0 , 1] is a hyperparameter controlling the relative emphasis on recency versus attention. The final patient-level representation z is then given by the weighted sum 
+
+z =
+
+> N
+
+X
+
+> i=1
+
+whybrid  
+
+> i
+
+vi, (8) followed by L2 normalization. This hybrid pooling strategy provides a flexible way to encode both the recency of visits and their global importance into a single patient-level vector that can be used by standard machine learning models. 10 2.3 Factor importance method by simulation for EHR data 
+
+2.3.1 Limitations of conventional feature-importance methods 
+
+In AI-based data analysis, one of the most widely used tools is feature importance , which quantifies how strongly each input variable influences model predictions. Broadly, there are two main families of methods. The first exploits model-intrinsic quantities, such as the coefficients of a linear model or the split gains of tree-based models. These approaches provide highly intuitive feature impor-tance; however, when a framework includes deep learning models, as in our case, such intrinsic importance measures cannot be obtained directly. The second family comprises simulation-based or perturbation-based methods, such as SHAP [30] and LIME [43], which approximate feature im-portance by repeatedly modifying input features and observing how the model’s prediction changes. A key advantage of these methods is that they are model-agnostic and can provide sample-wise 
+
+(local) importance scores for each individual, not just global averages across the population. How-ever, they can be computationally expensive. In our setting, where embeddings are generated using LLMs, applying such perturbation-based approaches would require recomputing embeddings for all perturbed inputs, leading to a prohibitively large (exponential) increase in computational cost. Thus, both of these conventional methods are difficult to apply directly when the LLM-based approaches such as PaReGTA have been utilized. Because PaReGTA includes deep learning models within itself, the patient-level features used for model training are high-dimensional embeddings ob-tained after multiple stages of text construction, sentence encoding, and pooling. The relationship between the detailed EHR data and the final representation is therefore effectively a black box. As a result, standard model-intrinsic measures such as logistic regression coefficients cannot be inter-preted in terms of the detailed clinical variables. SHAP and related simulation-based methods can in principle be applied if the entire pipeline is included in the simulation. For example, to assess the importance of a particular medication, one could remove all mentions of that medication from every visit text, recompute embeddings and predictions on this perturbed dataset, and compare the model’s performance with that of the detailed data inlcuding that medication. In practice, our experiments showed that PaReGTA is sufficiently expressive and robust that removing one or two medication types rarely produces a noticeable change in model performance. This robust-ness is consistent with our other findings: the resulting models achieved higher performance than those trained on traditional one-hot encoded EHR features. While this is desirable from a predic-tive standpoint, it makes naive perturbation-based feature importance at the level of individual medications uninformative. 
+
+2.3.2 PaReGTA-RSS (Representation Shift Score) 
+
+To address the challenge, we propose a factor importance method for PaReGTA, PaReGTA-RSS (Representation Shift Score). For a clinically defined factor of interest I (e.g., a medication class or a comorbidity cluster), we construct a perturbed version of the visit-level text in which all mentions of I are removed (Figure 1). We then pass both the original (clean) and perturbed texts 11 through the same text →embedding →pooling pipeline to obtain two patient-level representations for each patient i, denoted by ri ∈ RD (clean) and r′ 
+
+> i
+
+∈ RD (perturbed). The representation shift 
+
+∆ri = ri − r′ 
+
+> i
+
+captures how much the patient embedding would change if factor I were absent from the record. Let f (·) denote the downstream model’s scalar decision function (a real-valued score used to form predictions). We define the generalized RSS for patient i and factor I as score i(I) = f (ri) − f (r′
+
+> i
+
+). (9) This definition is model-agnostic: f (·) may be a logit (log-odds), a margin, or even a probability score, depending on the classifier. Many classifiers naturally produce logits (or log-odds) as an internal score, including logistic regression, neural networks whose final layer outputs logits before a sigmoid/softmax, and gradient-boosted tree models trained with a logistic loss (their raw margin corresponds to log-odds). In contrast, models such as k-nearest neighbors and random forests typically output probabilities via vote fractions, and standard SVMs output a geometric margin (decision function) that is not a logit unless an additional probability-calibration step is applied. Accordingly, in the generalized formulation, score i(I) should be interpreted as a change in the model’s native decision score (logit, margin, or probability), depending on the choice of f (·). By examining score i(I) at the individual level, we obtain patient-specific, factor-wise explanations that are directly compatible with PaReGTA. By aggregating score i(I) across patients (e.g., using mean absolute values), we obtain cohort-level factor importance summaries. Although the generalized representation shift formulation can be instantiated with any down-stream classifier that provides a real-valued decision score, utilizing logistic regression (LR) for the RSS analysis has both theoretical and practical advantages. In binary logistic regression, the model first computes a real-valued logit ηi (also called log-odds ): 
+
+ηi = c⊤ri + b, (10) where c, ri and b are the coefficient of LR, representation vector of i-th sample, and bias of LR, respectively. Therefore, when we choose f (·) as the logistic-regression logit, the generalized RSS becomes the change in logit induced by removing factor I:score i(I) = ηi − η′
+
+> i
+
+= ( c⊤ri + b) − (c⊤r′ 
+
+> i
+
++ b)= c⊤(ri − r′
+
+> i
+
+) = 
+
+> D
+
+X
+
+> j=1
+
+cj
+
+ ri,j − r′
+
+> i,j
+
+ ,
+
+(11) where η′ 
+
+> i
+
+is the logit from the perturbed representation r′
+
+> i
+
+. The coefficient-weighted representation shift is exactly the change in the logistic-regression logit; the intercept b cancels out. This yields 12 a signed and additive attribution with a clear probabilistic interpretation in terms of changes in log-odds. While nonlinear models such as gradient-boosted trees or kernel SVMs may achieve strong predictive performance, their decision functions involve higher-order interactions that make it less straightforward to express a representation shift as a single, globally comparable scalar decomposi-tion without additional approximation (e.g., surrogate linearization or SHAP in embedding space). By contrast, LR provides a stable linear probe on top of the learned embeddings, allowing us to isolate representation-level effects from additional nonlinearities in the downstream model. 
+
+# 3 Results 
+
+## 3.1 Dataset and task description 
+
+We evaluate the model’s encoding capability using a migraine type classification task (chronic mi-graine vs. episodic migraine) on AoU dataset. Accurate classification of migraine type is clinically important because chronic migraine is associated with substantially higher disease burden, disabil-ity, healthcare utilization, and risk of medication overuse compared to episodic migraine. However, distinguishing chronic from episodic migraine in real-world EHR data is challenging. Symptoms are often incompletely documented, care is fragmented across providers, medication use patterns are heterogeneous, and coding practices may not fully reflect symptom severity or temporal pro-gression. These characteristics make migraine type classification a practically relevant test case for evaluating temporally aware patient representations. In AoU system, migraine diagnoses are organized into six subtypes (unspecified migraine, mi-graine without aura, migraine with aura, chronic migraine without aura, chronic migraine with aura, menstrual migraine, and migraine that cannot be categorized into the previously described five types), and a participant may receive multiple labels over time. All migraine subtypes are de-fined based on ICD-9/10 codes. A patient is labeled as chronic if they ever have a chronic migraine record; otherwise, the patient is labeled episodic. Chronic patients account for 19% of the entire AoU cohort. We use structured signals from diagnoses, medications, and comorbidities data to train the clas-sification model. Encounter metadata includes hospital, clinic, and emergency-room care records. Comorbidity profiling shows frequent cardiometabolic and mental health conditions: hypertension is highly prevalent, and depression, insomnia, and anxiety are common. The comorbidities are also defined based on ICD-9/10 codes. We utilized data of 14 migraine-relevant medication classes (ac-etaminophen, antiemetics, beta-blockers, botulinum, CGRP, ergot, gabapentin, gepant, lasmiditan, NSAID, opioids, tricylic, triptan, and verapamil). We also include demographic information such as age, sex at birth, and race, along with the longitudinal prescription and diagnosis records. Age was calculated based on the date of birth and the date of latest visit records. After constructing and preprocessing dataset, 39,088 individuals had at least one migraine diagnosis. Overall, 80% of the patients were assigned female at birth. By race, 61% were White and 10% were Black. Most 13 Table 3: Example of visit-level text constructed from AoU EHR data (Gap tokenization). ID Visit date Concept Text 1 2021-07-01 Medication First visit, meds: acetaminophen 325 MG Oral Tablet 1 2021-07-01 Comorbidities First visit, comorbidities: Depression 1 2021-09-01 Medication 62 days after previous, meds: lasmiditan 100 MG Oral Tablet 1 2021-09-01 Comorbidities 62 days after previous, comorbidities: Depression, insomnia 1 2021-12-01 Medication 91 days after previous, meds: lasmiditan 100 MG Oral Tablet, ibuprofen 1 2021-12-01 Comorbidities 91 days after previous, comorbidities: Depression, insomnia patients were adults aged 18–64 years (81%), and 14% were older adults (aged ≥ 65 years). 
+
+## 3.2 Data encoding and model training 
+
+We split the cohort into training, test, and attribution sets in proportions of 0.7, 0.2, and 0.1, respectively, while preserving the label ratio between chronic and episodic migraine patients. All model development steps—including LLM fine-tuning and attention pooling training—were per-formed exclusively on the training set. Predictive performance was evaluated on the held-out test set, and factor-importance analyses were conducted only on the attribution set. As baselines, we generated patient-level representations using one-hot encoding and a count-based Bag-of-Codes (BoC), in which each feature is represented by its occurrence count. We then compared these baselines with our proposed method, PaReGTA. For experiments with the proposed framework, we followed the full pipeline described in the previous section: textualization, LLM fine-tuning and attention pooling training, encoding visit texts into visit-level embedding vectors, and aggregating the vectors into patient-level representa-tions (see Figure 1). Table 3 shows the textualized version of the example data in Table 2, which serves as input to the sentence-embedding LLM. After constructing patient-level representations via PaReGTA, we standardized all features to zero mean and unit variance. We then applied principal component analysis (PCA) for dimensionality reduction, retaining the minimum number of com-ponents that explained 95% of the total variance for each concept-specific representation (original dimensionality: 768). We report predictive performance on the test set and use the attribution set exclusively for factor-importance analyses. We utilized PyCaret’s classification module to train and compare machine learning models on these processed datasets. The experimental settings were identical across all experiments except for the encoded dataset. To address class imbalance, we applied the Synthetic Minority Over-sampling Technique (SMOTE; Chawla et al. [8]) within cross-validation folds to prevent data leakage for all experiments. We focused on five representative classifiers implemented in PyCaret: LightGBM, 14 Table 4: Performance comparison of models trained on encoded data with medication information. We underlined and bolded the best result and used bold for the second-best result among all results. Encoding Type Descriptions Examples in text (previous visit: 2021-06-01) One-hot encoding Binary presence/absence indicators aggregated at the patient level. Count BoC Patient-level occurrence counts without temporality or ordering. PaReGTA-Date Absolute date tokens. 2022-01-01 PaReGTA-Gap The date gap between neighboring visits. 214 days after previous PaReGTA-Month Summing up the date gap into months. 7 months after previous PaReGTA-Last Calculate the date gap from the last visit. 151 days before the latest visit PaReGTA-Without No temporal tokens. -Encoding Type Metric LightGBM GBC XGBoost LR SVM One-hot encoding ACC 84.02 83.78 83.38 80.35 80.10 AUC 0.7634 0.7583 0.7549 0.762 0.7475 Count BoC ACC 84.73 84.15 83.96 82.6 83.17 AUC 0.8354 0.8197 0.8272 0.7673 0.7256 PaReGTA-Date ACC 91.76 91.61 91.98 91.67 89.77 AUC 0.9428 0.9416 0.9437 0.9453 0.9292 PaReGTA-Gap ACC 92.33 92.26 92.39 91.62 90.34 AUC 0.9524 0.9517 0.9494 0.9514 0.9417 PaReGTA-Month ACC 92.06 91.63 92.02 91.44 91.11 AUC 0.9496 0.9481 0.9451 0.9495 0.9412 PaReGTA-Last ACC 79.42 80.29 82.17 79.68 77.76 AUC 0.7493 0.7785 0.7659 0.7819 0.7362 PaReGTA-Without ACC 83.7 81.84 83.82 81.9 80.02 AUC 0.8678 0.8636 0.8506 0.8636 0.8167 Gradient Boosting Classifier (GBC), Extreme Gradient Boosting (XGBoost), logistic regression (LR) with ℓ2 regularization, and a linear Support Vector Machine (SVM). For each classifier, Py-Caret automatically performed hyperparameter tuning using its internal search strategy (e.g., ran-domized or Bayesian search, depending on the estimator and configuration), optimizing primarily for the area under the receiver operating characteristic curve (AUC) under stratified 5-fold cross-validation. The best hyperparameter configuration for each model was then refit on the full training set and evaluated once on the held-out test set. For details on the experimental environment and settings, see Appendix A and B. 15 Table 5: Temporal textualization ablation without medication. We underlined and bolded the best result and used bold for the second-best result among all results. Encoding Type Descriptions Examples in text (previous visit: 2021-06-01) PaReGTA-Gap The date gap between neighboring visits. 214 days after previous PaReGTA-Month Summing up the date gap into months. 7 months after previous PaReGTA-Last Calculate the date gap from the last visit. 151 days before the latest visit PaReGTA-Without No temporal tokens. -Encoding Type Metric LightGBM GBC XGBoost LR SVM PaReGTA-Gap ACC 92.16 91.66 91.83 91.57 91.06 AUC 0.9439 0.9456 0.9398 0.9445 0.9405 PaReGTA-Month ACC 91.66 91.21 91.26 90.94 90.88 AUC 0.9447 0.9444 0.9411 0.9406 0.9327 PaReGTA-Last ACC 74.8 76.64 77.81 74.07 72.92 AUC 0.6875 0.7303 0.7093 0.7246 0.6809 PaReGTA-Without ACC 81.57 80.4 81.48 78.27 77.5 AUC 0.8436 0.8424 0.8314 0.8324 0.7918 
+
+## 3.3 Performance comparison between data encoding methods 
+
+To quantify how design choices in textualization of PaReGTA affect downstream performance, we performed an ablation study that varies (i) the representation of temporal information and (ii) whether medication information is explicitly included in the input text. To encode temporal information in visit-level text, we consider five temporal tokenization schemes and evaluate them as an ablation study: (i) Date (absolute date tokens), (ii) Gap (inter-visit time gap), (iii) Month (gap discretized to months), (iv) Last (time since the most recent visit), and (v) Without (no temporal tokens). Unless otherwise stated, we use the best-performing scheme (Gap ) as the default setting in subsequent experiments. Tables 4 and 5 demonstrate the perfor-mance comparison of PaReGTA with five temporal setting with two traditional encoding baseline, one-hot encoding and count BoC. Overall, LLM-based embeddings with temporal information ( Date or Gap ) substantially out-perform the baselines across all five classifiers. For instance, under LightGBM, accuracy increases from 84.02% (one-hot) to 91.76% ( Date of Table 4) and 92.33% ( Gap of Table 4), while AUC im-proves from 0.7634 to 0.9428 and 0.9524, respectively, indicating that the LLM-based representation captures clinically meaningful patterns beyond sparse tabular indicators. Among the temporal en-codings, the Gap formulation provides the strongest and most consistent performance. The best accuracy and AUC among the methods was 92.39% and 0.9524, which is achieved by XGBoost and LightGBM on Gap setting of Table 4. 16 These results suggest that a simple relative notion of recency ( Gap ) appears sufficient com-pared to absolute-date tokens for this task. Removing temporal tokens ( Without ) leads to a clear performance drop compared to Date and Gap , particularly in AUC. This indicates that temporal context provides useful predictive signal in our setting, and that omitting it discards information that the downstream classifiers can leverage. Notably, the Last encoding performed substantially worse than Gap , with AUC dropping to 0.75–0.78. This approach represents each visit by its distance from the most recent visit rather than from the preceding visit, thereby disrupting the sequential structure and obscuring patterns in consecutive visit intervals. The Month encoding achieved slightly lower performance than Gap (e.g., AUC 0.9496 vs. 0.9524), likely due to reduced temporal granularity when converting day-level intervals to month-level bins. These experimental results reveal the importance of proper encoding on temporal information. The effect of including medication descriptors is comparatively modest and model-dependent. Under the Gap setting, adding medication tokens slightly improves AUC for several models, while accuracy differences remain small and are not uniformly positive. Another important aspect of PaReGTA is that, when handling medication data, we do not rely on higher-level medication categories. Instead, we use the medication names exactly as recorded in the EHR. In many EHR systems, medication entries are often documented as product names rather than higher-level concepts (e.g., specific brand/product names instead of a category such as botulinum toxin). Conventional one-hot encoding struggles in this setting because the wide diversity of product names leads to severe sparsity and poor generalization, making upper-level medication categories necessary. In contrast, PaReGTA can directly encode raw product-level medication names as recorded in the EHR and leverage the general semantic knowledge of the pretrained LLM, thereby outperforming one-hot encoding and improving practical applicability. We also attempted to train commonly used deep sequential EHR baselines, RETAIN and T-LSTM, on the same cohort and train/test split. However, both models failed to yield a stable, meaningful solution in our setting (i.e., training did not converge to reliable validation performance). We hypothesize that this difficulty stems from a combination of (i) irregular and sparse longitudinal signals induced by cohort construction and migraine-centric encounter filtering, (ii) label imbalance, and (iii) practical constraints of running deep sequence models in the secure AoU environment with limited computational resources. Consequently, we focus our main comparisons on conventional classifiers to isolate the effect of the encoding strategy, while a more exhaustive study of deep sequential baselines under larger compute budgets and broader hyperparameter searches remains an important direction for future work. Taken together, these results show that PaReGTA yields substantial gains over conventional baselines and that gap-based temporal cues are particularly effective. Importantly, PaReGTA is flexible with respect to medication information, which addresses two common real-world constraints. When medication records are available but heterogeneous (e.g., recorded as product/brand strings), PaReGTA can ingest raw medication names directly without requiring labor-intensive normaliza-tion to higher-level concepts. Conversely, when medication records are missing, incomplete, or 17 Table 6: Verification of representation quality by Sentence embedding of PaReGTA Method Uniformity ( ↓) Isotropy Spectral flatness ( ↑) Top1 ( ↓)Full-text -0.1954 0.0217 0.2930 Visit-text -1.3571 0.0254 0.2247 Visit-text + SimCSE -3.1857 0.0476 0.1204 
+
+potentially confounded by post-diagnostic prescribing, PaReGTA still maintains strong perfor-mance using comorbidity-derived visit text alone. This flexibility reduces preprocessing burden while improving robustness across practical EHR settings. 
+
+## 3.4 Verification of embedding by LLM 
+
+We examined whether PaReGTA yields a well-behaved representation space under different encod-ing strategies. We report metrics that are widely used to assess the geometric quality of sentence embeddings. Uniformity follows Wang and Isola [51] and measures how evenly embeddings are spread over the unit hypersphere, more negative values indicate that pairwise distances are more uniformly distributed and that the representation is less collapsed. Spectral flatness summarizes the spread of singular values of the embedding covariance matrix, higher values indicate that variance is distributed more evenly across dimensions rather than concentrated in a few directions. Finally, Top1 denotes the fraction of total variance explained by the first principal component, lower values indicate that the representation is not dominated by a single direction of maximal variance. Table 6 compares three settings: (i) Full-text , where each patient’s longitudinal record is con-catenated into a single long document, (ii) Visit-text , where records are segmented into visit-level sentences without any further tuning, and (iii) Visit-text + SimCSE , where the visit-level encoder is further fine-tuned using SimCSE on the dataset. As shown in the table, both visit-level encod-ing and SimCSE fine-tuning substantially improve these geometric properties compared to other settings. Taken together, these results indicate that our final configuration (Visit-text + SimCSE) yields an embedding space that is more uniform and isotropic than naive full-text or untuned visit-level representations. Although we do not explicitly model fine-grained temporal dynamics in this work, this analysis supports our design choice to (i) represent EHR information at the visit-level and (ii) apply lightweight contrastive fine-tuning. All subsequent experiments therefore use the Visit-text + SimCSE setting as the default encoder when constructing patient-level representa-tions. 
+
+## 3.5 Ablation Study on fine-tuning LLM and training pooling 
+
+Table 7 summarizes an ablation study that isolates the contribution of two core components in PaReGTA: SimCSE-based contrastive fine-tuning of the encoder and attention-based pooling for aggregating visit-level embeddings into a patient-level representation. The “Original method” uses 18 Table 7: Ablation study on PaReGTA. We underlined and bolded the best result and used bold for the second-best result among all results. SimCSE Attention pooling Metric LightGBM GBC XGBoost LR SVM Original method ACC 92.16 91.66 91.83 91.57 91.06 AUC 0.9439 0.9456 0.9398 0.9445 0.9405 N N ACC 91.16 90.93 91.23 91.62 90.98 AUC 0.9397 0.9374 0.9332 0.9379 0.9301 N Y ACC 90.25 90.0 90.04 91.74 91.26 AUC 0.9095 0.9255 0.9135 0.9441 0.937 Y N ACC 90.56 90.45 90.91 91.49 90.82 AUC 0.9247 0.9331 0.925 0.9368 0.9303 Separated comorbidities ACC 92.01 91.79 91.85 91.63 91.19 AUC 0.9449 0.9431 0.9407 0.9454 0.9397 both modules, while the other rows remove one or both modules to test whether performance gains depend on each component. Overall, removing either module degrades performance, and removing both leads to the largest drop, indicating that encoder adaptation and informed aggregation are complementary. In particular, disabling SimCSE while keeping attention pooling results in a sub-stantial reduction in AUC for several models, while enabling SimCSE without attention pooling yields intermediate performance. A structural variant that separates comorbidities before embed-ding shows performance very close to the original method, suggesting that the main improvements are driven by the two methodological modules rather than by minor formatting choices. 
+
+## 3.6 Result on factor importance 
+
+LR achieved competitive predictive performance on PaReGTA embeddings (see Tables 4 and 5), indicating that the interpretability gain does not come at the cost of substantial predictive degra-dation. Based on this experimental result and considering the advantages of LR for RSS (see Subsection 2.3), we instantiate RSS using logistic regression in our experiments. For a given factor I, we construct a perturbed version of the visit-level text in which all in-formation related to the factor is removed, generate the corresponding patient-level representation with the same embedding and pooling pipeline, and compare it to the representation obtained from the original (clean) text. Using the LR coefficients, we compute a patient-level attribution score following Equation 11. This score corresponds to the change in the LR logit attributable to factor removal. We report the importance magnitude as the mean absolute attribution, Ei[|si|]. To ensure stable estimates, we visualize only factors that occur in at least 500 or 1,000 patients for the male and female full-cohort analyses, respectively, given that only 20% of patients are male at birth, and in at least 100 patients for subgroup analyses. Therefore, for factors observed in fewer patients than the predefined thresholds, we do not report aggregate importance at the full-cohort or subgroup 19 Figure 2: Factor importance of medications and comorbidities for all patients. level. However, patient-level factor importance can still be computed for individual patients who exhibit the factor. Figure 2 summarizes cohort-level importance magnitudes for medication classes and comorbidi-ties. Among medications (Figure 2A), onabotulinumtoxinA (botulinum toxin) shows the largest im-portance, followed by CGRP-targeting therapies and triptans. The prominence of botulinum toxin is consistent with its established role as a prophylactic treatment for chronic migraine, as demon-strated in the PREEMPT trials [4, 16], while not being indicated for episodic migraine. CGRP-targeting therapies (erenumab, fremanezumab, galcanezumab, and eptinezumab) and gepants (ubro-gepant and rimegepant) also appear among the most influential medication factors. CGRP mon-oclonal antibodies are used as preventive medications for episodic and chronic migraine. The ‘gepants’ include medications used for migraine prevention (atogepant for episodic and chronic migraine; rimegepant for episodic migraine) and for acute treatment of migraine attacks (ubro-gepant, rimegepant, zavegepant) [7, 14, 17, 39]. Due to step-care policies mandated by most insurance companies, the CGRP monoclonal antibodies and gepants are not usually available as first-line treatment. Triptans show high importance magnitude as well, consistent with their widespread use as first-line acute treatments across migraine types [19, 32]. Traditional pre-ventives such as beta-blockers and tricyclic antidepressants also have non-negligible importance, consistent with guideline-supported but heterogeneous real-world prescribing patterns—including comorbidity-driven use, earlier-line preventive use, and switching/escalation pathways—rather than a simple monotonic relationship between preventive prescribing and chronicity [13, 47]. Common analgesics and related classes (e.g., NSAIDs, acetaminophen, opioids) show measurable but rel-atively smaller importance, indicating that the model captures real-world medication patterns recorded around migraine encounters [32]. For comorbidities (Figure 2B), alcohol-related records and hypertension exhibit the largest importance magnitudes, followed by irritable bowel syndrome, anxiety, and diabetes mellitus. In-20 Figure 3: Factor importance of medications and comorbidities for male patients. somnia and fibromyalgia display moderate contributions, while while post-traumatic stress disorder (PTSD), depression, and temporomandibular disorders show smaller but non-negligible effects. No-tably, some factors such as anxiety show high importance magnitude despite near-zero mean signed scores across the cohort, indicating that the direction of their predictive influence varies substan-tially across patients. For some, anxiety pushes toward chronic predictions and for others toward episodic predictions. Comorbidities associated with chronic pain and central sensitization (e.g., temporomandibular disorders and fibromyalgia) contribute non-negligible importance, consistent with a shared burden of chronic pain conditions in subsets of chronic migraine patients. We em-phasize that these importance magnitudes reflect predictive relevance in an observational EHR setting and do not imply association or causality; they may capture a mixture of comorbidity bur-den, healthcare utilization patterns, and documentation differences. For example, there were only 75 chronic migraine patients with irritable bowel syndrome compared to more than 200 episodic migraine patients with irritable bowel syndrome, which may partly account for the direction of this factor’s influence. We further examined subgroup-specific patterns by sex at birth (Figures 3 and 4). In males (Figure 3), the most influential medication factors are triptans and beta-blockers, followed by other commonly observed classes (e.g., NSAIDs and opioids), and the most influential comorbidities include hypertension, anxiety, diabetes mellitus, PTSD, insomnia, and depression. In females (Figure 4A and 4B), migraine-specific preventive therapies (botulinum toxin and CGRP-targeting therapies) appear prominently among medication factors. For comorbidities, temporomandibular disorders and fibromyalgia show appreciable importance in the female subgroup; these conditions are more prevalent in women and therefore do not appear prominently in the male group. In contrast, depression and PTSD have higher importance among male patients. When restricting to female patients without temporomandibular disorders or fibromyalgia (Fig-ure 4C), the comorbidity importance profile shifts toward mental-health–related factors such as 21 Figure 4: Factor importance of medications and comorbidities for female patients. (C) is for patients without temporomandibular disorders or fibromyalgia. 
+
+Figure 5: Factor importance of the last N EHR records depression and PTSD, becoming more similar to the male subgroup. However, a key difference is that the variance of depression-related importance is lower in males than in the selected female group, while the variance of PTSD-related importance shows the opposite pattern. This indicates greater inter-patient variability in the role of depression among the selected female patients, sug-gesting that more careful, individualized consideration of depression is needed when diagnosing migraine in this subgroup, with the opposite implication for PTSD. Overall, these subgroup results illustrate that the proposed method can reveal clinically meaningful heterogeneity in which sets of comorbidities and treatments are most informative for the model across patient strata. Finally, our factor importance framework can be extended to temporal factors by defining a factor as the set of visit-level EHR records that fall within a recency window and removing those records from the input before recomputing the patient representation. Figure 5 reports the cohort-level importance magnitudes (mean absolute attribution, E[|si|]) for removing records within the last 30, 90, 180, and 365 days, where time is measured relative to each patient’s most recent visit used as the reference point. For each window length T , we compute importance only for patients whose observation span exceeds 2 T to ensure adequate longitudinal coverage. Because these windows are nested (e.g., the 90-day window contains the 30-day window), the 22 resulting magnitudes should be interpreted as the cumulative contribution of the corresponding recent-history horizon, rather than a per-visit effect. Under this cumulative interpretation, the in-creasing magnitude from 30 to 365 days indicates that the model leverages information distributed across the recent months, not only the immediately preceding encounters. When stratified by mi-graine type, episodic patients show consistently low cumulative importance across horizons, whereas chronic patients exhibit substantially higher reliance, especially for the 180 and 365 days horizons, suggesting that temporally extended recent history is more informative for chronic migraine pre-diction and motivating temporally aware encoding for this phenotype. 
+
+# 4 Conclusion 
+
+This work proposes methods to broaden and strengthen the real-world use of AI in clinical settings and, building on these methods, an end-to-end framework that generates patient-specific factor importance. Rather than simply applying an LLM to preprocessed EHR data, we provide a prac-tical methodology spanning the full pipeline: constructing EHR-based text inputs with temporal information, fine-tuning LLM encoders for clinical prediction, and generating patient-level represen-tations from visit-level records. PaReGTA starts from a pretrained sentence-embedding LLM and performs lightweight domain adaptation via SimCSE and hybrid pooling. While we use GTE-base-v1.5 as the base encoder in this study, any sentence-embedding model can be substituted, making the framework complementary to ongoing advances in LLM-based embeddings. Thus, PaReGTA is designed as a framework that leverages sentence-embedding LLMs rather than a standalone LLM that competes with them. Because the sentence-embedding encoder is modular, PaReGTA can directly benefit from advances in pretrained embedding models by simply swapping in a stronger encoder and applying the same SimCSE-based domain adaptation. In this sense, PaReGTA is complementary to (not competitive with) ongoing progress in LLMs. Our experiments show that models trained on embeddings produced by PaReGTA consistently outperform models trained on data processed with widely used encoding methods, one-hot encoding or count BoC, across all met-rics. Notably, our experimental results highlight that appropriately handling temporal information is critical for EHR modeling, reinforcing the importance of temporal signals in clinical prediction. Beyond predictive performance, we propose a factor importance method tailored to deep learn-ing based approaches, including PaReGTA. While LLM-based methods have been increasingly adopted in healthcare, our work is, to our knowledge, the first to introduce a factor importance ap-proach explicitly designed for such pipelines. Our factor importance approach is simulation-based, similar in theory to SHAP, and can estimate importance scores both at the cohort level and for individual patients. Empirically, the proposed factor importance successfully identifies medications and comorbidities that are closely associated with chronic migraine, providing clinically meaningful explanations that remain compatible with PaReGTA, regardless of the specific sentence-embedding encoder used. This study has several limitations. First, our factor importance is derived through simulation 23 and linked to the predictive model. Such model-based attribution does not imply association or causality and may be biased by representation choices. Second, to emphasize utility in data-limited clinical environments, we focused on classical machine-learning classifiers. With sufficiently large datasets, deep sequential architectures may outperform our approach. Third, while the experiments shown in Tables 4 and 5 demonstrate the usefulness of PaReGTA compared to one-hot encoding, the models in those experiments were trained using data that include periods after a chronic migraine diagnosis, making them difficult to apply directly in real clinical settings. Nevertheless, we emphasize that the primary purpose of these experiments is to validate the effectiveness of PaReGTA. Future work will proceed in a modeling perspective, we will integrate temporally informed embeddings and fine-grained signals into deeper neural architectures, coupling our method more tightly with time-aware sequence models to further improve performance. Together, these directions will strengthen representation robustness, broaden applicability across settings, and deepen the linkage among prediction, explanation, and patient-specific factor importance, while enabling better performance in real-world applications. 
+
+# References 
+
+[1] Angeela Acharya, Sulabh Shrestha, Anyi Chen, Joseph Conte, Sanja Avramovic, Siddhartha Sikdar, Antonios Anastasopoulos, and Sanmay Das. Clinical risk prediction using language models: benefits and considerations. Journal of the American Medical Informatics Association ,31(9):1856–1864, 2024. doi: 10.1093/jamia/ocae030. [2] All of Us Research Program Investigators. The “all of us” research program. The New England Journal of Medicine , 381(7):668–676, 2019. doi: 10.1056/NEJMsr1809937. [3] Emily Alsentzer, John Murphy, William Boag, Wei-Hung Weng, Di Jin, Tristan Naumann, and Matthew McDermott. Publicly available clinical BERT embeddings. In Proceedings of the 2nd Clinical Natural Language Processing Workshop , pages 72–78. Association for Compu-tational Linguistics, 2019. doi: 10.18653/v1/W19-1909. URL https://aclanthology.org/ W19-1909/ .[4] Sheena K. Aurora, David W. Dodick, Cynthia C. Turkel, Robert E. DeGryse, Stephen D. Silberstein, Richard B. Lipton, Hans-Christoph Diener, and Mitchell F. Brin. Onabo-tulinumtoxina for treatment of chronic migraine: results from the double-blind, randomized, placebo-controlled phase of the PREEMPT 1 trial. Cephalalgia , 30(7):793–803, 2010. doi: 10.1177/0333102410364676. [5] Inci M. Baytas, Cao Xiao, Xi Zhang, Fei Wang, Anil K. Jain, and Jiayu Zhou. Patient subtyp-ing via time-aware LSTM networks. In Proceedings of the 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD ’17) , pages 65–74, 2017. doi: 10.1145/3097983.3097997. 24 [6] Yoshua Bengio, Aaron Courville, and Pascal Vincent. Representation learning: A review and new perspectives. IEEE Transactions on Pattern Analysis and Machine Intelligence , 35(8): 1798–1828, 2013. doi: 10.1109/TPAMI.2013.50. [7] Andrew C. Charles, Kathleen B. Digre, Peter J. Goadsby, Matthew S. Robbins, Andrew Hershey, and American Headache Society. Calcitonin gene-related peptide-targeting therapies are a first-line option for the prevention of migraine: An american headache society position statement update. Headache , 64(4):333–341, 2024. doi: 10.1111/head.14692. [8] Nitesh V. Chawla, Kevin W. Bowyer, Lawrence O. Hall, and W. Philip Kegelmeyer. SMOTE: Synthetic minority over-sampling technique. Journal of Artificial Intelligence Research , 16: 321–357, 2002. doi: 10.1613/jair.953. [9] Zhengping Che, Sanjay Purushotham, Kyunghyun Cho, David Sontag, and Yan Liu. Recurrent neural networks for multivariate time series with missing values. Scientific Reports , 8:6085, 2018. doi: 10.1038/s41598-018-24271-9. [10] Edward Choi, Mohammad Taha Bahadori, Joshua A. Kulas, Andy Schuetz, Walter F. Stewart, and Jimeng Sun. RETAIN: An interpretable predictive model for healthcare using reverse time attention mechanism. In Advances in Neural Information Processing Systems (NeurIPS 2016) ,pages 3504–3512, 2016. [11] Edward Choi, Mohammad Taha Bahadori, Andy Schuetz, Walter F. Stewart, and Jimeng Sun. Doctor AI: Predicting clinical events via recurrent neural networks. In Proceedings of Machine Learning for Healthcare (MLHC 2016) , volume 56, pages 301–318. PMLR, 2016. URL 
+
+https://proceedings.mlr.press/v56/Choi16.html .[12] Edward Choi, Mohammad Taha Bahadori, Elizabeth Searles, Catherine Coffey, Michael Thompson, James Bost, Javier Tejedor-Sojo, and Jimeng Sun. Multi-layer representation learning for medical concepts. In Proceedings of the 22nd ACM SIGKDD International Con-ference on Knowledge Discovery and Data Mining (KDD ’16) , pages 1495–1504, 2016. doi: 10.1145/2939672.2939823. [13] James R. Couch and Ruth S. Hassanein. Amitriptyline in migraine prophylaxis. Archives of Neurology , 36(11):695–699, 1979. doi: 10.1001/archneur.1979.00500470065013. [14] Robert Croop, Richard B. Lipton, David Kudrow, David A. Stock, Lisa Kamen, Charles M. Conway, Elyse G. Stock, Vladimir Coric, and Peter J. Goadsby. Oral rimegepant for preventive treatment of migraine: a phase 2/3, randomised, double-blind, placebo-controlled trial. The Lancet , 397(10268):51–60, 2021. doi: 10.1016/S0140-6736(20)32544-7. [15] Suhan Cui, Jiaqi Wang, Yuan Zhong, Han Liu, Ting Wang, and Fenglong Ma. Recent advances in predictive modeling with electronic health records. In Proceedings of the Thirty-Third 
+
+25 International Joint Conference on Artificial Intelligence (IJCAI-24) , pages 8272–8280, 2024. doi: 10.24963/ijcai.2024/914. [16] Hans-Christoph Diener, David W. Dodick, Sheena K. Aurora, Cynthia C. Turkel, Robert E. DeGryse, Richard B. Lipton, Stephen D. Silberstein, and Mitchell F. Brin. Onabotulinum-toxina for treatment of chronic migraine: results from the double-blind, randomized, placebo-controlled phase of the PREEMPT 2 trial. Cephalalgia , 30(7):804–814, 2010. doi: 10.1177/ 0333102410364677. [17] David W. Dodick, Richard B. Lipton, Jessica Ailani, Kaifeng Lu, Michelle Finnegan, Joel M. Trugman, and Armin Szegedi. Ubrogepant for the treatment of migraine. The New England Journal of Medicine , 381(23):2230–2241, 2019. doi: 10.1056/NEJMoa1813049. [18] Tianyu Gao, Xingcheng Yao, and Danqi Chen. Simcse: Simple contrastive learning of sentence embeddings. In Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing , pages 6894–6910. Association for Computational Linguistics, 2021. doi: 10.18653/ v1/2021.emnlp-main.552. URL https://aclanthology.org/2021.emnlp-main.552/ .[19] Peter J. Goadsby, Linda A. Wietecha, Ellen B. Dennehy, Bernice Kuca, Michael G. Case, Sheena K. Aurora, and Charly Gaul. Phase 3 randomized, placebo-controlled, double-blind study of lasmiditan for acute treatment of migraine. Brain , 142(7):1894–1904, 2019. doi: 10.1093/brain/awz134. [20] Lin Lawrence Guo, Ethan Steinberg, Scott Lanyon Fleming, Jose Posada, Joshua Lemmon, Stephen R. Pfohl, Nigam Shah, Jason Fries, and Lillian Sung. EHR foundation models improve robustness in the presence of temporal distribution shift. Scientific Reports , 13:3767, 2023. doi: 10.1038/s41598-023-30820-8. [21] Stefan Hegselmann, Monica Agrawal, Alistair E. W. Johnson, and David Sontag. Large lan-guage models are powerful electronic health record encoders. arXiv preprint arXiv:2502.17403 ,2025. doi: 10.48550/arXiv.2502.17403. [22] George Hripcsak, Jon D. Duke, and Nigam H. Shah. Observational health data sciences and in-formatics (OHDSI): Opportunities for observational researchers. In Studies in Health Technol-ogy and Informatics , volume 216, pages 574–578, 2015. doi: 10.3233/978-1-61499-564-7-574. [23] Kyunghoon Hur, Jiyoung Lee, Jungwoo Oh, Wesley Price, Young-Hak Kim, and Edward Choi. Unifying heterogeneous electronic health records systems via text-based code embedding. In 
+
+Proceedings of the ACM Conference on Health, Inference, and Learning (CHIL) , 2021. [24] Alistair E. W. Johnson, Mohammad M. Ghassemi, Shamim Nemati, Katherine E. Nieber, David A. Clifton, and Gari D. Clifford. Machine learning and decision support in critical care. 
+
+Proceedings of the IEEE , 104(2):444–466, 2016. doi: 10.1109/JPROC.2015.2501978. 26 [25] Thomas A. Lasko, Joshua C. Denny, and Mia A. Levy. Computational phenotype discovery using unsupervised feature learning over noisy, sparse, and irregular clinical data. PLoS ONE ,8(6):e66341, 2013. doi: 10.1371/journal.pone.0066341. [26] Jinhyuk Lee, Wonjin Yoon, Sungdong Kim, Donghyeon Kim, Sunkyu Kim, Chan Ho So, and Jaewoo Kang. BioBERT: a pre-trained biomedical language representation model for biomedical text mining. Bioinformatics , 36(4):1234–1240, 2020. ISSN 1367-4803. doi: 10. 1093/bioinformatics/btz682. [27] Yikuan Li, Shishir Rao, Jos´ e Roberto Ayala Solares, Abdelaali Hassaine, Rema Ramakrish-nan, Dexter Canoy, Yajie Zhu, Kazem Rahimi, and Gholamreza Salimi-Khorshidi. BEHRT: Transformer for electronic health records. Scientific Reports , 10(1):7155, 2020. doi: 10.1038/ s41598-020-62922-y. [28] Zachary C. Lipton, David C. Kale, Charles Elkan, and Randall Wetzel. Learning to diagnose with LSTM recurrent neural networks. In Proceedings of the 4th International Conference on Learning Representations , San Juan, Puerto Rico, 2016. [29] Chuhan Liu, Ying Li, Xiaoyang Wang, and others. An unsupervised embedding harmonization system for privacy-preserving data mining in healthcare. IISE Transactions on Healthcare Systems Engineering , 14(1):1–17, 2024. doi: 10.1080/24725579.2023.2231011. Published online 25 Jul 2023. [30] Scott M. Lundberg and Su-In Lee. A unified approach to interpreting model predictions. In Advances in Neural Information Processing Systems (NeurIPS 2017) , pages 4765–4774, 2017. URL https://papers.nips.cc/paper/ 7062-a-unified-approach-to-interpreting-model-predictions .[31] Fenglong Ma, Radha Chitta, Jing Zhou, Quanzeng You, Tong Sun, and Jing Gao. Dipole: Diagnosis prediction in healthcare via attention-based bidirectional recurrent neural networks. In Proceedings of the 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD ’17) , pages 1903–1911, 2017. doi: 10.1145/3097983.3098088. [32] Michael J. Marmura, Stephen D. Silberstein, and Todd J. Schwedt. The acute treatment of migraine in adults: the american headache society evidence assessment of migraine pharma-cotherapies. Headache , 55(1):3–20, 2015. doi: 10.1111/head.12499. [33] Riccardo Miotto, Li Li, Brian A. Kidd, and Joel T. Dudley. Deep patient: An unsupervised representation to predict the future of patients from the electronic health records. Scientific Reports , 6:26094, 2016. doi: 10.1038/srep26094. [34] Niklas Muennighoff, Nouamane Tazi, Loic Magne, and Nils Reimers. MTEB: Massive text embedding benchmark. In Andreas Vlachos and Isabelle Augenstein, editors, Proceedings of 
+
+27 the 17th Conference of the European Chapter of the Association for Computational Linguistics ,2023. doi: 10.18653/v1/2023.eacl-main.148. [35] Stuart J. Nelson, Kelly Zeng, John Kilbourne, Tammy Powell, and Robin Moore. Normalized names for clinical drugs: RxNorm at 6 years. Journal of the American Medical Informatics Association , 18(4):441–448, 2011. doi: 10.1136/amiajnl-2011-000116. [36] Phuoc Nguyen, Truyen Tran, Nilmini Wickramasinghe, and Svetha Venkatesh. Deepr: Aconvolutional net for medical records. IEEE Journal of Biomedical and Health Informatics , 21 (1):22–30, 2017. doi: 10.1109/JBHI.2016.2633963. [37] Chao Pang, Xinzhuo Jiang, Krishna S. Kalluri, Matthew Spotnitz, RuiJun Chen, Adler Per-otte, and Karthik Natarajan. CEHR-BERT: Incorporating temporal information from struc-tured EHR data to improve prediction tasks. In Proceedings of Machine Learning for Health ,volume 158 of Proceedings of Machine Learning Research , pages 239–260. PMLR, 2021. [38] Trang Pham, Truyen Tran, Dinh Phung, and Svetha Venkatesh. Deepcare: A deep dynamic memory model for predictive medicine. In Advances in Knowledge Discovery and Data Mining (PAKDD 2016) , volume 9652 of Lecture Notes in Computer Science , pages 30–41. Springer, Cham, 2016. doi: 10.1007/978-3-319-31750-2 3. [39] Patricia Pozo-Rosich, Jessica Ailani, Messoud Ashina, Peter J. Goadsby, Richard B. Lip-ton, Uwe Reuter, Hua Guo, Brittany Schwefel, Kaifeng Lu, Ramesh Boinpally, Rosa Miceli, Rosa D A Ferreira, Emily McCusker, SungYun Yu, Lawrence Severt, Michelle Finnegan, and Joel M Trugman. Atogepant for the preventive treatment of chronic migraine (progress): a randomised, double-blind, placebo-controlled, phase 3 trial. The Lancet , 402(10404):775–785, 2023. doi: 10.1016/S0140-6736(23)01049-8. [40] Alvin Rajkomar, Eyal Oren, Kai Chen, Andrew M. Dai, Nissan Hajaj, Michaela Hardt, Pe-ter J. Liu, Xiaobing Liu, Jake Marcus, Mimi Sun, Patrik Sundberg, Hector Yee, Kun Zhang, Yi Zhang, Gerardo Flores, Gavin E. Duggan, Jamie Irvine, Quoc Le, Kurt Litsch, Alexander Mossin, Justin Tansuwan, De Wang, James Wexler, Jimbo Wilson, Dana Ludwig, Samuel L. Volchenboum, Katherine Chou, Michael Pearson, Srinivasan Madabushi, Nigam H. Shah, Atul J. Butte, Michael D. Howell, Claire Cui, Greg S. Corrado, and Jeffrey Dean. Scal-able and accurate deep learning with electronic health records. npj Digital Medicine , 1(1):18, 2018. doi: 10.1038/s41746-018-0029-1. [41] Laila Rasmy, Yang Xiang, Ziqian Xie, Cui Tao, and Degui Zhi. Med-BERT: pretrained contex-tualized embeddings on large-scale structured electronic health records for disease prediction. 
+
+npj Digital Medicine , 4:86, 2021. doi: 10.1038/s41746-021-00455-y. [42] Nils Reimers and Iryna Gurevych. Sentence-BERT: Sentence embeddings using siamese BERT-networks. In Proceedings of the 2019 Conference on Empirical Methods in Natural Lan-guage Processing and the 9th International Joint Conference on Natural Language Processing 
+
+28 (EMNLP-IJCNLP) , pages 3982–3992. Association for Computational Linguistics, 2019. doi: 10.18653/v1/D19-1410. URL https://aclanthology.org/D19-1410/ .[43] Marco Tulio Ribeiro, Sameer Singh, and Carlos Guestrin. “why should I trust you?”: Explain-ing the predictions of any classifier. In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD ’16) , pages 1135–1144, 2016. doi: 10.1145/2939672.2939778. [44] Adam Roberts, Colin Raffel, and Noam Shazeer. How much knowledge can you pack into the parameters of a language model? In Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP) , pages 5418–5426, Online, November 2020. Association for Computational Linguistics. doi: 10.18653/v1/2020.emnlp-main.437. URL 
+
+https://aclanthology.org/2020.emnlp-main.437/ .[45] Benjamin Shickel, Patrick J. Tighe, Azra Bihorac, and Parisa Rashidi. Deep EHR: A survey of recent advances in deep learning techniques for electronic health record (EHR) analysis. 
+
+IEEE Journal of Biomedical and Health Informatics , 22(5):1589–1604, 2018. doi: 10.1109/ JBHI.2017.2767063. [46] Artem Shmatko and others. Large language models improve transferability of electronic health record-based predictions across countries and coding systems. npj Digital Medicine , 2025. doi: 10.1038/s41746-026-02363-5. [47] Stephen D. Silberstein, Sharon Holland, Frederick Freitag, David W. Dodick, Charles Ar-goff, and Elizabeth Ashman. Evidence-based guideline update: pharmacologic treatment for episodic migraine prevention in adults: report of the quality standards subcommittee of the american academy of neurology and the american headache society. Neurology , 78(17):1337– 1345, 2012. doi: 10.1212/WNL.0b013e3182535d20. [48] Ethan Steinberg, Ken Jung, Jason A. Fries, Conor K. Corbin, Stephen R. Pfohl, and Nigam H. Shah. Language models are an effective representation learning technique for electronic health record data. Journal of Biomedical Informatics , 113:103637, 2020. doi: 10.1016/j.jbi.2020. 103637. [49] Shengpu Tang, Parmida Davarmanesh, Yanmeng Song, Danai Koutra, Michael W. Sjoding, and Jenna Wiens. Democratizing EHR analyses with FIDDLE: a flexible data-driven pre-processing pipeline for structured clinical data. Journal of the American Medical Informatics Association , 27(12):1921–1934, 2020. doi: 10.1093/jamia/ocaa139. [50] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Advances in Neural Information Processing Systems (NeurIPS 2017) , pages 5998–6008, 2017. URL 
+
+https://arxiv.org/abs/1706.03762 .29 [51] Tongzhou Wang and Phillip Isola. Understanding contrastive representation learning through alignment and uniformity on the hypersphere. In Hal Daum´ e III and Aarti Singh, editors, 
+
+International Conference on Machine Learning , volume 119 of Proceedings of Machine Learning Research , pages 9929–9939, 13–18 Jul 2020. [52] Cao Xiao, Edward Choi, and Jimeng Sun. Opportunities and challenges in developing deep learning models using electronic health records data: a systematic review. Journal of the Amer-ican Medical Informatics Association , 25(10):1419–1428, 2018. doi: 10.1093/jamia/ocy068. [53] Xi Yang, Aokun Chen, Nima PourNejatian, Hoo Chang Shin, Kaleb E Smith, Christopher Parisien, Colin Compas, Cheryl Martin, Anthony B Costa, Mona G Flores, Ying Zhang, Tanja Magoc, Christopher A Harle, Gloria Lipori, Duane A Mitchell, William R Hogan, Elizabeth A Shenkman, Jiang Bian, and Yonghui Wu. A large language model for electronic health records. 
+
+npj Digital Medicine , 5(1):194, 2022. doi: 10.1038/s41746-022-00742-2. [54] Zichao Yang, Diyi Yang, Chris Dyer, Xiaodong He, Alex Smola, and Eduard Hovy. Hierarchical attention networks for document classification. In Proceedings of the 2016 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies , pages 1480–1489. Association for Computational Linguistics, 2016. doi: 10. 18653/v1/N16-1174. URL https://aclanthology.org/N16-1174/ .[55] Manzil Zaheer, Satwik Kottur, Siamak Ravanbakhsh, Barnabas Poczos, Russ R Salakhut-dinov, and Alexander J Smola. Deep sets. In Advances in Neural Information Processing Systems (NeurIPS 2017) , pages 3391–3401, 2017. URL https://papers.nips.cc/paper/ 6931-deep-sets .[56] Yinghao Zhu, Zixiang Wang, Junyi Gao, Yuning Tong, Jingkun An, Weibin Liao, Ewen M. Harrison, Liantao Ma, and Chengwei Pan. Prompting large language models for zero-shot clinical prediction with structured longitudinal electronic health record data, 2024. URL 
+
+https://arxiv.org/abs/2402.01713 .
+
+# A Environment 
+
+Due to data sensitivity, AoU data cannot be exported to personal environments, so all imple-mentation and analyses have to be performed within the AoU workspace. Our workspace was provisioned with 4 CPUs and a single NVIDIA Tesla T4 GPU. We implemented the framework in Python 3.10.16. Key package versions were: numpy 1.23.5, pycaret 3.1.0, pytorch 2.6.0, and 
+
+transformers 4.51.3. We used pycaret to train a broad set of machine-learning models and to ap-ply standard preprocessing, pytorch as the deep-learning framework, and transformers to access pretrained models from the HuggingFace. 30 Table 8: Hyperparameters for SimCSE fine-tuning. Hyperparameter Value Description Epochs 1 Number of training epochs Batch size 128 Number of sentence pairs per batch Learning rate 2 × 10 −5 AdamW optimizer learning rate Max training samples 200,000 Maximum unique sentences for training Warmup ratio 0.05 Proportion of steps for LR warmup Gradient clipping 1.0 Maximum gradient norm Gradient accumulation 4 Steps to accumulate gradients Mixed precision (FP16) True Use half-precision training Max sequence length 256 Maximum tokens per input Table 9: Hyperparameters for hybrid temporal pooling. Hyperparameter Value Description Pooling method hybrid Time-weighted + attention pooling 
+
+γ 0.05 Time decay factor 
+
+δ mode log1p Time gap transformation 
+
+α 0.5 Attention vs. time-weighted weight 
+
+# B Experimental setting 
+
+This appendix details the hyperparameter configurations used for training the sentence embedding model and the attention-based pooler. 
+
+## B.1 SimCSE fine-tuning 
+
+We fine-tuned the GTE-base-v1.5 base encoder using the unsupervised SimCSE objective [18]. Table 8 summarizes the hyperparameters used for SimCSE fine-tuning. 
+
+## B.2 Hybrid temporal pooling 
+
+Table 9 presents the pooling configuration for aggregating visit-level embeddings. 
+
+## B.3 Attention pooling 
+
+Table 10 summarizes the hyperparameters for attention pooling training. 31 Table 10: Hyperparameters for attention pooling fine-tuning. Hyperparameter Value Description Epochs 3 Number of training epochs Batch size (triplets) 32 Triplets per batch Learning rate 1 × 10 −3 AdamW optimizer learning rate Weight decay 1 × 10 −4 L2 regularization coefficient Triplet margin 0.2 Margin for triplet loss Hidden dimension 96 Hidden layer size in attention MLP 
+
+δ mode log1p Time gap transformation Max triplets per anchor 4 Max positives per anchor Output normalization True L2-normalize representations Random seed 42 Seed for reproducibility 32
