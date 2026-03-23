@@ -1,0 +1,528 @@
+Title: Near-Equivalent Q-learning Policies for Dynamic Treatment Regimes
+
+URL Source: https://arxiv.org/pdf/2603.19440v1
+
+Published Time: Mon, 23 Mar 2026 00:10:36 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# NEAR -E QUIVALENT Q-LEARNING POLICIES FOR DYNAMIC 
+
+# TREATMENT REGIMES 
+
+Sophia Yazzourh 
+
+Department of Epidemiology and Biostatistics McGill University Montréal, Québec, Canada 
+
+sophia.yazzourh@mcgill.ca 
+
+Erica E.M. Moodie 
+
+Department of Epidemiology and Biostatistics McGill University Montréal, Québec, Canada March 23, 2026 
+
+# ABSTRACT 
+
+Precision medicine aims to tailor therapeutic decisions to the individual characteristics of each patient. This objective is commonly formalized through the framework of dynamic treatment regimes, which use statistical and machine learning methods to derive sequential decision rules adapted to evolving clinical information. In most existing formulations, these approaches produce a single optimal treatment recommendation at each stage, leading to a unique sequence of decision rules. However, in many clinical settings several treatment options may yield very similar expected outcomes, and restricting attention to a single optimal policy may conceal meaningful alternatives. In this work, we extend the Q-learning framework for retrospective data to incorporate a worst-value tolerance criterion controlled by a tuning hyperparameter ε, which specifies how far a policy is allowed to deviate from the optimal expected value. Rather than identifying a single optimal policy, the proposed approach constructs sets of ε-optimal policies whose expected value remains within a controlled neighborhood of the optimum. Conceptually, this formulation shifts the Q-learning problem from a vector-valued representation, in which a single value function determines the optimal decision, to a matrix-valued representation where multiple admissible value functions coexist during the backward recursion. This leads to families of near-equivalent treatment strategies instead of a single deterministic rule and explicitly characterizes regions of treatment indifference where several decisions achieve comparable expected outcomes. The proposed framework is illustrated through two settings. First, in a single-stage treatment decision problem, we examine how the admissibility criterion induces regions of treatment indifference around the decision boundary. Second, in a multi-stage treatment decision process, we apply the method within a sequential decision framework based on a simulated oncology model describing the joint evolution of tumor size and treatment toxicity. 
+
+Keywords Precision Medicine · Dynamic Treatment Regimes · Q-learning · Reinforcement Learning 
+
+# 1 Introduction 
+
+Precision medicine (Kosorok and Laber, 2019) places individual patient characteristics at the center of treatment decisions, with the goal of matching each patient with the treatment expected to confer the greatest clinical benefit. This question is particularly relevant in longitudinal settings with multiple decision points, as commonly encountered in the management of chronic diseases such as cancer, diabetes, or mental health disorders. Dynamic Treatment Regimes (DTRs) (Chakraborty and Moodie, 2013; Kosorok and Moodie, 2015) provide a formal framework for this paradigm by defining sequences of decision rules that adapt treatment recommendations to evolving patient characteristics. Over the last two decades, numerous methods have been proposed to estimate optimal DTRs, which can broadly be divided into two families. On the one hand, nonparametric methods such as inverse probability of treatment weighting (Robins, 2000), marginal structural models (Robins, 2000; Orellana et al., 2010), and outcome weighted learning (Zhao et al., 2012) aim to directly learn optimal strategies without imposing strong parametric assumption. On the other hand, regression-based approaches including G-estimation (Robins, 1992, 1989, 1998), dynamic weighted ordinary least 
+
+> arXiv:2603.19440v1 [stat.ML] 19 Mar 2026
+
+A PREPRINT - M ARCH 23, 2026 squares (Wallace and Moodie, 2015), and Q-learning (Clifton and Laber, 2020) rely on statistical modeling to estimate how different treatment decisions would affect patient outcomes, thereby identifying strategies that maximize clinical benefits. In this paper, we focus on Q-learning, a method rooted in reinforcement learning that frames treatment selection as a sequence of decision problems. At each stage, the method evaluates the expected benefit of each possible treatment, taking into account both immediate outcomes and their potential influence on future stages of care. By working backward from the final stage, these evaluations are combined to derive strategies that guide treatment choices in a way that maximizes overall patient benefit. Q-learning relies on regression models to estimate stage-specific value functions, which makes it particularly appealing in clinical applications. Parametric and semi-parametric modeling approaches are often familiar to practitioners, allow straightforward model selection and interpretation, and can be implemented using standard statistical tools while remaining flexible enough to capture complex treatment–covariate interactions. For these reasons, Q-learning has been widely adopted in precision medicine research and applied across diverse clinical contexts, as documented in review articles (Clifton and Laber, 2020; Yazzourh et al., 2025). Despite these advances, most existing methods are designed to identify a single optimal treatment policy. This "one-size-fits-all optimum" may be limiting in practice: clinical decisions often involve near-equivalent strategies, where multiple courses of action yield comparable expected outcomes. Restricting recommendations to a unique policy risks overlooking clinically acceptable alternatives, thereby reducing flexibility and clinician autonomy in the decision-making process. The integration of clinical expertise and domain knowledge into reinforcement learning algorithms has been increasingly recognized as an important direction for the application of dynamic treatment regimes in healthcare, both to improve the realism of treatment recommendations and to foster trust in data-driven decision tools (Holzinger, 2016; Maadi et al., 2021; Love et al., 2023; Holzinger et al., 2019; Yazzourh et al., 2025). Motivated by this perspective, we adapt Q-learning to identify sets of near-equivalent treatment policies by retaining treatment decisions whose expected value remains within an ε-threshold of the optimal policy. While multiple-policy approaches have been explored in online reinforcement learning settings (Fard and Pineau, 2011; Tang et al., 2020), their reliance on direct interaction with the environment limits applicability in healthcare contexts where learning must typically rely on previously collected clinical data. A related multi-objective framework incorporating patient preferences has been proposed for offline settings (Lizotte and Laber, 2016). In contrast, our approach is designed for retrospective clinical datasets under a single-objective paradigm, mapping out therapeutically equivalent treatment pathways while maintaining a primary focus on outcome optimization. In this work, we modify the Q-learning framework to allow a controlled level of deviation from the estimated optimal value. This makes it possible to identify several treatment actions that achieve similar performance. Our method introduces an ε-selection step during the backward recursion, which allows the retention of all treatment decisions whose estimated value remains within an ε-neighborhood of the optimum. Conceptually, this modification transforms the classical vector-based formulation of Q-learning into a matrix-based representation in which multiple admissible value functions are propagated through the recursion, ultimately producing sets of near-equivalent policies rather than a single deterministic rule. The remainder of the paper is organized as follows. Section 2 briefly reviews the classical Q-learning framework. Section 3 introduces the proposed near-equivalent Q-learning approach and describes the ε-selection procedure. Section 4 illustrates the method in a single-stage setting by examining individualized treatment rules and the resulting decision boundaries. Section 5 considers a multi-stage dynamic treatment regime in a simulated oncology setting. Section 6 concludes with a discussion of the methodological implications and potential extensions. 
+
+# 2 Q-learning 
+
+Longitudinal clinical data consist of measurements collected sequentially throughout the course of treatment. At baseline, they capture patient covariates such as demographic and clinical characteristics (e.g., age, sex, comorbidities, or genetic markers). As treatment progresses, some variables are reassessed at follow-up visits and may evolve over time, reflecting both the patient’s response to therapy and the natural progression of the disease. At each stage, outcomes are recorded to quantify the benefit of the treatment received up to that point. Together, these data describe a dynamic trajectory in which the patient’s state evolves in response to past decisions and, in turn, shapes future treatment choices. In the context of precision medicine, a Dynamic Treatment Regime provides a formal framework for individualizing care over time. We consider a setting with a finite number of decision stages, indexed by t = 0 , . . . , T , where treatment choices are made at discrete points during the course of care. A DTR is defined as a sequence of decision rules, each specifying how treatment should be adapted at a given stage according to the patient’s history up to that point. Formally, 2A PREPRINT - M ARCH 23, 2026 let Ht denote the history space available prior to stage t, and let Ht ∈ H t denote the corresponding random history. Similarly, let At denote the treatment space at stage t, and At ∈ A t the assigned treatment. The outcome subsequently observed is denoted by Yt. The collection π = {π0, . . . , π T } defines a DTR, where each decision rule is a mapping 
+
+πt : Ht → A t. For a realized history ht ∈ H t, the rule assigns the treatment at = πt(ht).Several methodological frameworks have been developed to estimate optimal DTRs, and these can broadly be divided into two families. The first family focuses on directly optimizing the value of a regime, defined as the expected cumulative outcome under a given sequence of decisions; the idea is to evaluate how well a candidate strategy would perform in the population without explicitly modeling the outcome process at each stage. Within this framework, inverse probability weighting and marginal structural models (Robins, 2000; Orellana et al., 2010) use weighting schemes to correct for time-dependent confounding, while outcome weighted learning (Zhao et al., 2012) formulates the problem as a weighted classification task. Extensions of this approach include backward outcome weighted learning (Zhao et al., 2015), which adapts the method to multi-stage settings through backward recursion, and residual weighted learning (Zhou et al., 2017), which replaces raw outcomes by residuals to improve stability and reduce variance. Despite their differences, these approaches share the common feature of targeting the regime value directly rather than modeling outcomes sequentially. The second family is based on regression formulations, where sequential models are fit to capture the relationship between patient histories, treatment assignments, and outcomes. G-estimation (Robins, 1992, 1989, 1998), dynamic weighted least squares, (Wallace and Moodie, 2015), and Q-learning (Clifton and Laber, 2020) all focus on recovering optimal strategies through sequential regression modeling of outcomes parameterized as structural nested mean models. In each approach, the analytic problem is conceived as a sequence of regression tasks solved backward in time, where each step predicts the cumulative outcome under alternative treatment choices. These methods derive optimal decision rules from recursively specified outcome models. Within this regression-based family, Q-learning occupies a central place and will be the focus of what follows. Beyond its popularity in applied work, it is conceptually appealing because it makes explicit the connection between sequential decision problems in medicine and reinforcement learning (Clifton and Laber, 2020; Yazzourh et al., 2025). Originally developed in the context of interactive online data, Q-learning was designed to learn strategies by both exploiting accumulated knowledge and exploring new actions to improve performance (Watkins, 1989; Watkins and Dayan, 1992). At the heart of this framework is the notion of a reward, denoted by R or Y , which provides a quantitative measure of the consequences of each decision; in medical applications, this notion coincides with the observed outcome. In Q-learning, the central objects are the Q-functions, which quantify the expected cumulative reward (i.e outcome) associated with taking a given action in a given state under a regime π. Intuitively, they measure how beneficial it is for a patient i with history hi,t to choose treatment ai,t at time t, while following strategy π thereafter. For patient 
+
+i ∈ { 1, . . . , N }, the stage-t Q -function is defined as 
+
+Qπi,t (hi,t , a i,t ) = Eπ
+
+" TX
+
+> t=0
+
+Yi,t (hi,t , a i,t ) Hi,t = hi,t , A i,t = ai,t 
+
+#
+
+.
+
+In the context of DTR, the data used for estimation consist of observations that have already been collected in clinical settings, either through formal clinical trial protocols or through medical decisions made in practice. In reinforcement learning, such datasets are considered offline , and the associated Q-functions are estimated retrospectively from pre-existing observations.As described in Algorithm 2, the procedure begins by estimating the Q-function at the final stage 
+
+T and then proceeds backward in time to earlier stages. This approach is commonly referred to as offline or backward Q-learning. In practice, the true Q-functions are unknown and must be estimated from the data. Let ˆQt denote the estimator of 
+
+Qt, obtained by fitting a regression model that predicts future outcomes from patient histories and treatments. Such estimators may rely on parametric models (e.g., linear or generalized linear models) or on more flexible machine learning methods, including support vector machines or deep neural networks. At the final stage T , the Q-function is estimated by regressing the final outcome on the covariates and treatment. For earlier stages t < T , the regression target is no longer the observed outcome alone but a modified outcome that incorporates the value of the best possible future decision. This captures how treatment choices at time t influence downstream rewards and links the decision process across time. At each stage, an optimal treatment is obtained by selecting the action associated with the largest estimated Q-value, where a Q-value represents the expected cumulative outcome for a given patient history ht and treatment choice a at stage t, assuming optimal decisions are followed thereafter. In practice, these Q-values are computed by evaluating the estimated Q function at the specific history and treatment pair (ht, a ).3A PREPRINT - M ARCH 23, 2026 This construction is closely related to the potential outcomes framework where Y denotes the observed outcome under the treatment actually received, whereas Y ∗(a) represents the counterfactual outcome that would have been observed under an alternative treatment a. In the recursive estimation procedure, the observed outcome at stage t is replaced by a pseudo-outcome constructed from the estimated model at stage t + 1 , representing the optimal expected future values. Using this learned model, we evaluate all feasible future actions (i.e., all counterfactual treatment choices) and retain the one producing the highest value. For the entire sample of N patients, we write the modified outcome in vector form as 
+
+˜yt =
+
+
+
+˜Y1,t 
+
+˜Y2,t 
+
+...
+
+˜YN,t 
+
+ =
+
+
+
+Y1,t + max at+1 
+
+ˆQt+1 (H1,t +1 , a t+1 )
+
+Y2,t + max at+1 
+
+ˆQt+1 (H2,t +1 , a t+1 )
+
+...
+
+YN,t + max at+1 
+
+ˆQt+1 (HN,t +1 , a t+1 )
+
+ .
+
+This representation highlights that for each patient, the unobserved continuation of their trajectory is replaced by the value they would have obtained under the optimal decision at the next stage. By propagating these optimal counterfactuals backward through time, Q-learning incorporates long-term and delayed treatment effects into the estimation. Once all the Q-functions have been estimated across stages, the optimal strategy is obtained by selecting, at each stage 
+
+t, the action that maximizes the corresponding estimated Q-function: 
+
+ˆπ⋆t (ht) = arg max 
+
+> at∈A t
+
+ˆQt(ht, a t).
+
+Algorithm 1.Backward Q-learning Input  
+
+> 1:
+
+Offline training data consisting of admissible histories Ht, treatments At, and outcomes Yt for t = 0 , . . . , T ,and a fitting algorithm (parametric or non-parametric). 
+
+Final stage T 
+
+> 2:
+
+Estimate QT from (YT , H T , A T ) such that 
+
+ˆQT (hT , a T ) ≜ ˆE(YT | HT = hT , A T = aT ) . 
+
+> 3:
+
+for t = T −1, . . . , 0 do  
+
+> 4:
+
+Compute the pseudo-outcome 
+
+˜Yt = Yt + max 
+
+> at+1
+
+ˆQt+1 (Ht+1 , a t+1 ). 
+
+> 5:
+
+Estimate 
+
+ˆQt(ht, a t) ≜ ˆE
+
+ ˜Yt | Ht = ht, A t = at
+
+
+
+. 
+
+> 6:
+
+end for Output  
+
+> 7:
+
+The estimated optimal policies {ˆπ⋆ 
+
+> 0
+
+, . . . , ˆπ⋆T } with 
+
+ˆπ⋆t (ht) = arg max 
+
+> at∈A t
+
+ˆQt(ht, a t).
+
+# 3 Near-equivalent Q-learning 
+
+In its standard formulation, Q-learning recommends a single action at each decision point, namely the one that maximizes the estimated expected outcome at time t. While this yields a clear decision rule, it may conceal alternative actions, or even entire treatment sequences, that achieve comparable expected outcomes. This limitation is particularly salient in clinical applications. Treatment policies are typically learned from observational or trial data generated under pre-existing medical strategies, often shaped by physician judgment or fixed study protocols. Consequently, the estimated policy reflects not only the outcome process but also the historical allocation mechanism embedded in the data. The resulting recommendation therefore inherits the exploration–exploitation structure of the data-generating process. 4A PREPRINT - M ARCH 23, 2026 Restricting the analysis to a unique optimal strategy may thus reduce flexibility and obscure near-equivalent treatment pathways that would be clinically acceptable. When estimated value differences are small, the distinction between optimal and suboptimal actions may be driven more by statistical variability than by meaningful clinical contrast. Identifying strategies with comparable expected performance may therefore provide a more informative and practically relevant characterization of the decision landscape. One possible way to address the limitations of single-policy Q-learning is to construct a framework that recommends 
+
+near-equivalent actions , thereby allowing the integration of additional considerations such as treatment invasiveness, local availability, or potential side effects. Rather than enforcing strict optimality, such an approach seeks to identify actions whose expected performance remains within a controlled margin of the optimal value. From a decision-process perspective, this idea is closely related to the concept of near-optimal policies introduced by Fard and Pineau 2011. In that work, admissible actions are defined through a worst-case value criterion, corresponding to the smallest Q-value retained within the acceptable set. This quantity determines both the permissible deviation from the optimal decision and the minimal performance level tolerated among admissible actions. The resulting framework yields a set of policies whose performance is guaranteed to remain within a predefined threshold. However, the approach of Fard and Pineau 2011 was developed in a fully model-based setting, assuming known transition probabilities, and within an interactive (on-policy) environment where the policy is optimized through direct interaction with the system. These assumptions differ substantially from real-world Dynamic Treatment Regime applications, which rely on observational or trial data and do not permit interactive policy refinement. The method was subsequently extended by Tang et al. 2020 to a model-free context and an off-policy setting, where the environment is first explored and then exploited in a separate optimization phase. Although this extension relaxes the requirement of known transition dynamics, it remains situated within an online learning paradigm and was evaluated in a simulated intensive-care framework based on MIMIC data. As such, it does not align with the constraints of offline DTR estimation. Finally, the notion of multiple admissible policies has also been explored in a multi-objective reinforcement learning framework by Lizotte and Laber 2016. In that setting, the reward is vector-valued and reflects several competing clinical objectives. The authors introduce a dominance concept of Pareto dominance, incorporating patient preferences. Applied to the CATIE study, this approach enables the identification of treatment strategies that balance multiple outcomes while remaining clinically interpretable. While conceptually related, existing approaches typically operate in model-based, interactive, or multi-objective settings. In contrast, our objective is to introduce controlled near-optimal admissibility within a single-objective, offline, regression-based Dynamic Treatment Regime framework. To this end, we consider a finite-horizon DTR setting in which Q-functions are estimated via classical backward Q-learning. Let T denote the terminal stage. As described previously, standard backward Q-learning proceeds recursively from stage T to stage 0, assuming that the optimal action is taken at subsequent stages when constructing pseudo-outcomes. Our goal is to embed near-optimal admissibility within this regression-based recursion while preserving its structural integrity. The admissibility criterion introduced by Fard and Pineau 2011 is originally formulated in terms of value functions, which are assumed to be positive. In their framework, a subset of actions S ⊆ A t is considered ε-admissible if 
+
+min  
+
+> a∈S
+
+V (ht, a ) ≥ (1 − ε) max 
+
+> a∈A t
+
+V (ht, a ).
+
+This definition relies on a worst-case perspective: the minimum value within the admissible set must remain within a 
+
+(1 − ε) margin of the optimal (i.e., maximal) value, ensuring that even the least favorable admissible action remains close to the optimum. Applying this condition directly within a Q-learning framework would require imposing the same criterion on the estimated Q-functions. However, unlike the value functions considered in the original formulation, Q-functions are not necessarily positive. Consequently, the multiplicative formulation above may lead to undesirable behavior when 
+
+max a∈A t
+
+ˆQt(ht, a ) is negative. To address this issue, we adopt the following admissibility condition. For a given history ht, an action a ∈ A t is considered admissible if 
+
+ˆQt(ht, a ) ≥ max 
+
+> a∈A t
+
+ˆQt(ht, a ) − ε max 
+
+> a∈A t
+
+ˆQt(ht, a ) .
+
+This condition ensures that the estimated value of any retained action lies within an ε-neighborhood of the optimal esti-mated value. Equivalently, the maximal tolerated loss relative to the optimal action is bounded by ε max a∈A t
+
+ˆQt(ht, a ) .The hyperparameter ε therefore controls the tolerated deviation from optimality. When ε = 0 , the procedure reduces to classical Q-learning, whereas increasing values of ε progressively enlarge the set of near-optimal admissible actions. 5A PREPRINT - M ARCH 23, 2026 The role of ε can be further clarified by examining its boundary cases. When ε = 0 , the admissibility condition reduces to ˆQt(ht, a ) ≥ max 
+
+> a∈A t
+
+ˆQt(ht, a ),
+
+which implies that only actions whose estimated value is strictly equal to the maximal estimated value are retained. At the other extreme, when ε = 1 , the condition becomes 
+
+ˆQt(ht, a ) ≥ max 
+
+> a∈A t
+
+ˆQt(ht, a ) − max 
+
+> a∈A t
+
+ˆQt(ht, a ) .
+
+Two situations may arise. If the estimated Q-functions are strictly positive, the condition reduces to ˆQt(ht, a ) ≥ 0. One might therefore expect that all strategies would be retained when rewards are strictly positive. However, in practice, Q-functions are estimated through regression models that do not constrain predictions to remain within the range of the observed outcomes. Many regression procedures allow extrapolation beyond the support of the target variable. For example, in the second implementation presented in Section 5, we use a support vector regression model with a radial basis function (Gaussian) kernel, which does not enforce positivity of predictions even when all observed rewards are positive. More generally, unless explicit constraints are imposed, estimated Q-values may take negative values. Consequently, ε = 1 does not guarantee that all strategies are retained, and the admissibility criterion becomes ill-posed at that boundary. If the maximal estimated Q-value is negative, the condition also becomes difficult to interpret, since the admissibility threshold may no longer correspond to a clear notion of near-optimality. For these reasons, we restrict the hyperparameter to ε ∈ [0 , 1[ to ensure a well-defined and controlled relaxation of optimality. The hyperparameter ε therefore controls the maximal loss tolerated with respect to the optimal treatment. Importantly, this loss is defined relative to the magnitude of the maximal estimated value. In other words, the admissibility threshold is not defined by a fixed distance from the optimum, but by a proportion of the size of the best estimated effect. When 
+
+max a∈A t
+
+ˆQt(ht, a ) is large, the admissible band becomes wider, reflecting the fact that several actions may yield similar large expected benefits. Conversely, when the maximal estimated value is small, the admissible band becomes narrower, meaning that only actions very close to the optimum are retained. Under this admissibility criterion, the decision rule at stage t becomes set-valued rather than single-valued, mapping each history ht to a subset of At containing all actions whose estimated value lies within the prescribed tolerance of the optimum. The sequential composition of these admissible sets across stages therefore defines a collection of near-equivalent treatment trajectories instead of a unique strategy. A necessary condition for implementation is that the action space At be finite and discrete, allowing explicit comparison across actions; in DTR applications, this assumption is natural, as treatment regimens are clinically predefined and finite. A direct application of ε-selection at every stage would disrupt the recursive structure of backward Q-learning. Standard recursion relies on the assumption that a unique optimal action is taken at future stages when constructing pseudo-outcomes. Allowing set-valued actions at all stages would therefore break this dependency structure and lead to a combinatorial expansion of candidate trajectories. Thus, to preserve the classical backward scheme, we introduce 
+
+ε-selection only at the penultimate stage. Applying the selection at stage T − 1 allows identification of near-equivalent treatment trajectories while preserving a unique optimal action at the terminal stage. If selection were introduced at the terminal stage alone, potentially suboptimal deviations could propagate backward and accumulate error. By contrast, selecting at the second-to-last stage captures multiple clinically comparable strategies while maintaining consistency with the estimated optimal outcome at T .At stage T , a single ˆQT is estimated. When ε-selection is applied at stage T − 1, for each patient i, it yields a set of ni
+
+admissible Q-functions, denoted 
+
+Q1 
+
+> i,T
+
+, . . . , Q ni 
+
+> i,T
+
+.
+
+Let 
+
+m = max  
+
+> i∈{ 0,...,N }
+
+(ni), m ≤ |A T |.
+
+Since regression at stage T − 2 relies on pseudo-outcomes derived from stage T − 1, these quantities must share a common dimension across individuals in order to fit a single regression model and maintain a coherent recursive structure. Let m denote the maximum number of admissible actions observed at stage T − 1. For each individual, we therefore construct a pseudo-outcome vector of length m. When ni < m , the vector is completed by padding with repeated evaluations of the first optimal Q-function until dimension m is reached. This construction yields a square and uniformly dimensioned pseudo-outcome matrix at stage T − 2, simplifying the backward recursion at earlier stages and avoiding stage-specific model specifications. Importantly, the padding operation neither alters the relative ordering of 6A PREPRINT - M ARCH 23, 2026 admissible actions nor changes the long-term optimization objective; it preserves the value structure induced by the estimated Q-functions while ensuring the dimensional alignment required for stable and consistent recursive estimation. Consequently, for stages t < T − 1, the pseudo-outcome no longer takes the form of a vector as in Section 2, but becomes a matrix ˜Yt of dimension (N × m), where m denotes the maximum number of per-individual Q-functions retained under the ε-selection criterion at stage T . Specifically, 
+
+˜Yt =
+
+
+
+˜Y 11,t . . . ˜Y m
+
+> 1,t
+
+... . . . ...
+
+˜Y 1 
+
+> N,t
+
+. . . ˜Y mN,t 
+
+ ,
+
+where, for j ∈ { 1, . . . , m },
+
+˜Y ji,t (hi,t ) = Yi,t (hi,t ) + max 
+
+> a
+
+ˆQji,t +1 (hi,t +1 , a ).
+
+For each j, a separate regression model is fitted using the pseudo-outcome vector ˜yjt (the j-th column of ˜Yt), yielding the corresponding estimator ˆQjt . The backward recursion therefore proceeds as in classical Q-learning, except that it is carried out in parallel across the m retained models. The complete procedure is summarized in Algorithm ?? and produces a collection of ε-equivalent treatment strategies within a standard regression-based DTR framework. Rather than discarding optimality, the method relaxes it in a controlled manner governed by the hyperparameter ε, thereby preserving the long-term optimization objective while allowing multiple near-optimal treatment trajectories. Clinically, this approach enables identification of patients located near decision boundaries, for whom multiple actions yield similar expected outcomes. For such patients, external considerations such as toxicity, availability, cost, or patient preference may legitimately guide the final choice without materially compromising expected performance. Methodologically, the approach remains fully grounded in backward Q-learning, requiring only a modified pseudo-outcome construction at stage T − 1.In the following section, we evaluate the proposed method in two complementary settings. We first consider a simulated Individualized Treatment Regime scenario (i.e., a single-stage decision process setting) with binary treatment, which allows for a clear investigation of the role of the hyperparameter ε and highlights the ability of the method to detect patients located near the decision boundary. We then illustrate the approach in a multi-stage DTR setting with six treatment stages in a simulated oncology framework to assess its practical performance and potential clinical relevance. All code and simulation results are publicly available on a dedicated GitHub repository 1.
+
+Algorithm 2. Near-Equivalent Q-learning Input : Offline training data consisting of i ∈ { 1, . . . , N } patients, each with admissible histories hi,t and associated rewards Yi,t for t ∈ { 0, . . . , T }. The algorithm also requires a fitting method (parametric or non-parametric) and a hyperparameter ε ∈ [0; 1[ that specifies the allowed deviation from the optimal policy. 
+
+Final stage T :
+
+Estimation: Estimate QT based on YT ∼ HT , A T , such that 
+
+ˆQT (hT , a T ) ≜ ˆE(YT | HT = hT , A T = aT ).
+
+At this stage, we obtain a single estimated Q-function, denoted ˆQT .
+
+Penultimate stage T − 1:1. ε-Selection : for each patient i, identify the subset of estimated QT -functions whose value satisfies the 
+
+ε-admissibility condition, 
+
+ˆQi,T (hi,T , a ) ≥ max 
+
+> a∈A T
+
+ˆQi,T (hi,T , a ) − ε max 
+
+> a∈A T
+
+ˆQi,T (hi,T , a ) .
+
+Let ni denote the number of estimated Q-functions satisfying this criterion for patient i. We then construct the vector h ˆQ1 
+
+> i,T
+
+, . . . , ˆQni
+
+> i,T
+
+i
+
+,
+
+containing the admissible estimated Q-values for patient i.2. Padding : Let m = max i∈{ 1,...,N }(ni) denote the maximum number of per-individual Q-functions satisfying the ε-selection criterion at stage T , where m ≤ |A T | and |A T | denotes the cardinality of 
+
+> 1https://github.com/sophiayazzourh/Multiple_Policies_Qlearning
+
+7A PREPRINT - M ARCH 23, 2026 the action space. We construct an (N × m) matrix in which the i-th row consists of the ni selected elements [ ˆQ1 
+
+> i,T
+
+, . . . , ˆQni 
+
+> i,T
+
+], followed, when ni < m , by (m − ni) copies of ˆQ1 
+
+> i,T
+
+to ensure common dimensionality across patients. This results, for each patient i, in a vector of dimension (1 × m) given by 
+
+h ˆQ1 
+
+> i,T
+
+, . . . , ˆQmi,T 
+
+i
+
+.
+
+3. Pseudo-outcome matrix: construct the pseudo-outcome matrix ˜YT −1 of dimension (N × m):
+
+˜YT −1 =
+
+
+
+˜Y 11,T −1 . . . ˜Y m 
+
+> 1,T −1
+
+... . . . ...
+
+˜Y 1  
+
+> N,T −1
+
+. . . ˜Y mN,T −1
+
+ ,
+
+where, for j ∈ { 1, . . . , m },
+
+˜Y ji,T −1(hi,T −1) = Yi,T −1(hi,T −1) + max 
+
+> a
+
+ˆQji,T (hi,T , a ).
+
+4. Estimation : Estimate the functions QjT −1 by fitting separate regressions to each column of ˜YT −1. Let 
+
+˜yjT −1 denote the pseudo-outcome vector associated with model j, i.e., the j-th column of ˜YT −1. For 
+
+j = 1 , . . . , m , we define 
+
+ˆQjT −1(hT −1, a T −1) ≜ ˆE ˜yjT −1 | HT −1 = hT −1, A T −1 = aT −1
+
+.
+
+At stage T − 1, this yields a collection of m optimal and near-optimal Q-functions: 
+
+n ˆQ1 
+
+> T−1
+
+, . . . , ˆQmT −1
+
+o
+
+.
+
+Stages t < T − 1:1. Pseudo-outcome matrix: construct the pseudo-outcome matrix ˜Yt of dimension (N × m):
+
+˜Yt =
+
+
+
+˜Y 11,t . . . ˜Y m
+
+> 1,t
+
+... . . . ...
+
+˜Y 1 
+
+> N,t
+
+. . . ˜Y mN,t 
+
+ ,
+
+where, for j = 1 , . . . , m ,
+
+˜Y ji,t (hi,t ) = Yi,t (hi,t ) + max 
+
+> a
+
+ˆQji,t +1 (hi,t +1 , a ).
+
+2. Estimation : For j = 1 , . . . , m , estimate the functions Qjt by fitting separate regressions to each column of ˜Yt. Let ˜yjt denote the pseudo-outcome vector associated with model j, i.e., the j-th column of ˜Yt.We define ˆQjt (ht, a t) ≜ ˆE ˜yjt | Ht = ht, A t = at
+
+.
+
+At each stage t, this yields a collection of m optimal and near-optimal Q-functions: 
+
+n ˆQ1 
+
+> t
+
+, . . . , ˆQmt
+
+o
+
+.
+
+Construction of ε-equivalent estimated policy sets ˆΠT : At each stage t, we construct a set of near-equivalent actions. The sequential combination of these actions defines a set of near-equivalent strategies such that, for 
+
+j ∈ { 1, . . . , m },
+
+ˆΠj (h) = 
+
+h
+
+ˆπj
+
+> 0
+
+(h0), . . . , ˆπjT (hT )
+
+i
+
+,
+
+where 
+
+ˆπjt (ht) = arg max 
+
+> at∈A t
+
+ˆQjt (ht, a t).
+
+8A PREPRINT - M ARCH 23, 2026 
+
+# 4 Individualized Treatment Regimes: decision boundaries and the role of ε
+
+We consider a single-stage individualized treatment regime and simulate data according to (Song et al., 2015). For each simulated patient, covariates X0, . . . , X 9 are generated independently and identically distributed as U([ −1, 1]) , and 
+
+A ∈ {− 1, 1} with P(A = 1) = 1 /2. The outcome is generated as Y ∼ N  1 + 2 X0 + X1 + 0 .5X2 + T0(A, X ), 1,where T0(A, X ) = ( X0 + X1)A. The true individualized treatment effect is τ (X) = X0 + X1, the optimal rule is 
+
+π⋆(X) = sign( X0 + X1), and the true decision boundary is the linear surface X0 + X1 = 0 .We implement a one-stage Q-learning procedure using a linear working model for the Q-function. Specifically, we estimate bQ(X, A ) = bβ0 + bβ⊤ 
+
+> X
+
+X + bβAA + bβ⊤ 
+
+> AX
+
+(AX ),
+
+where treatment–covariate interaction terms allow for heterogeneous treatment effects. The model is fitted on the training sample using a linear regression with regressors [1 , X 0, . . . , X 9, A, AX 0, . . . , AX 9], i.e., including all covariates and all treatment–covariate interaction terms. For each subject in the test set, predicted values are computed under both treatment options A = −1 and A = +1 , yielding the estimated value pair   bQ(X, −1) , bQ(X, +1) .
+
+In the one-stage binary-treatment setting, the role of ε is naturally understood through the blip function, defined as the difference between the Q-values evaluated under each of the two treatment options, ∆( X) = Q(X, 1) − Q(X, −1) .The blip fully determines the individualized treatment rule: its sign specifies the optimal action, while its magnitude reflects the strength of the treatment preference. From a reinforcement learning perspective, ∆( X) corresponds to a relative advantage function, quantifying how much better one action performs compared to the alternative at the same covariate profile. In this setting, ε-selection is constructed directly from the estimated blip b∆( X) = bQ(X, 1) − bQ(X, −1) by retaining both treatments whenever | b∆( X)| ≤ ε, equivalently including all actions whose predicted value lies within ε of the maximal predicted Q-value. Geometrically, this replaces the sharp decision boundary b∆( X) = 0 with a band defined by | b∆( X)| ≤ ε. As ε increases, this band widens, identifying regions of the covariate space where the difference in expected outcomes between treatments is small and where no clearly dominant choice emerges. Figure 1 displays the estimated blip surface projected onto the (X0, X 1) plane. Positive regions (yellow) indicate preference for treatment +1 , while negative regions (purple) favor treatment −1. The smooth transition of the surface reflects the linear treatment–covariate interaction used in the data-generating mechanism. Misclassified points are primarily located near the true decision boundary, where the treatment effect is close to zero and small estimation fluctuations may alter the sign of the blip. The white band corresponds to the ε-selection region defined by | b∆( h)| ≤ ε. This band encompasses most misclassified observations and identifies regions where the expected difference between treatments is small. Rather than imposing a sharp boundary, the ε-selection framework explicitly acknowledges that, in these areas, no clearly dominant treatment emerges. This perspective is related in spirit to earlier approaches that address instability near the decision boundary through hard- or soft-thresholding (Moodie and Richardson, 2010; Chakraborty et al., 2010), although the present framework differs in that it yields a set of admissible treatments rather than modifying the decision rule itself. In contrast, misclassifications are rare in regions where the blip has large magnitude, indicating that the model reliably identifies the optimal treatment when the signal is strong. Overall, the concentration of apparent errors near the ε-band suggests that they reflect intrinsic ambiguity in treatment preference rather than model inadequacy. 
+
+# 5 Cancer Simulation Study: A Multistage Multiple-Treatment Decision Problem 
+
+The goal of this section is to illustrate the behavior of the proposed approach in a setting with multiple treatments and multiple stages. As a point of reference, we consider standard Q-learning, since our method is explicitly designed as an extension of it, modifying only the decision rule while preserving the underlying estimation procedure. Existing approaches for constructing set–valued or near–optimal treatment rules are typically developed in model-based, interactive, or multi–objective settings (Fard and Pineau, 2011; Lizotte and Laber, 2016; Tang et al., 2020), and do not directly accommodate the offline, regression-based Dynamic Treatment Regime framework considered here. Consequently, there are currently no direct comparable methods that address the same data structure. We illustrate the proposed method using a simulated dataset based on the model proposed by Zhao et al. (2009), a benchmark frequently used in reinforcement learning studies (Fürnkranz et al., 2012; Akrour et al., 2012; Goldberg and Kosorok, 2012; Humphrey, 2017; Yazzourh, 2024). The model represents a simplified form of chemotherapy management in a non-specific cancer population, where treatment decisions are made monthly over a six-month period. 9A PREPRINT - M ARCH 23, 2026 
+
+Figure 1: Estimated blip surface b∆( X) = bQ(X, 1) − bQ(X, −1) projected onto the (X0, X 1) plane for increasing values of ε. The dashed line represents the true decision boundary X0 + X1 = 0 . White contours indicate the ε-selection region defined by | b∆( X)| ≤ ε.At each time t = 0 , . . . , 6, the patient’s state St = ( Tt, X t) includes tumor size Tt and treatment toxicity Xt. The administered dose At ranges from 0 to 1 in increments of 0.1. Tumor and toxicity dynamics are governed by coupled differential equations describing tumor reduction due to treatment, drug toxicity accumulation, and remission once 
+
+Tt = 0 . Mortality is modeled by a survival process with hazard λ(t) = exp( −4 + Tt + Xt), reflecting the combined effect of tumor burden and toxicity on survival probability. The reward at each stage t is defined as the sum of three components capturing (i) survival status, (ii) change in toxicity, and (iii) tumor response, with Rt = Rt, 1 + Rt, 2 + Rt, 3,where Rt, 1 = −60 if death occurs at stage t and 0 otherwise, Rt, 2 = 5 if Xt+1 − Xt ≤ − 0.5 and −5 otherwise, and Rt, 3 = 15 if Tt+1 = 0 , 5 if Tt+1 − Tt ≤ − 0.5 and Tt+1 ̸ = 0 , and −5 otherwise. Each patient trajectory is thus characterized by sequential trade-offs between efficacy and tolerability, providing a suitable environment for evaluating decision rules under multiple near-equivalent treatment sequences. From this simulation model, we generated a training sample of 500 patients under a randomized treatment strategy and fitted our models using both classical backward Q-learning (Algorithm 2) and the proposed Near-Equivalent Q-learning procedure (Algorithm ?? ). In both approaches, the same regression model was employed, namely a support vector regression with radial basis function kernel (default C = 1 .0), ensuring comparability between methods. To illustrate the behavior of the proposed approach under different levels of admissibility, we consider several values of the hyperparameter ε ∈ { 0.1, 0.3, 0.5, 0.9}. For each value of ε, the ε-selection criterion is applied within the backward recursion to identify sets of near-equivalent policies. 10 A PREPRINT - M ARCH 23, 2026 The resulting treatment strategies are evaluated by simulating trajectories on an independent test sample of 5000 patients generated under identical initial conditions. Figure 2 displays, over a six-month horizon, the combined average tumor size and toxicity experienced by these patients under the different treatment strategies. The dashed curves correspond to constant treatment regimes ranging from 0.1 to 1.0, while the red solid line (“opt”) represents the policy learned via classical Q-learning. The dashed curves correspond to the near-equivalent policies identified by our method, and the shaded red region illustrates the ε-tolerance band around the optimal trajectory. Each panel corresponds to a different value of the admissibility parameter ε.All learned policies produce consistently lower values of the combined tumor size—toxicity metric than the constant treatment regimes across the entire time horizon. Since lower values correspond to a better trade-off between tumor burden and treatment toxicity, this indicates that adaptive treatment strategies achieve more favorable overall outcomes than fixed-dose regimes. The first-ranked near-equivalent policy, in terms of value, perfectly overlaps with the classical optimal policy, confirming that the proposed framework recovers the standard Q-learning solution when ε is small. As 
+
+ε increases, the admissible band gradually widens, reflecting a controlled relaxation of optimality. Nevertheless, the resulting policies remain visually almost indistinguishable from the optimal trajectory and consistently outperform all constant treatment regimes. This indicates that the policy with the highest value within the near-equivalent set remains very similar across values of ε.This pattern also suggests that the value function exhibits a relatively flat region around the optimum. In other words, several treatment strategies produce nearly identical expected outcomes, indicating that the optimal policy is not isolated but lies within a plateau of near-optimal solutions. The proposed framework explicitly characterizes this region by identifying sets of ε-equivalent policies. Moreover, the performance gap between constant and learned treatment strategies increases over time, reflecting the cumulative impact of sequential decision-making and illustrating the stability of the backward learning process under a controlled relaxation of optimality. Moreover, the performance gap between constant and learned treatment strategies increases over time, reflecting the cumulative nature of sequential decision-making and illustrating the stability of the backward learning process under a controlled relaxation of optimality. We also report the computational cost of the proposed procedure. All computations were performed in Python on a laptop equipped with an Apple M1 processor (16 GB RAM). Training the classical Q-learning model required approximately 0.29 seconds, whereas training the near-equivalent Q-learning procedure required about 2.1 seconds for a given value of ε.Although the simulation model captures key aspects of dynamic treatment decisions, it remains a simplified repre-sentation of the clinical process and is primarily designed to illustrate the methodological behavior of the proposed approach. The limitations of this simulation design and their implications for practical applications are discussed in the next section. 
+
+# 6 Discussion 
+
+This work introduces a framework for identifying near-equivalent treatment policies within the Q-learning paradigm. While classical Q-learning focuses on estimating a single optimal policy, the proposed approach relaxes this objective by identifying sets of policies whose expected value remains within a controlled tolerance of the optimum. Rather than producing a single deterministic rule, the method characterizes families of treatment strategies that are nearly optimal according to a user-defined admissibility hyperparameter ε. This formulation reflects the practical reality that, in many clinical settings, several treatment options may lead to very similar expected outcomes. Consequently, restricting attention to a single optimal policy may obscure meaningful alternatives and give the impression of a sharply defined decision boundary where little difference in expected benefit actually exists. By explicitly identifying sets of near-optimal strategies, the proposed framework provides a richer representation of treatment decisions and highlights situations in which the optimal choice is inherently unstable. The hyperparameter ε controls the tolerance for near-optimality in the treatment recommendation. Conceptually, ε
+
+represents the maximum acceptable loss in expected outcome relative to the optimal treatment. In this work, ε is interpreted as a tolerance on the difference in expected outcome between competing treatment options, allowing for flexible treatment recommendations in regions where these differences are small. In applications to clinical data, several practical strategies could guide the choice of ε. When the outcome scale is arbitrary or model-dependent, it may be convenient to define ε relative to the empirical distribution of the estimated blip function. For instance, ε could be selected as a fixed fraction of the standard deviation of the blip or as a low quantile of |∆( h)|. Such scale-relative choices may provide a pragmatic way to calibrate the tolerance level when no natural clinical scale is available. Another possible interpretation is to view ε as a mechanism for controlling the size of the near-indifference region. By selecting ε so that a predetermined proportion of individuals satisfies |∆( h)| ≤ ε,11 A PREPRINT - M ARCH 23, 2026 
+
+Figure 2: Combined average tumor size and toxicity over six stages for 5000 simulated patients under identical initial conditions ( ntrain = 500 , ntest = 5000 ). Each panel corresponds to a different value of ε, illustrating how the admissible set of policies expands as the tolerance increases. Dashed lines correspond to constant treatment regimes ranging from 0.1 to 1.0. The red solid line (“opt”) represents the policy learned via classical backward Q-learning. Bold dashed lines denote the ε-equivalent policies obtained with the proposed method. The shaded red band indicates the ε-tolerance region around the optimal policy. one could regulate the fraction of the population for which the treatment recommendation becomes set-valued rather than deterministic. From this perspective, ε acts as a policy-level tuning parameter governing the trade-off between decisiveness and flexibility. More generally, the choice of ε would ideally incorporate clinical considerations, since the acceptable deviation from optimality depends on the practical consequences of treatment differences. Future work could therefore explore approaches that combine empirical calibration with clinically meaningful thresholds when selecting ε.From a statistical standpoint, ε may also be linked to estimation uncertainty. When uncertainty quantification for the blip function is available, for instance through bootstrap or Bayesian procedures, ε may be chosen to reflect the typical magnitude of estimation error. Treatments are then considered near-optimal when differences in estimated 
+
+Q-values cannot be distinguished given the uncertainty of the model. Interpreting ε as a tolerance on instantaneous regret therefore provides a unified perspective linking clinical relevance, statistical uncertainty, and reinforcement learning principles. Several design choices were considered when integrating the ε-selection step within the backward Q-learning recursion. In the proposed implementation, the selection is performed at the penultimate stage of the algorithm. Introducing the criterion at the final stage would effectively impose the admissibility condition on a transformed version of the final outcome, which could lead to cumulative drift when propagated backward through the regression steps. Conversely, introducing the ε-selection too early in the recursion would collapse the decision process to a single policy in subsequent stages due to the structure of the backward regression updates. The penultimate stage therefore represents a natural compromise, allowing the admissible set of policies to expand while preserving a direct connection with the final objective. We also considered applying the ε-selection criterion at every stage of the backward recursion. Such an approach would generate a branching structure of candidate policies whose size grows exponentially with the number of stages and the cardinality of the action space. In addition to the resulting computational burden, many of the resulting policies would be identical, making the criterion insufficiently restrictive in practice. 12 A PREPRINT - M ARCH 23, 2026 From the perspective of individualized treatment rules illustrated in Section 4, the admissibility criterion naturally defines regions of treatment indifference. When these regions are large, the resulting policy may recommend multiple treatments for a given patient because the estimated treatment effects are very similar. In such situations, enforcing a single treatment recommendation may be arbitrary and overly sensitive to estimation noise. The proposed framework instead explicitly acknowledges this ambiguity by identifying sets of ε-optimal treatments. Consequently, several treatments may reasonably be considered acceptable, allowing external considerations such as patient preference, treatment accessibility, cost, or safety to inform the final decision. More broadly, the width of the admissible region can be interpreted as an indicator of treatment indifference: narrow regions correspond to clear treatment preference, whereas wider regions indicate that multiple treatments yield nearly identical expected outcomes. In this way, the proposed method provides additional insight beyond a single optimal rule by characterizing the stability of the treatment decision. When considered in the context of dynamic treatment regimes presented in Section 5, the proposed framework identifies sets of sequential policies whose cumulative value remains within an ε-neighborhood of the optimal policy. Rather than focusing exclusively on a single optimal sequence of decisions, the method characterizes families of near-optimal strategies that produce similar long-term outcomes. This perspective is particularly relevant in sequential decision problems where treatment effects accumulate over time, as small deviations from the optimal decision at a given stage may have only limited impact on the overall outcome, leading to multiple policies with very similar value. Identifying such policies therefore provides insight into the stability of the sequential decision process and may facilitate the integration of practical constraints or expert judgment into the final treatment strategy. The simulation setting considered in this work is intentionally simplified and does not fully reflect the complexity typically encountered in precision medicine applications. In particular, the state space includes only two covariates describing tumor size and toxicity, which limits the heterogeneity of patient profiles and reduces the potential for highly individualized treatment recommendations. Moreover, patient trajectories are generated through a deterministic dynamical system based on ordinary differential equations. Although this formulation captures interactions between tumor progression and treatment toxicity, it also produces relatively smooth and structured trajectories, resulting in limited variability in the state space and potentially contributing to the relatively stable set of near-equivalent policies observed in the simulation results. These simplifications were deliberately adopted to provide a controlled environment in which the methodological behavior of the proposed framework can be clearly illustrated. In more realistic clinical settings involving higher-dimensional patient histories and more complex stochastic dynamics, the structure of near-equivalent policies may be substantially richer. The additional computational cost induced by the proposed framework remains moderate and primarily reflects the identification of multiple admissible treatment strategies during the backward recursion. In practice, the number of near-equivalent strategies that may be explored is naturally bounded by the size of the action space, so the complexity of the procedure remains directly linked to the number of available treatment options. Several extensions of the proposed framework deserve further investigation. First, uncertainty quantification for near-equivalent treatment strategies could be developed using bootstrap procedures applied to the entire learning process. Such an approach would allow the construction of confidence measures for the admissible treatment sets and provide additional insight into the stability of the recommended strategies. However, this task is complicated by the presence of near-equivalent treatment options, which naturally raises questions of non-identifiability, as small differences in estimated value may not be statistically distinguishable. In such regions, the decision rule may exhibit non-smooth behavior, leading to non-standard asymptotics and potentially limiting the validity of standard bootstrap procedures. Addressing these challenges may require the development of alternative inferential tools tailored to set-valued or near-indifferent decision problems. Second, the current implementation estimates a separate regression model for each action. An interesting extension would consist in estimating the Q-function through vector-valued or multi-output regression models, allowing informa-tion to be shared across treatment options. Related ideas have been explored in the context of joint or shared-parameter estimation approaches (Wang et al., 2022), which aim to improve statistical efficiency by leveraging common structure across treatments. Such approaches could potentially enhance estimation when value functions associated with different treatments are similar. In this setting, because only the outcome corresponding to the treatment actually received is observed for each individual, multi-output formulations would require careful modeling to account for this partially observed structure and to avoid introducing bias in the estimation of treatment effects. Finally, the proposed ε-selection framework is not restricted to classical Q-learning and could potentially be combined with other regression-based methods for estimating individualized treatment rules, such as dynamic weighted ordinary least squares or G-estimation. Applying the approach to real-world datasets involving multiple treatment alternatives represents an important direction for future work. 13 A PREPRINT - M ARCH 23, 2026 
+
+# Acknowledgments 
+
+Erica E. M. Moodie is a Canada Research Chair (Tier 1) in Statistical Methods for Precision Medicine, funded by the Canadian Institutes of Health Research (CIHR). This work was supported by a Discovery Grant from the Natural Sciences and Engineering Research Council of Canada (NSERC). Computational resources were provided by the Digital Research Alliance of Canada (Alliance Canada). 
+
+# Financial disclosure 
+
+None reported. 
+
+# Conflict of interest 
+
+The authors declare no potential conflict of interests. 
+
+# References 
+
+Akrour, R., Schoenauer, M., and Sebag, M. (2012). April: Active preference learning-based reinforcement learning. In 
+
+Proceedings of the European Conference on Machine Learning and Knowledge Discovery in Databases (ECML PKDD) , pages 116–131. Chakraborty, B. and Moodie, E. E. M. (2013). Statistical methods for dynamic treatment regimes , volume 2. Springer. Chakraborty, B., Murphy, S., and Strecher, V. (2010). Inference for non-regular parameters in optimal dynamic treatment regimes. Statistical methods in medical research , 19(3):317–343. Clifton, J. and Laber, E. (2020). Q-learning: Theory and applications. Annual Review of Statistics and Its Application ,7(1):279–301. Fard, M. M. and Pineau, J. (2011). Non-deterministic policies in markovian decision processes. Journal of Artificial Intelligence Research , 40:1–24. Fürnkranz, J., Hüllermeier, E., Cheng, W., and Park, S.-H. (2012). Preference-based reinforcement learning: A formal framework and a policy iteration algorithm. Machine Learning , 89:123–156. Goldberg, Y. and Kosorok, M. R. (2012). Q-learning with censored data. Annals of Statistics , 40(1):529–560. Holzinger, A. (2016). Interactive machine learning for health informatics: When do we need the human-in-the-loop? 
+
+Brain Informatics , 3(2):119–131. Holzinger, A., Langs, G., Denk, H., Zatloukal, K., and Müller, H. (2019). Causability and explainability of artificial intelligence in medicine. Wiley Interdisciplinary Reviews: Data Mining and Knowledge Discovery , 9(4):e1312. Humphrey, K. (2017). Using reinforcement learning to personalize dosing strategies in a simulated cancer trial with high dimensional data . PhD thesis, The University of Arizona. Kosorok, M. R. and Laber, E. B. (2019). Precision medicine. Annual review of statistics and its application , 6(1):263– 286. Kosorok, M. R. and Moodie, E. E. M. (2015). Adaptive treatment strategies in practice: Planning trials and analyzing data for personalized medicine . SIAM. Lizotte, D. J. and Laber, E. B. (2016). Multi-objective markov decision processes for data-driven decision support. 
+
+Journal of Machine Learning Research , 17(210):1–28. Love, T., Ajoodha, R., and Rosman, B. (2023). Who should i trust? cautiously learning with unreliable experts. Neural Computing and Applications , 35(23):16865–16875. Maadi, M., Akbarzadeh Khorshidi, H., and Aickelin, U. (2021). A review on human-ai interaction in machine learning and insights for medical applicationss. International Journal of Environmental Research and Public Health ,18(4):2121. Moodie, E. E. and Richardson, T. S. (2010). Estimating optimal dynamic regimes: Correcting bias under the null. 
+
+Scandinavian Journal of Statistics , 37(1):126–146. Orellana, L., Rotnitzky, A., and Robins, J. M. (2010). Dynamic regime marginal structural mean models for estimation of optimal dynamic treatment regimes, part i: Main content. The International Journal of Biostatistics , 6(2):Article 8. 14 A PREPRINT - M ARCH 23, 2026 Robins, J. M. (1989). The analysis of randomized and non-randomized aids treatment trials using a new approach to causal inference in longitudinal studies. Health Service Research Methodology: a Focus on AIDS , pages 113–159. Robins, J. M. (1992). Estimation of the time-dependent accelerated failure time model in the presence of confounding factors. Biometrika , 79(2):321–334. Robins, J. M. (1998). Correction for non-compliance in equivalence trials. Statistics in Medicine , 17(3):269–302. Robins, J. M. (2000). Marginal structural models versus structural nested models as tools for causal inference. In 
+
+Statistical Models in Epidemiology, the Environment, and Clinical Trials , pages 95–133. Springer. Song, R., Wang, W., Zeng, D., and Kosorok, M. R. (2015). Penalized q-learning for dynamic treatment regimens. 
+
+Statistica Sinica , 25(3):901. Tang, S., Modi, A., Sjoding, M., and Wiens, J. (2020). Clinician-in-the-loop decision making: Reinforcement learning with near-optimal set-valued policies. In Proceedings of the International Conference on Machine Learning (ICML) ,pages 9387–9396. PMLR. Wallace, M. P. and Moodie, E. E. (2015). Doubly-robust dynamic treatment regimen estimation via weighted least squares. Biometrics , 71(3):636–644. Wang, S., Moodie, E. E., Stephens, D. A., and Nijjar, J. S. (2022). Adaptive treatment strategies for chronic conditions: shared-parameter g-estimation with an application to rheumatoid arthritis. Biostatistics , 23(2):430–448. Watkins, C. J. and Dayan, P. (1992). Q-learning. Machine Learning , 8:279–292. Watkins, C. J. C. (1989). Learning from Delayed Rewards . PhD thesis, King’s College. Yazzourh, S. (2024). Reinforcement learning and Bayesian outcome-weighted learning for precision medicine: integrating medical knowledge into decision-making algorithms . PhD thesis, Université de Toulouse. Yazzourh, S., Savy, N., Saint-Pierre, P., and Kosorok, M. R. (2025). Medical knowledge integration into reinforcement learning algorithms for dynamic treatment regimes. International Statistical Review .Zhao, Y., Kosorok, M. R., and Zeng, D. (2009). Reinforcement learning design for cancer clinical trials. Statistics in Medicine , 28(26):3294–3315. Zhao, Y.-Q., Zeng, D., Laber, E. B., and Kosorok, M. R. (2015). New statistical learning methods for estimating optimal dynamic treatment regimes. Journal of the American Statistical Association , 110(510):583–598. Zhao, Y.-Q., Zeng, D., Rush, A. J., and Kosorok, M. R. (2012). Estimating individualized treatment rules using outcome weighted learning. Journal of the American Statistical Association , 107(449):1106–1118. Zhou, X., Mayer-Hamblett, N., Khan, U., and Kosorok, M. R. (2017). Residual weighted learning for estimating individualized treatment rules. Journal of the American Statistical Association , 112(517):169–187. 15
