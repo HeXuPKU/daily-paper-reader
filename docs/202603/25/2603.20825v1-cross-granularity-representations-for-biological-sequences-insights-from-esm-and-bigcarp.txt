@@ -1,0 +1,365 @@
+Title: Cross-Granularity Representations for Biological Sequences: Insights from ESM and BiGCARP
+
+URL Source: https://arxiv.org/pdf/2603.20825v1
+
+Published Time: Tue, 24 Mar 2026 00:47:29 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Cross-Granularity Representations for Biological Sequences: Insights from ESM and BiGCARP 
+
+Hanlin Xiao 1,2, Rainer Breitling 1,∗, Eriko Takano 1, Mauricio A. Alvarez 2 
+
+> 1
+
+Manchester Institute of Biotechnology, The University of Manchester, Manchester, United Kingdom  
+
+> 2
+
+Department of Computer Science, The University of Manchester, Manchester, United Kingdom * Corresponding author: Rainer.Breitling@manchester.ac.uk 
+
+Abstract —Recent advances in general-purpose foundation models have stimulated the development of large biological sequence models. While natural language shows symbolic granu-larity (characters, words, sentences), biological sequences exhibit hierarchical granularity whose levels (nucleotides, amino acids, protein domains, genes) further encode biologically functional information. In this paper, we investigate the integration of cross-granularity knowledge from models through a case study of BiG-CARP, a Pfam domain–level model for biosynthetic gene clusters, and ESM, an amino acid–level protein language model. Using representation analysis tools and a set of probe tasks, we first explain why a straightforward cross-model embedding initializa-tion fails to improve downstream performance in BiGCARP, and show that deeper-layer embeddings capture a more contextual and faithful representation of the model’s learned knowledge. Furthermore, we demonstrate that representations at different granularities encode complementary biological knowledge, and that combining them yields measurable performance gains in intermediate-level prediction tasks. Our findings highlight cross-granularity integration as a promising strategy for improving both the performance and interpretability of biological founda-tion models. Our code is available at https://github.com/Nugkta/ cgrep. 
+
+I. I NTRODUCTION 
+
+Recent breakthroughs in deep learning [1], [2] have spurred a paradigm shift towards the training of foundation models [3]. These models are characterized by their general-purpose architectures, trained on vast, multi-domain datasets using self-supervised learning frameworks. Given the complexity and data-rich nature of biology, the field has witnessed a surge of new biological foundation models spanning multiple modalities and domains, such as genomics, medical imaging, and transcriptomics [4]. Similar to text in natural language, biological sequences, such as the nucleotide sequences of DNA and the amino acid sequences of proteins, are central to this revolution. Inspired by the remarkable success of Large Language Models (LLMs) [5], biological sequence models aim to learn the underlying “grammar” of these sequences. 
+
+This work was supported by the Engineering and Physical Sciences Research Council [EP/Y030826/1]. © 2025 IEEE. Personal use of this material is permitted. Permission from IEEE must be obtained for all other uses, in any current or fu-ture media, including reprinting/republishing this material for advertising or promotional purposes, creating new collective works, for resale or re-distribution to servers or lists, or reuse of any copyrighted component of this work in other works. Published in: 2025 IEEE International Confer-ence on Bioinformatics and Biomedicine (BIBM), pp. 6936–6943, DOI: 10.1109/BIBM66473.2025.11356265 atg tgg cca tcc gtt gac gaa ctt gcc tgg taa 
+
+M W P S V D E L A W *
+
+PF1  PF3 PF2 
+
+PF1, PF2, PF3, PF4, PF5,  PF6   
+
+> gene 1 gene 2 gene 3
+> Nucleotides
+> (gene)
+> Amino acids
+> (protein)
+> Pfam domains
+> (protein)
+> Pfam domains
+> (BGC)
+> Transcribe &
+> translate
+> HMM scan
+
+Gene 1  fine 
+
+> coarse
+> A
+> Granularity
+
+a
+
+b cross gran ularity learn ing 
+
+cross  
+
+> token 1 token IDs sentence
+> Characters
+> BPE tokens
+
+gran  ing ularity  learn    
+
+> token 2 token 3 token 4 token 5
+
+Fig. 1. Multi-granularity nature of biological sequences and its analogy to tokenization in NLP. a) Gene sequences at the nucleotide level can be transcribed and translated into amino acids, which can be further abstracted into Pfam domains by HMM scans. A biosynthetic gene cluster (BGC) can thus be represented as a sequence of Pfam domains, the granularity used in the BiGCARP model. b) Similarly, NLP sequences can be represented at different granularities, from characters through subwords (the “token” here) to words and sentences. Unlike statistical NLP tokenizers (e.g., byte-pair encoding), which are reversible, biological “tokenizers” are lossy but inject functional priors by providing higher-level abstractions. 
+
+The recent proliferation of such models [6]–[8] and their applications has demonstrated their significant effectiveness. A defining aspect of biological sequences is their intrin-sic hierarchical and multi-granular nature, which offers an analogy to tokenization in natural language processing, albeit with vital distinctions (Fig. 1). Whereas NLP tokenizers (e.g., Byte Pair Encoding) are typically lossless, data-driven, and optimized from a corpus to form an efficient vocabulary [1], transitions between biological scales are governed by biophysical principles (Fig. 1a) and inherently lossy. For in-stance, the translation from nucleotides to amino acids discards information of non-coding regions and the use of synonymous codons. On the other hand, this abstraction exchanges genomic complexity for a representation where functional and structural information, such as conserved protein motifs, becomes more explicit. This principle of abstraction extends to higher levels. A full protein sequence can be represented as an ordered sequence of its constituent functional domains, often defined 
+
+> arXiv:2603.20825v1 [cs.LG] 21 Mar 2026
+
+by models from databases like Pfam [9]. This transformation is again lossy, but it distills a complex polypeptide into its core functional and evolutionary units, which immediately provides functional hypotheses and simplifies comparisons of protein architecture across evolutionary distances. At the highest level relevant here, this domain-centric view can be applied to an entire biosynthetic gene cluster (BGC), which is a cluster of co-located genes that cooperate to produce a secondary metabolite. As shown in Fig. 1, a BGC can be represented as a sequence of domains, ignoring the boundaries between individual proteins. This provides a simplified representation of the enzymatic “assembly line,” which could act as apowerful heuristic for predicting the chemical class of the synthesized metabolites. This multi-granular nature is mirrored by the distinct types of information prioritized by databases at each level. Ge-nomic databases capture the whole genomic context, anno-tating features including gene locations, regulatory elements, and non-coding regions. In contrast, protein-centric databases, even when computationally annotated, are structured to store protein-specific functional and structural information, such as predicted three-dimensional structures and Gene Ontology (GO) term annotations. Therefore, foundation models have typically been developed to specialize at a single granularity— from the nucleotide [6], [7] and amino acid levels [10], [11], to the gene or domain level [12]. Each model leverages the specific information available at its chosen scale, allowing coarser models to capture long-range dependencies while finer models resolve local details, ultimately leading to highly specialized and distinct representation spaces. This paper investigates the potential of integrating infor-mation across these distinct granularities through an empiri-cal case study of two representative models: ESM [8], and BiGCARP [13]. ESM is a series of massive amino acid-level models; the most recent version is pre-trained on over 3.15 billion protein sequences, capturing broad biological domains. It has demonstrated state-of-the-art performance on diverse downstream tasks, including protein structure prediction and de novo sequence generation. In contrast, BiGCARP operates at a much coarser granularity of Pfam domains [9] to manage the longer context length of BGCs. It is trained on the more specialized antiSMASH database [14], which contains around 127,000 BGCs. Furthermore, the original BiGCARP imple-mentation has already attempted to leverage ESM’s represen-tations by initializing BiGCARP’s token embedding matrix using domain-level representations derived from ESM (Fig. 2). However, despite the seemingly informative initialization, the strategy did not translate to a substantial improvement in downstream task performance. This discrepancy between the potential of the cross-granular information and the outcome presents another question that our research addresses. The main contributions of this paper include:  
+
+> •
+
+We analyze the training dynamics of the BiGCARP model to explain why its ESM-based initialization does not transfer effectively. We demonstrate that the model’s initial architectural layers largely transform the represen-tation space, preventing the initialized information from being retained in higher layers.  
+
+> •
+
+We investigate the choice of embedding extraction strat-egy, showing that representations from the last layer are more faithful to the model’s learned knowledge and result in better downstream performance in this cross-granularity context.  
+
+> •
+
+By curating three evaluation tasks, we demonstrate that fine-grained (ESM) and coarse-grained (BiGCARP) mod-els learn complementary local and global information. We further show that combining these representations improves performance for an intermediate-level task, un-derscoring cross-granularity integration as a promising approach for developing more comprehensive biological foundation models. BiGCARP                                        
+
+> Embedding matrix
+> ESM
+> RADAAR…
+> PF1 1E PF4 1E …
+> PF1 2E PF4 2E …
+> ………PF1 1PF2 1…
+> PF1 2PF2 2…
+> ………
+> PF1 1
+> PF1 2
+> …
+> PF1 1L PF4 1L …
+> PF1 2L PF4 2L …
+> ………
+> Masked Tokens / Probe Tasks
+> ESM -
+> Initialize
+> Prediction
+> Head
+> Last -layer Mean Pool
+> PF1 amino acids
+> Embedder
+> Pre -trained ESM
+> BiGCARP Training
+> PF1 PF4 …
+> Fig. 2. Overview of the BiGCARP model and ESM-based initialization. Left: A BGC is represented as a sequence of Pfam domains, which are embedded through an embedding matrix initialized either randomly or with ESM. BiGCARP processes these embeddings into last-layer representations, which are passed to a prediction head for masked language modeling and downstream probe tasks. Right: In ESM-based initialization, each Pfam domain is associated with a representative amino acid sequence. The sequence is encoded by the pre-trained ESM model, mean-pooled, and used to construct the embedding vector for that domain in BiGCARP. Blue blocks illustrate an example of domain PF1 receiving its embedding initialization {PF i}ni=1
+> from its representative amino acid sequence (right), and progressing from its embedder-layer embeddings {PF iE }ni=1 to its last-layer embeddings
+> {PF iL }ni=1 (left).
+
+II. R ELATED WORK 
+
+Multimodal foundation models in biology have recently gained traction, with many approaches integrating hetero-geneous data types such as structural information, textual descriptions of function, images, or omics profiles [4], [15]. A range of biological sequence models have been developed across different granularities, such as nucleotide-based models [6], [7], amino acid models [10], [11], gene-level models [12] and Pfam domain-level models like BiGCARP [13]. However, these models are usually trained and evaluated independently, with little effort focused on fusing cross-granular representa-tions to obtain complementary insights. Early efforts in cross-granularity integration have been explored in natural language processing (NLP) [16], where BERT was initialized with pre-trained embeddings from other models. Also, in gLM [12], the authors adopted similar initialization strategies at the gene level. Finally, several task-specific applications relate to our experiments: for example, [17] uses BiGCARP’s embedder representations to match BGCs and their products, and existing A-domain prediction methods [18] often adopt ESM-based embeddings—a strategy we adapt and extend in this study. III. M ETHODS AND EXPERIMENTAL DESIGN 
+
+A. Relevant Biological Sequence Models 1) ESM: The Evolutionary Scale Modeling (ESM) fam-ily consists of powerful protein language models based on encoder-only Transformer architectures. The most recent model, ESM-3, is trained on over 3.15 billion protein se-quences, including synthetic data, and incorporates multimodal inputs such as structural and functional annotations [8]. Since this project focuses on prokaryotic BGCs and sequence-level modeling, we primarily employ ESM-2 and ESM-1b to maintain consistency with the original BiGCARP pipeline. Given an amino acid sequence, these models output contextual embeddings for each residue; in our case, the embeddings are 1,280-dimensional. For full architectural and pre-training details, we refer readers to the original ESM publications [15]. 
+
+2) BiGCARP: BiGCARP also adopts an encoder-based ar-chitecture, but is built upon the CARP framework [19], which leverages dilated convolutional layers for efficient sequence modeling. Unlike ESM, BiGCARP is specifically designed for BGC analysis. It is pre-trained on data from the antiSMASH database [14], which contains approximately 127,000 anno-tated BGCs, including nucleotide sequences, gene annotations, and translated amino acid sequences. During pre-training, each BGC is scanned using Hidden Markov Models (HMMs) from the Pfam database to generate a sequence of protein domains. These domain sequences typically range from a few dozen to several hundred Pfam entries per BGC. BiGCARP takes these domain sequences as input and produces embeddings for each Pfam domain. 
+
+B. The Cross-Granularity Initialization 
+
+The pipeline for ESM-based embedding initialization is illustrated in Fig. 2. In the standard BiGCARP model, each Pfam domain in the input sequence is first mapped to a representative vector using an embedding matrix. Usually, this matrix is randomly initialized from a Gaussian distribu-tion, following standard practice in language modeling (e.g., BERT), and jointly optimized with the model during training. However, to incorporate information from the finer-grained, pre-trained ESM model, BiGCARP also initializes the Pfam embedding matrix using ESM-derived representations. For each Pfam domain, a representative amino acid sequence is selected (the first entry associated with that domain in the Pfam database) and passed through ESM. The last-layer residue embeddings are then mean-pooled to obtain a fixed-size vector, which is used to initialize the corresponding entry in the embedding matrix, as shown on the right side of Fig. 2. 
+
+C. Embedding Extraction Embeddings are vector representations of tokens in the vocabulary, designed to encode information learned during pre-training. These embeddings serve as input to downstream modules, as illustrated in the top-left corner of Fig. 2. In the original BiGCARP implementation, embeddings are extracted directly from the embedding matrix layer, resulting in static representations—each Pfam domain is always associated with the same vector. These embeddings are thus strongly influ-enced by the initialization method, such as the ESM-derived scheme described earlier. However, in representation learning, it is more common to extract embeddings from higher layers of the model. These layers incorporate contextual information through mechanisms like self-attention or dilated convolutions, enabling the model to produce contextualized representations, where the same to-ken may have different embeddings depending on its surround-ing domains. For example, in BERT, representation extraction is often performed from higher or final layers [1]. Moreover, different layers have been shown to capture distinct types of linguistic and semantic information [20]. Motivated by this, we compare the downstream task performance using embeddings extracted from the initial embedding matrix ( embedder layer )versus the last-layer embeddings of BiGCARP (Fig. 2). Additionally, for our UMAP-based representation analysis, we require a single, static embedding per Pfam domain. To construct this, we aggregate all occurrences of each Pfam domain across the dataset, extract their contextualized embed-dings, and compute their average. These averaged vectors are then used for UMAP dimensionality reduction and visualiza-tion. 
+
+D. Representation Analysis Tools 1) Uniform Manifold Approximation and Projection (UMAP): To analyze the representations learned by each model, we apply UMAP, a dimensionality reduction method that preserves both local and global structure [21]. High-dimensional embeddings, 1280-dimensional for ESM and 256-dimensional for BiGCARP, are projected into two dimensions for visualization. Each Pfam domain is associated with a representative embedding, visualized as a point in 2D. We select UMAP over other dimension reduction methods, such as PCA, due to its stronger preservation of the representation space structure. A meaningful embedding space should result in reduced representations that exhibit clustering of similar Pfam domains. To interpret the resulting visualizations, we apply several labeling strategies. Following the original BiGCARP paper, each domain is first labeled by its Pfam clan, which captures sequence similarity and evolutionary origin [22]. We further annotate each domain with one of four functional categories— core, tailoring, regulation, or transport—based on its role within a BGC. Finally, we manually examine representative clusters to assess whether they correspond to biologically coherent groupings, offering insight into the functional infor-mation encoded by the embeddings. 
+
+2) Centered Kernel Alignment (CKA): CKA is a technique for quantifying the similarity between two sets of representa-tions. It computes a normalized similarity score by comparing how patterns of variation in one representation space corre-spond to those in another, effectively measuring how similarly the two spaces organize the same set of inputs [23]. In this study, we use CKA to analyze representational dynamics in the BiGCARP model under different initialization schemes. Specifically, we compare representations across lay-ers to assess how information evolves as it propagates through the network. We compute CKA scores either between layers of the same model or across models with different initialization (e.g., ESM-based vs. random). Higher CKA scores indicate greater representational similarity, which we interpret as a proxy for how much information is preserved during encoding. 
+
+E. Probe Tasks 
+
+To compare the effectiveness of different embeddings, we select three probe tasks adapted from prior studies. These tasks serve as targeted evaluations of how well various rep-resentations capture features of different scales. This section introduces the biological motivation behind each task and describes the corresponding datasets. For the performance metrics, we have mainly focused on the comparison of the Macro AUROC score, as it provides a robust, threshold-independent measure of class separability and is particularly suitable for imbalanced classification tasks. 
+
+1) BGC Product Class Prediction: We evaluate embedding quality through a BGC product class prediction task, following prior work [13], [24]. Each BGC is linked to a characterized natural product, categorized into one or more of seven major classes: polyketides, nonribosomal peptides (NRPs), RiPPs, terpenes, saccharides, alkaloids, and others. This task is framed as a multi-label classification problem. These product classes differ in their biosynthetic logic. For instance, polyketides are synthesized by polyketide synthases (PKSs) through iterative or modular extension using acyl-CoA precursors, while NRPs are assembled by nonribosomal peptide synthetases (NRPSs) via domain-specific modules. Therefore, this task allows us to evaluate whether the em-beddings capture more global biosynthetic patterns across the entire BGC. We focus on three key comparisons: (1) ESM-initialized vs. randomly initialized BiGCARP models, (2) last-layer (con-textual) vs. embedder layer (static) representations, and (3) single-source vs. concatenated embeddings from ESM and BiGCARP. For consistency, we employ a simple two-layer MLP classifier (hidden dimensions: 512 and 256) across all evaluations. This architecture is sufficiently expressive to pro-cess high-dimensional embeddings while remaining deliber-ately limited in capacity, ensuring that performance differences reflect the quality of the embeddings rather than the classifier. Given the limited size (about 3,000 entries) and class imbal-ance of the training dataset, we adopt stratified 5-fold cross-validation to ensure balanced splits. To improve statistical robustness, each evaluation is repeated across 10 random seeds, and we report the average performance and uncertainties across runs. 
+
+2) A-Domain Substrate Prediction: Nonribosomal peptides (NRPs) are a class of natural products encoded by BGCs, with important applications as antibiotics, toxins, and immunosup-pressants [25]. They are assembled by nonribosomal peptide synthetases (NRPSs), which use amino acids as monomers to construct peptide backbones. NRPSs are organized into repeat-ing modules, each typically containing three core domains: the adenylation (A) domain , which selects and activates the substrate; the peptidyl carrier protein (PCP) domain, which tethers the activated amino acid; and the condensation (C) domain, which catalyzes peptide bond formation between adjacent residues. In this experiment, we focus on the A-domain, due to its central role in determining substrate specificity. Accurate prediction of A-domain substrates is essential for inferring NRP structure and function, but remains a challenging task. Several recent tools have employed deep learning and protein language models to tackle this problem [18], [26]. Substrate specificity is largely governed by local sequence and structural features, particularly a well-characterized motif known as the 
+
+Stachelhaus code —a set of ten residues near the substrate-binding pocket [27]. In addition, the broader BGC context might influence substrate selection, for example, through epistatic effects or coordinated domain organization across modules, motivating the attempt at representation integration. To investigate this, we compare two embedding strategies: (1) ESM-based embeddings , derived from the A-domain amino acid sequence; and (2) BiGCARP-based embeddings , derived from the full Pfam-annotated BGC context. For the ESM variant, we input the full A-domain amino acid sequence into the ESM model and extract residue-level embeddings. We then isolate the embeddings corresponding to the Stachelhaus code positions and apply mean pooling to obtain the final representation. This strategy outperformed full-sequence pooling and is therefore the only variant reported here. For the BiGCARP variant, we input the full BGC Pfam domain sequences that contain the A-domain (PF00501) into the model and extract the last-layer embeddings. We then apply mean pooling over the entire BGC sequence to obtain a global representation. We also experimented with using only the contextualized A-domain embedding from BiGCARP, but found it performed worse than full-sequence pooling and thus omitted it from further analysis. The dataset used in this experiment is based on annotations introduced in [18], which extend MIBiG entries with known A-domain substrates and Stachelhaus code residues. For each annotated A-domain, we retrieve its originating BGC, recon-struct the Pfam domain sequence, and align the A-domain position for embedding extraction. Out of approximately 2,200 annotated A-domains, around 1,600 could be successfully matched with corresponding BGC sequences. The substrate label space consists of roughly 50 distinct classes, many of which are sparsely populated. This long-tail distribution makes prediction particularly difficult and often necessitates specialized approaches such as contrastive learning using molecular structures annotations [18]. In this study, we adopt a simplified setup, predicting a set of key substrate-related properties as summarized in Table II. 
+
+3) Halogen Product Prediction: This task targets the pre-diction of whether a BGC produces a halogenated natural product. We focus on Pfam domain PF04820, which cor-responds to flavin-dependent halogenases that catalyze the incorporation of halogen atoms (e.g., Cl, Br) into organic com-pounds. While the presence of PF04820 suggests halogenation, this association is not deterministic: BGCs containing this do-main do not always yield halogenated products due to factors such as gene silencing, incomplete biosynthetic context, or inactive domain variants. To investigate this, we curated a dataset from the MIBiG database, which includes manually annotated biosynthetic gene clusters along with the chemical structures of their known products. We filtered all BGCs containing PF04820 and labeled each as halogenated or non-halogenated based on whether any of its associated product SMILES strings contained halogen atoms (F, Cl, Br, or I). Due to the rarity of experimentally characterized halo-genated BGCs, the resulting dataset comprises only 46 entries containing the PF04820 domain. To ensure statistical robust-ness despite the limited sample size, we adopt a leave-one-out cross-validation (LOOCV) scheme. Furthermore, we apply bootstrap resampling with 10,000 iterations to estimate con-fidence intervals for each embedding configuration, allowing for more reliable performance comparisons across models. 
+
+F. Datasets 
+
+antiSMASH-DB —This is the primary corpus used to train the BiGCARP model. It contains around 147,000 sequences, each processed using the antiSMASH tool to identify gene sequences and translate them into amino acid sequences. To reduce redundancy and prevent data leakage, preprocess-ing follows the original BiGCARP protocol, including BiG-SCAPE clustering to remove highly similar BGCs. 
+
+MIBiG —The Minimum Information about a Biosynthetic Gene cluster (MIBiG) database provides manually curated, experimentally validated BGCs with detailed annotations of gene function and final products [28]. We use MIBiG version 3.0, which includes 2,502 entries. This dataset serves as the source for multiple probe tasks in our study. Task-specific subsets are extracted based on criteria such as the presence of halogenase or A-domains. 
+
+Pfam —Pfam is a database of protein families, each defined by a conserved domain, a brief functional description, and a unique Pfam ID. The Pfam 33.1 contains around 19,000 domain entries, each associated with a profile HMM used to scan amino acid sequences for domain annotation [9]. In this study, Pfam domain-annotated sequences constitute the input to BiGCARP, while the corresponding functional descriptions are used for downstream analyses, including label generation and UMAP-based representation visualization. IV. R ESULTS 
+
+A. Representation Analysis 1) UMAP: In the original BiGCARP paper [13], the authors present a UMAP projection of ESM-generated embeddings for all Pfam domains in the Pfam database. When colored by Pfam clan membership, the embeddings form coherent clusters, indicating that ESM captures homology-related patterns. This observation motivates the use of ESM-based initialization in BiGCARP, under the assumption that such structure may benefit downstream learning. However, several limitations should be considered. First, the visualization includes all Pfam domains, whereas only about half are represented in the antiSMASH dataset used to train BiGCARP. When restricting the projection to only those domains, clan-level clustering becomes substantially weaker. Second, clan membership is partially defined by sequence similarity, which ESM embeddings naturally preserve due to their amino acid input. In contrast, BiGCARP is expected to learn higher-level functional patterns beyond sequence similarity. When visualizing the last-layer embeddings of a BiGCARP model trained from random initialization (Fig. 3), the distribution is largely different, and distinct clusters emerge that align with function labels. We also compared last-layer embeddings between models initialized randomly and those using ESM-based embeddings. The resulting UMAP projections show similar cluster struc-tures, suggesting that the choice of initialization has limited influence on the final representation space. This explains the comparable downstream performance across initialization schemes, despite differences at the embedding layer. Due to space constraints, we include one representative visualization (Fig. 3) in this paper. Additional figures and analyses are available in the accompanying repository. 
+
+B. Functional Themes in UMAP Clusters 
+
+The UMAP visualization revealed several well-defined func-tional clusters of Pfam domains. Here, we examine three clusters in detail (Fig. 3). Cluster 1 consists primarily of regulatory domains involved in the global control of BGC expression. Notable examples include PF00015 (MCPsignal, a methyl-accepting chemotaxis receptor domain) and PF17150 (CHASE-like extracellular sensor domain), both of which detect extracellular or sys-temic signals and transmit them through signaling cascades to modulate BGC activity. The cluster also contains PF00563 (EAL domain), which degrades cyclic-di-GMP and thereby influences transcription factor binding and pathway activation. Although the underlying mechanisms vary from membrane-bound receptors to second messenger degradation, the unifying theme is global-scale regulatory control of BGCs. Cluster 2 is enriched in tailoring domains responsible for large-scale modifications of metabolite scaffolds. For exam-ple, PF00534 and PF13439 encode glycosyltransferases that append sugar moieties, while PF03062 (a membrane-bound O-acyltransferase) attaches fatty acid chains. These enzymes typically introduce bulky chemical groups, reflecting their role in macro-level structural tailoring. Cluster 3 contains a mixture of regulatory and tailoring domains operating at a more localized scale. Regulatory ele-ments such as PF00440 and PF08360 (TetR family regulators) often control the expression of nearby genes rather than entire operons. Tailoring domains in this cluster, including GNAT acetyltransferases and PF03492 (SAM-dependent methyltrans-ferases), add small chemical groups like acetyl or methyl moieties, consistent with fine-scale chemical modification. These clusters demonstrate that the learned embeddings organize domains not only by functional type but also by functional scale: Cluster 1 reflects global regulation, Cluster 2 macro-level tailoring, and Cluster 3 local regulation and fine-scale modification. This separation, despite overlaps in functional labels, suggests that the embeddings capture biolog-ically meaningful contextual information, enabling functional inference for uncharacterized domains in novel BGCs. Beyond the main clusters, many domains fall within a diffuse region. We examined several representative cases, such as PF01544 (a general magnesium transporter), and PF14011 (a type VII secretion accessory protein). These examples sug-gest that the diffuse regions capture broadly reused functions, though they may also reflect limitations of the training data. A systematic analysis will allow drawing firmer conclusions. 
+
+1) CKA Analysis of Representation Retention: To investi-gate how pre-trained information propagates through the BiG-CARP model, we use CKA to quantify the similarity between internal representations across different layers. Specifically, we aim to assess whether the structural features encoded in the pre-trained ESM embeddings are preserved during training. Fig. 4 shows the CKA similarity matrix computed be-tween layers of a BiGCARP model initialized with ESM embeddings. The heatmap reveals four square blocks along the diagonal, reflecting the four-block structure of the CARP architecture. This periodicity serves as a useful consistency check and confirms that layer representations are locally coherent within each block. A particularly notable pattern is the sharp drop in similarity immediately after the embedding layer (Layer 0), suggesting that the model rapidly transforms the input embeddings in early stages. This abrupt change is attributable to the first dilated convolution layer, which incorporates local context and substantially modifies the initial representation space. To quantify and compare how much of the original embed-ding structure is retained, we compare the similarity between the embedder and final layers in both ESM-initialized and randomly initialized BiGCARP models throughout the training UMAP 1 
+
+> UMAP 2
+> regulation
+> transport
+> tailoring
+> core
+> Cluster 1
+> Cluster 3
+> Cluster 2
+
+Fig. 3. Two-dimensional UMAP projection of BiGCARP last-layer embeddings. All Pfam domains in the training corpus are shown and colored by functional category. Functionally coherent clusters emerge, indicating that BiGCARP captures high-level functional information. Three representative clusters are selected and analyzed in the main text to illustrate their underlying themes. 
+
+checkpoints (Fig. 5). Interestingly, the CKA curves for both settings follow nearly identical trends, indicating that the information from the ESM initialization is not retained. This observation suggests that the benefits of pre-trained initialization are largely overwritten under the masked lan-guage modeling objective. The final layers in both ESM-initialized and randomly initialized models become highly similar, echoing the findings from the original BiGCARP study that initialization has a limited impact on downstream performance. Layer 0 
+
+> Layer 4
+> Layer 8
+> Layer 12
+> Layer 16
+> Layer 20
+> Layer 24
+> Layer 28
+> Layer 32
+> Layers (ESM-initialised)
+> Layer 0
+> Layer 4
+> Layer 8
+> Layer 12
+> Layer 16
+> Layer 20
+> Layer 24
+> Layer 28
+> Layer 32
+> Layers (ESM-initialised)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> CKA Similarity
+
+Fig. 4. CKA self-similarity of the ESM-initialized model across layers. 
+
+The four-period pattern reflects the model’s four-block architecture. A sharp change between layers 0 and 1 arises from the dilated convolution layer, while the low similarity between the first and last layers indicates limited retention of initial representations. 0 20 40 60 80 100 
+
+> Training Epoch
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> CKA Similarity
+> ESM-initialised Embedder vs ESM-initialised Embedder
+> ESM-initialised Embedder vs ESM-initialised Last Layer
+> ESM-initialised Embedder vs Random Last Layer
+> Random Embedder vs Random Last Layer
+
+Fig. 5. Evolution of CKA similarity during training across layers and initialization schemes. The near-constant similarity of the ESM-initialized embedder to itself (blue) indicates that it is trainable but minimally reshaped during training. The red and purple curves show that, despite different initialization strategies, the similarity between initial and last layers converges to a similar level, suggesting that ESM initialization does not preserve additional information in the final layer. The low similarity of cross-model comparisons (green) provides a consistency check. TABLE I BGC P RODUCT CLASS PREDICTION PERFORMANCE 
+
+Embedding Strategy Macro AUROC ESM + BiGCARP (random-initialized, last-layer) 0.917 +0 .003 
+
+> −0.003
+
+ESM-initialized (last-layer) 0.913 +0 .005 
+
+> −0.005
+
+Random-initialized (last-layer) 0.912 +0 .005 
+
+> −0.005
+
+Pfam2Vec + Random Forest 0.911 +0 .003 
+
+> −0.003
+
+ESM embeddings 0.908 +0 .003 
+
+> −0.003
+
+Random-initialized (embedder) 0.903 +0 .003 
+
+> −0.003
+
+Random baseline 0.889 +0 .005 
+
+> −0.005
+
+ESM-initialized (embedder) 0.872 +0 .008 
+
+> −0.008
+
+C. Probe Tasks 
+
+To complement the representation analysis, we use a set of probe tasks to evaluate the quality and characteristics of embeddings produced under different model configurations. These tasks assess the effect of initialization, the impact of embedding extraction methods, and the complementarity between ESM and BiGCARP representations. 
+
+1) BGC Product Class Prediction: The performance of different embeddings is summarized in Table I. Across all configurations, last-layer embeddings from BiGCARP con-sistently outperform those from the embedder layer and the pre-trained ESM model, irrespective of initialization. In contrast, both ESM and embedder-layer embeddings, which primarily capture local sequence features, perform comparably to the random embedding baseline, indicating their limited utility for this global classification task. Furthermore, the simple concatenation of ESM-based and BiGCARP (random-initialized, last layer) embeddings actually lead to a substantial improvement. These results empirically support three main conclusions: (1) BiGCARP’s last-layer embeddings encode meaningful, task-relevant global patterns not present in the initial representations; (2) pre-trained initialization offers little benefit, as training rapidly overrides the initial structure; and (3) combining the cross-granularity embeddings substantially improved the BGC product classification task performance. 
+
+TABLE II A-D OMAIN SUBSTRATE PROPERTY PREDICTION PERFORMANCE 
+
+(AUROC) 
+
+Property Stachel (ESM) BiGCARP BiGCARP + Stachel 
+
+is aromatic 0.935 +0 .007  
+
+> −0.009
+
+0.813 +0 .008  
+
+> −0.010
+
+0.872 +0 .005 
+
+> −0.015
+
+has heterocycle 0.955 +0 .004  
+
+> −0.008
+
+0.895 +0 .006  
+
+> −0.006
+
+0.920 +0 .008 
+
+> −0.010
+
+high polarity 0.913 +0 .004  
+
+> −0.008
+
+0.620 +0 .011  
+
+> −0.009
+
+0.843 +0 .011 
+
+> −0.020
+
+is Val 0.960 +0 .003  
+
+> −0.004
+
+0.909 +0 .004  
+
+> −0.005
+
+0.937 +0 .008 
+
+> −0.011
+
+is Gly 0.980 +0 .002  
+
+> −0.004
+
+0.923 +0 .004  
+
+> −0.005
+
+0.958 +0 .008 
+
+> −0.011
+
+is canonical aa 0.946 +0 .005  
+
+> −0.006
+
+0.885 +0 .005  
+
+> −0.009
+
+0.927 +0 .007 
+
+> −0.008
+
+2) A-Domain Substrate Prediction: The A-domain sub-strate prediction task targets the identification of substrate specificity in adenylation domains, which depends heavily on local sequence features. Therefore, this task serves to evaluate how well the learned embeddings capture locality. As shown in Table II, ESM-based embeddings significantly outperform BiGCARP embeddings, consistent with expecta-tions given ESM’s fine-grained, amino acid-level resolution. While BiGCARP performs worse, its embeddings still achieve well-above-random performance (AUROC = 0.5), indicating that the model retains some useful local context despite being optimized for global representations. We further evaluated a simple concatenation of ESM and BiGCARP embeddings, but this did not improve performance over ESM alone. This likely reflects the task’s strong reliance on local information, which is already well captured by ESM. Overall, these results reinforce the complementary nature of the two models: ESM excels at fine-grained, structure-level tasks, while BiGCARP encodes broader, higher-level context more suited to global objectives. 
+
+3) Halogen Product Prediction: On the halogenation pre-diction task (Table III), concatenating ESM and BiGCARP embeddings achieves the highest AUROC, with a statistically significant improvement over ESM alone ( p = 0 .046 , two-sided bootstrap test on LOOCV predictions) and others. This result provides direct evidence that integrating representa-tions across granularities yields measurable benefits for this intermediate-level task. The performance pattern aligns with the task’s reliance on finer sequence features: ESM performs strongly due to its residue-level resolution, whereas BiGCARP alone underper-forms, indicating that global or local context by themselves are insufficient. The significant gain from simple concatenation suggests that the two models encode complementary informa-tion, motivating more expressive fusion strategies and tests on larger annotated datasets. V. L IMITATIONS AND FUTURE WORK 
+
+This proof-of-concept study has several limitations that highlight promising directions for future research. Method-TABLE III HALOGEN PREDICTION PERFORMANCE (AUROC) 
+
+Embedding Strategy AUROC ESM + BiGCARP (mean-pooled) 0.759 +0 .165 
+
+> −0.209
+
+ESM embeddings 0.659 +0 .216 
+
+> −0.241
+
+BiGCARP (mean-pooled) 0.181 +0 .154 
+
+> −0.130
+
+ologically, our deliberately simple setup, which involved basic embedding concatenation, static injection, and a simple MLP, could be enhanced with more sophisticated techniques, such as attention-based fusion or joint pre-training, to integrate infor-mation more effectively. Furthermore, the study’s scope was limited to BGCs, with some tasks constrained by small sample sizes, underscoring the need to scale the approach to larger datasets and extend the cross-granularity paradigm to new biological domains to improve robustness and demonstrate broader applicability. Future work should refine the integration methods and broaden the scope to fully realize the potential of cross-granularity modeling in biological sequence learning. VI. C ONCLUSION 
+
+The hierarchical, multi-granular structure of biological se-quences reflects an intrinsic form of multimodality, offering rich opportunities for cross-granularity representation learning. In this study, we investigated this potential through a case study on two models: ESM at the amino acid level and BiGCARP at the Pfam domain level. Our representational analyses and curated probe tasks revealed that simple embed-ding transfer across granularities does not retain pre-trained information, while last-layer embeddings capture more mean-ingful and contextualized features. Moreover, we confirmed that ESM and BiGCARP encode complementary biological information: ESM specializes in fine-grained, local, and struc-tural properties, while BiGCARP captures broader, functional context. Their combination proves effective for intermediate-level tasks, where simple concatenation yields measurable gains. These findings underscore the value of cross-granularity integration as a promising direction for improving the utility and interpretability of biological foundation models. REFERENCES [1] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “BERT: Pre-training of deep bidirectional transformers for language understanding,” arXiv preprint arXiv:1810.04805 , 2018. [2] Y. LeCun, Y. Bengio, and G. Hinton, “Deep learning,” Nature , vol. 521, no. 7553, pp. 436–444, 2015. [3] R. Bommasani, D. A. Hudson, E. Adeli, R. Altman, S. Arora, S. von Arx et al. , “On the opportunities and risks of foundation models,” arXiv preprint arXiv:2108.07258 , 2021. [4] F. Guo, R. Guan, Y. Li, Q. Liu, X. Wang, C. Yang, and J. Wang, “Foun-dation models in bioinformatics,” National Science Review , vol. 12, no. 4, p. nwaf028, 2025. [5] W. X. Zhao, K. Zhou, J. Li, T. Tang, X. Wang, Y. Hou, Y. Min, B. Zhang, J. Zhang, Z. Dong et al. , “A survey of large language models,” arXiv preprint arXiv:2303.18223 , 2023. [6] G. Brixi, M. G. Durrant, J. Ku, M. Poli, G. Brockman, D. Chang, G. A. Gonzalez, S. H. King, D. B. Li, A. T. Merchant et al. , “Genome modeling and design across all domains of life with Evo 2,” bioRxiv preprint bioRxiv:2025.02.18.638918 , 2025. [7] Z. Zhou, Y. Ji, W. Li, P. Dutta, R. Davuluri, and H. Liu, “DNABERT-2: Efficient foundation model and benchmark for multi-species genome,” 
+
+arXiv preprint arXiv:2306.15006 , 2023. [8] T. Hayes, R. Rao, H. Akin, N. J. Sofroniew, D. Oktay, Z. Lin, R. Verkuil, V. Q. Tran, J. Deaton, M. Wiggert et al. , “Simulating 500 million years of evolution with a language model,” Science , vol. 387, no. 6736, pp. 850–858, 2025. [9] J. Mistry, S. Chuguransky, L. Williams, M. Qureshi, G. A. Salazar, E. L. L. Sonnhammer, S. C. E. Tosatto, L. Paladin, S. Raj, L. J. Richardson et al. , “Pfam: The protein families database in 2021,” Nucleic Acids Research , vol. 49, no. D1, pp. D412–D419, 2021. [10] N. Brandes, D. Ofer, Y. Peleg, N. Rappoport, and M. Linial, “Pro-teinBERT: A universal deep-learning model of protein sequence and function,” Bioinformatics , vol. 38, no. 8, pp. 2102–2110, 2022. [11] N. Brandes, G. Goldman, C. H. Wang, C. J. Ye, and V. Ntranos, “Genome-wide prediction of disease variant effects with a deep protein language model,” Nature Genetics , vol. 55, no. 9, pp. 1512–1522, 2023. [12] Y. Hwang, A. L. Cornman, E. H. Kellogg, S. Ovchinnikov, and P. R. Girguis, “Genomic language model predicts protein co-regulation and function,” Nature Communications , vol. 15, no. 1, p. 2880, 2024. [13] C. Rios-Martinez, N. Bhattacharya, A. P. Amini, L. Crawford, and K. K. Yang, “Deep self-supervised learning for biosynthetic gene cluster detection and product classification,” PLOS Computational Biology ,vol. 19, no. 5, p. e1011162, 2023. [14] K. Blin, S. Shaw, S. A. Kautsar, M. H. Medema, and T. Weber, “The antiSMASH database version 3: Increased taxonomic coverage and new query features for modular enzymes,” Nucleic Acids Research , vol. 49, no. D1, pp. D639–D643, 2021. [15] Z. Lin, H. Akin, R. Rao, B. Hie, Z. Zhu, W. Lu, N. Smetanin, R. Verkuil, O. Kabeli, Y. Shmueli et al. , “Evolutionary-scale prediction of atomic-level protein structure with a language model,” Science , vol. 379, no. 6637, pp. 1123–1130, 2023. [16] H. Y. Kim, N. Balasubramanian, and B. Kang, “On initializing trans-formers with pre-trained embeddings,” arXiv preprint arXiv:2407.12514 ,2024. [17] G. Liu, Y. Li, G. Ong, F. T. Wong, D. W. P. Tay, Y. H. Lim, C. S. Foo, and W. Koh, “Unified genomic and chemical representations enable bidirectional biosynthetic gene cluster and natural product retrieval,” 
+
+bioRxiv preprint bioRxiv:2025.01.05.630922 , 2025. [18] A. K. Adduri, A. T. McNutt, C. N. Ellington, K. Suraparaju, N. Fang, D. Yan, B. Krummenacher, S. Li, C. Bodden, E. P. Xing et al. ,“Interpretable adenylation domain specificity prediction using protein language models,” bioRxiv preprint bioRxiv:2025.01.13.632878 , 2025. [19] K. K. Yang, N. Fusi, and A. X. Lu, “Convolutions are competitive with transformers for protein sequence pretraining,” Cell Systems , vol. 15, no. 3, pp. 286–294, 2024. [20] A. Rogers, O. Kovaleva, and A. Rumshisky, “A primer in BERTology: What we know about how BERT works,” Transactions of the Association for Computational Linguistics , vol. 8, pp. 842–866, 2020. [21] L. McInnes, J. Healy, and J. Melville, “UMAP: Uniform manifold approximation and projection for dimension reduction,” arXiv preprint arXiv:1802.03426 , 2018. [22] R. D. Finn, J. Mistry, B. Schuster-B¨ ockler, S. Griffiths-Jones, V. Hollich, T. Lassmann, S. Moxon, M. Marshall, A. Khanna, R. Durbin et al. ,“Pfam: Clans, web tools and services,” Nucleic Acids Research , vol. 34 (Database Issue), pp. D247–D251, 2006. [23] S. Kornblith, M. Norouzi, H. Lee, and G. Hinton, “Similarity of neural network representations revisited,” Proceedings of Machine Learning Research , vol. 97 (Proceedings of the 36th International Conference on Machine Learning, ICML 2019), pp. 3519–3529, 2019. [24] G. D. Hannigan, D. Prihoda, A. Palicka, J. Soukup, O. Klempir, L. Rampula, J. Durcak, M. Wurst, J. Kotowski, D. Chang et al. , “A deep learning genome-mining strategy for biosynthetic gene cluster prediction,” Nucleic Acids Research , vol. 47, no. 18, p. e110, 2019. [25] R. D. S¨ ussmuth and A. Mainz, “Nonribosomal peptide synthesis— principles and prospects,” Angewandte Chemie International Edition ,vol. 56, no. 14, pp. 3770–3821, 2017. [26] M. Mongia, R. Baral, A. Adduri, D. Yan, Y. Liu, Y. Bian, P. Kim, B. Behsaz, and H. Mohimani, “AdenPredictor: Accurate prediction of the adenylation domain specificity of nonribosomal peptide biosynthetic gene clusters in microbial genomes,” Bioinformatics , vol. 39 (Supple-ment 1, ISMB/ECCB 2023 Proceedings), pp. i40–i46, 2023. [27] T. Stachelhaus, H. D. Mootz, and M. A. Marahiel, “The specificity-conferring code of adenylation domains in nonribosomal peptide syn-thetases,” Chemistry & Biology , vol. 6, no. 8, pp. 493–505, 1999. [28] B. R. Terlouw, K. Blin, J. C. Navarro-Munoz, N. E. Avalon, M. G. Chevrette, S. Egbert, S. Lee, D. Meijer, M. J. J. Recchia, Z. L. Reitz 
+
+et al. , “MIBiG 3.0: A community-driven effort to annotate experi-mentally validated biosynthetic gene clusters,” Nucleic Acids Research ,vol. 51, no. D1, pp. D603–D610, 2023.

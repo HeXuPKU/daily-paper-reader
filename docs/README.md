@@ -6,91 +6,79 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-24
-- 运行时间：2026-03-24 20:17:08 UTC
+- 最新运行日期：2026-03-25
+- 运行时间：2026-03-25 20:11:33 UTC
 - 运行状态：成功
-- 本次总论文数：23
-- 精读区：12
+- 本次总论文数：19
+- 精读区：8
 - 速读区：11
 
 ### 今日简报（AI）
-今日深度研读 23 篇前沿成果，聚焦本地化大模型在多模态生存分析与基因交互领域的突破性进展。
-重点推荐满分论文中 LLM 的本地化生存预测方案，以及通过 GIP-RAG 实现的可解释性基因通路分析。
-建议普通读者关注大模型如何结合检索增强与拓扑感知技术，解决罕见病诊断及强化学习中的复杂逻辑难题。
-- 详情：[/202603/24/README](/202603/24/README)
+今日深度解析 19 篇 AI 医疗与生物前沿进展，重点聚焦 LLM 智能体在真实世界医学证据生成中的满分表现。
+核心结论指出大模型已具备处理复杂医疗观测性研究的能力，且跨粒度表示技术正显著提升生物序列的解析精度。
+推荐关注 AI 在 FDA 监管推理及空间转录组学中的垂直应用，把握医疗
+- 详情：[/202603/25/README](/202603/25/README)
 
 ### 精读区论文标签
-1. [Multimodal Survival Analysis with Locally Deployable Large Language Models](/202603/24/2603.22158v1-multimodal-survival-analysis-with-locally-deployable-large-language-models)  
+1. [Can LLM Agents Generate Real-World Evidence? Evaluating Observational Studies in Medical Databases](/202603/25/2603.22767v1-can-llm-agents-generate-real-world-evidence-evaluating-observational-studies-in-medical-databases)  
    标签：评分：10.0/10、query:med-ai
-   evidence：利用大语言模型整合临床文本、协变量和基因组谱
-2. [GIP-RAG: An Evidence-Grounded Retrieval-Augmented Framework for Interpretable Gene Interaction and Pathway Impact Analysis](/202603/24/2603.20321v1-gip-rag-an-evidence-grounded-retrieval-augmented-framework-for-interpretable-gene-interaction-and-pathway-impact-analysis)  
+   evidence：用于医疗保健和医学数据库证据生成的LLM智能体
+2. [Cross-Granularity Representations for Biological Sequences: Insights from ESM and BiGCARP](/202603/25/2603.20825v1-cross-granularity-representations-for-biological-sequences-insights-from-esm-and-bigcarp)  
    标签：评分：9.0/10、query:med-ai
-   evidence：大语言模型与知识图谱用于基因相互作用分析
-3. [G2DR: A Genotype-First Framework for Genetics-Informed Target Prioritization and Drug Repurposing](/202603/24/2603.20346v1-g2dr-a-genotype-first-framework-for-genetics-informed-target-prioritization-and-drug-repurposing)  
+   evidence：大型生物序列模型与基因组簇
+3. [Counterfactual Credit Policy Optimization for Multi-Agent Collaboration](/202603/25/2603.21563v1-counterfactual-credit-policy-optimization-for-multi-agent-collaboration)  
    标签：评分：9.0/10、query:med-ai
-   evidence：基因型优先的药物重定位和靶点优先级排序
-4. [Deep reflective reasoning in interdependence constrained structured data extraction from clinical notes for digital health](/202603/24/2603.20435v1-deep-reflective-reasoning-in-interdependence-constrained-structured-data-extraction-from-clinical-notes-for-digital-health)  
+   evidence：多智能体大语言模型的强化学习
+4. [Cerebra: A Multidisciplinary AI Board for Multimodal Dementia Characterization and Risk Assessment](/202603/25/2603.21597v2-cerebra-a-multidisciplinary-ai-board-for-multimodal-dementia-characterization-and-risk-assessment)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于临床数据提取的大语言模型智能体框架
-5. [Towards Practical Multimodal Hospital Outbreak Detection](/202603/24/2603.20536v1-towards-practical-multimodal-hospital-outbreak-detection)  
+   evidence：用于EHR和多模态临床分析的多智能体AI团队
+5. [Multimodal Training to Unimodal Deployment: Leveraging Unstructured Data During Training to Optimize Structured Data Only Deployment](/202603/25/2603.22530v1-multimodal-training-to-unimodal-deployment-leveraging-unstructured-data-during-training-to-optimize-structured-data-only-deployment)  
    标签：评分：9.0/10、query:med-ai
-   evidence：整合电子健康记录与全基因组测序进行疫情检测
-6. [Position: Multi-Agent Algorithmic Care Systems Demand Contestability for Trustworthy AI](/202603/24/2603.20595v1-position-multi-agent-algorithmic-care-systems-demand-contestability-for-trustworthy-ai)  
+   evidence：针对非结构化和结构化电子健康记录数据的多模态学习框架
+6. [Synthetic or Authentic? Building Mental Patient Simulators from Longitudinal Evidence](/202603/25/2603.22704v1-synthetic-or-authentic-building-mental-patient-simulators-from-longitudinal-evidence)  
    标签：评分：9.0/10、query:med-ai
-   evidence：医疗决策中的多智能体系统
-7. [Clinical Cognition Alignment for Gastrointestinal Diagnosis with Multimodal LLMs](/202603/24/2603.20698v1-clinical-cognition-alignment-for-gastrointestinal-diagnosis-with-multimodal-llms)  
+   evidence：用于纵向EHR和患者模拟的智能体
+7. [Privacy-Preserving EHR Data Transformation via Geometric Operators: A Human-AI Co-Design Technical Report](/202603/25/2603.22954v1-privacy-preserving-ehr-data-transformation-via-geometric-operators-a-human-ai-co-design-technical-report)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于临床诊断对齐的多模态大语言模型
-8. [Discriminative Representation Learning for Clinical Prediction](/202603/24/2603.20921v1-discriminative-representation-learning-for-clinical-prediction)  
+   evidence：电子健康记录数据的隐私保护转换
+8. [Central Dogma Transformer III: Interpretable AI Across DNA, RNA, and Protein](/202603/25/2603.23361v1-central-dogma-transformer-iii-interpretable-ai-across-dna-rna-and-protein)  
    标签：评分：9.0/10、query:med-ai
-   evidence：使用纵向电子健康记录数据进行临床预测
-9. [A harmonized benchmarking framework for implementation-aware evaluation of 46 polygenic risk score tools across binary and continuous phenotypes](/202603/24/2603.21201v1-a-harmonized-benchmarking-framework-for-implementation-aware-evaluation-of-46-polygenic-risk-score-tools-across-binary-and-continuous-phenotypes)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：使用英国生物样本库表型对多基因风险评分工具进行基准测试
-10. [Overview of TREC 2025 Biomedical Generative Retrieval (BioGen) Track](/202603/24/2603.21582v1-overview-of-trec-2025-biomedical-generative-retrieval-biogen-track)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：利用大语言模型进行生物医学生成式检索和临床笔记摘要
-11. [A Multidisciplinary AI Board for Multimodal Dementia Characterization and Risk Assessment](/202603/24/2603.21597v1-a-multidisciplinary-ai-board-for-multimodal-dementia-characterization-and-risk-assessment)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：用于电子健康记录和临床笔记分析的多智能体AI团队
-12. [GSEM: Graph-based Self-Evolving Memory for Experience Augmented Clinical Reasoning](/202603/24/2603.22096v1-gsem-graph-based-self-evolving-memory-for-experience-augmented-clinical-reasoning)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：用于经验增强临床推理智能体的图结构记忆
+   evidence：跨DNA、RNA和蛋白质的可解释AI
 
 ### 速读区论文标签
-1. [BiSSLB: Binary Spike-and-Slab Lasso Biclustering](/202603/24/2603.18378v1-bisslb-binary-spike-and-slab-lasso-biclustering)  
+1. [FDARxBench: Benchmarking Regulatory and Clinical Reasoning on FDA Generic Drug Assessment](/202603/25/2603.19539v1-fdarxbench-benchmarking-regulatory-and-clinical-reasoning-on-fda-generic-drug-assessment)  
    标签：评分：8.0/10、query:med-ai
-   evidence：针对单核苷酸多态性（SNP）数据的双聚类分析
-2. [Mind the Rarities: Can Rare Skin Diseases Be Reliably Diagnosed via Diagnostic Reasoning?](/202603/24/2603.18418v1-mind-the-rarities-can-rare-skin-diseases-be-reliably-diagnosed-via-diagnostic-reasoning)  
+   evidence：在药物标签上基准测试语言模型的临床推理
+2. [Adapting a Pre-trained Single-Cell Foundation Model to Spatial Gene Expression Generation from Histology Images](/202603/25/2603.19766v1-adapting-a-pre-trained-single-cell-foundation-model-to-spatial-gene-expression-generation-from-histology-images)  
    标签：评分：8.0/10、query:med-ai
-   evidence：用于皮肤病诊断的大型视觉语言模型
-3. [RewardFlow: Topology-Aware Reward Propagation on State Graphs for Agentic RL with Large Language Models](/202603/24/2603.18859v1-rewardflow-topology-aware-reward-propagation-on-state-graphs-for-agentic-rl-with-large-language-models)  
+   evidence：用于基因表达的单细胞基座模型
+3. [MedQ-Engine: A Closed-Loop Data Engine for Evolving MLLMs in Medical Image Quality Assessment](/202603/25/2603.19863v1-medq-engine-a-closed-loop-data-engine-for-evolving-mllms-in-medical-image-quality-assessment)  
    标签：评分：8.0/10、query:med-ai
-   evidence：强化学习增强大语言模型的智能体推理能力
-4. [Reinforcement-guided generative protein language models enable de novo design of highly diverse AAV capsids](/202603/24/2603.19473v1-reinforcement-guided-generative-protein-language-models-enable-de-novo-design-of-highly-diverse-aav-capsids)  
+   evidence：在医学评估中演进多模态大语言模型
+4. [MedSPOT: A Workflow-Aware Sequential Grounding Benchmark for Clinical GUI](/202603/25/2603.19993v1-medspot-a-workflow-aware-sequential-grounding-benchmark-for-clinical-gui)  
    标签：评分：8.0/10、query:med-ai
-   evidence：强化学习与蛋白质语言模型用于基因序列设计
-5. [Federated Learning for Privacy-Preserving Medical AI](/202603/24/2603.15901v1-federated-learning-for-privacy-preserving-medical-ai)  
+   evidence：用于临床图形界面工作流的多模态大模型智能体
+5. [When Should a Robot Think? Resource-Aware Reasoning via Reinforcement Learning for Embodied Robotic Decision-Making](/202603/25/2603.16673v1-when-should-a-robot-think-resource-aware-reasoning-via-reinforcement-learning-for-embodied-robotic-decision-making)  
    标签：评分：7.0/10、query:med-ai
-   evidence：用于医疗人工智能和阿尔茨海默病分类的联邦学习
-6. [Evaluating Causal Discovery Algorithms for Path-Specific Fairness and Utility in Healthcare](/202603/24/2603.15926v1-evaluating-causal-discovery-algorithms-for-path-specific-fairness-and-utility-in-healthcare)  
+   evidence：基于大语言模型的智能体决策强化学习
+6. [HISR: Hindsight Information Modulated Segmental Process Rewards For Multi-turn Agentic Reinforcement Learning](/202603/25/2603.18683v1-hisr-hindsight-information-modulated-segmental-process-rewards-for-multi-turn-agentic-reinforcement-learning)  
    标签：评分：7.0/10、query:med-ai
-   evidence：临床记录数据中的因果发现
-7. [Anticipatory Planning for Multimodal AI Agents](/202603/24/2603.16777v1-anticipatory-planning-for-multimodal-ai-agents)  
+   evidence：用于智能体强化学习的分段过程奖励
+7. [BVSIMC: Bayesian Variable Selection-Guided Inductive Matrix Completion for Improved and Interpretable Drug Discovery](/202603/25/2603.18957v1-bvsimc-bayesian-variable-selection-guided-inductive-matrix-completion-for-improved-and-interpretable-drug-discovery)  
    标签：评分：7.0/10、query:med-ai
-   evidence：用于多模态AI智能体的强化学习框架
-8. [SLEA-RL: Step-Level Experience Augmented Reinforcement Learning for Multi-Turn Agentic Training](/202603/24/2603.18079v1-slea-rl-step-level-experience-augmented-reinforcement-learning-for-multi-turn-agentic-training)  
+   evidence：用于药物抗性预测的基因组信息
+8. [HiPath: Hierarchical Vision-Language Alignment for Structured Pathology Report Prediction](/202603/25/2603.19957v1-hipath-hierarchical-vision-language-alignment-for-structured-pathology-report-prediction)  
    标签：评分：7.0/10、query:med-ai
-   evidence：多轮智能体训练的强化学习
-9. [Compute Allocation for Reasoning-Intensive Retrieval Agents](/202603/24/2603.14635v2-compute-allocation-for-reasoning-intensive-retrieval-agents)  
+   evidence：用于结构化病理报告预测的视觉语言模型
+9. [Communication-Aware Multi-Agent Reinforcement Learning for Decentralized Cooperative UAV Deployment](/202603/25/2603.16141v1-communication-aware-multi-agent-reinforcement-learning-for-decentralized-cooperative-uav-deployment)  
    标签：评分：6.0/10、query:med-ai
-   evidence：使用大语言模型的推理密集型检索智能体
-10. [Multi-Task Genetic Algorithm with Multi-Granularity Encoding for Protein-Nucleotide Binding Site Prediction](/202603/24/2603.14797v1-multi-task-genetic-algorithm-with-multi-granularity-encoding-for-protein-nucleotide-binding-site-prediction)  
+   evidence：用于去中心化智能体的多智能体强化学习
+10. [TPMM: Three-component Posterior Mixture Model Enables Robust Inverton Detection in Low-Depth Metagenomes and Suggests Potential Viral Invertons](/202603/25/2603.16194v1-tpmm-three-component-posterior-mixture-model-enables-robust-inverton-detection-in-low-depth-metagenomes-and-suggests-potential-viral-invertons)  
    标签：评分：6.0/10、query:med-ai
-   evidence：蛋白质-核苷酸结合位点预测
-11. [Empowering Chemical Structures with Biological Insights for Scalable Phenotypic Virtual Screening](/202603/24/2603.15006v1-empowering-chemical-structures-with-biological-insights-for-scalable-phenotypic-virtual-screening)  
+   evidence：宏基因组测序与DNA倒位
+11. [What if Pinocchio Were a Reinforcement Learning Agent: A Normative End-to-End Pipeline](/202603/25/2603.16651v1-what-if-pinocchio-were-a-reinforcement-learning-agent-a-normative-end-to-end-pipeline)  
    标签：评分：6.0/10、query:med-ai
-   evidence：用于药物发现的可扩展表型虚拟筛选
+   evidence：强化学习智能体与规范顾问
 
 
 <div class="dpr-home-promo-card">
