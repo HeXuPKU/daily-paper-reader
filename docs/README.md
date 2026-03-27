@@ -6,82 +6,91 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-26
-- 运行时间：2026-03-26 19:51:26 UTC
+- 最新运行日期：2026-03-27
+- 运行时间：2026-03-27 20:08:29 UTC
 - 运行状态：成功
-- 本次总论文数：20
-- 精读区：9
+- 本次总论文数：23
+- 精读区：12
 - 速读区：11
 
 ### 今日简报（AI）
-今日深度复盘 20 篇医疗 AI 论文，聚焦 LLM 在临床时间序列与病理影像理解的跨代升级。
-核心突破在于利用大模型构建可移植临床表征，并实现对全切片病理图像（WSI）的高效分级解析。
-建议优先研读临床数据表征与胃癌多模态基准研究，以把握医疗 AI 从理论走向复杂实战的趋势。
-- 详情：[/202603/26/README](/202603/26/README)
+今日精选 23 篇前沿成果，重点聚焦生命科学大模型与阿尔茨海默症 AI 诊断的突破性进展。
+满分论文 Central Dogma Transformer III 实现了跨生物分子链的可解释性建模，而 AD-CARE 代理则在多模态临床诊断中展现出极高的公平性与准确度。
+建议关注 AI Agent 在生物医学与流行病学自动化研究中的深度应用，探索大模型重塑医疗决策的潜力。
+- 详情：[/202603/27/README](/202603/27/README)
 
 ### 精读区论文标签
-1. [Can we generate portable representations for clinical time series data using LLMs?](/202603/26/2603.23987v1-can-we-generate-portable-representations-for-clinical-time-series-data-using-llms)  
+1. [Central Dogma Transformer III: Interpretable AI Across DNA, RNA, and Protein](/202603/27/2603.23361v2-central-dogma-transformer-iii-interpretable-ai-across-dna-rna-and-protein)  
    标签：评分：10.0/10、query:med-ai
-   evidence：利用大语言模型从临床时间序列中创建可移植的患者嵌入
-2. [MLLM-HWSI: A Multimodal Large Language Model for Hierarchical Whole Slide Image Understanding](/202603/26/2603.23067v2-mllm-hwsi-a-multimodal-large-language-model-for-hierarchical-whole-slide-image-understanding)  
+   evidence：跨越DNA、RNA和蛋白质的大规模基因组模型
+2. [AD-CARE: A Guideline-grounded, Modality-agnostic LLM Agent for Real-world Alzheimer's Disease Diagnosis with Multi-cohort Assessment, Fairness Analysis, and Reader Study](/202603/27/2603.25322v1-ad-care-a-guideline-grounded-modality-agnostic-llm-agent-for-real-world-alzheimers-disease-diagnosis-with-multi-cohort-assessment-fairness-analysis-and-reader-study)  
+   标签：评分：10.0/10、query:med-ai
+   evidence：用于真实世界阿尔茨海默症诊断和临床支持的大模型智能体
+3. [Parameter-Efficient Fine-Tuning for Medical Text Summarization: A Comparative Study of Lora, Prompt Tuning, and Full Fine-Tuning](/202603/27/2603.21970v1-parameter-efficient-fine-tuning-for-medical-text-summarization-a-comparative-study-of-lora-prompt-tuning-and-full-fine-tuning)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于病理学和医学影像的多模态大语言模型
-3. [CDMT-EHR: A Continuous-Time Diffusion Framework for Generating Mixed-Type Time-Series Electronic Health Records](/202603/26/2603.23719v1-cdmt-ehr-a-continuous-time-diffusion-framework-for-generating-mixed-type-time-series-electronic-health-records)  
+   evidence：针对医学文本摘要的大语言模型微调
+4. [Graph-Aware Late Chunking for Retrieval-Augmented Generation in Biomedical Literature](/202603/27/2603.22633v1-graph-aware-late-chunking-for-retrieval-augmented-generation-in-biomedical-literature)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于生成混合类型时间序列电子健康记录（EHR）数据的连续时间扩散框架
-4. [Dialogue to Question Generation for Evidence-based Medical Guideline Agent Development](/202603/26/2603.23937v1-dialogue-to-question-generation-for-evidence-based-medical-guideline-agent-development)  
+   evidence：生物医学文献的图感知 RAG
+5. [MLLM-HWSI: A Multimodal Large Language Model for Hierarchical Whole Slide Image Understanding](/202603/27/2603.23067v1-mllm-hwsi-a-multimodal-large-language-model-for-hierarchical-whole-slide-image-understanding)  
    标签：评分：9.0/10、query:med-ai
-   evidence：利用大模型开发医学指南智能体
-5. [VOLMO: Versatile and Open Large Models for Ophthalmology](/202603/26/2603.23953v1-volmo-versatile-and-open-large-models-for-ophthalmology)  
+   evidence：用于病理学和医学图像理解的多模态大语言模型
+6. [PLACID: Privacy-preserving Large language models for Acronym Clinical Inference and Disambiguation](/202603/27/2603.23678v1-placid-privacy-preserving-large-language-models-for-acronym-clinical-inference-and-disambiguation)  
    标签：评分：9.0/10、query:med-ai
-   evidence：眼科多模态大语言模型
-6. [MedAidDialog: A Multilingual Multi-Turn Medical Dialogue Dataset for Accessible Healthcare](/202603/26/2603.24132v1-medaiddialog-a-multilingual-multi-turn-medical-dialogue-dataset-for-accessible-healthcare)  
+   evidence：用于临床推理的隐私保护大语言模型
+7. [S4CMDR: a metadata repository for electronic health records](/202603/27/2603.24118v2-s4cmdr-a-metadata-repository-for-electronic-health-records)  
    标签：评分：9.0/10、query:med-ai
-   evidence：使用大语言模型的多语言医疗对话数据集
-7. [CarePilot: A Multi-Agent Framework for Long-Horizon Computer Task Automation in Healthcare](/202603/26/2603.24157v1-carepilot-a-multi-agent-framework-for-long-horizon-computer-task-automation-in-healthcare)  
+   evidence：电子健康记录的元数据存储库
+8. [DeepDTF: Dual-Branch Transformer Fusion for Multi-Omics Anticancer Drug Response Prediction](/202603/27/2603.24265v1-deepdtf-dual-branch-transformer-fusion-for-multi-omics-anticancer-drug-response-prediction)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于EHR系统中长周期任务自动化的多智能体框架
-8. [Multi-Agent Reasoning with Consistency Verification Improves Uncertainty Calibration in Medical MCQA](/202603/26/2603.24481v1-multi-agent-reasoning-with-consistency-verification-improves-uncertainty-calibration-in-medical-mcqa)  
+   evidence：多组学抗癌药物反应预测与精准肿瘤学
+9. [Evaluating Fine-Tuned LLM Model For Medical Transcription With Small Low-Resource Languages Validated Dataset](/202603/27/2603.24772v1-evaluating-fine-tuned-llm-model-for-medical-transcription-with-small-low-resource-languages-validated-dataset)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于医学多项选择题解答的领域专家多智能体框架
-9. [Scaling Recurrence-aware Foundation Models for Clinical Records via Next-Visit Prediction](/202603/26/2603.24562v1-scaling-recurrence-aware-foundation-models-for-clinical-records-via-next-visit-prediction)  
+   evidence：针对医学转录和电子健康记录行政负担微调的大语言模型
+10. [Rethinking Health Agents: From Siloed AI to Collaborative Decision Mediators](/202603/27/2603.24986v1-rethinking-health-agents-from-siloed-ai-to-collaborative-decision-mediators)  
    标签：评分：9.0/10、query:med-ai
-   evidence：针对序列化电子健康记录和临床事件的生成式预训练
+   evidence：基于大语言模型的健康智能体用于协作临床决策
+11. [OMIND: Framework for Knowledge Grounded Finetuning and Multi-Turn Dialogue Benchmark for Mental Health LLMs](/202603/27/2603.25105v1-omind-framework-for-knowledge-grounded-finetuning-and-multi-turn-dialogue-benchmark-for-mental-health-llms)  
+   标签：评分：9.0/10、query:med-ai
+   evidence：心理健康大语言模型智能体框架与对话基准
+12. [A Decade-Scale Benchmark Evaluating LLMs' Clinical Practice Guidelines Detection and Adherence in Multi-turn Conversations](/202603/27/2603.25196v1-a-decade-scale-benchmark-evaluating-llms-clinical-practice-guidelines-detection-and-adherence-in-multi-turn-conversations)  
+   标签：评分：9.0/10、query:med-ai
+   evidence：评估大语言模型在临床实践指南遵循方面的表现
 
 ### 速读区论文标签
-1. [CoDA: Exploring Chain-of-Distribution Attacks and Post-Hoc Token-Space Repair for Medical Vision-Language Models](/202603/26/2603.18545v1-coda-exploring-chain-of-distribution-attacks-and-post-hoc-token-space-repair-for-medical-vision-language-models)  
+1. [Adaptive Robust Estimator for Multi-Agent Reinforcement Learning](/202603/27/2603.21574v1-adaptive-robust-estimator-for-multi-agent-reinforcement-learning)  
    标签：评分：8.0/10、query:med-ai
-   evidence：医学视觉语言模型与临床工作流可靠性
-2. [Gastric-X: A Multimodal Multi-Phase Benchmark Dataset for Advancing Vision-Language Models in Gastric Cancer Analysis](/202603/26/2603.19516v1-gastric-x-a-multimodal-multi-phase-benchmark-dataset-for-advancing-vision-language-models-in-gastric-cancer-analysis)  
+   evidence：用于增强大语言模型推理能力的多智能体强化学习
+2. [Guideline-grounded retrieval-augmented generation for ophthalmic clinical decision support](/202603/27/2603.21925v1-guideline-grounded-retrieval-augmented-generation-for-ophthalmic-clinical-decision-support)  
    标签：评分：8.0/10、query:med-ai
-   evidence：胃癌分析中视觉语言模型的多模态基准
-3. [Evaluating Large Language Models on Historical Health Crisis Knowledge in Resource-Limited Settings: A Hybrid Multi-Metric Study](/202603/26/2603.20514v1-evaluating-large-language-models-on-historical-health-crisis-knowledge-in-resource-limited-settings-a-hybrid-multi-metric-study)  
+   evidence：用于临床决策支持的医疗大语言模型
+3. [AgentSLR: Automating Systematic Literature Reviews in Epidemiology with Agentic AI](/202603/27/2603.22327v1-agentslr-automating-systematic-literature-reviews-in-epidemiology-with-agentic-ai)  
    标签：评分：8.0/10、query:med-ai
-   evidence：评估LLM在健康危机知识方面的表现
-4. [When Documents Disagree: Measuring Institutional Variation in Transplant Guidance with Retrieval-Augmented Language Models](/202603/26/2603.21460v1-when-documents-disagree-measuring-institutional-variation-in-transplant-guidance-with-retrieval-augmented-language-models)  
+   evidence：用于流行病学文献综述的智能体AI
+4. [CLiGNet: Clinical Label-Interaction Graph Network for Medical Specialty Classification from Clinical Transcriptions](/202603/27/2603.22752v1-clignet-clinical-label-interaction-graph-network-for-medical-specialty-classification-from-clinical-transcriptions)  
    标签：评分：8.0/10、query:med-ai
-   evidence：用于移植指南的检索增强语言模型
-5. [RAFT-UP: Robust Alignment for Spatial Transcriptomics with Explicit Control of Spatial Distortion](/202603/26/2603.18249v1-raft-up-robust-alignment-for-spatial-transcriptomics-with-explicit-control-of-spatial-distortion)  
+   evidence：电子健康记录中临床转录文本的医学专业分类
+5. [Stochastic Sequential Decision Making over Expanding Networks with Graph Filtering](/202603/27/2603.19501v1-stochastic-sequential-decision-making-over-expanding-networks-with-graph-filtering)  
    标签：评分：7.0/10、query:med-ai
-   evidence：空间转录组学与基因表达分析
-6. [Maximum-Entropy Exploration with Future State-Action Visitation Measures](/202603/26/2603.18965v1-maximum-entropy-exploration-with-future-state-action-visitation-measures)  
+   evidence：用于顺序决策的多智能体系统
+6. [MARLIN: Multi-Agent Reinforcement Learning for Incremental DAG Discovery](/202603/27/2603.20295v1-marlin-multi-agent-reinforcement-learning-for-incremental-dag-discovery)  
    标签：评分：7.0/10、query:med-ai
-   evidence：强化学习智能体中的最大熵探索
-7. [PARHAF, a human-authored corpus of clinical reports for fictitious patients in French](/202603/26/2603.20494v1-parhaf-a-human-authored-corpus-of-clinical-reports-for-fictitious-patients-in-french)  
+   evidence：用于因果结构发现的多智能体强化学习
+7. [Fast and Scalable Cellwise-Robust Ensembles for High-Dimensional Data](/202603/27/2603.20940v1-fast-and-scalable-cellwise-robust-ensembles-for-high-dimensional-data)  
    标签：评分：7.0/10、query:med-ai
-   evidence：为绕过EHR隐私限制而编写的虚构患者临床报告语料库
-8. [A scalable Bayesian functional factor model for high-dimensional longitudinal molecular data](/202603/26/2603.20844v1-a-scalable-bayesian-functional-factor-model-for-high-dimensional-longitudinal-molecular-data)  
+   evidence：用于高维基因组数据分析的鲁棒集成方法
+8. [PivotRL: High Accuracy Agentic Post-Training at Low Compute Cost](/202603/27/2603.21383v1-pivotrl-high-accuracy-agentic-post-training-at-low-compute-cost)  
    标签：评分：7.0/10、query:med-ai
-   evidence：大规模纵向分子谱分析与患者异质性
-9. [Embedding World Knowledge into Tabular Models: Towards Best Practices for Embedding Pipeline Design](/202603/26/2603.17737v1-embedding-world-knowledge-into-tabular-models-towards-best-practices-for-embedding-pipeline-design)  
+   evidence：长周期任务的智能体后训练与强化学习
+9. [Hypothesis-Conditioned Query Rewriting for Decision-Useful Retrieval](/202603/27/2603.19008v1-hypothesis-conditioned-query-rewriting-for-decision-useful-retrieval)  
    标签：评分：6.0/10、query:med-ai
-   evidence：基于大语言模型的表格预测嵌入流水线
-10. [Unified Policy Value Decomposition for Rapid Adaptation](/202603/26/2603.17947v1-unified-policy-value-decomposition-for-rapid-adaptation)  
+   evidence：用于 RAG 的假设条件查询重写
+10. [Coding Agents are Effective Long-Context Processors](/202603/27/2603.20432v1-coding-agents-are-effective-long-context-processors)  
    标签：评分：6.0/10、query:med-ai
-   evidence：用于控制系统快速适应的强化学习框架
-11. [Cell-Type Prototype-Informed Neural Network for Gene Expression Estimation from Pathology Images](/202603/26/2603.18461v1-cell-type-prototype-informed-neural-network-for-gene-expression-estimation-from-pathology-images)  
+   evidence：代码智能体作为长文本处理器用于推理和检索
+11. [Towards Extended Reality Intelligence for Monitoring and Predicting Patient Readmission Risks](/202603/27/2603.20556v1-towards-extended-reality-intelligence-for-monitoring-and-predicting-patient-readmission-risks)  
    标签：评分：6.0/10、query:med-ai
-   evidence：利用单细胞RNA测序数据集进行基因表达估计
+   evidence：机器学习预测患者再入院风险
 
 
 <div class="dpr-home-promo-card">
