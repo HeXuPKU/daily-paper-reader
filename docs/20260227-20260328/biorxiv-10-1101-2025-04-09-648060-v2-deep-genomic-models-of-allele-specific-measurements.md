@@ -1,0 +1,24 @@
+---
+title: Deep genomic models of allele-specific measurements
+title_zh: 等位基因特异性测量的深度基因组模型
+authors: "Mostafavi, S., Tue, X., Sasse, A., Chowdhary, K., Spiro, A., Wang, L., Chikina, M., Benoist, C."
+date: 2026-02-27
+pdf: "https://www.biorxiv.org/content/10.1101/2025.04.09.648060v2.full.pdf"
+tags: ["query:gwas"]
+score: 8.0
+evidence: 用于因果调查DNA序列变异的深度学习序列到功能模型
+tldr: DeepAllele 是一种新型深度学习框架，旨在通过等位基因特异性数据预测 DNA 序列变异对顺式基因调控的影响。该方法利用 F1 杂交种或长读段测序提供的配对等位基因序列，克服了传统统计关联方法的局限性。在小鼠免疫细胞实验中，它成功识别出更多功能性调控基序，显著提升了基因组学中因果关系的发现能力。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-1101-2025-04-09-648060-v2/fig-001.webp\", \"caption\": \"Figure 2. Identifying the mechanism behind allelic imbalances in F1 data. a) Attribution map from ISM for a sequence-pair to the log ratio for PU.1 ChIP-seq from DeepAllele. The bottom track shows the effect size (difference between predicted impact of individual alleles) of the individual variants between both sequences. Detectable motifs are framed and names of associated TFs from JASPAR are shown besides the frame (TomTom q<0.05) b) Attribution map from ISM for a sequence-pair to the log ratio from DeepAllele ATAC-seq. The three rows show the same as in a) c) Pie-chart showing the percentage of main variants (i.e. variant with the largest predicted effect) in their associated TF-like motif groups in sequence attributions with trusted log-ratio predictions for PU.1 ChIP-seq data. The TF with the largest total enrichment across motif clusters was assigned to all seqlet clusters that had a significant match to this TF (i.e. q-value < 0.05). TF enrichment was computed as the product of the negative log p-value of a TF and the number of seqlets in a cluster. All clusters assigned to the TF are combined as the TF-like group. d) Pie-chart showing the percentage of main variants in their associated TF-like motif groups in sequences with trusted log-ratio predictions for ATAC-seq data.\", \"page\": 5, \"index\": 1, \"width\": 954, \"height\": 554}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-1101-2025-04-09-648060-v2/fig-002.webp\", \"caption\": \"Figure 3. DeepAllele detects active TF motifs for variants that standard models miss a) Sequence attributions generated with Taylor approximated ISM (TISM) and variant effect sizes for both alleles from DeepAllele and the standard single-input model. Extracted TF motif and the assigned cluster number is added to the sequence attribution. b) Pie-chart showing the motif clusters containing the main variant for DeepAllele and the standard model.\", \"page\": 7, \"index\": 2, \"width\": 946, \"height\": 576}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-1101-2025-04-09-648060-v2/fig-003.webp\", \"caption\": \"Table 1. Details on DeepAllele’s model architecture\", \"page\": 9, \"index\": 3, \"width\": 962, \"height\": 745}]"
+motivation: 现有的等位基因分析方法主要依赖于跨个体的统计关联，难以直接从序列特征预测顺式调控的细微变化。
+method: 开发了名为 DeepAllele 的深度学习序列到功能模型，利用配对的等位基因输入来学习预测调控差异的序列特征。
+result: 在 F1 杂交小鼠免疫细胞中的应用显示，该模型识别出的顺式调控语法在更多基因组区域内与已知生物机制相吻合。
+conclusion: 该框架通过利用遗传变异揭示了功能相关的调控基序，为增强基因组学中的因果发现提供了有效的计算手段。
+---
+
+## 摘要
+测序数据的等位基因特异性定量允许对 DNA 序列变异如何影响顺式基因调控进行因果探究。目前用于因果分析的等位基因特异性测量分析方法依赖于个体间遗传变异与等位基因失衡之间的统计关联。相比之下，我们提出了 DeepAllele，这是一种利用成对等位基因特异性输入的新型深度学习序列到功能模型，旨在学习能够预测等位基因间基因调控细微变化的序列特征。我们的方法适用于具有明确相位（phasing）的数据集，例如 F1 杂交种和其他受控遗传杂交，或 Fiber-seq 中使用的长读长测序技术，在这些技术中，测序读取可以被分配到完整的等位基因序列。我们将该框架应用于 F1 杂交小鼠免疫细胞的等位基因特异性测量，并证明与基准模型相比，该模型额外学习到的顺式调控语法在显著更多的基因组区域中与已知的生物学机制相吻合。总之，我们的工作提供了一个计算框架，利用遗传变异来揭示功能相关的调控基序，从而增强了基因组学中的因果发现。
+
+## Abstract
+Allele-specific quantification of sequencing data allows for a causal investigation of how DNA sequence variations influence cis gene regulation. Current methods for analyzing allele-specific measurements for causal analysis rely on statistical associations between genetic variation across individuals and allelic imbalance. Instead, we propose DeepAllele, a novel deep learning sequence-to-function model using paired allele-specific input, designed to learn sequence features that predict subtle changes in gene regulation between alleles. Our approach is suited for datasets with unambiguous phasing, such as F1 hybrids and other controlled genetic crosses, or long-read sequencing technologies used in Fiber-seq, in which reads can be assigned to complete allele sequences. We apply our framework to allele-specific measurements in immune cells from F1 hybrid mice, and show that the models additionally learned cis-regulatory grammar aligns with known biological mechanisms across a significantly larger number of genomic regions compared to baseline models. In summary, our work presents a computational framework to leverage genetic variation to uncover functionally-relevant regulatory motifs, enhancing causal discovery in genomics.

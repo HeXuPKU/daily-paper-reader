@@ -1,0 +1,1830 @@
+Title: A biobank-scale method for learning modulators of gene-environment interaction underlying human complex traits from multiple environmental exposures
+
+URL Source: https://www.biorxiv.org/content/10.64898/2026.03.13.711725v1.full.pdf
+
+Number of Pages: 17
+
+Markdown Content:
+# A biobank-scale method for learning modulators of 1
+
+# gene-environment interaction underlying human complex traits 2
+
+# from multiple environmental exposures 3
+
+## Zhengtong Liu 1, Arush Ramteke 2, Aakarsh Anand 1, Aditya Gorla 3, Moonseong Jeong 1,4
+
+## and Sriram Sankararaman *1,4,5 
+
+> 5
+> 1
+
+Department of Computer Science, UCLA, Los Angeles, CA, USA 6
+
+> 2
+
+Department of Computer Science, Courant Institute of Mathematical Sciences, NYU, NY, USA. 7
+
+> 3
+
+Bioinformatics Interdepartmental Program, UCLA, Los Angeles, CA, USA 8
+
+> 4
+
+Department of Human Genetics, David Ge !en School of Medicine, UCLA, Los Angeles, CA, USA 9
+
+> 5
+
+Department of Computational Medicine, David Ge !en School of Medicine, UCLA, Los Angeles, CA, USA 10 
+
+> *
+
+Corresponding author: sriram@cs.ucla.edu 11 
+
+Abstract 12 
+
+It is increasingly recognized that genetic e !ects on complex traits and diseases are shaped by en-13 
+
+vironmental context. Biobanks that measure diverse environmental exposures alongside genotypes and 14 
+
+phenotypes at scale enable systematic study of gene-environment (G →E) interactions. Existing ap-15 
+
+proaches, however, are limited in their ability to accurately model polygenic G → E involving many expo-16 
+
+sures across genome-wide genetic variants. It is unclear which exposure combinations are relevant for a 17 
+
+given trait while distinguishing true interactions from environment-dependent heteroskedastic noise. To 18 
+
+address these challenges, we develop E”cient multi-eNvironmental Gene-environment Interaction iNfer-19 
+
+ence Estimator (ENGINE), a supervised variance-component framework that learns an embedding that 20 
+
+combines multiple environmental exposures while jointly estimating additive, G →E, and heteroskedastic 21 
+
+noise components. To enable biobank-scale inference, ENGINE makes a single pass over the genotype 22 
+
+matrix to cache genotype-dependent summaries, then assembles normal-equation components and gra-23 
+
+dients at each iteration. In simulations, ENGINE controls type I error rates, achieves high power, and 24 
+
+accurately recovers the environmental embedding while remaining e ”cient at biobank-scale. Applied to 25 
+
+five complex traits paired with lifestyle exposures in N = 291 ,273 unrelated white British individuals 26 
+
+and M = 454 ,207 common SNPs (MAF > 0.01) from the UK Biobank, ENGINE recovered G →E variance 27 
+
+that was on average 1 .4-fold larger than that captured by a single exposure and 5 .5-fold larger than that 28 
+
+captured by the first principal component of the exposures. 29 
+
+.CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint 1 Introduction 30 
+
+Gene–environment (G →E) interactions—wherein the magnitude and sometimes the direction of a variant’s 31 
+
+e!ect depends on environmental context—are increasingly recognized as important contributors to the genetic 32 
+
+architecture of complex traits [1–5]. Growing empirical evidence for context-dependent allelic e !ects across 33 
+
+environments [6, 7] suggests that explicitly modeling G →E can increase explained variance, help account for 34 
+
+components of missing heritability, and improve risk stratification in predictive models [8–12]. 35 
+
+In practice, the operative “environment” is rarely a single exposure [13–17]. Large biobanks now mea-36 
+
+sure a wide array of exposures that collectively constitute the exposome [18–22]. Within this exposome, 37 
+
+lifestyle and behavioral factors, medication use, and sociodemographic context covary and can jointly mod-38 
+
+ulate genetic e !ects via G →E. For instance, low-density lipoprotein (LDL) levels may reflect interactions 39 
+
+between lipid-related loci and age, while statin use, diet, and physical activity further modify those genetic 40 
+
+influences [8, 23–25]. Modeling such multi-environment modulation requires methods that can accommodate 41 
+
+many environmental variables, retain interpretability at the level of individual environments, and scale to 42 
+
+biobank-sized cohorts. 43 
+
+Polygenic models quantify the genome-wide contribution of G →E by aggregating variant-level interaction 44 
+
+e!ects, thereby o !ering higher power than single-variant approaches when individual e !ects are weak. In par-45 
+
+ticular, variance component or mixed models are well-suited to model aggregate genetic signal, arising from 46 
+
+additive genetic e !ects and from interactions such as those due to G →E, within a single framework [7, 26–29]. 47 
+
+Early variance component approaches for modeling polygenic G →E (e.g., GCTA-G →E [30], MV-GREML [31], 48 
+
+MRNM [26]) enabled inference for interactions with individual environmental exposures. LEMMA [32] mod-49 
+
+els polygenic G →E by learning an environment score—a data-driven combination of exposures–that allows 50 
+
+multiple environments to jointly modulate genetic e !ects. However, because LEMMA does not explicitly 51 
+
+model environment-dependent residual variance, estimates of G →E variance can be biased upward under noise 52 
+
+heterogeneity, leading to inflated false positive rates [8]. MonsterLM [9] scales to biobank-sized datasets and 53 
+
+yields approximately unbiased estimates in many settings; however, its reliance on pruning and partitioning 54 
+
+the genome into relatively weakly correlated blocks (and its focus on common variation) can limit power and 55 
+
+scope for discovering G →E e !ects. GxEMM [7] and GENIE [8] incorporate context-specific heteroskedastic-56 
+
+ity within a variance-components framework; GENIE is designed to scale to biobank-sized cohorts, whereas 57 
+
+GxEMM becomes computationally infeasible for large samples. Despite these advances, approaches to learn 58 
+
+which combinations of environmental exposures contribute to polygenic G →E on a biobank-scale remain 59 
+
+limited. 60 
+
+Here we present ENGINE, E!cient multi-eNvironmental Gene-environment Interaction iNference Esti-61 
+
+mator , a method that jointly learns the combination of environments that interact with polygenic e !ects 62 
+
+for a given trait, estimates the contribution of each environment to the interaction signal while produc-63 
+
+ing calibrated variance-component estimates for additive e !ects, G →E, and noise by explicitly modeling 64 
+
+environment-dependent heteroskedasticity (Figure 1). ENGINE scales to biobank-sized cohorts by caching 65 
+
+genotype-dependent intermediate quantities so that subsequent model updates avoid repeated full passes 66 
+
+over the genotype matrix. In simulations, ENGINE is well calibrated and accurately estimates the variance 67 
+
+components and the environmental embedding. Applied to five complex traits with lifestyle exposures in 68 
+
+UK Biobank, ENGINE detects substantially larger G →E signal than analyses that consider environments 69 
+
+one at a time or replace them with unsupervised embeddings. Together, ENGINE provides a principled 70 
+
+and tractable path to disentangling how multiple environments jointly modulate genetic e !ects on complex 71 
+
+traits. 72 
+
+# 2 Methods 73 
+
+## 2.1 Estimation of variance components in G →E linear mixed model 74 
+
+Let X ↑ RN →M denote standardized genotypes of M variants on N individuals, y ↑ RN a standardized 75 
+
+phenotype, and E ↑ RN →L a matrix of L measured environments (columns are centered and scaled). We 76 
+
+compress the L environments into a one–dimensional vector e = Eω, with interpretable, unit–norm weights 77 
+
+ω ↑ RL that quantify each environment’s contribution to the interaction signal. Intuitively, e collects 78 
+
+1
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint
+
+B
+
+A
+
+C
+
+Figure 1: Overview of ENGINE. A. Pipeline. Inputs are a genotype matrix, multiple environments, and a phenotype. ENGINE learns an interpretable environmental embedding e and reports point estimates and standard errors for the additive ( ω2 
+
+> g
+
+), interaction ( ω2
+
+> g→e
+
+), and noise-by-environment ( ω2
+
+> n→e
+
+) variance components. For e ”ciency, genotype-dependent summaries ( Ug→e) are cached in a single streaming pass and reused across iterations. B. Separating heteroskedastic noise from G →E. With two environments, the combination that maximizes N →E variance can di !er from the one that maximizes G →E variance; ENGINE therefore learns weights that maximize G →E while controlling N →E. C. Interpretable environment weights. The entries of environmental weights ( ω) quantify the contribution of each environmental exposure to the embedding and to the captured G →E signal. heterogeneous environmental e !ects into a single direction along which genetic e !ects may be modulated. 79 
+
+We model the phenotype y with a linear mixed model comprising four components: an additive genetic 80 
+
+e!ect, a G →E interaction that varies with the environment embedding e, a noise-by-environment (N →E) 81 
+
+term that captures heteroskedasticity aligned with e, and a residual term [29, 28, 33, 7]: 82 
+
+y = Xε + (X ↓ e)ϑ + (I ↓ e)ϖ + ϱ. (1) Here, ↓ denotes the Hadamard (elementwise) product with row-wise broadcasting across SNP columns, so 83 
+
+that X ↓ e = diag (e) X and I ↓ e = diag (e); equivalently, we scale each individual genotype and residual 84 
+
+noise by their environmental score. The N →E component (context-specific noise) captures heteroskedastic 85 
+
+noise across individuals exposed to di !erent environments. Distinguishing this component from the G →E86 
+
+component is crucial for controlling false positives, and such environment-dependent heteroskedasticity is 87 
+
+widely observed for complex traits [8]. 88 
+
+We assume independent, mean-zero random e !ects with variances that define the components of interest: 89 
+
+ε ↔ D
+
+(
+
+0, ω2 
+
+> g
+> M
+
+IM
+
+)
+
+, ϑ ↔ D
+
+(
+
+0, ω2 
+
+> g→e
+> M
+
+IM
+
+)
+
+, ϖ ↔ D(0, ω2
+
+> n→e
+
+IN
+
+) , ϱ ↔ D(0, ω2
+
+> n
+
+IN
+
+) ,
+
+where D can be any zero-mean distribution with the stated second moments (this moment assumption makes 90 
+
+the method-of-moments robust to non-Gaussian e !ect distributions). The M-vectors ε and ϑ represent the 91 
+
+main additive e !ects and the G →E interaction e !ects along e respectively, while ϖ captures environment-92 
+
+modulated noise (Table S1). Under E[y] = 0, the population covariance decomposes additively into kernels: 93 
+
+Cov[ y] = ω2 
+
+> g
+
+Kg + ω2 
+
+> g→e
+
+Kg→e(ω) + ω2 
+
+> n→e
+
+Kn→e(ω) + ω2 
+
+> n
+
+IN ,
+
+where 94 
+
+Kg = 1 
+
+> M
+
+XX ↑, Kg→e(ω) = 1 
+
+> M
+
+(X ↓ e)( X ↓ e)↑, Kn→e(ω) = diag (e)2 .
+
+2
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint
+
+Here Kg is the genetic relatedness matrix (GRM), Kg→e is the GRM after scaling each individual’s genotypes 95 
+
+by ei, thereby up-weighting pairs of individuals who are both environmentally exposed, and Kn→e is diagonal 96 
+
+with entries e2 
+
+> i
+
+, modeling environment-dependent variance inflation. 97 
+
+Given fixed ω, we first estimate the variance components ς2 = {ω2 
+
+> g
+
+, ω2
+
+> g→e
+
+, ω2
+
+> n→e
+
+, ω2
+
+> n
+
+} using the method-98 
+
+of-moments (MoM), matching the model covariance to the empirical covariance yy ↑ via a Frobenius-norm 99 
+
+objective: 100 
+
+L(ω, ς2) = 
+
+∥∥∥ yy ↑ ↗ ω2 
+
+> g
+
+Kg ↗ ω2
+
+> g→e
+
+Kg→e(ω) ↗ ω2
+
+> n→e
+
+Kn→e(ω) ↗ ω2
+
+> n
+
+IN
+
+∥∥∥2
+
+> F
+
+. (2) Because Eq. (2) is quadratic in ς2, the minimizer ̂ ς2 solves the linear system Â ς2 = b, where A ↑101 
+
+R4→4, b ↑ R4 are defined: 102 
+
+Ars = tr [ Kr Ks] , br = y↑Kr y, where Kr , Ks ↑ {Kg , Kg→e(ω), Kn→e(ω), IN }
+
+We attach asymptotic standard errors to ̂ ς2 = A↓1b via the delta method: 103 
+
+Cov (̂ ς2) = A↓1 Cov( b) A↓1, Cov( b)rs = 2 tr [ Kr !y Ks !y ] ,
+
+with !y = Cov[ y]. In practice, we plug in ˜!y = ∑
+
+> l
+
+̂ ω2 
+
+> l
+
+Kl and evaluate the trace contractions e ”ciently 104 
+
+using probe sketches (see Section 2.3). Because A is small and reused, SE computation adds negligible 105 
+
+overhead once the necessary contractions are cached. 106 
+
+## 2.2 Optimization of the environment embedding 107 
+
+Next, we alternate to optimize ω for fixed variance components ς2, such that the learned embedding 108 
+
+e = Eω concentrates G →E signal while accounting for N →E heteroskedasticity. In particular, we se-109 
+
+lect a single environmental embedding such that the induced kernel Kg→e(ω) aligns with phenotype co-110 
+
+variance while penalizing variance inflation captured by Kn→e(ω). For notational simplicity, we write 111 
+
+Kg→e = Kg→e(ω), Kn→e = Kn→e(ω). Based on the objective in Eq. (2), the terms depending on ω112 
+
+simplify to (see Notes S1): 113 
+
+L(ω) = ↗ 2ω2 
+
+> g→e
+
+y↑Kg→ey + ( ω2
+
+> g→e
+
+)2 tr [K2
+
+> g→e
+
+] + 2 ω2 
+
+> g
+
+ω2 
+
+> g→e
+
+tr [ Kg Kg→e] ↗ 2ω2 
+
+> n→e
+
+y↑Kn→ey
+
++ ( ω2
+
+> n→e
+
+)2 tr [K2
+
+> n→e
+
+] + 2 ω2 
+
+> g
+
+ω2 
+
+> n→e
+
+tr [ Kg Kn→e] + 2 ω2
+
+> g→e
+
+ω2 
+
+> n→e
+
+tr [ Kg→eKn→e] (3) The Euclidean gradient ↘ωL(ω) is then derived as: 114 
+
+↘ωL(ω) = ↗ 4ω2
+
+> g→e
+
+Gy ω + g23 ↗ 4ω2
+
+> n→e
+
+E↑((y ↓ y) ↓ e)
+
++ 4 ω4
+
+> n→e
+
+E↑(e↔3) + 4 ω2 
+
+> g
+
+ω2
+
+> n→e
+
+E↑(sg ↓ e) + 8 ω2
+
+> g→e
+
+ω2
+
+> n→e
+
+E↑(sg ↓ e↔3),
+
+where 115 
+
+Gy = 1
+
+M
+
+(X↑(E ↓ y))↑(X↑(E ↓ y)), GE = 1
+
+M
+
+(X↑E)↑(X↑E), sg = diag (Kg ) ,
+
+and e↔3 is the element-wise cube of e (Table S1). The vector g23 aggregates the trace-gradient contributions 116 
+
+from the second and third terms; see Section 2.3 for e ”cient evaluation. 117 
+
+Note that there is a scale non-identifiability between ω and ω2
+
+> g→e
+
+: scaling ω rescales Kg→e and can be 118 
+
+o!set by ω2
+
+> g→e
+
+. We therefore fix ≃ω≃2 = 1 and optimize on the unit sphere SL↓1. Defining g = 1 
+
+> N
+
+↘ωL(ω), 119 
+
+we project to the tangent space at ω via g↑ = g ↗ (ω↑g) ω and take a capped geodesic step: 120 
+
+ε = min {ϑ ≃g↑≃2, εmax 
+
+}, ωnew = ω cos ε ↗ g↑
+
+≃g↑≃2
+
+sin ε,
+
+where εmax is the maximum allowed step size. This exactly preserves unit norm and caps the per-iteration 121 
+
+rotation, stabilizing progress when gradients are large. In practice, our proposed scheme of alternating (i) 122 
+
+solving the 4 →4 MoM system for ̂ ς2 at the current ω and (ii) taking one or a few geodesic steps on ω123 
+
+converges quickly in our experiments. 124 
+
+3
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint
+
+## 2.3 E!cient learning via streaming and pre-computation 125 
+
+The primary computational challenge is that both solving for ̂ ς2 and ω-gradient require repeated contractions 126 
+
+with genotype-derived kernels. Na¨ ıvely rebuilding genotype-based quantities at each iteration is prohibitively 127 
+
+expensive at biobank scale. Instead, we perform a single streamed pass over the genotype matrix X to cache 128 
+
+probe sketches that su ”ce for all subsequent evaluations, thereby decoupling per-iteration cost from the 129 
+
+number of SNPs M .130 
+
+We employ Hutchinson’s trace estimator [34], using B ⇐ M independent standard-normal probe vectors 131 
+
+collected as the rows of W ↑ RB→N . Rather than forming the kernel matrices, we multiply each target matrix 132 
+
+by the random probes to obtain compact sketches. Traces are approximated by the average Frobenius inner 133 
+
+product of the corresponding sketches; accordingly, we compute kernel sketches U r = Kr W ↑ so that the 134 
+
+pairwise kernel trace tr [ Kr Ks] follows from 1 
+
+> B
+
+⇒U r , U s⇑F . For the additive kernel, U g is fixed and computed 135 
+
+once. Meanwhile, the context-specific kernel Kg→e depends on ω only through e = Eω and admits a linear 136 
+
+decomposition over environments. Let Zε = X ↓ E:,ε be the per-environment modulated genotype matrix. 137 
+
+During the single streamed pass over SNP blocks, we compute and cache pairwise probe sketches 138 
+
+U g→e[ϖ, k ] = 
+
+
+
+1
+
+M
+
+(ZεZ↑ 
+
+> k
+
++ ZkZ↑
+
+> ε
+
+)W ↑, ϖ < k, 
+
+1
+
+M ZεZ↑ 
+
+> ε
+
+W ↑, ϖ = k, 
+
+so that for any ω we can assemble 139 
+
+U g→e(ω) = 
+
+> ε↗k
+
+ϱεϱk U g→e[ϖ, k ].
+
+Then, both trace and cross-trace terms involving Kg→e may be computed as: 140 
+
+tr [K2
+
+> g→e
+
+] ⇓ 1
+
+> B
+
+∥∥U g→e(ω)∥∥2 
+
+> F
+
+, tr [ Kg Kg→e] ⇓ 1
+
+> B
+
+U g , U g→e(ω) 
+
+> F
+
+.
+
+To obtain the trace-gradient g23 without forming a L → L matrix, we first compute scalar contractions 141 
+
+s(1)  
+
+> εk
+
+= 1
+
+> B
+
+U g→e(ω), U g→e[ϖ, k ] 
+
+> F
+
+, s(2)  
+
+> εk
+
+= 1
+
+> B
+
+U g , U g→e[ϖ, k ]
+
+> F
+
+Next, we define the upper-triangular matrix C ↑ RL→L as: 142 
+
+Clk =
+
+
+
+2 ω4 
+
+> g→e
+
+s(1)  
+
+> εk
+
++ 2 ω2 
+
+> g
+
+ω2 
+
+> g→e
+
+s(2)  
+
+> εk
+
+, ϖ ⇔ k
+
+0 , l > k 
+
+Then, we derive g23 = ( C+C↑)ω. In practice, we realize g23 via two indexed scatter-adds over the 143 
+
+P = L(L+1) /2 pairs [35–37], avoiding materializing C while injecting ω into all trace terms at a cost that 144 
+
+is independent of M .145 
+
+Finally, to bound memory, we stream the genotype matrix in SNP blocks, updating all sketches and 146 
+
+quadratic forms in-place and discarding block-level temporaries. After this single pass, subsequent iterations 147 
+
+reuse the cached quantities: each MoM solves (the 4 →4 system) and each ω-gradient evaluation runs in time 148 
+
+independent of M , depending only on the number of individuals N , the number of environments L, and the 149 
+
+number of random probes B. Therefore, streaming and pre-computation provide biobank-scale e ”ciency 150 
+
+without sacrificing the statistical structure of the model. 151 
+
+## 2.4 Regularized cross-fitting for G ×E152 
+
+As outlined in Algorithm 1, our procedure alternates between estimating the variance components at the 153 
+
+current environment embedding and updating the environment weights to decrease the loss in Eq. (3). While 154 
+
+computationally convenient, reusing the same sample for both steps couples learning and evaluation and can 155 
+
+introduce target leakage, with the environment weights adapting to noise in the phenotype vector. In the 156 
+
+presence of a nonzero genetic main e !ect ω2 
+
+> g
+
+or environment-specific noise ω2
+
+> n→e
+
+, the optimizer may synthesize 157 
+
+4
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint
+
+artificial G →E by borrowing signal from the main e !ect or from heteroskedasticity. To address overfitting, 158 
+
+we introduce variant-level cross-fitting and an ϖ1-regularized update on the sphere to break this coupling 159 
+
+and stabilize the embedding. 160 
+
+To decouple learning and evaluation, we use cross-fitting over variants. We split M SNPs into two disjoint 161 
+
+halves (e.g., by chromosome or LD blocks, balancing MAF/LD), obtaining matrices X(1) , X(2) ↑ RN →M/ 2.162 
+
+Using only X(1) , we make a single streamed pass to build the required sketches and optimize a unit-norm 163 
+
+embedding ω(1) . Freezing this embedding, we then use only X(2) to assemble A(2) and b(2) , solve for ̂ ς2(2) ,164 
+
+and compute standard errors. We then swap roles: learn ω(2) on X(2) , and evaluate ̂ ς2(1) on X(1) . This 165 
+
+separation prevents ω from capturing noise in the same variants used for component estimation. We derive 166 
+
+the final embedding as the average of the two held-out solutions followed by renormalization to unit norm, 167 
+
+and evaluate variance components on the full dataset to capture variance explained by all SNPs. 168 
+
+Cross-fitting removes the main leakage path, but dense embeddings can still overfit by combining many 169 
+
+weak, correlated environments. To constrain model complexity and improve interpretability, we add ϖ1170 
+
+regularization on the sphere, solving 171 
+
+min  
+
+> ω
+
+L(ω) + ς≃ω≃1 subject to ≃ω≃2 = 1 .
+
+The unit-norm constraint fixes the scale ambiguity with ω2
+
+> g→e
+
+, and the ϖ1 penalty encourages a sparse set 172 
+
+of nonzero weights. This reduces e !ective degrees of freedom, improves robustness under collinearity, and 173 
+
+concentrates the embedding on environments with strongest support. 174 
+
+We implement the update in each coordinate via soft-thresholding followed by renormalization, 175 
+
+˜ωi ↖ sign( ωi) max (|ωi| ↗ φ ς , 0), ω ↖ ˜ω/≃ ˜ω≃2,
+
+where φ is the step length along the geodesic move. This “soft-threshold on the sphere” integrates directly 176 
+
+into the existing update with negligible overhead. Because a fixed, strong penalty can bias the solution, we 177 
+
+apply light annealing: start with large ς = ς0 to obtain a stable coarse embedding, then decay ς toward a 178 
+
+lower bound ςmin across outer alternations. 179 
+
+Together, these changes control overfitting. Cross-fitting separates learning ω from evaluating ς2, block-180 
+
+ing gains that arise from relabeling noise as signal. The ϖ1 term reduces the tendency to inflate ≃Kg→e≃F or 181 
+
+mimic Kg without improving fit, and annealing allows the procedure to begin conservatively and refine as 182 
+
+evidence accumulates. As a result, the embedding is more stable across resamples and interaction estimates 183 
+
+are better calibrated under the null without sacrificing ENGINE’s one-pass, streamed MoM e ”ciency. 184 
+
+# 3 Results 185 
+
+## 3.1 Calibration and power 186 
+
+We benchmarked ENGINE against the most relevant alternative, LEMMA, in terms of the calibration under 187 
+
+the null of no G →E. We simulated phenotypes for N = 10 ,000 unrelated UK Biobank (UKB) participants of 188 
+
+White British ancestry using M = 10 ,000 SNPs genotyped on the UKB array (see Notes S4). We used five 189 
+
+lifestyle environments (Townsend deprivation index, sleep duration, age, smoking status, alcohol frequency), 190 
+
+mixing categorical and quantitative measures to assess robustness to di !erent value types. Phenotypes 191 
+
+followed Model 1 with ω2 
+
+> g
+
+= 0 .1 and an environmental score Eω, where ω ↑ R5 was simulated from a 192 
+
+standard normal distribution. We varied the heteroskedastic noise ω2 
+
+> n→e
+
+↑ {0, 0.02 , 0.04 , 0.06 , 0.08 } while 193 
+
+fixing ω2 
+
+> g→e
+
+= 0, and ran 200 replicates per setting, comparing ENGINE with LEMMA. When ω2 
+
+> n→e
+
+= 0, 194 
+
+ENGINE produced ̂ ω2 
+
+> g→e
+
+centered at zero, whereas LEMMA exhibited a slight positive bias (mean ⇓ 0.010 195 
+
+across replicates; Figure 2A). One plausible source is data reuse: the environmental score is learned and 196 
+
+G→E heritability is estimated on the same data, inducing overfitting (also observed for ENGINE without 197 
+
+regularization; see Section 3.3). As ω2 
+
+> n→e
+
+increased, ENGINE remained unbiased (overall mean across all 198 
+
+settings ↗8.8 → 10 ↓6), while the bias associated with LEMMA increased with heteroskedasticity. Type-I 199 
+
+error was well calibrated for ENGINE: at significance threshold p < 0.05, the observed rejection proportions 200 
+
+lay within their 95% binomial intervals at all ω2 
+
+> n→e
+
+levels. In contrast, LEMMA showed inflated rejection 201 
+
+rates both with and without heteroskedastic noise (Figure 2B). 202 
+
+5    
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint    
+
+WUXH͗   
+
+> QH
+> ಜ
+> 
+> 
+> 
+> 
+> (VWLPDWHG͗ 
+> J  H
+
+$    
+
+>    
+
+͗  
+
+> 
+> QH
+> 
+> 
+> 
+> 
+> 
+> )DOVHSRVLWLYHUDWH
+
+% 
+
+> (1*,1( /(00$
+
+Figure 2: Calibration under the null across varying levels of heteroskedastic noise. We simulated phenotypes from N = 10 ,000 individuals and M = 10 ,000 SNPs with five lifestyle environments under the null of no G →E variance ( ω2 
+
+> g→e
+
+= 0), varying noise-by-environment variance ω2 
+
+> n→e
+
+↑ {0, 0.02 , 0.04 , 0.06 , 0.08 }
+
+across 200 replicates. A. Estimated ω2
+
+> g→e
+
+. Boxplots across 200 replicates; ENGINE is marked in blue and LEMMA in orange. B. Type I error. False-positive rate at significance level 0 .05 with 95% binomial confidence intervals. We next evaluated the statistical power of ENGINE when G →E is present. We fixed ω2 
+
+> g
+
+= 0 .3, varied 203 
+
+ω2 
+
+> g→e
+
+↑ {0.05 , 0.10 , 0.15 , 0.20 , 0.25 }, and set ω2 
+
+> n→e
+
+= ω2
+
+> g→e
+
+. ENGINE yielded accurate variance-component 204 
+
+estimates: ̂ ω2 
+
+> g
+
+was centered on the truth across all settings, and ̂ ω2 
+
+> g→e
+
+tracked the simulated values closely 205 
+
+as ω2 
+
+> g→e
+
+increased (Figure 3A). Power, calculated as the proportion of p < 0.05 rejections, approached 206 
+
+1 by ω2 
+
+> g→e
+
+⇓ 0.10 (Figure 3B). We then assessed recovery of the environment embedding using a sign-207 
+
+invariant metric: the squared correlation r2 between the predicted and true embeddings, which can be 208 
+
+interpreted as the fraction of variation in the true embedding explained by the learned embedding. ENGINE 209 
+
+achieved r2 > 0.9 when ω2 
+
+> g→e
+
+↙ 0.15 (Fig. 3C). We also confirmed in simulations that the number of random 210 
+
+probe vectors B does not a !ect the accuracy of ENGINE in prediction (Figure S1). We used B = 100 211 
+
+by default in all experiments. Together, these results indicate that ENGINE is well calibrated under the 212 
+
+null, powerful when interactions are present, and accurately recovers both variance components and the 213 
+
+environment embedding. 214 
+
+## 3.2 E!ciency and scaling 215 
+
+We benchmarked ENGINE against LEMMA and the exact-per-update ENGINE baseline, which recomputes 216 
+
+the exact traces and rebuilds the normal equations at every embedding update. Recall that the e ”cient 217 
+
+implementation of ENGINE makes a single streaming O(N M ) pass over the genotype matrix to cache 218 
+
+sketches of GRMs; subsequent embedding updates reuse these caches without scanning the raw genotypes. 219 
+
+For the experiments below, we used five lifestyle environments by default. With SNPs fixed at M = 10 ,000, 220 
+
+number of environmental exposures at L = 5 and individuals varied N ↑ {1, 3, 5, 10 , 30 , 50 , 100 } k, ENGINE 221 
+
+is highly scalable: while LEMMA is slightly faster for smaller sample sizes when the number of individuals 222 
+
+is less than 10 , 000, its runtime grows more steeply so that for sample sizes of N = 100 , 000 its runtime is 223 
+
+↔ 5→ that of ENGINE (Figure 4A). The exact-per-update ENGINE baseline is computationally prohibitive, 224 
+
+taking ↔ 900 s at N = 1 , 000 ( ↔ 45 → slower than ENGINE). In a second experiment, with individuals fixed 225 
+
+at N = 10 ,000 and SNPs varied M ↑ {1, 3, 5, 10 , 30 , 50 , 100 } k, ENGINE is marginally slower at the smallest 226 
+
+M but becomes faster once the number of SNPs reaches 10 , 000; the exact-per-update ENGINE baseline 227 
+
+remains infeasible as its per-iteration cost grows with M (Figure 4B). In an additional experiment with both 228 
+
+individuals and SNPs fixed at N = M = 10 , 000, ENGINE exhibits similar runtime scaling in the number 229 
+
+of environments as LEMMA (Figure S2). We further report that ENGINE fits the full UK Biobank array 230 
+
+dataset ( M = 454 ,207 variants; N = 291 ,273 individuals; L = 5 environments) in approximately seven hours 231 
+
+on a single CPU core. 232 
+
+6
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint
+
+Figure 3: Power and estimation accuracy as a function of interaction strength. We simulated phenotypes from N = 10 ,000 individuals and M = 10 ,000 SNPs with five lifestyle environments, setting 
+
+ω2 
+
+> g
+
+= 0 .3, ω2 
+
+> g→e
+
+↑ {0.05 , 0.10 , 0.15 , 0.20 , 0.25 }, and ω2 
+
+> n→e
+
+= ω2 
+
+> g→e
+
+(200 replicates per setting). A. Variance estimates. Boxplots of ̂ ω2 
+
+> g
+
+are in green and ̂ ω2 
+
+> g→e
+
+in blue across replicates; the horizontal dashed line marks zero. B. Power. Rejection rate at significance level 0 .05 with 95% binomial confidence intervals. C. Embedding accuracy. Squared correlation between the learned environmental embedding and the ground truth. 
+
+## 3.3 Ablation studies 233 
+
+We evaluated how cross-fitting (A/B holdout) and ϖ1 penalization of the environment embedding a !ect false-234 
+
+positive control under the no G →E calibration scenarios, varying heterogeneous noise ω2 
+
+> n→e
+
+and running 100 235 
+
+replicates per setting at significance level 0 .05; unless noted, the regularization parameter was ς = 5 → 10 ↓3.236 
+
+Without either safeguard, the procedure was severely inflated. At ω2 
+
+> n→e
+
+= 0, the false positive rate (FPR) 237 
+
+was 0 .48. As noise heterogeneity increased, inflation lessened but remained substantial (FPR = 0 .22 at 238 
+
+ω2 
+
+> n→e
+
+= 0 .08). Each safeguard alone reduced inflation: cross-fitting was most e !ective when ω2 
+
+> n→e
+
+was larger, 239 
+
+with FPR decreasing from 0 .11 to 0 .06 as ω2 
+
+> n→e
+
+rose from 0 .02 to 0 .08, whereas ϖ1 regularization helped most 240 
+
+when noise heterogeneity was absent or small (FPR ⇓ 0.09 at ω2 
+
+> n→e
+
+= 0 .02) and was slightly less protective 241 
+
+as ω2 
+
+> n→e
+
+grew (rising to ⇓ 0.11 at 0 .08). Used together, the two mechanisms restored near-nominal behavior, 242 
+
+with FPR ⇓ 0.05 at ω2 
+
+> n→e
+
+= 0 and mean FPR across settings 0 .06 (95% binomial CI [0 .01 , 0.11]) (Figure 5). 243 
+
+These results indicate that cross-fitting and ϖ1 regularization together enable calibrated false positive rates 244 
+
+across the range of tested noise heteroskedasticity levels. 245 
+
+## 3.4 G→E associated with lifestyle factors in the UK Biobank 246 
+
+Lifestyle context can modulate the genetic architecture of complex traits, with prior studies reporting in-247 
+
+teractions across socioeconomic status, physical activity, sleep, smoking, alcohol intake, and diet for body 248 
+
+mass index (BMI) [38–45]. From 42 derived environments including dietary and non-dietary measures and 249 
+
+their interactions with sex and age (Notes S3; Table S2), we pre-screened and retained ten that each showed 250 
+
+significant ω2 
+
+> g→e
+
+with BMI in UK Biobank, after adjusting for sex, age, and the top 20 genetic principal com-251 
+
+ponents. Applying ENGINE to these ten environments uncovered a substantial, interpretable lifestyle G →E252 
+
+component (Table S3). Using common array-genotyped SNPs with MAF > 0.01 ( M = 454 ,207), we trained 253 
+
+the environmental embedding on N = 50 ,000 individuals and then estimated variance components on the full 254 
+
+set of N = 291 ,273 unrelated White British participants. The learned embedding yielded ω2 
+
+> g→e
+
+= 2 .34 → 10 ↓2
+
+> 255
+
+(SE: 4 .2 → 10 ↓3), exceeding the interaction variance attributable to any single exposure (Figure 6A). 256 
+
+We then compared the learned embedding to unsupervised baselines constructed as the top principal 257 
+
+component (PC) from (i) the selected ten exposures and (ii) the full set of 42 derived environments. ENGINE 258 
+
+produced both a larger ω2 
+
+> g→e
+
+and stronger statistical evidence than either PC baseline: the estimate from 259 
+
+the learned embedding was around 4 → that of the top PC from the ten exposures ( ω2 
+
+> g→e
+
+= 3 .88 → 10 ↓3)260 
+
+and substantially larger than the top PC from all 42 environments ( ω2 
+
+> g→e
+
+= 1 .35 → 10 ↓3; Figure 7A). A 261 
+
+paired comparison over leave-one-out jackknife blocks (100 blocks) confirmed that blockwise estimates of 262 
+
+7      
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint N N N N N N N
+
+1XPEHURILQGLYLGXDOV 1 
+
+> 
+> 
+> 
+> 
+> 
+> 5XQWLPH V
+
+$      
+
+> N N N N N N N
+
+1XPEHURI613V 0 
+
+%  
+
+> (1*,1( /(00$ (1*,1( H[DFWSHUXSGDWH
+
+Figure 4: Runtime benchmarks against alternative approaches. Points show mean wall-clock runtime over 200 replicates; error bars denote one standard deviation. Dotted curves are power-law fits over the observed range, and open markers at 100 k indicate values obtained by extrapolating these fits. Both axes are on a logarithmic scale. A. Scaling with sample size. The number of SNPs is fixed at M = 10 ,000 and we vary the number of individuals N ↑ {1, 3, 5, 10 , 30 , 50 , 100 } k. The runtime for the exact-per-update ENGINE baseline at N = 100 k is extrapolated because the method did not complete within the 8-hour wall-clock limit under 30 GB of memory. B. Scaling with SNP count. The number of individuals is fixed at N = 10 ,000 and we vary the number of SNPs M ↑ {1, 3, 5, 10 , 30 , 50 , 100 } k. The runtime for the exact-per-update ENGINE baseline at M = 100 k is likewise extrapolated. All benchmarks were run on a single core of an Intel Xeon Gold 6140 CPU (36 cores, 2.30 GHz) with a maximum of 30 GB memory and an 8-hour wall-clock limit per replicate. 
+
+ω2 
+
+> g→e
+
+were consistently higher for the learned embedding than for the top PC of the ten exposures (one-sided 263 
+
+p = 6 .62 → 10 ↓15 ; see Notes S2). Targeting the interaction structure directly thus yields measurable gains 264 
+
+over unsupervised projections that need not align with the G →E signal. Finally, the learned embedding also 265 
+
+exceeded the strongest single-environment signal, with ω2 
+
+> g→e
+
+significantly larger than the maximum across 266 
+
+individual environments (jackknife p = 2 .67 → 10 ↓6). 267 
+
+The learned weights ̂ ω provide additional interpretability. Smoking-related measures (and their interac-268 
+
+tions) received the largest magnitudes, while nontrivial weight was also assigned to other features (e.g., time 269 
+
+spent watching TV and TDI-related measures), supporting a di !use architecture in which many exposures 270 
+
+contribute modestly to the overall G →E component (Figure 6B). This pattern aligns with prior evidence 271 
+
+that lifestyle factors collectively shape BMI’s genetic e !ects [17, 32]. 272 
+
+In addition to BMI, we extended our lifestyle-exposure analysis to four traits—basal metabolic rate, 273 
+
+standing height, LDL cholesterol (LDL-C) direct, and gamma glutamyltransferase (GGT). For all five traits, 274 
+
+after residualizing each trait on fixed-e !ect covariates (basal metabolic rate additionally adjusted for BMI), 275 
+
+the learned embedding yielded a significantly larger estimate of ω2 
+
+> g→e
+
+than the top PC of the same envi-276 
+
+ronments (jackknife p < 0.05 /(42 → 5), Bonferroni-corrected across exposures and traits). To quantify the 277 
+
+magnitude of G →E relative to additive e !ects, we computed rg→e = ω2
+
+> g→e
+
+/ω2 
+
+> g
+
+on the full dataset; across 278 
+
+traits, this ratio ranged from 2 .47% for height to 10 .25% for LDL-C levels (Figure 7B). Within the con-279 
+
+text of lifestyle G →E, these results indicate that height has a largely additive genetic architecture, whereas 280 
+
+lifestyle exposures substantially modulate the genetic architecture of LDL-C levels [8, 31, 46–48]. Compar-281 
+
+isons with the single environment that attains the largest ω2 
+
+> g→e
+
+estimate show that the learned embedding 282 
+
+captures additional G →E signal for height and GGT, while marginally for LDL-C direct and basal metabolic 283 
+
+rate (Figure 7A; Figure S3). These trait-specific di !erences indicate that not all traits exhibit substantial 284 
+
+additional G →E beyond the contribution of the single most interacting environment. 285 
+
+8
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint
+
+Figure 5: Ablation of cross-fitting (CV) and ϖ1 regularization on false-positive control. False positive rate under no true G →E as a function of heterogeneous noise ω2
+
+> n→e
+
+. Curves compare ENGINE with both safeguards (CV+ ϖ1), without CV, without ϖ1, and with neither. The false postive rate is calculated as P(rejection at p < 0.05) across 100 replicates; error bars show 95% binomial CIs; the dashed line marks the significance level 0 .05 ( ϖ1 penalty ς = 5 → 10 ↓3). 
+
+Figure 6: Lifestyle G →E for BMI: single environments vs. learned embedding. A. Single-exposure estimates. Estimates of ω2 
+
+> g→e
+
+for each selected environmental exposure, with error bars in-dicating the estimated standard errors; the dashed vertical line marks the learned embedding estimate (ω2 
+
+> g→e
+
+= 2 .34 → 10 ↓2). B. Learned embedding weights. The magnitude of learned embedding weights for the same features. 
+
+# 4 Discussion 286 
+
+We present ENGINE, a scalable multi-environment G →E estimator that learns a one-dimensional environ-287 
+
+mental embedding to concentrate interaction signal while explicitly modeling context-dependent noise. The 288 
+
+central computational idea is to precompute genotype-dependent summaries and cache them, so each iter-289 
+
+ation can form gradients and update variance components without repeated passes over the full genotype 290 
+
+matrix. This design makes training practical at biobank scale. Methodologically, cross-fitting and ϖ1 regu-291 
+
+larization reduce leakage from additive e !ects and noise-by-environment components, improving calibration 292 
+
+while retaining strong power under heterogeneous noise. 293 
+
+Interpreting the learned embedding requires care. Because the interaction term is bilinear, optimiza-294 
+
+tion over the environment weights is nonconvex and may converge to di !erent local optima depending on 295 
+
+initialization. Nevertheless, we found that ENGINE yielded generally consistent embeddings and variance-296 
+
+component estimates across random seeds (Figure S4). In practice, stability can be improved by imposing 297 
+
+mild structure—for example, constraining weights to be nonnegative after preprocessing and using multiple 298 
+
+random starts to report a consensus embedding when feasible. We also note that the embedding is trained 299 
+
+in the European-ancestry cohort; transfer to other populations depends on the degree to which causal vari-300 
+
+9
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint
+
+Figure 7: Lifestyle G →E across traits. A. Learned embedding vs. baselines. Estimates of ω2
+
+> g→e
+
+across traits (basal metabolic rate, height, BMI, LDL-C direct, GGT) for four approaches: the learned environmental embedding (blue), the best single environment (“Top Env”, pink), the top principal component computed from the selected environments (brown), and the top principal component from all environments (purple). Points show estimates; horizontal bars denote the standard errors. B. G →E proportion of additive variance. Estimates of the ratio rg→e = ω2
+
+> g→e
+
+/ω2 
+
+> g
+
+for the learned embedding across traits, with error bars indicating the estimated standard errors. ants and G →E architectures are shared across ancestries. Finally, we estimate variance components via 301 
+
+the method of moments. While potentially less statistically e ”cient than restricted maximum likelihood 302 
+
+(REML) under particular assumptions [49], the method-of-moments approach is substantially faster and 303 
+
+integrates naturally with cached summaries [50, 51]. 304 
+
+Several directions could broaden applicability and robustness. First, cache size currently scales as O(L2)305 
+
+in the number of exposures L, which may be memory-limiting for hundreds to thousands of environments. A 306 
+
+practical remedy is to compress storage using anchored sketches—for example, maintaining a single “anchor” 307 
+
+environment sketch and storing per-exposure projections or scaling factors relative to this anchor—thereby 308 
+
+preserving fast iterations while reducing memory. Second, correlated exposures remain challenging: we 309 
+
+currently standardize and whiten inputs for stability, but learning directly on correlated features would im-310 
+
+prove usability and interpretability. Covariance-aware parameterizations or structured regularization that 311 
+
+explicitly models correlation could replace preprocessing while preserving identifiability. Third, ENGINE 312 
+
+currently learns linear combinations of exposures; incorporating modest nonlinearity (e.g., low-degree fea-313 
+
+ture maps or kernelized expansions with sketching) could capture higher-order environmental e !ects without 314 
+
+compromising scalability. Beyond variance decomposition, the learned embedding can be fixed and reused 315 
+
+in downstream analyses to estimate stabilized SNP-by-embedding interaction e !ects, facilitating locus pri-316 
+
+oritization and biological interpretation. An additional theoretical direction is to establish convergence 317 
+
+guarantees for sketch-based updates and error bounds that quantify approximation accuracy as a function 318 
+
+of the number of random probe vectors. 319 
+
+Overall, ENGINE provides an e ”cient and well-calibrated framework for discovering environmental con-320 
+
+texts that modulate genetic e !ects on complex traits, bridging statistical interpretability with biobank-scale 321 
+
+computation. 322 
+
+# 5 Code availability 323 
+
+The ENGINE software is publicly available at https://github.com/sriramlab/ENGINE .324 
+
+# Acknowledgements 325 
+
+This research was conducted using the UK Biobank Resource under application 33127. We thank the 326 
+
+participants of UK Biobank for making this work possible. This work was funded, in part, by NIH grants 327 
+
+10 
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint
+
+R35GM153406 (Z.L., M.J., A.A., and S.S.), 1R21HG013393 (A.R.) and NSF grant CAREER-1943497 (S.S.). 328 
+
+11 
+
+.CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint Algorithm 1 Alternating optimization for learning the environment embedding 
+
+Require: X (streamed in SNP blocks), E ↑ RN →L, y ↑ RN , step size ϑ, cap εmax , tolerances ↼ang , ↼obj 
+
+Ensure: ̂ ω ↑ SL↓1,̂ ς2 = ( ̂ ω2 
+
+> g
+
+,̂ ω2
+
+> g→e
+
+,̂ ω2
+
+> n→e
+
+,̂ ω2
+
+> n
+
+)
+
+1: Precompute 
+
+Sample rows of W ↑ RB→N from N (0, I)Cache U g = Kg W ↑
+
+Cache 
+
+U g→e[ϖ, k ] = 
+
+
+
+1
+
+M ZεZ↑ 
+
+> ε
+
+W ↑, ϖ = k, 
+
+1
+
+M
+
+(ZεZ↑ 
+
+> k
+
++ ZkZ↑
+
+> ε
+
+)W ↑, ϖ < k, 
+
+ϖ ⇔ k, 
+
+where Zε = X ↓ E:,ε.Cache Gy , GE , sg
+
+2: Pick ω(0) ↑ SL↓1.
+
+3: Initialize L(0) ↖ +∝.
+
+4: for t = 0 , 1, 2 , . . . do 
+
+5: e(t) ↖ Eω(t)
+
+6: 
+
+U g→e(ω(t)) ↖ 
+
+> ε↗k
+
+ϱ(t) 
+
+> ε
+
+ϱ(t) 
+
+> k
+
+U g→e[ϖ, k ].
+
+7: Update ς2 (MoM): build A(ω(t)), b(ω(t)), and solve 
+
+A(ω(t))̂ ς2 ( t) = b(ω(t)).
+
+8: Compute gradient wrt ω:
+
+Assemble g(ω(t)) (including trace terms via scatter-adds) Set g↑ ↖ g ↗ (ω(t)↑g) ω(t)
+
+9: if ≃g↑≃2 = 0 then 
+
+10: break 
+
+11: end if 
+
+12: Update ω:
+
+ε ↖ min {ϑ≃g↑≃2, εmax }
+
+ω(t+1) ↖ ω(t) cos ε ↗ g↑
+
+≃g↑≃2
+
+sin ε
+
+13: Recompute ς2 at the new iterate: 
+
+e(t+1) ↖ Eω(t+1) 
+
+U g→e(ω(t+1) ) ↖ 
+
+> ε<k
+
+2ϱ(t+1)  
+
+> ε
+
+ϱ(t+1)  
+
+> k
+
+U g→e[ϖ, k ] + 
+
+> ε
+
+(ϱ(t+1)  
+
+> ε
+
+)2U g→e[ϖ, ϖ]Build A(ω(t+1) ), b(ω(t+1) ), and solve 
+
+A(ω(t+1) )̂ ς2 ( t+1) = b(ω(t+1) ).
+
+14: Compute 
+
+L(t+1) ↖ 1
+
+N L
+
+(
+
+ω(t+1) ,̂ ς2 ( t+1) )
+
+.
+
+15: Stop if 1 ↗ ⇒ ω(t+1) , ω(t)⇑ < ↼ang and |L (t) ↗ L(t+1) |
+
+max {1, |L (t)|} < ↼obj 
+
+for several consecutive iterations. 
+
+16: end for 
+
+17: return ̂ ω ↖ ω(t+1) ,̂ ς2 ↖̂ ς2 ( t+1) 
+
+12 
+
+.CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint References 329 
+
+[1] Esther Herrera-Luis, Kelly Benke, Heather Volk, Christine Ladd-Acosta, and Genevieve L Wojcik. 330 
+
+Gene–environment interactions in human health. Nature Reviews Genetics , 25(11):768–784, 2024. 331 
+
+[2] Kenneth E Westerman and Tamar Sofer. Many roads to a gene-environment interaction. The American 332 
+
+Journal of Human Genetics , 111(4):626–635, 2024. 333 
+
+[3] Samuel J Virolainen, Andrew VonHandorf, Kenyatta CMF Viel, Matthew T Weirauch, and Leah C 334 
+
+Kottyan. Gene–environment interactions and their impact on human health. Genes & Immunity , 24 335 
+
+(1):1–11, 2023. 336 
+
+[4] Carly Boye, Shreya Nirmalan, Ali Ranjbaran, and Francesca Luca. Genotype → environment interactions 337 
+
+in gene regulation and complex traits. Nature Genetics , 56(6):1057–1068, 2024. 338 
+
+[5] Shinichi Namba, Kyuto Sonehara, Yuriko N Koyanagi, Takezo Kikuchi, Takafumi Ojima, Ryuya 339 
+
+Edahiro, Go Sato, Taiki Yamaji, Yoshihiko Tomofuji, Hiroyuki Ueda, et al. A cross-population com-340 
+
+pendium of gene–environment interactions. Nature , pages 1–10, 2026. 341 
+
+[6] Eric Weine, Samuel Pattillo Smith, Rebecca Kathryn Knowlton, and Arbel Harpak. Trade-o !s in 342 
+
+modeling context dependency in complex trait genetics. Elife , 13:RP99210, 2025. 343 
+
+[7] Andy Dahl, Khiem Nguyen, Na Cai, Michael J Gandal, Jonathan Flint, and Noah Zaitlen. A robust 344 
+
+method uncovers significant context-specific heritability in diverse complex traits. The American Journal 345 
+
+of Human Genetics , 106(1):71–91, 2020. 346 
+
+[8] Ali Pazokitoroudi, Zhengtong Liu, Andrew Dahl, Noah Zaitlen, Saharon Rosset, and Sriram Sankarara-347 
+
+man. A scalable and robust variance components method reveals insights into the architecture of 348 
+
+gene-environment interactions underlying complex traits. The American Journal of Human Genetics ,349 
+
+111(7):1462–1480, 2024. 350 
+
+[9] Matteo Di Scipio, Mohammad Khan, Shihong Mao, Michael Chong, Conor Judge, Nazia Pathan, Nicolas 351 
+
+Perrot, Walter Nelson, Ricky Lali, Shuang Di, et al. A versatile, fast and unbiased method for estimation 352 
+
+of gene-by-environment interaction e !ects on biobank-scale datasets. Nature Communications , 14(1): 353 
+
+5196, 2023. 354 
+
+[10] Alison A Motsinger-Reif, David M Reif, Farida S Akhtari, John S House, C Ryan Campbell, Kyle P 355 
+
+Messier, David C Fargo, Ti !any A Bowen, Srikanth S Nadadur, Charles P Schmitt, et al. Gene-356 
+
+environment interactions within a precision environmental health framework. Cell Genomics , 4(7), 357 
+
+2024. 358 
+
+[11] Jingjing Li, Xiao Li, Sai Zhang, and Michael Snyder. Gene-environment interaction in the era of 359 
+
+precision medicine. Cell , 177(1):38–44, 2019. 360 
+
+[12] William R Reay, Joshua R Atkins, Vaughan J Carr, Melissa J Green, and Murray J Cairns. Pharma-361 
+
+cological enrichment of polygenic risk for precision medicine in complex disorders. Scientific reports , 10 362 
+
+(1):879, 2020. 363 
+
+[13] Christopher Paul Wild. The exposome: from concept to utility. International journal of epidemiology ,364 
+
+41(1):24–32, 2012. 365 
+
+[14] Chirag J Patel, Jayanta Bhattacharya, and Atul J Butte. An environment-wide association study (ewas) 366 
+
+on type 2 diabetes mellitus. PloS one , 5(5):e10746, 2010. 367 
+
+[15] Ghassan B Hamra and Jessie P Buckley. Environmental exposure mixtures: questions and methods to 368 
+
+address them. Current epidemiology reports , 5(2):160–165, 2018. 369 
+
+[16] Jonathan Sulc, Ninon Mounier, Felix G¨ unther, Thomas Winkler, Andrew R Wood, Timothy M Frayling, 370 
+
+Iris M Heid, Matthew R Robinson, and Zolt´ an Kutalik. Quantification of the overall contribution of 371 
+
+gene-environment interaction for obesity-related traits. Nature communications , 11(1):1385, 2020. 372 
+
+13 
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint
+
+[17] Rachel Moore, Francesco Paolo Casale, Marc Jan Bonder, Danilo Horta, Lude Franke, Inˆ es Barroso, 373 
+
+and Oliver Stegle. A linear mixed-model approach to study multivariate gene–environment interactions. 374 
+
+Nature genetics , 51(1):180–186, 2019. 375 
+
+[18] Cathie Sudlow, John Gallacher, Naomi Allen, Valerie Beral, Paul Burton, John Danesh, Paul Downey, 376 
+
+Paul Elliott, Jane Green, Martin Landray, et al. Uk biobank: an open access resource for identifying 377 
+
+the causes of a wide range of complex diseases of middle and old age. PLoS medicine , 12(3):e1001779, 378 
+
+2015. 379 
+
+[19] Clare Bycroft, Colin Freeman, Desislava Petkova, Gavin Band, Lloyd T Elliott, Kevin Sharp, Allan 380 
+
+Motyer, Damjan Vukcevic, Olivier Delaneau, Jared O’Connell, et al. The uk biobank resource with 381 
+
+deep phenotyping and genomic data. Nature , 562(7726):203–209, 2018. 382 
+
+[20] All of Us Research Program Investigators. The “all of us” research program. New England Journal of 383 
+
+Medicine , 381(7):668–676, 2019. 384 
+
+[21] Christopher Paul Wild. Complementing the genome with an “exposome”: the outstanding challenge of 385 
+
+environmental exposure measurement in molecular epidemiology. Cancer Epidemiology Biomarkers & 386 
+
+Prevention , 14(8):1847–1850, 2005. 387 
+
+[22] Konstantinos C Makris, Andrea Baccarelli, Edwin K Silverman, and Robert O Wright. How exposomic 388 
+
+tools complement and enrich genomic research. Cell Genomics , 5(8), 2025. 389 
+
+[23] Michal Sadowski, Mike Thompson, Joel Me !ord, Tanushree Haldar, Akinyemi Oni-Orisan, Richard 390 
+
+Border, Ali Pazokitoroudi, Na Cai, Julien F Ayroles, Sriram Sankararaman, et al. Characterizing the 391 
+
+genetic architecture of drug response using gene-context interaction methods. Cell Genomics , 4(12), 392 
+
+2024. 393 
+
+[24] Jaana A Hartiala, James R Hilser, Subarna Biswas, Aldons J Lusis, and Hooman Allayee. Gene-394 
+
+environment interactions for cardiovascular disease. Current atherosclerosis reports , 23(12):75, 2021. 395 
+
+[25] Dmitry Shungin, Wei Q Deng, Tibor V Varga, Jian’an Luan, Evelin Mihailov, Andres Metspalu, GIANT 396 
+
+Consortium, Andrew P Morris, Nita G Forouhi, Cecilia Lindgren, et al. Ranking and characterization of 397 
+
+established bmi and lipid associated loci as candidates for gene-environment interactions. PLoS genetics ,398 
+
+13(6):e1006812, 2017. 399 
+
+[26] Guiyan Ni, Julius Van Der Werf, Xuan Zhou, Elina Hypp¨ onen, Naomi R Wray, and S Hong Lee. 400 
+
+Genotype–covariate correlation and interaction disentangled by a whole-genome multivariate reaction 401 
+
+norm model. Nature communications , 10(1):2239, 2019. 402 
+
+[27] Wujuan Zhong, Aparna Chhibber, Lan Luo, Devan V Mehrotra, and Judong Shen. A fast and powerful 403 
+
+linear mixed model approach for genotype-environment interaction tests in large-scale gwas. Briefings 404 
+
+in Bioinformatics , 24(1):bbac547, 2023. 405 
+
+[28] Ali Pazokitoroudi, Yue Wu, Kathryn S Burch, Kangcheng Hou, Aaron Zhou, Bogdan Pasaniuc, and 406 
+
+Sriram Sankararaman. E ”cient variance components analysis across millions of genomes. Nature com-407 
+
+munications , 11(1):4020, 2020. 408 
+
+[29] Yue Wu and Sriram Sankararaman. A scalable estimator of snp heritability for biobank-scale data. 409 
+
+Bioinformatics , 34(13):i187–i194, 2018. 410 
+
+[30] Jian Yang, S Hong Lee, Michael E Goddard, and Peter M Visscher. Gcta: a tool for genome-wide 411 
+
+complex trait analysis. The American journal of human genetics , 88(1):76–82, 2011. 412 
+
+[31] Matthew R Robinson, Geo !rey English, Gerhard Moser, Luke R Lloyd-Jones, Marcus A Triplett, Zhi-413 
+
+hong Zhu, Ilja M Nolte, Jana V van Vliet-Ostaptchouk, Harold Snieder, LifeLines Cohort Study, et al. 414 
+
+Genotype–covariate interaction e !ects and the heritability of adult body mass index. Nature genetics ,415 
+
+49(8):1174–1181, 2017. 416 
+
+14 
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint
+
+[32] Matthew Kerin and Jonathan Marchini. Inferring gene-by-environment interactions with a bayesian 417 
+
+whole-genome regression model. The American Journal of Human Genetics , 107(4):698–713, 2020. 418 
+
+[33] Moonseong Jeong, Ali Pazokitoroudi, Zhengtong Liu, and Sriram Sankararaman. Scalable summary-419 
+
+statistics-based heritability estimation method with individual genotype level accuracy. Genome Re-420 
+
+search , 34(9):1286–1293, 2024. 421 
+
+[34] Michael F Hutchinson. A stochastic estimator of the trace of the influence matrix for laplacian smoothing 422 
+
+splines. Communications in Statistics-Simulation and Computation , 18(3):1059–1076, 1989. 423 
+
+[35] M Jon Turner, Ray W Clough, Harold C Martin, and LJ Topp. Sti !ness and deflection analysis of 424 
+
+complex structures. journal of the Aeronautical Sciences , 23(9):805–823, 1956. 425 
+
+[36] Fred G Gustavson. Two fast algorithms for sparse matrices: Multiplication and permuted transposition. 426 
+
+ACM Transactions on Mathematical Software (TOMS) , 4(3):250–269, 1978. 427 
+
+[37] Iain S Du !, Michael A Heroux, and Roldan Pozo. An overview of the sparse basic linear algebra 428 
+
+subprograms: The new standard from the blas technical forum. ACM Transactions on Mathematical 429 
+
+Software (TOMS) , 28(2):239–267, 2002. 430 
+
+[38] Jessica Tyrrell, Andrew R Wood, Ryan M Ames, Hanieh Yaghootkar, Robin N Beaumont, Samuel E 431 
+
+Jones, Marcus A Tuke, Katherine S Ruth, Rachel M Freathy, George Davey Smith, et al. Gene– 432 
+
+obesogenic environment interactions in the uk biobank study. International journal of epidemiology , 46 433 
+
+(2):559–575, 2017. 434 
+
+[39] Tuomas O Kilpel¨ ainen, Lu Qi, Soren Brage, Stephen J Sharp, Emily Sonestedt, Ellen Demerath, Tariq 435 
+
+Ahmad, Samia Mora, Marika Kaakinen, Camilla Helene Sandholt, et al. Physical activity attenuates 436 
+
+the influence of fto variants on obesity risk: a meta-analysis of 218,166 adults and 19,268 children. PLoS 437 
+
+medicine , 8(11):e1001116, 2011. 438 
+
+[40] Qibin Qi, Audrey Y Chu, Jae H Kang, Majken K Jensen, Gary C Curhan, Louis R Pasquale, Paul M 439 
+
+Ridker, David J Hunter, Walter C Willett, Eric B Rimm, et al. Sugar-sweetened beverages and genetic 440 
+
+risk of obesity. New England Journal of Medicine , 367(15):1387–1396, 2012. 441 
+
+[41] Nathaniel F Watson, Kathryn Paige Harden, Dedra Buchwald, Michael V Vitiello, Allan I Pack, David S 442 
+
+Weigle, and Jack Goldberg. Sleep duration and body mass index in twins: a gene-environment interac-443 
+
+tion. Sleep , 35(5):597–603, 2012. 444 
+
+[42] Anne E Justice, Thomas W Winkler, Mary F Feitosa, Misa Gra !, Virginia A Fisher, Kristin Young, 445 
+
+Llilda Barata, Xuan Deng, Jacek Czajkowski, David Hadley, et al. Genome-wide meta-analysis of 446 
+
+241,258 adults accounting for smoking behaviour identifies novel loci for obesity traits. Nature commu-447 
+
+nications , 8(1):14977, 2017. 448 
+
+[43] Tiange Wang, Yoriko Heianza, Dianjianyi Sun, Tao Huang, Wenjie Ma, Eric B Rimm, JoAnn E Manson, 449 
+
+Frank B Hu, Walter C Willett, and Lu Qi. Improving adherence to healthy dietary patterns, genetic 450 
+
+risk, and long term weight gain: gene-diet interaction analysis in two prospective cohort studies. bmj ,451 
+
+360, 2018. 452 
+
+[44] Ming Ding, Christina Ellervik, Tao Huang, Majken K Jensen, Gary C Curhan, Louis R Pasquale, Jae H 453 
+
+Kang, Janey L Wiggs, David J Hunter, Walter C Willett, et al. Diet quality and genetic association with 454 
+
+body mass index: results from 3 observational studies. The American Journal of Clinical Nutrition , 108 455 
+
+(6):1291–1300, 2018. 456 
+
+[45] Matthew R Robinson, Gibran Hemani, Carolina Medina-Gomez, Massimo Mezzavilla, Tonu Esko, Kon-457 
+
+stantin Shakhbazov, Joseph E Powell, Anna Vinkhuyzen, Sonja I Berndt, Stefan Gustafsson, et al. 458 
+
+Population genetic di !erentiation of height and body mass index across europe. Nature genetics , 47 459 
+
+(11):1357–1362, 2015. 460 
+
+15 
+
+> .CC-BY-NC 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted March 16, 2026. ;https://doi.org/10.64898/2026.03.13.711725 doi: bioRxiv preprint
+
+[46] Lo¨ ıc Yengo, Sailaja Vedantam, Eirini Marouli, Julia Sidorenko, Eric Bartell, Saori Sakaue, Marielisa 461 
+
+Gra !, Anders U Eliasen, Yunxuan Jiang, Sridharan Raghavan, et al. A saturated map of common 462 
+
+genetic variants associated with human height. Nature , 610(7933):704–712, 2022. 463 
+
+[47] Aline Jelenkovic, Yoon-Mi Hur, Reijo Sund, Yoshie Yokoyama, Sisira H Siribaddana, Matthew Hotopf, 464 
+
+Athula Sumathipala, Fruhling Rijsdijk, Qihua Tan, Dongfeng Zhang, et al. Genetic and environmental 465 
+
+influences on adult human height across birth cohorts from 1886 to 1994. Elife , 5:e20320, 2016. 466 
+
+[48] Vincent Laville, Timothy Majarian, Yun J Sung, Karen Schwander, Mary F Feitosa, Daniel I Chasman, 467 
+
+Amy R Bentley, Charles N Rotimi, L Adrienne Cupples, Paul S de Vries, et al. Gene-lifestyle interactions 468 
+
+in the genomics of human complex traits. European Journal of Human Genetics , 30(6):730–739, 2022. 469 
+
+[49] H Desmond Patterson and Robin Thompson. Recovery of inter-block information when block sizes are 470 
+
+unequal. Biometrika , 58(3):545–554, 1971. 471 
+
+[50] Xiang Zhou. A unified framework for variance component estimation with summary statistics in genome-472 
+
+wide association studies. The annals of applied statistics , 11(4):2027, 2017. 473 
+
+[51] Kun Yue, Jing Ma, Timothy Thornton, and Ali Shojaie. Rehe: Fast variance components estimation 474 
+
+for linear mixed models. Genetic epidemiology , 45(8):891–905, 2021. 475 
+
+16

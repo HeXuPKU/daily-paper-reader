@@ -1,0 +1,24 @@
+---
+title: Ensembles of Graph Attention Networks Supervised by Genotype-to-Phenotype Structures Improved Genomic Prediction Performance
+title_zh: 由基因型-表型结构监督的图注意力网络集成提升了基因组预测性能
+authors: "Tomura, S., Powell, O. M., Wilkinson, M. J., Cooper, M."
+date: 2026-03-11
+pdf: "https://www.biorxiv.org/content/10.64898/2025.12.21.695855v3.full.pdf"
+tags: ["query:gwas"]
+score: 8.0
+evidence: 利用基因型-表型结构的图注意力网络进行基因组预测
+tldr: 本研究探讨了图注意力网络（GAT）在作物基因组预测中的应用。通过引入基因型到表型（G2P）结构（如基因网络）作为先验知识，研究对比了不同复杂度的G2P结构对预测性能的影响。虽然单一数据驱动的先验知识模型表现不稳，但基于多样性预测定理构建的GAT集成模型在玉米开花期预测中表现出持续的优越性，为整合生物学先验知识提升育种效率提供了新思路。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2025-12-21-695855-v3/fig-001.webp\", \"caption\": \"Figure 3: Prediction performance transition of the three GAT models (infinitesimal, fully connected and data-driven prior 919 knowledge) and their ensemble as the ratio of the training set becomes smaller (0.8, 0.65, 0.5, 0,35 and 0.2), measured by a) Pearson 920 correlation for the TeoNAM dataset, b) mean squared error (MSE) for the TeoNAM dataset, c) Pearson correlation for the 921 MaizeNAM dataset and d) MSE for the MaizeNAM dataset. The upper and lower boundaries accompanying each line show the 922 metric value range with standard error based on 2,500 and 1,250 prediction scenarios in each ratio for the TeoNAM and MaizeNAM 923 datasets, respectively. 924\", \"page\": 33, \"index\": 1, \"width\": 715, \"height\": 820}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2025-12-21-695855-v3/fig-002.webp\", \"caption\": \"Figure 1: Three graph attention network (GAT) models constructed from three possible genotype-to-phenotype (G2P) relationships: 901 a) infinitesimal model, b) fully connected model and c) data-driven prior knowledge model. The infinitesimal model assumes no 902 explicit connections between genomic marker nodes. The fully connected model allows all genomic marker nodes to be connected 903 to others. The data-driven prior knowledge model only allows certain connections between genomic marker nodes based on the 904 inferred trait gene network from the provided data. 905\", \"page\": 32, \"index\": 2, \"width\": 683, \"height\": 600}]"
+motivation: 探索如何利用图注意力网络结合基因型到表型的结构信息来提高作物基因组预测的准确性。
+method: 提出了一种集成GAT模型的方法，通过融合从无穷小到全连接等多种不同复杂度的G2P结构来捕捉互补的预测特征。
+result: 在玉米嵌套关联映射数据集的测试中，集成GAT模型在预测开花期性状方面始终优于单一结构的GAT模型。
+conclusion: 集成多种G2P结构的GAT模型能更全面地表征基因网络，为未来整合多组学数据和经验验证的基因相互作用提供了有效框架。
+---
+
+## 摘要
+准确选择优良作物基因型推动了作物育种应用中多种预测算法的探索。图注意力网络 (GAT) 是一种尚未被充分探索的基因组预测方法。通过利用注意力机制直接分析图形数据，GAT 可以整合基因型-表型 (G2P) 结构来正则化预测。作为一种潜在的 G2P 结构，可以从可解释的机器学习模型中推断出基因网络，以有效学习预测模式的关键特征，从而可能提高预测性能。在本研究中，我们调查了与代表从微效到全连接的连续 G2P 结构的 GAT 模型相比，将此类数据驱动的先验知识整合到 GAT 中是否能提高预测性能。应用多样性预测定理，我们还将这些多样的 G2P 结构组合成 GAT 基因组预测模型的集成，以整合多个模型的互补优势。在两个玉米嵌套关联制图数据集的开花期性状结果显示，数据驱动先验知识的 GAT 模型缺乏一致的性能提升。然而，GAT 集成模型表现出一致的优越性能。集成模型预测性能的提升可能是由于其能够通过整合来自不同 G2P 结构的信息，捕捉到推断基因网络更完整的表征。使用 GAT 方法观察到的结果为未来研究中通过整合源自组学数据和经验验证的基因相互作用的生物学先验知识，利用 GAT 进一步提升性能奠定了基础，从而可能增强 GAT 集成的性能。
+
+## Abstract
+Accurate selection of favourable crop genotypes has motivated the exploration of diverse prediction algorithms for crop breeding applications. One genomic prediction method that has not been fully explored is graph attention networks (GAT). By directly analysing graphical data with the attention mechanism, GAT can incorporate the genotype-to-phenotype (G2P) structure to regularise predictions. As one potential G2P structure, a gene network can be inferred from interpretable machine learning models to effectively learn key features of prediction patterns, potentially improving prediction performance. Here, we investigated whether incorporating such data-driven prior knowledge into GAT improved prediction performance compared to GAT models representing a continuum of G2P structures, ranging from infinitesimal to fully connected. Applying the Diversity Prediction Theorem, we also combined these diverse G2P structures into an ensemble of GAT genomic prediction models to integrate complementary strengths of multiple models. The results for flowering time traits in two maize nested association mapping datasets showed a lack of consistent performance improvement in the data-driven prior knowledge GAT model. However, consistent outperformance was observed for the ensemble of GAT models. Improved predictions from the ensemble model may be driven by its ability to capture a more complete representation of the inferred gene network through the integration of information from diverse G2P structures. The observed results using the GAT methodology provided the foundation for potential performance improvement using GAT by integrating biological prior knowledge derived from omics data and empirically verified gene interactions in future research, thereby potentially enhancing the GAT ensemble performance.
