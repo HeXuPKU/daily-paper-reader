@@ -1,0 +1,24 @@
+---
+title: "Genetic influences on food liking and food preference patterns in young adults: a genome-wide association study"
+title_zh: 青年人食物喜好和食物偏好模式的遗传影响：一项全基因组关联研究
+authors: "Hui, P. S., Zhang, J., Hwang, L.-D."
+date: 2026-03-27
+pdf: "https://www.biorxiv.org/content/10.64898/2026.03.25.714302v1.full.pdf"
+tags: ["query:gwas"]
+score: 9.0
+evidence: 针对年轻人97种食物喜好特征的全基因组关联分析
+tldr: 本研究针对2784名25岁年轻成年人，通过全基因组关联分析（GWAS）探讨了97种食物喜好及两种主要偏好模式（植物/海鲜类与肉类）的遗传基础。研究发现了32个显著的基因关联，揭示了遗传变异不仅影响单一食物，还影响广泛的饮食模式。与中老年群体相比，年轻人的食物喜好遗传特征具有独特性，仅在葡萄柚等少数性状上表现出一致性。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-25-714302-v1/fig-001.webp\", \"caption\": \"Figure 1. Study design overview.\", \"page\": 5, \"index\": 1, \"width\": 943, \"height\": 360}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-25-714302-v1/fig-002.webp\", \"caption\": \"Figure 2. Heatmap showing pairwise Pearson correlation coefficients among 97 food liking traits in ALSPAC and two food-liking principal components (PC1 and PC2). PC1 and PC2 were derived from the principal component analysis of the 97 food liking traits.\", \"page\": 6, \"index\": 2, \"width\": 933, \"height\": 936}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-25-714302-v1/fig-003.webp\", \"caption\": \"Table 1. Genetic variants associated with food liking traits in ALSPAC with p < 5 × 10-8.\", \"page\": 8, \"index\": 3, \"width\": 1464, \"height\": 858}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-25-714302-v1/fig-004.webp\", \"caption\": \"Figure 3. Cross-trait associations for the lentil-associated SNP rs76659918 and the burger-associated SNP rs7193528 across food liking traits in ALSPAC. Bars represent effect sizes (β) with standard errors. Colours indicate the p-value thresholds (p < 0.001, p < 0.01, p < 0.05). Traits are ordered by effect size within each SNP. Only traits with p < 0.05 are included. PC1 and PC2 were derived from the principal component analysis of the 97 food liking traits.\", \"page\": 9, \"index\": 4, \"width\": 943, \"height\": 708}]"
+motivation: 尽管已知遗传因素影响饮食行为，但针对年轻人这一长期饮食习惯形成关键期的食物喜好遗传研究仍较为匮乏。
+method: "对来自ALSPAC队列的2,784名25岁受试者进行了97项食物喜好性状及两个主成分（PC）的全基因组关联分析。"
+result: 识别出24个性状相关的32个显著基因位点，发现某些变异会同时影响多种相关食物的喜好及整体偏好模式。
+conclusion: 研究证实了遗传因素在年轻人食物喜好及偏好模式中的作用，并指出年轻人与中老年人在食物喜好的遗传影响上存在显著差异。
+---
+
+## 摘要
+遗传变异导致了食物喜好和饮食行为的个体差异。全基因组关联研究（GWAS）已经确定了与这些性状相关的遗传变异，但大多数证据来自中老年人群。青年期是长期饮食习惯形成的关键生命阶段，然而这一时期食物喜好的遗传基础在很大程度上仍未被探索。我们对来自雅芳父母与儿童队列研究（ALSPAC）的 2,784 名青年（25 岁）的 97 种食物喜好性状和两个衍生的主成分（PC）进行了 GWAS。主成分捕捉到了更广泛的食物偏好模式，反映了对多种植物性食物和海鲜（PC1）以及肉类食物（PC2）的偏好。GWAS 在 24 个性状中确定了 32 个全基因组显著关联。跨性状分析表明，几种变异影响了相关食物组的喜好。例如，与扁豆相关的变异 rs76659918 显示出与多种食物的关联，包括蜂蜜、原味酸奶、辣椒、茄子、牛油果和黑橄榄，以及 PC1；而与培根、汉堡和牛排相关的变异则与多种肉类食物和 PC2 相关。探索性分析显示，TAS2R38 苦味敏感等位基因与对抱子甘蓝的较低喜好相关，而与其他性状关联的证据有限。与英国生物样本库（UK Biobank）队列（37-73 岁）中食物喜好的 GWAS 比较显示，重复性有限，仅对葡萄柚相关位点有强有力的证据。本研究确定了与青年期食物喜好相关的遗传变异，并表明遗传影响在单个食物水平和更广泛的食物偏好模式水平上均发挥作用。
+
+## Abstract
+Genetic variation contributes to individual differences in food liking and dietary behaviour. Genome-wide association studies (GWAS) have identified genetic variants associated with these traits, but most evidence comes from middle-aged and older populations. Young adulthood is a key life stage during which long-term dietary habits develop, yet the genetic basis of food liking during this period remains largely unexplored. We conducted GWAS of 97 food liking traits and two derived principal components (PCs) in 2,784 young adults (age 25) from the Avon Longitudinal Study of Parents and Children. The PCs captured broader food preference patterns reflecting preferences for diverse plant-based and seafood foods (PC1) and meat-based foods (PC2). GWAS identified 32 genome-wide significant associations across 24 traits. Cross-trait analyses indicated that several variants influenced liking across groups of related foods. For example, the lentil-associated variant rs76659918 showed associations with multiple foods, including honey, plain yogurt, chilli peppers, aubergines, avocado, and black olives, as well as PC1, whereas variants associated with bacon, burgers, and steak were linked to multiple meat-based foods and PC2. Exploratory analyses showed that TAS2R38 bitter-sensitive alleles were associated with lower liking for Brussels sprouts, with limited evidence for associations with other traits. Comparison with GWAS of food liking in the UK Biobank cohort (age 37-73) showed limited replication, with robust evidence only for the grapefruit-associated locus. This study identifies genetic variants associated with food liking in young adulthood and suggests that genetic influences operate at both the level of individual foods and broader food preference patterns.
