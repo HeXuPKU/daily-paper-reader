@@ -1,0 +1,4201 @@
+Title: CLOP-DiT: Structured-Metadata-Conditioned Single-Cell Latent Generation via Contrastive Language-Omics Pretraining and Diffusion Transformers
+
+URL Source: https://www.biorxiv.org/content/10.64898/2026.03.26.714457v1.full.pdf
+
+Number of Pages: 33
+
+Markdown Content:
+> Received: Revised: Accepted: Published:
+> Copyright: © 2026 by the author. Submitted to Genes for possible open access publication under the terms and conditions of the Creative Commons Attribution (CC BY) license.
+
+Article 
+
+# CLOP-DiT: Structured-Metadata-Conditioned Single-Cell Latent Generation via Contrastive Language-Omics Pretraining and Diffusion Transformers 
+
+Zeyu Fu 
+
+State Key Laboratory of Trauma and Chemical Poisoning, Institute of Combined Injury, Chongqing Engineering Research Center for Nanomedicine, College of Preventive Medicine, Army Medical University, Chongqing 400038, China 
+
+Simple Summary 1
+
+CLOP-DiT is a computational pipeline that generates synthetic single-cell gene expression 2
+
+profiles from structured biological descriptions (cell type, tissue, organism, marker genes, 3
+
+and disease context). It first learns to align text descriptions with real cell data in a shared 4
+
+mathematical space, then uses a diffusion model to generate new cell states matching a 5
+
+given description. The generated cells capture correct cell-type identity and marker gene 6
+
+patterns, but do not yet reproduce the full cell-to-cell variability seen in real single-cell 7
+
+experiments. This work demonstrates that text-guided single-cell generation is feasible as a 8
+
+proof of concept, opening directions for future simulation and hypothesis-generation tools 9
+
+in biology. 10 
+
+Abstract 11 
+
+Generating realistic single-cell transcriptomic profiles from structured biological descrip- 12 
+
+tions would enable controlled simulation, data augmentation, and hypothesis-driven 13 
+
+cell-state creation—yet no existing method combines text–cell alignment with conditional 14 
+
+generation. We present CLOP-DiT, a modular three-stage pipeline: (1) a contrastive aligner 15 
+
+(CLOP) maps BiomedBERT text embeddings and scGPT cell embeddings into a shared 16 
+
+512-dimensional space; (2) a conditional Diffusion Transformer (DiT) generates scGPT- 17 
+
+compatible latent states via flow matching, steered by a five-field biological template (cell 18 
+
+type, tissue, organism, marker genes, disease); and (3) a frozen scGPT decoder maps latents 19 
+
+to gene expression. Across 69 cell types from 80 GEO datasets (220,304 cells), a high-fidelity 20 
+
+regime (CFG = 2.0) achieves 36.9% KNN accuracy (25 × chance) and 81.0% steering, while 21 
+
+a high-diversity regime (CFG = 1.0) reaches diversity ratio 0.93 at 80.7% steering. Condi- 22 
+
+tioning field ablation and swap-label permutation tests confirm that marker genes are the 23 
+
+dominant steering signal (steering accuracy drops from 99.8% to 62.4% when only metadata 24 
+
+fields are retained). Key limitations are identified transparently: in-distribution per-gene 25 
+
+variance structure is well preserved ( r = 0.98) but cross-dataset variance correlation drops 26 
+
+to near zero, the discriminator AUC of 0.656 indicates residual distinguishability, and a 27 
+
+pilot rare-cell augmentation study was negative. The modular architecture enables targeted 28 
+
+remediation of each limitation without full retraining. CLOP-DiT establishes the feasibil- 29 
+
+ity of structured-metadata-conditioned single-cell generation and provides a composable 30 
+
+framework for iterative improvement. 31 
+
+Keywords: single-cell RNA-seq; generative model; diffusion transformer; contrastive 32 
+
+learning; structured-metadata conditioning; flow matching; latent generation; foundation 33 
+
+model 34 
+
+Version March 26, 2026 submitted to Genes https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 2 of 33 
+
+1. Introduction 35 
+
+Single-cell RNA sequencing (scRNA-seq) has transformed the study of cellular het- 36 
+
+erogeneity by enabling transcriptome-scale profiling at single-cell resolution [ 1, 2]. Yet 37 
+
+generating synthetic single-cell states from structured biological descriptors remains dif- 38 
+
+ficult. A generative model conditioned on cell identity, tissue context, organism, marker 39 
+
+genes, and disease state is attractive for controlled simulation and hypothesis generation, 40 
+
+and its value depends on whether it preserves biologically meaningful structure rather 41 
+
+than merely the fluency of the textual prompt. 42 
+
+Most current single-cell generative models condition on categorical labels or per- 43 
+
+turbation metadata rather than richer multi-field descriptions. Variational autoencoders 44 
+
+such as scVI [ 3,4] and scGen [ 5], geometric generative models [ 6 ], and foundation models 45 
+
+such as Geneformer [ 7] and scBERT [ 8–11 ] broaden the modeling landscape, but they do 46 
+
+not jointly learn a structured text–cell alignment space and a conditional diffusion-style 47 
+
+generator. Cell2Sentence [ 12 ] and GenePT [ 13] move closer to language-based biology, yet 48 
+
+they address different problem formulations and do not combine contrastive cross-modal 49 
+
+alignment with latent flow matching. 50 
+
+The most closely related concurrent work is CellWhisperer [ 42 ], which also bridges 51 
+
+natural language and single-cell transcriptomics via contrastive alignment. However, 52 
+
+CellWhisperer is fundamentally discriminative : it retrieves and annotates existing cells by 53 
+
+matching text queries to a reference atlas, but it does not generate novel single-cell expres- 54 
+
+sion profiles. CLOP-DiT occupies the complementary generative niche—given a structured 55 
+
+biological description, it synthesises new cell states that do not exist in the training data. 56 
+
+This distinction is important because controlled generation enables applications such as 57 
+
+data augmentation for rare cell types, in-silico perturbation simulation, and hypothesis- 58 
+
+driven creation of cell states not yet experimentally observed. Table 1 summarizes the key 59 
+
+differences. 60 
+
+Table 1. Comparison of CLOP-DiT with related methods for conditional single-cell generation and annotation. “Cond. modality” indicates the conditioning input type; “Gen. paradigm” indicates the generation approach. 
+
+Method Cond. Modality Gen. Paradigm Output 
+
+scVI [3] Categorical (batch/type) cVAE Expression scGen [5] Categorical (perturbation) VAE + shift Expression Geneformer [7] Rank-value tokens Masked LM Cell embeddings Cell2Sentence [12] Gene-rank text LLM decoding Gene-rank text GenePT [13] Gene text embeddings None (annotation) Annotations CellWhisperer [42] Free-form text None (retrieval) Cell annotations 
+
+CLOP-DiT (ours) Structured 5-field text DiT + flow matching Gene expression 
+
+Recent advances in contrastive multimodal learning and diffusion modeling motivate 61 
+
+a direct bridge between biological descriptions and cell representations. CLIP/SigLIP-style 62 
+
+objectives show that strong cross-modal alignment can emerge from contrastive train- 63 
+
+ing [ 14 ,15 ], while Diffusion Transformers and flow matching provide scalable conditional 64 
+
+generation in continuous latent spaces [ 16– 19 ]. These ingredients motivate the design of 65 
+
+CLOP-DiT: first build a well-separated text–cell condition space, then learn a conditional 66 
+
+sampler in a biologically meaningful latent representation. 67 
+
+We present CLOP-DiT, a three-stage pipeline that aligns structured metadata with 68 
+
+scGPT cell embeddings, samples scGPT latents conditioned on that aligned representation, 69 
+
+and decodes latents back to gene expression. The input is a fixed five-field template—cell 70 
+
+type, tissue, organism, marker genes, and disease context—and the method therefore con- 71   
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 3 of 33
+
+stitutes structured-metadata conditioning rather than free-form language understanding. 72 
+
+A frozen scGPT decoder optionally maps generated latents back to expression, but because 73 
+
+this decoder is many-to-one, latent-space metrics are the primary indicators of generative 74 
+
+quality. 75 
+
+The main contributions are fourfold. First, CLOP uses PrototypeSigLIP with ZCA- 76 
+
+whitened BiomedBERT embeddings to align text and cell representations in a shared 77 
+
+512-dimensional space and improve inter-type separability by ∼130 × (pairwise cosine 78 
+
+similarity from 0.994 to 0.222). Second, a 1D Diffusion Transformer performs conditional 79 
+
+flow matching in that latent space to generate type-specific cell embeddings. Third, we eval- 80 
+
+uate the model on 69 deduplicated cell types from 80 GEO datasets using complementary 81 
+
+latent, diversity, and downstream biological metrics. Fourth, we report both the strengths 82 
+
+and the limits of the approach: structured conditioning produces clear above-chance type 83 
+
+specificity, but variance preservation, covariance preservation, and rare-cell augmentation 84 
+
+remain unresolved. 85 
+
+Across the main operating points, CLOP-DiT reaches 36.9% KNN accuracy and 81.0% 86 
+
+steering in a high-fidelity regime, while a high-diversity regime achieves a diversity ra- 87 
+
+tio of 0.93 at 80.7% steering. Multi-seed replication shows stable steering and diversity, 88 
+
+whereas decoder-level analyses reveal strong mean reconstruction but weak preservation 89 
+
+of within-population heterogeneity. CLOP-DiT is a proof-of-concept structured-metadata- 90 
+
+to-latent conditional sampler with a clear roadmap for improvement, not a finished tool for 91 
+
+downstream biological analysis. 92 
+
+2. Materials and Methods 93 
+
+Figure 1 provides an overview of the pipeline. We organize the Materials and Meth- 94 
+
+ods in three parts: (1) Dataset curation and preprocessing (2.1); (2) Model architecture 95 
+
+and training—covering CLOP alignment (2.2), DiT generation (2.3), and scGPT decoding 96 
+
+(2.4); (3) Evaluation framework and metrics (2.5). Together, these components form a 97 
+
+reproducible pipeline for text-conditioned single-cell generation. 98 
+
+2.1. Dataset 99 
+
+We curated 80 datasets from the Gene Expression Omnibus (GEO) spanning cancer and 100 
+
+developmental biology, comprising 220,304 cells after quality control and highly variable 101 
+
+gene selection [ 20, 21 ] (2,000 highly variable genes per dataset, selected by mean expression 102 
+
+and dispersion). Each cell was encoded into a 512-dimensional embedding by a pre-trained 103 
+
+scGPT model. Cell-type annotations were organized into 1,088 unique text groups, each 104 
+
+described by a structured text caption (not free-form natural language) incorporating cell 105 
+
+type, marker genes, tissue of origin, organism, and disease context. Text descriptions were 106 
+
+generated for each cell type using a structured template: 107 
+
+{cell type}, tissue: {tissue}, organism: {organism}, 108 
+
+markers: {top 5 DE marker genes}, context: {disease/condition} 109 
+
+where marker genes were identified per cell type by one-vs.-rest Wilcoxon rank-sum 110 
+
+test [ 22 ] on the training set. As an independent check on marker gene circularity, we vali- 111 
+
+dated these training-set-derived markers against PanglaoDB [ 23 ] and CellMarker 2.0 [ 24]; 112 
+
+the Jaccard overlap (0.39–0.45, well above the ∼0.01 expected for random gene sets of this 113 
+
+size) indicates that the selected markers converge with biological consensus (see Discussion). 114 
+
+The exact template and marker gene sources are available in the project repository [45]. 115 
+
+The corpus was split into 72 training datasets (199,670 cells) and 8 held-out validation 116 
+
+datasets (20,634 cells). The 8 validation datasets were selected by study (not by cell) to 117 
+
+ensure no sample overlap between training and validation splits, and were chosen to span 118 
+
+the major tissue and cancer categories in the corpus (lung, gastric, skin, liver, blood) via 119 
+
+stratified selection across tissue types; the full list of GEO accession identifiers for all 80 120 
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint
+
+Version March 26, 2026 submitted to Genes 4 of 33 Stage 1: CLOP Alignment Stage 2: DiT Generation Stage 3: Decoding   
+
+> train: align text and cell latents ODE latent sampling decode to genes
+
+Shared 
+
+Space 
+
+(512-d) 
+
+Text 
+
+Description  
+
+> BiomedBERT
+> frozen | 340M
+
+ZCA Text Proj.  
+
+> MLP 1024 512
+
+Cell 
+
+Profile  
+
+> scGPT Enc.
+> frozen | 51M
+> Cell Proj.
+> MLP 512 512
+
+PrototypeSigLIP z0 
+
+> 512-d
+
+ODE   
+
+> Euler/Mid
+> Cond. Embed
+> 512 512
+
+t
+
+> sin emb
+> z1
+
+scGPT 
+
+Decoder 
+
+> frozen
+
+Gene Expr. 
+
+Profile    
+
+> scGPT latent =
+> DiT training target
+> (0, I)
+> DiT1D
+> 8 AdaLN-Zero
+> 22.1M params
+> v(zt,t,c)
+
+CFG guidance 
+
+v = vunc + s(vcond vunc )    
+
+> 512-d
+> Text Path Cell Path Generation Shared Space Decoding
+> training only
+> condition c
+> AdaLN
+> sampled latent
+
+(a) (b) (c) Evaluation Pipeline Schematic      
+
+> 80 GEO Datasets
+> (220,304 cells, 1,088 groups)
+> Deduplication
+> 1,088 69 types
+> Cell-type Stratified Split
+> 72 train / 8 held-out
+> scGPT Encoding
+> 512-d embeddings
+> Real Embeddings (80% train)
+> PCA-50 fit on this split only
+> Real Embeddings (20% test)
+> PCA transform applied
+> DiT Generation
+> 69 types × 100 cells = 6,900
+> CFG sweep: 0.5 5.0
+> KNN Classifier (k=15, cosine)
+> Trained on 80% real PCA-50
+> Same PCA-50 transform
+> applied to generated + test
+> Per-type statistics
+> (centroids, covariances)
+> from real data
+> KNN Accuracy
+> (top-1, top-5)
+> Steering
+> Accuracy
+> Diversity
+> Ratio
+> FD, Coverage
+> Density, Cosine
+> Linear
+> Accuracy
+> Common-Metrics Composite (9)
+> PRIMARY BENCHMARK
+> Full Composite (17)
+> + 8 downstream biology metrics
+> Bootstrap
+> 95% CI
+> (B=1000)
+> Real Data Generated Data Fitted Models Transforms Metrics
+
+(d) 
+
+Figure 1. CLOP-DiT pipeline overview and evaluation framework. (Top) Stage 1 (CLOP) aligns structured text descriptions and scGPT cell embeddings in a shared 512-dimensional space after BiomedBERT whitening and projection. Stage 2 (DiT) performs conditional flow matching in scGPT latent space and generates a target latent from Gaussian noise using classifier-free guidance at infer-ence. Stage 3 (Decoding) maps the generated latent back to gene expression through the frozen scGPT decoder. (Bottom) Evaluation pipeline schematic: data flow from raw datasets through deduplication, stratified splitting, scGPT encoding, PCA fitting (on real training split only), KNN classifier training, and metric computation. The common-metrics-only composite (9 shared distributional metrics) is the primary benchmark; bootstrap confidence intervals ( B=1, 000) are computed by resampling the 69 evaluation types. 
+
+datasets is provided in Table A4 (Appendix A), and the validation study identifiers are 121 
+
+in Table A5. Within the 72 training datasets, a cell-type-stratified split reserves ∼10% of 122 
+
+cells per type for training-time validation, ensuring that all 69 deduplicated cell types 123 
+
+are represented in both partitions. This held-out design tests interpolation within the 124 
+
+training distribution; the 8 held-out datasets share tissue types and cell populations with 125 
+
+the training corpus and do not represent a stringent out-of-distribution generalization test. 126 
+
+The relationship between the 1,088 text groups and the 69 evaluated cell types is as 127 
+
+follows. The 1,088 text groups correspond to sub-cluster-level descriptions: each Leiden [ 25 ] 128 
+
+cluster within each dataset receives a unique text caption. Many sub-clusters share the 129 
+
+same canonical cell type (e.g., “CD8+ T cells” in lung and liver datasets produce separate 130 
+
+text groups). For evaluation, text groups are consolidated by core cell-type identity via 131 
+
+a deduplication pipeline that (a) removes uncharacterized or ambiguous sub-clusters 132 
+
+(mapped to null in the annotation pipeline) and (b) merges cross-dataset sub-clusters into 133 
+
+canonical types, yielding 69 evaluable cell types after deduplication. This consolidation 134 
+
+produces a deduplicated cache (1,088 original captions → 69 deduplicated types, 167,245 135 
+
+cells); the deduplication pipeline is available in the project repository [ 45 ]. KNN accuracy is 136 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 5 of 33 
+
+computed over these 69 consolidated types (random chance = 1 / 69 ≈ 1.45%). All headline 137 
+
+generation metrics, bootstrap confidence intervals, and benchmark comparisons operate 138 
+
+on this consistent 69-type evaluation set. 139 
+
+The 80 datasets comprise both Homo sapiens (59 datasets) and Mus musculus (21 datasets, 140 
+
+including Tabula Muris [ 26]), predominantly from tumor microenvironment and develop- 141 
+
+mental contexts. Consequently, all generation and evaluation results apply exclusively to 142 
+
+human and mouse cancer and developmental single-cell biology; generalization to other 143 
+
+organisms, non-cancer tissues, or perturbation conditions has not been tested. 144 
+
+Training and evaluation were implemented in Python 3.10 using PyTorch 2.1 145 
+
+(CUDA 12.0), scGPT v0.2.1, and Hugging Face Transformers 4.36 for BiomedBERT; the 146 
+
+complete environment specification is provided in the project repository [45]. 147 
+
+Hardware and compute budget. 148 
+
+All training and evaluation were conducted on a single NVIDIA GeForce RTX 5090 149 
+
+Laptop GPU (24 GB VRAM) using PyTorch 2.1 with CUDA 12.0 and automatic mixed 150 
+
+precision (AMP/FP16). The modest compute requirements ( <2 GPU-hours total, <24 GB 151 
+
+VRAM peak) mean that any Ampere-or-later GPU with ≥16 GB VRAM should suffice for 152 
+
+reproduction. CLOP alignment training (60 epochs, batch size 1024) completes in approxi- 153 
+
+mately 10 minutes ( ∼10 s/epoch). DiT flow-matching training (200 epochs, batch size 1024) 154 
+
+completes in approximately 75 minutes ( ∼23 s/epoch). End-to-end figure reproduction 155 
+
+from cached embeddings takes under 30 minutes. Total compute for a single full training 156 
+
+run (CLOP + DiT + evaluation + visualization) is under 2 GPU-hours; no multi-GPU or 157 
+
+distributed training was used. Inference for 69 cell types ( ∼6,900 generated cells) takes 158 
+
+approximately 2 minutes with 10-step Euler integration. 159 
+
+2.2. CLOP: Contrastive Language–Omics Pretraining 160 
+
+CLOP aligns structured metadata descriptions and cell profiles into a shared 512- 161 
+
+dimensional embedding space using a PrototypeSigLIP contrastive loss, producing the 162 
+
+well-separated condition space required by the DiT. A frozen BiomedBERT-large encoder 163 
+
+maps text descriptions to 1024-dimensional embeddings, and a frozen scGPT encoder 164 
+
+maps cells to 512-dimensional embeddings. Dual three-layer MLP projectors (text: 1024 → 165 
+
+1024 → 1024 → 512; cell: 512 → 512 → 512 → 512) with BatchNorm [ 27 ], GELU 166 
+
+activation [ 28 ], and dropout [ 29 ] (0.2) project both modalities onto the L2-normalized unit 167 
+
+hypersphere. 168 
+
+ZCA whitening. 169 
+
+Prior to projection, Zero-phase Component Analysis (ZCA) whitening is applied to the 170 
+
+BiomedBERT embeddings to decorrelate dimensions and mitigate the collapse typical of 171 
+
+frozen BERT representations. The transform is fitted once on the training text embeddings 172 
+
+using the full 1024 × 1024 covariance matrix with regularisation ϵ = 10 −4, then reused 173 
+
+unchanged for validation and inference text. All components are retained; the goal is 174 
+
+decorrelation rather than dimensionality reduction. In preliminary sensitivity checks, ZCA 175 
+
+produced substantially lower pairwise cosine similarity than mean-centering or LayerNorm, 176 
+
+and it was therefore adopted as the production preprocessing step. 177 
+
+The CLOP loss is: 178 
+
+LCLOP = 12
+
+"
+
+CE TC ⊤
+
+τ , arange (B)
+
+!
+
++ CE CT ⊤
+
+τ , arange (B)
+
+!# 
+
+(1) 179 
+
+where T, C ∈ RB×512 are L2-normalized projection matrices (each row is a projected 180 
+
+text or cell embedding, respectively), B is the batch size, TC ⊤ ∈ RB×B is the pairwise 181 
+
+cosine similarity matrix, τ is a logit-scale parameter (following the CLIP convention where 182 
+
+τ multiplies rather than divides the similarity matrix), and label smoothing ϵ = 0.1 is 183   
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 6 of 33
+
+applied. The targets arange (B) = [ 0, 1, . . . , B−1] enforce identity matching: each text 184 
+
+embedding should match its corresponding cell embedding in the batch. In the production 185 
+
+configuration, τ = 14.0 is fixed (effective softmax temperature 1 /τ ≈ 0.071); the value was 186 
+
+selected via grid search over {7.0, 10.0, 14.0, 20.0 } to maximise inter-type cosine separation 187 
+
+on the validation split, yielding the sharpest condition space before training-accuracy 188 
+
+collapse. The ablation study (Table 5) was conducted on an earlier baseline configuration 189 
+
+that used a learnable temperature; the “Fixed temperature” ablation row therein shows that 190 
+
+switching from learned to fixed temperature reduced prototype accuracy by −4.61 pp under 191 
+
+that configuration. The final production model subsequently adopted fixed temperature 192 
+
+alongside a stratified validation split and updated regularization schedule, under which the 193 
+
+fixed-temperature setting achieved satisfactory downstream generation quality (Section 3). 194 
+
+The loss function follows the PrototypeSigLIP formulation, which aligns text prototypes 195 
+
+to cell-group centroids rather than individual cells, with a cohesion regularization weight 196 
+
+of 0.15. The CLOP aligner has 3.02M trainable parameters and is trained for 60 epochs 197 
+
+with AdamW [ 30 ] (lr = 5 × 10 −4, weight decay 0.06, cosine schedule [ 31 ] with 5-epoch 198 
+
+warmup). 199 
+
+The critical output of CLOP is the projected condition space. Raw scGPT cell-type 200 
+
+centroids have a pairwise cosine similarity of 0.994 (cell types differ by only 0.6%), whereas 201 
+
+CLOP-projected conditions have a pairwise cosine of 0.222, amplifying inter-group separa- 202 
+
+tion by a factor of ∼130 ×. This well-separated condition space is what enables the DiT to 203 
+
+distinguish between cell types. 204 
+
+2.3. DiT: Conditional Flow Matching with Diffusion Transformer 205 
+
+The Diffusion Transformer (DiT1D) processes cell embeddings as sequences of 16 206 
+
+pseudo-tokens, each 32-dimensional (totaling 512-d). The architecture comprises 8 AdaLN- 207 
+
+Zero transformer blocks with 8-head self-attention (head dimension 64) and feed-forward 208 
+
+layers (512 → 2048 → 512). Timestep information is encoded via sinusoidal embed- 209 
+
+dings projected to 512 dimensions, and CLOP condition vectors are projected from 512 210 
+
+to 512 dimensions. The combined condition ccombined = temb + cemb (element-wise sum- 211 
+
+mation, not concatenation) modulates each block through 6 AdaLN-Zero parameters 212 
+
+(γ1, β1, α1, γ2, β2, α2), all zero-initialized for stable early training. The model has 22.10M 213 
+
+parameters (Table A1). 214 
+
+Training uses a flow matching objective [17,32]: 215 
+
+LFM = ∥vθ (zt, t, c) − (z1 − z0)∥2 (2) 216 
+
+where z0 ∼ N (0, I), z1 is the real cell embedding, zt = ( 1 − t)z0 + tz 1, and t is drawn 217 
+
+from a logit-normal distribution ( μ=0, σ=1), which concentrates training on intermediate 218 
+
+timesteps where the velocity field is most complex [ 33 ]. During training, classifier-free 219 
+
+guidance (CFG) [ 34 ] is enabled by dropping the condition with 15% probability; when the 220 
+
+condition is dropped, cemb is replaced by a zero vector of the same dimension ( 0 ∈ R512 ), 221 
+
+serving as the unconditional null token. At inference: 222 
+
+vguided = vuncond + s · (vcond − vuncond ) (3) 223 
+
+where s is the guidance scale. DiT is trained for 200 epochs with EMA [ 35] (decay = 224 
+
+0.9999). 225   
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 7 of 33
+
+Because the standard flow matching loss (Equation 2) regresses toward the conditional 226 
+
+mean velocity, it does not penalise insufficient spread in the generated distribution. A 227 
+
+possible extension is an explicit variance-matching regularisation of the form 228 
+
+Lvar =
+
+> G
+
+## ∑
+
+> g=1
+
+
+
+σgen  
+
+> g
+
+− σreal 
+
+> g
+
+2
+
+, (4) 229 
+
+where σgen  
+
+> g
+
+and σreal  
+
+> g
+
+denote the per-gene standard deviations of generated and real cells, 230 
+
+respectively. Such a penalty requires differentiable decoding within the training loop— 231 
+
+currently infeasible with the frozen scGPT decoder—or a latent-space distributional term 232 
+
+such as sliced Wasserstein distance. This extension is not used in the current model and is 233 
+
+discussed further in Section 4. 234 
+
+2.4. Decoding via scGPT 235 
+
+Generated latent vectors z1 ∈ R512 are mapped back to gene expression using the 236 
+
+frozen scGPT decoder. This step is useful for downstream biological inspection, but it 237 
+
+introduces an important limitation: the decoder is many-to-one, so diverse latent vectors 238 
+
+near the training manifold can decode to similar expression profiles. We therefore treat 239 
+
+latent-space metrics—KNN accuracy, steering, diversity ratio, and centroid cosine—as 240 
+
+the primary indicators of generative quality, whereas expression-space analyses serve as 241 
+
+decoder-induced compatibility checks rather than direct measures of generation fidelity. 242 
+
+Breaking this bottleneck requires a trainable decoder or lightweight adapter, which is left 243 
+
+to future work. 244 
+
+2.5. Evaluation Framework 245 
+
+We evaluate CLOP-DiT along six axes using in-distribution conditions (the actual 246 
+
+CLOP-projected text embeddings from training data): 247 
+
+1. KNN classification accuracy : For each generated cell, a k-nearest-neighbor classifier 248 
+
+(k=15, cosine metric, PCA-50 features) trained on 80% of real data predicts its cell 249 
+
+type. PCA is fitted on the real training split only and applied identically to generated 250 
+
+embeddings; the same PCA transform is used across all method comparisons. Random 251 
+
+chance is 1 / 69 ≈ 1.45%. Because real cell-type centroids in scGPT space have pairwise 252 
+
+cosine similarity of 0.994, small embedding perturbations can substantially affect 253 
+
+KNN accuracy; the biological meaning of absolute KNN values therefore warrants 254 
+
+caution. 255 
+
+2. Steering accuracy : For random cell-type pairs (A, B), we generate cells conditioned 256 
+
+on A and test whether the generated centroid is closer to the real cluster A than B in 257 
+
+centered space. Random chance is 50%. Note: At intermediate-to-high CFG values 258 
+
+(e.g., CFG ≥ 1.5) with multi-step solvers, steering accuracy can saturate at 1.0 with 259 
+
+bootstrap CI [1.0, 1.0], indicating a ceiling effect; this metric loses discriminative power 260 
+
+once guidance is sufficient. 261 
+
+3. Diversity ratio : Ratio of generated within-group variance to real within-group vari- 262 
+
+ance. Ideal is 1.0; values <1 indicate mode sharpening; values >1 indicate excess 263 
+
+noise. 264 
+
+4. Coverage and density : Coverage measures the fraction of real samples that have at 265 
+
+least one generated neighbor within the real data’s KNN radius ( k=5); it quantifies 266 
+
+mode coverage. Density measures the average number of generated samples falling 267 
+
+within each real sample’s KNN radius, normalised by k; it quantifies precision. Both 268 
+
+are computed in PCA-50 embedding space. 269   
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 8 of 33
+
+5. Centroid cosine similarity : The cosine similarity between the real and generated cell- 270 
+
+type centroids, computed in the 512-dimensional scGPT embedding space (uncentered; 271 
+
+cos (μreal , μgen )). Reported per-type and averaged across 69 types. 272 
+
+6. Downstream biological concordance : Clustering alignment (ARI [ 36 ], NMI [ 37]), 273 
+
+classifier transfer, and differential expression concordance between real and generated 274 
+
+data. 275 
+
+All metrics are reported as point estimates over the fixed evaluation set described 276 
+
+above. Two configurations are designated as primary operating points : CFG = 2.0 with 10-step 277 
+
+Euler integration (high-fidelity regime) and CFG = 1.0 with 10-step Midpoint integration 278 
+
+(high-diversity regime). All other CFG and solver combinations in Appendix A represent 279 
+
+sensitivity analysis; no multiple-comparison correction was applied to these exploratory 280 
+
+comparisons. Bootstrap 95% confidence intervals for the composite benchmark scores 281 
+
+are shown in Figure 7d; variability across single-measurement metrics (KNN, steering, 282 
+
+diversity ratio) is characterized by the CFG sweep (Appendix A, Table A2). 283 
+
+Caveat on Fréchet Distance (FD). FD [ 38 ] compares distributional moments (mean 284 
+
+and covariance) between real and generated samples. While widely used for unconditional 285 
+
+evaluation, FD can be misleading for conditional generation: a model that reproduces the 286 
+
+global marginal distribution but ignores conditioning achieves a low FD without having 287 
+
+learned the target conditional. FD is therefore reported as a secondary metric throughout; 288 
+
+the primary metrics (KNN accuracy, steering, diversity ratio) are specifically designed for 289 
+
+conditional evaluation. 290 
+
+The biological evidence is organized by figure family: Figures 4–5 establish marker- 291 
+
+level and gene-level fidelity; Figures 6 and 7 provide robustness readouts for guidance 292 
+
+and diversity; Figure 7 reports benchmarking; Figure 8 tests downstream biology. The 293 
+
+evaluation pipeline is shown in the bottom panel of Figure 1. 294 
+
+Having established the methodology and evaluation framework, we now present the 295 
+
+empirical results. 296 
+
+2.6. Statistical Analysis 297 
+
+Primary endpoints. Two operating points were pre-specified as primary comparisons: 298 
+
+CFG = 2.0 with 10-step Euler integration (high-fidelity regime, selected because KNN accu- 299 
+
+racy plateaus at CFG 2.0–3.0 in Table A2; the lower end was chosen to minimize diversity 300 
+
+loss) and CFG = 1.0 with 10-step Midpoint integration (high-diversity regime, selected to 301 
+
+match DivR ≈ 1.0). The primary metrics are KNN top-1 classification accuracy (69-class, 302 
+
+k=15, cosine metric on PCA-50 features) and steering accuracy (pairwise directional test, 303 
+
+1000 random pairs). 304 
+
+Exploratory analyses. All other CFG/solver/step combinations reported in Tables A2 305 
+
+and A6 (Appendix A) constitute exploratory sensitivity analyses. No correction for multiple 306 
+
+comparisons (e.g., Bonferroni, Holm) was applied to these comparisons. Rankings and 307 
+
+performance claims refer only to the two primary operating points unless explicitly stated 308 
+
+otherwise. 309 
+
+Uncertainty quantification. Bootstrap 95% confidence intervals (percentile method, 310 
+
+B=1000 resamples, seed 42) are reported for all headline metrics where per-unit (per-cell or 311 
+
+per-type) data are available (see Results). These CIs capture evaluation sampling variability 312 
+
+but not training-run variance, as all results derive from a single training run (seed 42). 313 
+
+Formal superiority tests (e.g., permutation tests) were not conducted; all comparisons are 314 
+
+descriptive. 315 
+
+Multi-seed replication. To characterise inter-run variance, we trained three indepen- 316 
+
+dent CLOP + DiT pipeline replicas (seeds 42, 123, 456) with identical hyperparameters and 317 
+
+report mean ± standard deviation for all core metrics in Table 3 (see Section 3.3). 318   
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 9 of 33
+
+Limitations of the statistical design. (1) No formal pre-registration: operating points 319 
+
+were selected based on interpretable criteria post-hoc rather than by pre-registered protocol; 320 
+
+this study is therefore exploratory rather than confirmatory. (2) No multiple-comparison 321 
+
+correction for the exploratory CFG sweep. 322 
+
+2.7. Composite Score Formulation 323 
+
+The composite benchmark score aggregates all active metrics into a single ranking 324 
+
+index. For each metric m with direction dm ∈ { lower , higher }, let vm,j denote the raw value 325 
+
+for method j. We compute a min–max normalised score: 326 
+
+sm,j =
+
+
+
+1 − vm,j − min k vm,k
+
+max k vm,k − min k vm,k
+
+if dm = lower, 
+
+vm,j − min k vm,k
+
+max k vm,k − min k vm,k
+
+if dm = higher, (5) 327 
+
+where k ranges over all methods that report a non-null value for m; methods lacking 328 
+
+metric m receive sm,j = 0. The composite score is the unweighted arithmetic mean over 329 
+
+all M active metrics: 330 
+
+Cj = 1
+
+M
+
+> M
+
+## ∑
+
+> m=1
+
+sm,j. (6) 331 
+
+Because not all methods support downstream biology (Section 2.5, axis 6), they receive s = 0 332 
+
+on those metrics, which inflates the score of methods that do. In the current benchmark, 8 333 
+
+of 17 active metrics are reported only by CLOP-DiT; the remaining 9 distributional metrics 334 
+
+are shared by all methods. To enable fair like-for-like comparison, the common-metrics- 335 
+
+only composite ( Ccommon  
+
+> j
+
+, restricted to the 9 shared distributional metrics) serves as the 336 
+
+primary benchmark figure. The full composite ( Cj over all M = 17 metrics) is reported as 337 
+
+a supplementary capability ranking but should not be used for method comparison, as the 338 
+
+8 exclusive metrics structurally bias it in favour of CLOP-DiT. Table 2 and the per-metric 339 
+
+panels in Figure 7 report individual metrics for transparent comparison. Bootstrap 95% 340 
+
+confidence intervals (percentile method, B=1, 000) for all headline generation metrics are 341 
+
+provided in Table A8 (Appendix A). 342 
+
+3. Results 343 
+
+We report in-distribution results along the six evaluation axes defined in the Methods, 344 
+
+organized by evidence type: training dynamics and embedding space (Figure 2); core 345 
+
+generation quality metrics and per-type analysis (Figure 3); gene-level fidelity (Figures 4–5); 346 
+
+conditioning robustness and diversity trade-offs (Figures 5, 6, and 7); baseline comparisons 347 
+
+and benchmarking (Figure 7); and downstream biological validation (Figure 8). This 348 
+
+structure allows readers to assess evidence quality at multiple resolutions, from training 349 
+
+convergence through partial downstream biological utility. 350 
+
+3.1. Training Dynamics and Embedding Space 351 
+
+Figure 2 shows the training curves for both stages of the pipeline. CLOP (panels a–d) 352 
+
+converges to a training loss of 1.187 at epoch 60, with batch training accuracy reaching 87%. 353 
+
+The validation accuracy of ∼2.5% appears modest but represents 6.4 × random chance 354 
+
+(1/256 = 0.39%)—a 256-way contrastive ranking task in which the model must match each 355 
+
+text to its corresponding cell from a full mini-batch—and, more importantly, produces 356 
+
+a well-separated condition space (pairwise cosine 0.222 vs. 0.994 for raw embeddings). 357 
+
+DiT (panels e–h) achieves a final validation velocity cosine of 0.990 with EMA, indicating 358 
+
+near-perfect velocity field prediction. Training proceeds in three phases: rapid initial 359 
+
+convergence (epochs 1–10, val_cosine 0.13 → 0.69), a plateau of fine-grained refinement 360 
+
+(epochs 10–180), and final EMA-driven convergence. 361 
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint
+
+Version March 26, 2026 submitted to Genes 10 of 33 
+
+The embedding space (panels i–n) visualizes the alignment at two levels. The CLOP- 362 
+
+projected embedding space via UMAP [ 39 ] shows text and cell embeddings jointly projected 363 
+
+into the shared 512-dimensional space forming distinct clusters, with text embeddings 364 
+
+co-localizing with their corresponding cell-type clusters, confirming successful cross-modal 365 
+
+alignment. Generated cells occupy overlapping but distinguishable regions relative to their 366 
+
+real counterparts, demonstrating that conditional flow matching captures the type-specific 367 
+
+structure of the data manifold while introducing controlled variation through the stochastic 368 
+
+ODE starting point z0 ∼ N (0, I). 369 0 50 100    
+
+> Epoch
+> 0.1
+> 0.2
+> Contrastive Loss
+> CLOP Loss
+> Train Val
+> 050 100
+> Epoch
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Cosine Separation
+
+Inter-Type Separation                     
+
+> Inter-sep
+> 050 100
+> Epoch
+> 0
+> 50
+> 100
+> Accuracy (%)
+> Classification Accuracy
+> Val Acc
+> Train Acc
+> Top-5
+> Top-10
+> 050 100
+> Epoch
+> 0.0
+> 0.5
+> 1.0
+> Score
+> Embedding Quality
+> Text Cell
+> Inter-sep
+> Mean Cos
+> 80 160 240
+> Epoch
+> 10 1
+> 10 0
+> Flow-Matching Loss
+> DiT Loss
+> Train MSE Val MSE
+> 80 160 240
+> Epoch
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Cosine Similarity
+> Fidelity (Cosine)
+> 80 160 240
+> Epoch
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> Learning Rate
+> ×10 4LR Schedule
+> 025 50 75 100
+> Training Progress (%)
+> 0.0
+> 0.5
+> 1.0
+> Remaining Loss Gap
+> Convergence Comparison
+> DiT val loss
+> CLOP val loss
+> 90% converged 2.43 16.59
+> UMAP 1
+> 0.92
+> 12.54
+> UMAP 2
+
+Text Prototypes (CLOP space)  
+
+> 2.36 16.41
+> UMAP 1
+> 0.26
+> 13.95
+> UMAP 2
+
+Cell + Prototype Overlay (4968 cells)  
+
+> 4k 8k
+> Cells
+> CD8+ cytotoxic T lymp
+> Tissue-resident mac.
+> Generic epith. form p
+> Neutrophils
+> Interferon-stimulated
+> Antibody-secreting pl
+> Tip and angiogenic en
+> Prostate luminal epit
+> Excitatory glutamater
+> Capillary endo. cells
+> Hippocampal dentate g
+> Spinal cord interneur
+> Plasmacytoid dendriti
+> Multiciliated epith.
+> Melanocytes
+> Conventional dendritic
+> Ameloblasts
+> Kidney proximal tubule
+
+Cells per Type  
+
+> 3.08 16.17
+> UMAP 1
+> 0.82
+> 12.55
+> UMAP 2
+
+Real (5000 cells)  
+
+> 3.1 16.2
+> UMAP 1
+> 0.75
+> 12.69
+> UMAP 2
+
+Generated (5000 cells) 
+
+> 9.64
+> UMAP 1
+> 5.97
+> UMAP 2
+
+Type-Colored Overlay 
+
+> Real
+> Generated
+
+Figure 2. Training dynamics and embedding space analysis. Training dynamics (a–d ) CLOP loss, inter-type cosine separation, batch accuracy, and embedding-quality metrics over 60 epochs. ( e–h ) DiT train/validation loss, velocity cosine similarity, learning-rate schedule, and normalized convergence comparison. Embedding space (i–j ) CLOP-projected text and cell embeddings form aligned clusters in the shared space. (k) Cell-count distribution across types. (l–n ) Real and generated scGPT embeddings occupy overlapping but distinguishable regions. 
+
+3.2. Core Evaluation Metrics 370 
+
+Table 2 and Figure 3 summarize the core results across generation configurations. At 371 
+
+CFG = 2.0 with 10-step Euler integration, CLOP-DiT achieves a KNN top-1 accuracy of 372 
+
+36.9% (25 × random chance of 1.45%; 52 points below the 89% real-data baseline), KNN 373 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 11 of 33 
+
+top-5 of 55.3%, steering accuracy of 81.0%, and linear classifier accuracy of 51.1%. Note that 374 
+
+the Fréchet distance (FD) reported in Table 2 is often misleading for conditional generation, 375 
+
+because global mean/covariance matching tends to favour unconditional baselines; FD 376 
+
+is therefore reported alongside the directional metrics (KNN, steering, diversity). Uncon- 377 
+
+ditional generation ( s=0) collapses to random chance (KNN = 1.0%, steering = 47.5%), 378 
+
+providing a critical ablation confirming that the text condition is the sole driver of cell-type 379 
+
+specificity. 380 
+
+Table 2. Core evaluation results. KNN-1 and KNN-5: top-1 and top-5 k-nearest-neighbor accuracy among 69 deduplicated cell types (random = 1.45%). Steering: pairwise directional accuracy (random = 50%). DivR: diversity ratio with ideal = 1.0. LinAcc: logistic regression accuracy in embedding space (trained on real, evaluated on generated; distinct from the expression-space downstream classifier in Figure 8). FD: Fréchet distance [ 38 ] (lower is better, but misleading for conditional generation; see text). 
+
+Method KNN-1 KNN-5 Steering DivR LinAcc FD 
+
+Real data 0.890 0.993 — 1.000 0.942 0.00 CFG=2.0 Euler-10 0.369 0.553 0.810 0.513 0.511 3.17 CFG=3.0 Euler-10 0.367 0.554 0.802 0.473 0.508 3.46 CFG=1.0 Mid-10 0.288 0.461 0.807 0.929 0.357 2.64 CFG=1.0 Euler-50 0.293 0.466 0.807 0.919 0.365 2.65 CFG=0.0 (uncond) 0.010 0.051 0.475 1.833 0.010 0.58 Gaussian 0.011 0.048 0.466 2.277 0.009 0.03 Random chance 0.010 — 0.500 — — —
+
+Bootstrap confidence intervals. To quantify evaluation sampling uncertainty, we 381 
+
+computed bootstrap 95% CIs by resampling the 69 cell types in the generation cache 382 
+
+with replacement ( B=1, 000, percentile method). All 69 deduplicated types have both real 383 
+
+and generated cells, so the bootstrap covers the full evaluation set consistently. At an 384 
+
+intermediate reference configuration (CFG = 1.5, Midpoint, 20 steps; selected to balance 385 
+
+fidelity and diversity between the two primary operating points): KNN top-1 = 0.509 [0.421, 386 
+
+0.586], KNN top-5 = 0.728 [0.658, 0.794], steering = 1.000 [1.000, 1.000] ( ceiling effect : all 387 
+
+bootstrap resamples achieve perfect pairwise accuracy at this configuration, indicating that 388 
+
+the steering metric saturates at moderate-to-high CFG and becomes non-discriminative; 389 
+
+this ceiling limits the interpretability of steering differences across configurations), diversity 390 
+
+ratio = 0.969 [0.963, 0.974], linear accuracy = 0.583 [0.518, 0.646], and centroid cosine = 391 
+
+0.898 [0.875, 0.913]. The narrow diversity ratio and centroid cosine CIs reflect uniformly 392 
+
+high performance across types; the wider KNN CIs reflect type-dependent classification 393 
+
+difficulty. These CIs capture evaluation sampling variability; inter-run variance across three 394 
+
+training seeds is reported separately in Table 3. 395 
+
+3.3. Multi-Seed Validation 396 
+
+To quantify inter-run variance from stochastic initialization, data shuffling, and mini- 397 
+
+batch ordering, we trained three independent CLOP + DiT pipelines (seeds 42, 123, 456) 398 
+
+with identical hyperparameters and evaluated each under both operating regimes (Table 3). 399 
+
+Inter-run standard deviations are small relative to effect sizes: steering accuracy varies 400 
+
+by < 1 percentage point ( σ = 0.009), diversity ratio by < 2 percentage points ( σ = 0.015– 401 
+
+0.016), and centroid cosine by ∼ 1% ( σ = 0.010–0.012). KNN top-1 accuracy exhibits the 402 
+
+largest inter-seed variance ( σ = 0.082 in the high-fidelity regime), reflecting the sensitivity 403 
+
+of nearest-neighbor classification to the decision boundary in the tightly-packed scGPT 404 
+
+embedding space. Critically, the qualitative conclusions—25 × above random chance, 405 
+
+∼52-point gap from real data, near-ideal diversity at CFG = 1.0—are stable across all three 406 
+
+seeds. 407 
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint
+
+Version March 26, 2026 submitted to Genes 12 of 33 25 50 75 100 
+
+Value (accuracy shown as %) 
+
+CLOP Loss 
+
+Proto Acc 
+
+Top-5 Acc 
+
+Text-Cell 
+
+DiT Loss 
+
+DiT Cosine 
+
+0.0457 
+
+99.8% 
+
+100.0% 
+
+97.9% 
+
+0.0222 
+
+99.0% 
+
+Training Convergence 
+
+FD 
+
+(inv) 
+
+Coverage Centroid 
+
+Cos 
+
+Diversity 
+
+Ratio 
+
+Gene 
+
+Corr 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Score
+
+Quality Profile 
+
+CLOP-DiT Gaussian baseline 
+
+0.790 
+
+0.134 
+
+0.942 0.942 
+
+1.000 
+
+0.911 
+
+0.011 
+
+0.938 
+
+1.000 
+
+0.000 
+
+0.8 1.6 2.4 3.2 
+
+Score 
+
+Diversity 
+
+Ratio 
+
+Cond 
+
+Gain 
+
+NN 
+
+Distance 
+
+0.969 [0.963, 0.974] 
+
+1.709 
+
+0.701 
+
+Collapsed: 0/69 | Near-copies: 0 
+
+Diversity Health 
+
+10 5
+
+10 4
+
+Deviation (1 r) 
+
+Gene Pearson r 
+
+Gene Spearman 
+
+Per-Type r (mean) 
+
+Per-Type r (min) 
+
+4.1e-06 
+
+6.6e-06 
+
+4.0e-05 
+
+9.7e-05 
+
+Lower = better (log scale) 
+
+Expression Fidelity 0.00 0.25 0.50 0.75 1.00 
+
+Centroid Cosine Similarity 
+
+Inhibitory GABAergic neur 
+
+Smooth muscle cells 
+
+Spinal cord interneurons 
+
+Hepatocytes 
+
+Heat-shock and stress res 
+
+Circulating monocytes 
+
+Actively proliferating 
+
+Tissue-resident mac. 
+
+Alveolar type 2 (AT2) pne 
+
+Natural killer (NK) cells 
+
+Cholangiocytes and bile d 
+
+Erythroid lineage cells 
+
+Luminal epithelial cells 
+
+B lymphocytes 
+
+Hippocampal dentate gyrus 
+
+Megakaryocytes 
+
+Mature red blood (erythro 
+
+Prostate luminal epith. 
+
+Mesenchymal stem and stro 
+
+Pancreatic alpha cells 
+
+Intermediate neural prog. 
+
+Lymphatic endo. cells 
+
+Lower motor neurons 
+
+Oligodendrocyte precursor 
+
+Real Gen Centroid Cosine 
+
+mean (see caption) 
+
+0.3 0.6 0.9 1.2 
+
+Fréchet Distance (lower = better) 
+
+Myoepith. and basal cells 
+
+Multiciliated epith. cells 
+
+Oligodendrocytes 
+
+Pituitary thyrotroph cells 
+
+Melanocytes 
+
+Lymphatic endo. cells 
+
+Microglia 
+
+Prostate luminal epith. 
+
+Ameloblasts 
+
+Merkel cells 
+
+Megakaryocytes 
+
+Hepatocytes 
+
+Hematopoietic stem and pr 
+
+Club (Clara) secretory 
+
+Alveolar type 2 (AT2) pne 
+
+Erythroid lineage cells 
+
+Heat-shock and stress res 
+
+Luminal epithelial cells 
+
+CD4+ helper T lymphocytes 
+
+Actively cycling in S/G2/ 
+
+Excitatory glutamatergic 
+
+CD8+ cytotoxic T lymph. 
+
+Smooth muscle cells 
+
+Inhibitory GABAergic neur 
+
+Fréchet Outlier Profile 
+
+2.0 2.5 3.0 3.5 4.0 
+
+log10(Number of Real Cells) 
+
+0.45 
+
+0.60 
+
+0.75 
+
+0.90 
+
+> Centroid Cosine Similarity
+
+Inhibitory 
+
+Kidney prox 
+
+Dorsal horn 
+
+Smooth musc 
+
+Spinal cord 
+
+Fidelity vs Abundance 
+
+0.6 
+
+0.8 
+
+1.0 
+
+Div. 
+
+ratio Vascular end 
+
+> Neutrophils
+> Pituitary go
+> CD4+FOXP3+ r
+> Merkel cells
+> Inhibitory G
+> Conventional
+> Erythroid li
+
+Vascular endo. cells 
+
+Mesenchymal stem and 
+
+Generic epith. form p 
+
+Alveolar type 1 (AT1) 
+
+Lymphatic endo. cells 
+
+Multiciliated epith. 
+
+Fibroblasts and mesen 
+
+Ameloblasts 
+
+Luminal epith. cells 
+
+Inhibitory GABAergic 
+
+Tissue-resident mac. 
+
+Pancreatic delta cells 
+
+Club (Clara) secretory 
+
+CD8+ cytotoxic T lymp 
+
+> Cell Type (text prototypes)
+
+Cosine Similarity (sorted by diagonal) 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+Cos. 
+
+sim. 
+
+0.0 0.5 1.0 
+
+Cosine Similarity 
+
+Capillary endo. cells 
+
+Neuroendocrine cells 
+
+Club (Clara) secretory 
+
+Urothelial (transitio 
+
+Microglia 
+
+Exhausted T cells 
+
+B lymphocytes 
+
+Luminal epith. cells 
+
+Merkel cells 
+
+Melanocytes 
+
+Dorsal horn sensory n 
+
+Spinal cord interneur 
+
+Lymphatic endo. cells 
+
+Prostate luminal epit 
+
+Hepatocytes 
+
+Pituitary thyrotroph 
+
+MHC-II-high antigen-p 
+
+Vascular endo. cells 
+
+-0.095 
+
+-0.086 
+
+Per-Type Alignment 
+
+[0 excellent / 0 good / 69 poor] 
+
+> =0.029 | med=0.036
+
+2 4 6 8
+
+Density 
+
+0.2 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Cosine Similarity
+
+Diag vs Off-Diag 
+
+Diagonal (n=69) 
+
+Off-diagonal (n=4692) 
+
+Mann Whitney U test 
+
+d=0.4, p=1.7e-04*** 
+
+Figure 3. Generation quality overview: metrics, per-type fidelity, and text–cell alignment. Metrics dashboard (a) Training convergence summary. ( b) Multi-metric comparison between CLOP-DiT and the Gaussian baseline. ( c) Diversity health gauges. ( d) Expression-fidelity deviation (1 − r, log scale). 
+
+Per-type fidelity (e) Per-type centroid cosine similarity ranked across cell types, ( f) Fréchet outlier profile, and ( g) abundance–fidelity scatter. Text–cell alignment (h) 69 ×69 cosine similarity heatmap (mean diagonal μdiag = 0.916, σ = 0.053; Cohen’s d = 5.8, separation ratio 20.9 ×). ( i) Per-type alignment bars. ( j) Diagonal vs. off-diagonal distribution comparison ( ∆ = 0.872, 95% CI [0.875, 0.913]). 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 13 of 33 
+
+Table 3. Multi-seed validation (3 independent training runs). Mean ± standard deviation for core metrics under both operating regimes. All three seeds use identical hyperparameters (Table A3), identical data splits, and identical evaluation protocol. 
+
+High-Fidelity (CFG=2.0, Euler) High-Diversity (CFG=1.0, Midpoint) Metric Mean ± Std Range Mean ± Std Range 
+
+KNN Top-1 0.348 ± 0.082 [0.258, 0.419] 0.273 ± 0.048 [0.220, 0.312] KNN Top-5 0.535 ± 0.016 [0.524, 0.553] 0.465 ± 0.038 [0.430, 0.504] Steering 0.808 ± 0.009 [0.798, 0.817] 0.801 ± 0.008 [0.792, 0.807] Diversity Ratio 0.511 ± 0.015 [0.496, 0.525] 0.924 ± 0.016 [0.906, 0.937] Linear Acc. 0.488 ± 0.023 [0.465, 0.511] 0.355 ± 0.097 [0.257, 0.452] Centroid Cos. 0.892 ± 0.012 [0.878, 0.900] 0.892 ± 0.010 [0.880, 0.898] 
+
+3.4. Per-Type Generation Quality and Text–Cell Alignment 408 
+
+Beyond aggregate metrics, per-type analysis reveals which cell types benefit most from 409 
+
+text conditioning and where failures concentrate. Figure 3 presents per-type generation 410 
+
+quality and text–cell alignment. The enhanced per-type analysis now makes heterogeneity 411 
+
+explicit: centroid cosine is ranked across all 69 deduplicated cell types; the Fréchet profile 412 
+
+highlights outlier types rather than only reporting the mean, and the abundance–fidelity 413 
+
+scatter encodes Fréchet distance as bubble size and diversity ratio as color. This reveals that 414 
+
+failure modes are concentrated in a small subset of biologically difficult or underrepresented 415 
+
+types rather than being uniform across the atlas. The text–cell alignment analysis (panels 416 
+
+h–j) confirms that generated cells remain most similar to their intended text condition 417 
+
+despite these type-specific differences. 418 
+
+3.5. Gene-Level Fidelity 419 
+
+A key question for conditional generation is whether cell-type-specific marker gene 420 
+
+signatures and gene-level expression statistics are preserved. Figure 4 addresses this at two 421 
+
+levels: marker-gene comparison (top) confirms that CLOP-DiT preserves cell-type-specific 422 
+
+expression signatures, while per-gene correlation analysis (bottom) localizes fidelity in gene- 423 
+
+wise means and marker-level residuals. Figure 5 provides a broader view of expression 424 
+
+distribution properties, including per-gene coefficient of variation and per-cell variability. 425 
+
+3.6. Conditioning Landscape and Diversity Trade-Offs 426 
+
+Having established that CLOP-DiT generates biologically recognizable cells (Sections 2.5– 427 
+
+3), we now ask whether the generation can be controlled —and at what cost to biological 428 
+
+diversity. 429 
+
+Figure 5 visualizes how text conditions distribute in the CLOP projection space and 430 
+
+how the resulting generated cell clouds cluster accordingly. The well-separated condition- 431 
+
+ing landscape enables targeted control of cell-type generation via classifier-free guidance. 432 
+
+Together with Figures 6 and 7, this section is the main robustness analysis for whether 433 
+
+control can be increased without erasing biologically meaningful heterogeneity. 434 
+
+Building on this conditioning structure, Figure 6 decomposes diversity behavior into 435 
+
+interpretable diagnostics rather than a single scalar summary. Panel ( a) shows that most 436 
+
+cell types remain under-dispersed relative to real data, whereas panel ( b) shows nearest- 437 
+
+neighbour distances that stay above the memorization threshold. Panel ( c) shows that 438 
+
+increasing classifier-free guidance monotonically reduces intra-type diversity while leaving 439 
+
+the mean latent norm nearly unchanged, and panel ( d) shows that adding conditioning 440 
+
+noise consistently increases within-type spread over centroid-only conditioning. Panel ( e) 441 
+
+identifies a narrow sweet-spot around the production configuration ( ε = 0.03). Comple- 442 
+
+mentary quantitative sweeps in Table A2 show that KNN accuracy saturates near CFG 443 
+
+= 2.0–3.0 ( ∼41 × random in the fine-grained sweep) before declining. Expression-level 444 
+
+diversity measurements (Figure 7) confirm that the Midpoint solver at CFG = 1.0 achieves 445 
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint
+
+Version March 26, 2026 submitted to Genes 14 of 33 0 10 20 30                        
+
+> Mean Expression
+> CD8A
+> GZMB
+> CD68
+> CD163
+> KRT8
+> COL1A1
+> COL1A2
+> Real Gen
+> CD8A
+> GZMB
+> CD68
+> CD163
+> KRT8
+> COL1A1
+> COL1A2
+> CD8A
+> GZMB
+> CD68
+> CD163
+> KRT8
+> COL1A1
+> COL1A2
+> Pituitary thyro
+> Myoepith. and b
+> Pericytes and m
+> Kidney proximal
+> Real Generated
+> 30.0
+> 32.5
+> 35.0
+> Expr.
+> CD8A
+> GZMB
+> CD68
+> CD163
+> KRT8
+> COL1A1
+> COL1A2
+> Pituitary thyro
+> Myoepith. and b
+> Pericytes and m
+> Kidney proximal
+> +0.06 +0.04 +0.05
+> +0.03
+> -0.04 -0.06 +0.02
+> Expression (Gen Real)
+> 0.05
+> 0.00
+> 0.05
+> 0.0008 0.0006 0.0004 0.0002 0.0000 0.0002 0.0004
+> log 2Fold Change (Gen / Real)
+> CD163
+> CD68
+> CD8A
+> GZMB
+> COL1A1
+> COL1A2
+> KRT8
+> Marker Fold Change 24 32 40
+> Real Mean Expression
+> 24
+> 32
+> 40
+> Generated Mean Expression
+> Per-Gene Correlation
+> CFH
+> SHD
+> EXPH5
+> FGL1
+> U91319.1
+> 0.000
+> 0.641
+> 1.281
+> |Resid|
+> ×10 2
+> 10 5
+> 10 4
+> Deviation (1 r)
+> Pancreatic beta cells
+> Exhausted T cells
+> Hepatocytes
+> Hippocampal dentate gyr
+> Lower motor neurons
+> Lymphatic endo. cells
+> Circulating monocytes
+> Oligodendrocyte precurs
+> Myoepith. and basal
+> Multiciliated epith.
+> Expression in scGPT binned space
+> Per-Type Expression Fidelity
+> CD3D
+> CD3E
+> CD8A
+> CD8B
+> CD4
+> IL7R
+> MS4A1
+> CD79A
+> GNLY
+> NKG7
+> CD14
+> LYZ
+> 10
+> 20
+> 30
+> Expression (mean ± SEM)
+> Marker Gene Expression
+> 0.06
+> 0.03
+> 0.00
+> 0.03
+> Residual (Gen Real)
+> 30
+> 60
+> 90
+> Density
+> ||<0.01: 91%
+> ||<0.10: 100%
+> Per-Gene Residual Distribution
+> Zero
+> Mean=-0.002
+
+Figure 4. Gene-level fidelity analysis. Top row (marker gene comparison): ( a) Paired bar chart of canonical marker gene expression in real vs. generated cells. ( b) Per-type × marker dual heatmap. (c) Difference heatmap ( ∆ = generated − real). ( d) Fold-change waterfall. Bottom row (expression correlation): ( e) Per-gene mean expression scatter with residual coloring. ( f) Per-type deviation from perfect correlation (1 − r, log scale). ( g) Marker-gene expression comparison with error whiskers. (h) Per-gene residual distribution. 
+
+near-ideal diversity (0.930) while maintaining 80.7% steering and best preserving gene-level 446 
+
+variance. 447 
+
+3.7. Baseline Comparison and Composite Benchmark 448 
+
+How does CLOP-DiT compare to existing approaches? This section benchmarks against 449 
+
+both parametric baselines (Gaussian per-type sampling, shuffled-label controls) and learned 450 
+
+generative models (scVI Latent, scGen, EmbeddingVAE). 451 
+
+CLOP-DiT is compared against baseline methods including unconditional generation 452 
+
+(CFG = 0), Gaussian sampling from per-type statistics, shuffled-label and mean-collapse 453 
+
+controls, EmbeddingVAE, scVI Latent [ 3], and a conditional scGen baseline [ 5] (conditional 454 
+
+scVI with cell-type covariates, trained on the same expression matrix; see Section 4). Figure 7 455 
+
+shows that CLOP-DiT is strongest on conditioning-sensitive and downstream-relevant 456 
+
+metrics (e.g., steering and classifier transfer), while unconditional distribution-matching 457 
+
+baselines outperform CLOP-DiT on FD-like mean-matching objectives (see Discussion for 458 
+
+the Fréchet distance caveat). 459 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 15 of 33 0.0 0.5 1.0    
+
+> Real CV (std/|mean|) ×10 2
+> 0.0
+> 0.5
+> 1.0
+> Generated CV
+> ×10 2
+> r = 0.991
+
+Per-Gene Variability (CV)   
+
+> y = x
+> EXPH5
+> LYPD6B
+> FST
+> ARSI
+> ZBED2
+> SHD
+> 0.0000
+> 0.0005
+> | CV|
+> 0800 1600
+> Gene index (sorted by real mean)
+> 25
+> 30
+> 35
+> 40
+> Expression
+
+Expression Range  
+
+> Real 10 90%
+> Gen 10 90%
+> Real mean
+> Gen mean
+> 2.16 2.20
+> Per-Cell Std Dev
+> 0
+> 20
+> 40
+> 60
+> Density
+> Std ratio: 1.001
+
+Per-Cell Variability          
+
+> 0.5 1.0 1.5
+> Std Ratio (Gen / Real, clipped at 5×)
+> EREG
+> TMCC1
+> TAGLN
+> COL5A2
+> LIMA1
+> TRERF1
+> SPI1
+> PPP1R18
+> CCL5
+> TPM2
+> ASPH
+> RNF130
+> 1.53×
+> 1.53×
+> 1.53×
+> 1.54×
+> 1.55×
+> 1.56×
+> Most Divergent Genes
+> (over- & under-dispersed)
+> Real ( =2.187) Gen ( =2.188) 0.0 0.4
+> 0.0
+> 0.3
+> PC2
+> Real (n=2077)
+> 0.0 0.4
+> Centroid (n=512)
+> 0.0 0.4
+> Noise (n=512)
+> 0.0 0.4
+> Variant (n=512)
+> Centroid Noise Variant
+> 0.000
+> 0.025
+> 0.050
+> 0.075
+> 0.100
+> 0.125
+> Mean centroid shift (PC units)
+
+Centroid Shift    
+
+> Real Centroid Noise Variant
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Within-type diversity
+
+Diversity by Mode   
+
+> Centroid Noise Variant
+> 0.04
+> 0.08
+> 0.12
+> Per-type centroid shift
+
+Shift Distribution                    
+
+> Centroid Noise Variant
+> 0.0
+> 0.5
+> 1.0
+> KNN-5 Accuracy  1.00 0.99 1.00
+> Identity Preservation (KNN-5)
+> Real
+> Centroid
+> Noise
+> Variant
+> CD8+ cytotoxic
+> Actively prolif
+> Hematopoietic s
+> Megakaryocytes
+> Kidney proximal
+> 0.98 0.91 0.94 0.89
+> 0.97 0.88 0.92 0.89
+> 0.93 0.80 0.88 0.84
+> 0.93 0.83 0.89 0.85
+> 0.65 0.60 0.75 0.67
+
+Per-Type Diversity (1 cos)    
+
+> Real Centroid Noise Variant
+> 0.00
+> 0.25
+> 0.50
+> Pairwise Cosine Similarity
+
+Cluster Tightness     
+
+> 0.75
+> 1.00
+> CD8+ cytotoxic Actively proli Hematopoietic Megakaryocytes Kidney proxima
+
+Figure 5. Expression distribution analysis and conditioning landscape. (Top) (a) Per-gene coefficient-of-variation scatter (real vs. generated) with abbreviated outlier callouts moved to the panel margin. ( b) Expression-range ribbons. ( c) Per-cell variability distributions. ( d) Top variable genes ranked by standard-deviation ratio. (Bottom) (e) PCA projection of real and generated cells under three conditioning modes (centroid, noisy, variant); the shared cell-type legend is placed beneath the panel set to keep the scatter axes clear. ( f) Mean centroid shift per mode. ( g) Within-type diversity by mode relative to the real baseline. ( h) Per-type centroid shift distributions. ( i) KNN-5 identity-preservation accuracy. ( j) Per-type diversity heatmap (1 − mean cosine ). ( k) Pairwise cosine violin plots comparing cluster tightness across modes. 
+
+Figure 7 aggregates these metrics into a composite benchmark score across eight 460 
+
+methods (CLOP-DiT, scGen, scVI Latent, EmbeddingVAE, and four synthetic baselines). 461 
+
+On the 9 distributional metrics shared by all methods (the primary, fair like-for-like 462 
+
+comparison), the Gaussian baseline (0.747) outperforms CLOP-DiT (0.694) , demonstrating 463 
+
+that mean-matching approaches remain competitive on unconditional distributional quality. 464 
+
+The scGen baseline (common-metrics composite 0.425; trained as a conditional scVI with 465 
+
+cell-type labels, equivalent to scGen’s core capability) achieves the best coverage among 466 
+
+all methods (0.384 vs. 0.028 for CLOP-DiT), reflecting the expressiveness of its cell-type- 467 
+
+conditioned VAE latent space. However, scGen’s per-type metrics (centroid cosine, diversity 468 
+
+ratio) are not directly comparable because its 32-dimensional latent space requires PCA 469 
+
+projection to align with the 512-dimensional CLOP-DiT space. When the 8 downstream 470 
+
+biology metrics (clustering, classifier transfer, DE concordance)—which only CLOP-DiT 471 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 16 of 33 0.0 0.2 0.4 0.6 0.8 1.0 1.2              
+
+> Diversity Ratio (gen / real)
+> Dorsal horn s
+> Capillary end
+> Excitatory gl
+> Merkel cells
+> Mature red bl
+> Radial glial
+> MHC-II-high a
+> Megakaryocytes
+> Inhibitory GA
+> Intra-Type Diversity Ratio
+> p5 p25 median mean p75 p95
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Cosine Distance to Nearest Real Cell
+> Nearest-Neighbour Distance
+> 246
+> CFG Scale
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Mean Intra-Type Diversity
+> Div.
+> Norm
+> CFG Scale vs Diversity & Norm
+> Tissue-resi
+> Erythroid l
+> Pituitary t
+> Retinal gan
+> Mesenchymal
+> Cell Type
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Intra-Type Div.
+> Centroid vs Noisy Conditioning
+> 0.96
+> 0.99
+> 1.02
+> 1.05
+> Mean Norm
+> FD
+> Sweet spot
+> Production =0.03
+> Centroid cos
+> Diversity
+> 0.00 0.01 0.02 0.03 0.05 0.08
+> Noise Scale ( )
+> 0.105
+> 0.120
+> 0.135
+> 0.150
+> Fréchet Distance
+> 0.0
+> 0.3
+> 0.6
+> 0.9
+> Cosine / ratio
+
+Figure 6. Diversity diagnostics and noise-scale trade-off. (a) Intra-type diversity ratio (gener-ated/real) ranked across cell types; the dashed line marks the ideal ratio of 1.0. ( b) Percentiles of the cosine distance from each generated cell to its nearest real-cell neighbour; the dotted line marks the memorization threshold. ( c) Classifier-free guidance (CFG) scale versus mean intra-type diversity and mean latent norm. ( d) Per-type intra-type diversity under centroid-only versus centroid+noise conditioning. ( e) Noise-scale sweep showing Fréchet distance, centroid cosine, and diversity ratio as functions of ε; the legend is placed to the right of the panel to keep the plotting area unobstructed, the shaded band marks the sweet-spot region, and the vertical line marks the production configuration (ε = 0.03). 
+
+reports—are included, the full composite reaches 0.838 vs. 0.395 for Gaussian and 0.225 for 472 
+
+scGen; however, this full composite is structurally biased in favour of CLOP-DiT because 473 
+
+the 8 exclusive metrics guarantee a scoring advantage, and should not be used for method 474 
+
+ranking . The common-metrics-only composite is the recommended comparison. Bootstrap 475 
+
+95% confidence intervals support the stability of per-metric orderings. 476 
+
+3.8. Downstream Biological Validation 477 
+
+Beyond distributional metrics, we evaluate whether generated cells are usable in 478 
+
+standard single-cell analysis workflows. These analyses are implemented from matched 479 
+
+real/generated AnnData objects with shared preprocessing and use Scanpy [ 40] for the 480 
+
+single-cell workflow, ensuring that any downstream advantage is not caused by mis- 481 
+
+matched feature engineering. Two downstream tasks are assessed on real and generated 482 
+
+cells jointly: 483 
+
+Clustering, mixing, and classifier alignment (Figure 8): We construct matched An- 484 
+
+nData objects from real and generated expression matrices, select 2,000 shared highly 485 
+
+variable genes, perform PCA and Leiden [ 25 ] clustering on the combined dataset, and 486 
+
+compute the Adjusted Rand Index (ARI), Normalized Mutual Information (NMI), cluster 487 
+
+purity, and per-type KNN mixing scores [ 41 ]. High mixing scores indicate that generated 488 
+
+cells partially co-localize with real cells of the same type in the joint embedding, though 489 
+
+the discriminator AUC of 0.656 confirms that real and generated populations remain distin- 490 
+
+guishable. A logistic regression classifier is trained on real PCA embeddings to predict cell 491 
+
+type, then evaluated on generated embeddings to measure transfer accuracy and macro-F1. 492 
+
+The enhanced classifier panel reports a per-type precision/recall/F1 heatmap in addition 493 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 17 of 33 Cell Std 
+
+(across genes) 
+
+Gene Std 
+
+(across cells) 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+> Standard Deviation
+> ratio=1.00
+> ratio=1.04
+
+Expression Variability Summary 
+
+> Real
+> Generated
+
+Min Mean Max 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+1.2 
+
+> Gene Std Ratio (gen / real)
+
+Per-Type Gene Std Ratio 
+
+> ratio=1 (equal diversity)
+
+FD Cosine Diversity Coverage 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Value
+
+Key Metrics Comparison 
+
+0.0 0.2 0.4 0.6 0.8 1.0 
+
+Normalised Value 
+
+Gaussian N( , ²I) 
+
+CLOP-DiT 
+
+Shuffled Labels 
+
+> 0.75
+> 0.50
+> 0.42
+
+Normalised Scores (1 = best) 
+
+0.0 0.3 0.6 0.9 
+
+Absolute Improvement 
+
+FD | Gaussian N( , 
+
+Cen | Gaussian N( , 
+
+Div | Gaussian N( , 
+
+Cov | Gaussian N( , 
+
+FD | Shuffled Label 
+
+Cen | Shuffled Label 
+
+Div | Shuffled Label 
+
+Cov | Shuffled Label 
+
+> -0.121
+> +0.004
+> -0.079
+> +0.124
+> -0.099
+> +0.917
+> -0.058
+> +0.107
+
+CLOP-DiT Advantage ( metric)       
+
+> CLOP-DiT Gaussian N( , ²I) Shuffled Labels
+> FD Cosine Diversity Coverage FD
+> MMD
+> KL
+> Cov
+> Den
+> Cent
+> Min
+> Div
+> Coll
+> r
+> CLOP-DiT
+> EmbeddingVAE
+> scVI Latent
+> scGen
+> Gaussian N( ,
+> Shuffled Labe
+> Random N(0,I)
+> Mean-only (co
+
+Metrics Comparison Heatmap    
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Normalised Score (1 = best)
+> 0.0 0.3 0.6 0.9
+
+Normalised Aggregate Score  
+
+> #1 Gaussian N( , ²
+> #2 CLOP-DiT
+> #3 Shuffled Labels
+> #4 Random N(0,I)
+> #5 Mean-only (coll
+> #6 scGen
+> #7 scVI Latent
+> #8 EmbeddingVAE
+> 0.395
+> 0.838
+> 0.298
+> 0.298
+> 0.280
+> 0.225
+> 0.212
+> 0.099
+> 0.747
+> 0.694
+> 0.563
+> 0.562
+> 0.529
+> 0.425
+> 0.400
+> 0.188
+
+Composite Score (higher = better) 
+
+> All metrics (full)
+> Common metrics (primary)
+> FD
+> Cent Cos
+> Div
+> Cover
+> Gene r
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> Value
+
+Key Metrics        
+
+> 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75
+
+Metric Value 
+
+> CLOP-DiT
+> scVI Latent
+> Gaussian N( ,
+> Random N(0,I)
+> CLOP-DiT
+> scVI Latent
+> Gaussian N( ,
+> Random N(0,I)
+> CLOP-DiT
+> scVI Latent
+> Gaussian N( ,
+> Random N(0,I)
+
+95% Bootstrap CI Comparison   
+
+> CLOP-DiT
+> EmbeddingVAE
+> scVI Latent
+> scGen
+> Gaussian N( , ²I)
+> Shuffled Labels
+> Random N(0,I)
+> Mean-only (collaps
+> CLOP-DiT
+> EmbeddingVAE
+> scVI Latent
+> scGen
+> Gaussian N( , ²I)
+> Shuffled Labels
+> Random N(0,I)
+> Mean-only (collaps
+
+Figure 7. Expression-level diversity, baseline comparison, and composite benchmark. (Top) 
+
+(a) Gene-expression variability summary (real vs. generated). ( b) Per-type gene standard-deviation ratio. (Middle) (c) Head-to-head grouped-bar analysis across four evaluation metrics. ( d) Ranked normalised scores per method. ( e) Absolute metric delta of CLOP-DiT relative to each baseline. 
+
+(Bottom) (f) Normalized metrics heatmap (methods × metrics). ( g) Composite score (solid = common-metrics-only; hatched = full). Warning: the full composite is structurally biased ; the common-metrics-only bars are the fair comparison. ( h) Grouped comparison of four interpretable metrics. (i) 95% bootstrap confidence intervals. 
+
+to the confusion matrix and discriminator ROC, demonstrating that downstream perfor- 494 
+
+mance exhibits strong heterogeneity across cell types. The real-vs.-generated discriminator 495 
+
+AUC (0.656) indicates partial but non-trivial separability, so downstream usability remains 496 
+
+qualified rather than near-indistinguishable transfer. 497 
+
+DE concordance (Figure 8): Wilcoxon rank-sum differential expression analysis [ 22] 498 
+
+is performed on three biologically meaningful contrasts (CD8 vs. CD4 T cells, resident 499 
+
+macrophage vs. monocyte, epithelial tumor vs. fibroblast). We compare log-fold changes 500 
+
+between real and generated data via Pearson and Spearman correlations, Jaccard overlap 501 
+
+of the top-50 DE genes, and sign-agreement fractions. The enhanced DE figure weights 502 
+
+each gene by effect size and colors it by adjusted significance, which separates minor noisy 503 
+
+disagreements from the biologically important genes that dominate each contrast. 504 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 18 of 33 2 4 6 8 10 12 14 16 
+
+UMAP 1 
+
+> 6
+> 4
+> 2
+> 0
+> 2
+> 4
+> 6
+> 8
+> UMAP 2
+
+UMAP Overlay       
+
+> Real
+> Generated
+> 0.0 0.1 0.2 0.3 0.4 0.5 0.6
+
+Fraction Real Neighbours 
+
+> Kidney proximal tub
+> Pericytes and mural
+> Spinal cord interne
+> Fibroblasts and mes
+> Actively cycling in
+> Pancreatic beta
+> Interferon-stimulat
+> Natural killer (NK)
+> Prostate luminal ep
+> Dorsal horn sensory
+> Vascular endo. cells
+> B lymphocytes
+> Capillary endo.
+> Merkel cells
+
+Sorted kNN Mixing Score 
+
+> mean=0.407
+> Leiden clusters: 19
+> ARI
+> NMI
+> Purity
+> Mix
+> 0.126
+> 0.446
+> 0.280
+> 0.407
+
+Clustering Metrics 
+
+> 0
+> 23
+> 46
+
+Predicted 
+
+> 0
+> 23
+> 46
+> True Type
+> 0.0
+> 0.0
+> 0.9
+> 0.1
+> 0.2
+> 0.7
+> 0.0
+> 0.6
+
+Confusion Matrix     
+
+> 0.00 0.25 0.50 0.75 1.00
+
+Recall Prec. Rec. F1                                         
+
+> Actively cycling
+> Actively
+> CD4+ helper T
+> Basal epithelial
+> Exhausted T cells
+> Fibroblasts and
+> Generic
+> Excitatory
+> Inhibitory
+> Hippocampal
+> CD4+FOXP3+
+> Mature red blood
+> Multiciliated
+> B lymphocytes
+> Neuroendocrine
+> Urothelial
+> Intermediate
+> Oligodendrocyte
+> 0.00 0.00 0.00
+> 0.00 0.00 0.00
+> 0.00 0.00 0.00
+> 0.00 0.00 0.00
+> 0.00 0.00 0.00
+> 0.00 0.00 0.00
+> 0.00 0.00 0.00
+> 0.00 0.00 0.00
+> 0.00 0.00 0.00
+> 0.46 0.57 0.51
+> 0.64 0.44 0.52
+> 0.38 0.85 0.53
+> 0.43 0.71 0.54
+> 0.43 0.75 0.55
+> 0.46 0.74 0.57
+> 0.53 0.73 0.62
+> 0.65 1.00 0.79
+> 0.77 0.81 0.79
+> Per-Type P/R/F1 (worst+best 18)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Score
+> Acc 0.308 | Median F1 0.253
+> 0.00 0.25 0.50 0.75 1.00
+
+FPR 
+
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> TPR
+
+Discriminator ROC    
+
+> AUC = 0.656
+> Random (0.5) 0.0004 0.0000 0.0004 0.0008
+
+Real logFC  
+
+> 0.4
+> 0.3
+> 0.2
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> Generated logFC
+> ORM2
+> r = 0.170 (p 5.0e-13)
+> Sign agr. = 0.857
+> logFC in scGPT output space
+> max |logFC| 7.1e-04
+
+Effect-Size Concordance 
+
+CD8+ cytotoxic T ly vs CD4+ helper T lymph.           
+
+> sign disagreement
+> y = x
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Pears.
+> r
+> Spear. Jacc.
+> 50
+> Sign
+> agr.
+> CD8+ cytotoxic
+> vs CD4+ helper T l
+> Tissue-resident
+> vs Circulating mon
+> Generic epith.
+> vs Fibroblasts and
+> 0.17 0.14 0.08 0.86
+> 0.56 0.47 0.20 1.00
+> 0.45 0.34 0.21 0.97
+
+Concordance Across Contrasts 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> CD8+ cy
+> vs CD4+ he
+> Tissue-
+> vs Circula
+> Generic
+> vs Fibrobl
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Score
+
+Per-Contrast Summary 
+
+> Pears. r
+> Spear.
+> Jacc.@50
+> Sign agr.
+
+Figure 8. Downstream validation. (Top) (a) Leiden clustering on combined real + generated data with UMAP overlay, ( b) sorted per-type KNN mixing profile, and ( c) compact cluster-alignment gauges (ARI, NMI, cluster purity, mean KNN mixing). ( d) Cell-type classification confusion matrix, (e) precision/recall/F1 heatmap, and ( f) real-vs.-generated discriminator ROC curve. (Bottom) 
+
+(g) Effect-size-weighted logFC scatter for the leading contrast; sign-disagreement genes are outlined. (h) Concordance heatmap (Pearson r, Spearman ρ, Jaccard@50, sign agreement) across three contrasts. (i) Per-contrast grouped-bar summary. 
+
+Together, these results establish that CLOP-DiT generates text-conditioned single-cell 505 
+
+profiles with measurable type specificity, though with performance trade-offs between 506 
+
+fidelity and diversity that depend on the operating regime. 507 
+
+3.9. In-Distribution Expression-Level Validation 508 
+
+To assess biological fidelity across tissue contexts, we performed expression-level 509 
+
+validation on five datasets (Table A7) spanning lung adenocarcinoma (GSE123902), basal 510 
+
+cell carcinoma (GSE123813), liver T-cell hepatocellular carcinoma (GSE98638), gastric cancer 511 
+
+(GSE183904), and acute lymphoblastic leukemia in bone marrow (GSE132509). Four of 512 
+
+these five datasets (GSE123902, GSE123813, GSE98638, GSE132509) are from the training 513 
+
+split; only GSE183904 is among the 8 held-out validation studies (Table S2). This analysis 514 
+
+therefore primarily evaluates in-distribution gene-level reconstruction fidelity rather than 515 
+
+out-of-distribution generalization. For each dataset, cells were generated conditioned 516 
+
+on the dataset-specific text descriptions and compared with real (scGPT-reconstructed) 517 
+
+expression profiles; because both the generated and reference expressions are decoded by 518 
+
+the same frozen scGPT decoder, the resulting correlations measure decoder-reconstructed 519 
+
+fidelity rather than agreement with raw sequencing counts. Per-gene mean expression, 520 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 19 of 33 
+
+gene-level variance, and Fréchet distance in both gene space and embedding space were 521 
+
+computed for each dataset independently (Table 4). 522 
+
+Table 4. Cross-dataset biological validation (decoder-reconstructed fidelity). Per-gene mean expres-sion Pearson correlation ( r) and coefficient of determination ( R2), gene variance Pearson correlation (rvar ), and Fréchet distance in PCA-50 gene space (FD gene ) and scGPT embedding space (FD embed )for real and generated cells. Both “real” and generated expression profiles are decoded by the same frozen scGPT decoder; correlations therefore measure decoder-reconstruction consistency rather than agreement with raw sequencing counts. Split indicates whether the dataset was used for training (Train) or held-out validation (Val). All five datasets achieve gene_mean r > 0.999. 
+
+Dataset (GEO) Tissue Split rmean R2 rvar FD gene FD embed 
+
+GSE123902 Lung Train 0.9995 0.9990 +0.011 3.07 × 10 −5 73.9 GSE123813 Skin (BCC) Train 0.9997 0.9995 −0.019 5.25 × 10 −6 72.7 GSE98638 Liver Train 0.9995 0.9989 −0.003 2.04 × 10 −5 155.4 GSE183904 Gastric Val 0.9997 0.9994 +0.013 1.30 × 10 −5 62.1 GSE132509 Blood (ALL) Train 0.9993 0.9985 −0.007 8.87 × 10 −6 69.1 
+
+Across all five datasets, per-gene mean expression Pearson correlation exceeds 0.999 523 
+
+and R2 exceeds 0.998. Because both reference and generated profiles pass through the same 524 
+
+frozen scGPT decoder, these correlations reflect decoder-reconstructed fidelity rather than 525 
+
+absolute biological accuracy against raw counts. However, per-gene variance correlation 526 
+
+(rvar ) is near zero across all datasets (range: −0.019 to +0.013), indicating that the model 527 
+
+reproduces mean expression accurately but does not preserve gene-level variability— 528 
+
+consistent with the flow-matching mean-regression bias. Embedding-space FD (62.1–155.4) 529 
+
+is substantially higher than gene-space FD ( < 10 −4), reflecting the many-to-one decoder 530 
+
+mapping. 531 
+
+3.10. CLOP Ablation Study 532 
+
+To validate the contribution of individual CLOP components, we conducted 15 abla- 533 
+
+tion experiments, removing or modifying one component at a time while holding all other 534 
+
+settings constant. Table 5 summarizes the six most informative ablations. 535 
+
+Table 5. CLOP ablation study ( ablation baseline only ; not the final production model). Validation prototype accuracy (top-1) for the ablation baseline configuration (all features enabled) and represen-tative ablations. ∆ denotes the change from baseline in percentage points. These results characterize the CLOP alignment stage in isolation and do not directly predict downstream DiT generation quality; the final production model uses different regularization settings. 
+
+Ablation Category Val Proto Acc (%) ∆ (pp) 
+
+−cohesion regularization 86.41 +10.24 
+
+−cell noise regularization 86.23 +10.07 
+
+−dropout (lighter) regularization 77.32 +1.15 Baseline reference 76.17 —Fixed temperature optimization 71.55 −4.61 High variant prob regularization 70.14 −6.03 
+
+The two most impactful ablations are cohesion regularization removal ( +10.24 pp) and 536 
+
+cell noise augmentation removal ( +10.07 pp), both of which improve prototype accuracy. 537 
+
+This counterintuitive result has the following mechanistic explanation: both cohesion loss 538 
+
+and cell noise augmentation act as within-group tightening forces that penalize intra-cluster 539 
+
+variance. In a contrastive learning regime where the primary bottleneck is inter-group 540 
+
+separation (raw pairwise cosine 0.994), these tightening forces compete with the alignment 541 
+
+gradient rather than complementing it. In effect, the network spends representational capac- 542 
+
+ity enforcing tight within-group clusters before inter-group margins have been established, 543 
+
+diverting training signal from the discrimination task. Removing these terms allows the 544   
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 20 of 33
+
+optimizer to focus entirely on inter-group separation, which is the binding constraint at this 545 
+
+scale. This interpretation is consistent with recent analyses of regularization–discrimination 546 
+
+trade-offs in contrastive learning [ 15 ]. Architecture ablations (projection dimension 256 547 
+
+vs. 512 vs. 768) have minimal impact (within ±0.3 pp), indicating that the CLOP aligner is 548 
+
+not sensitive to projection dimension in this range. Fixed temperature ( −4.61 pp) and high 549 
+
+variant probability ( −6.03 pp) degrade performance substantially relative to the ablation 550 
+
+baseline (which used a learnable temperature). Clarification: The ablation baseline used a 551 
+
+learnable τ, whereas the final production model uses fixed τ = 14.0 in combination with a 552 
+
+stratified validation split (Section 2.1). The production configuration was selected based on 553 
+
+the full-pipeline generation quality assessment, not solely on CLOP prototype accuracy; 554 
+
+the ablation table characterizes the CLOP alignment stage in isolation and does not directly 555 
+
+predict downstream DiT generation performance. 556 
+
+3.11. Rare Cell Augmentation 557 
+
+As a proof-of-concept, we evaluated whether generated cells can improve classifier per- 558 
+
+formance on an underrepresented type (“Cycling cells”, <5% prevalence). Augmentation 559 
+
+at 1–10 × ratios did not improve Cycling-cell F1 (baseline 0.828 → 0.741–0.786 after augmen- 560 
+
+tation), though overall macro F1 remained stable (0.947–0.964), indicating that synthetic 561 
+
+profiles are realistic enough to avoid catastrophic interference but lack the within-type 562 
+
+heterogeneity needed for net positive augmentation. 563 
+
+3.12. Conditioning Field Ablation and Swap-Label Permutation Test 564 
+
+To assess whether the conditioning signal causally steers generation—rather than the 565 
+
+model recapitulating training-set structure regardless of prompt content—we performed 566 
+
+two targeted experiments. 567 
+
+Conditioning field ablation. We generated 50 cells per type across all 69 cell types 568 
+
+(3,450 cells per variant) under five prompt variants: (i) full : the complete structured prompt; 569 
+
+(ii) no-markers : marker gene fields removed; (iii) shuffled-markers : marker gene lists randomly 570 
+
+permuted across types; (iv) metadata-only : only organism, tissue, and disease fields retained; 571 
+
+(v) external-markers : canonical markers from PanglaoDB/CellMarker 2.0 substituted for the 572 
+
+training markers (evaluated on 15 well-characterized types). Table 6 reports KNN accuracy, 573 
+
+steering accuracy, and centroid cosine similarity for each variant. 574 
+
+Table 6. Conditioning field ablation results (CFG = 2.0, Euler solver, 10 steps, 50 cells per type). KNN accuracy assessed against real-cell references using the ablation-specific generation cache (freshly encoded prompt variants), which differs from the primary evaluation cache in Table 2 (cached training-time CLOP conditions, 200 cells per type); the lower KNN values reflect the use of re-encoded prompt embeddings rather than the optimized training-time conditions. Steering measured as cosine alignment to the target type centroid; centroid cosine is the mean cosine similarity between generated and real centroids. The external-markers variant was evaluated on a 15-type subset with consensus markers from PanglaoDB and CellMarker 2.0. 
+
+Prompt variant KNN (%) Steering (%) Centroid cos. Full (all fields) 2.87 99.8 0.050 No markers 2.26 98.0 0.035 Shuffled markers 2.81 97.9 0.035 Metadata only 1.51 62.4 0.025 External markers (15 types) 17.07 — 0.702 ∗
+
+> ∗Cosine similarity between external-marker and full-prompt centroids.
+
+The results indicate that semantic content contributes to the conditioning signal beyond 575 
+
+prompt length alone: removing only the marker field reduces centroid cosine from 0.050 576 
+
+to 0.035 (30% relative drop), while retaining only metadata fields collapses steering from 577 
+
+99.8% to 62.4%. Substituting external markers from independent databases yields a high 578   
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 21 of 33
+
+cosine similarity to the full-prompt variant (0.702), indicating that the model responds to 579 
+
+marker-gene semantics rather than memorized training prompts. 580 
+
+Swap-label permutation test. To test whether generation follows the conditioning 581 
+
+signal causally, we generated 15 cell-type pairs where the prompt for type A was used to 582 
+
+condition generation but evaluation was performed against both type A (matched) and 583 
+
+type B (mismatched) real-cell centroids. In 9 of 15 pairs, the generation conditioned on the 584 
+
+matched prompt was closer to the real centroid of type A than the mismatched generation 585 
+
+(matched cosine similarity 0.032 vs. mismatched 0.016, gap = 0.016). Critically, in all 15 of 586 
+
+15 pairs the mislabeled generation—conditioned on text B but evaluated against real cluster 587 
+
+A—followed the conditioning signal (text B) rather than the evaluation label, confirming 588 
+
+that the model generates latents based on prompt semantics rather than memorized label 589 
+
+identity. The sub-unity matched-wins rate (9/15) reflects the small magnitude of centroid 590 
+
+cosine differences in the tightly packed scGPT embedding space rather than a failure of 591 
+
+causal conditioning. While this test does not fully exclude encoder-level leakage, it provides 592 
+
+causal evidence that the conditioning channel is functional and semantically interpretable. 593 
+
+4. Discussion 594 
+
+CLOP-DiT demonstrates that structured biological metadata drives non-trivial single- 595 
+
+cell latent generation, but the method operates within a narrow and precisely defined scope. 596 
+
+The conditioning signal is a fixed five-field template rather than free-form language, and 597 
+
+the model is a structured-metadata-to-latent sampler, not a general biological language 598 
+
+model. Within that scope, the central result is clear: conditioning produces above-chance, 599 
+
+cell-type-specific latent generation and supports two useful operating regimes that trade 600 
+
+off fidelity against diversity. 601 
+
+Variance and covariance deficits. The strongest biological limitation is the loss of 602 
+
+cell-to-cell heterogeneity. Although in-distribution per-gene variance is well correlated 603 
+
+(r = 0.98, Figure A1), cross-dataset variance ratios fall orders of magnitude below unity 604 
+
+(Figure A1d), and within-type gene–gene correlation structure is only weakly preserved. 605 
+
+A pilot latent-space analysis (Figure 9, panels a–d) shows that generated latents preserve 606 
+
+overall spread better than per-dimension variance structure, while Mantel correlations 607 
+
+of within-type gene–gene matrices remain weak (Figure 9, panels e–h). Both findings 608 
+
+point to the same root cause: the flow-matching objective matches conditional means far 609 
+
+better than second-order structure. This is addressable within the current architecture via 610 
+
+a variance-matching regularization term (Equation 4) added to the DiT training objective 611 
+
+alone; early experiments at λ = 0.1 show stable training dynamics. 612 
+
+Extended validation. Five additional experiments characterize the model beyond 613 
+
+core metrics; full figures are provided in Appendix A.1. Cross-dataset gene-level valida- 614 
+
+tion across five tissues (Figure A1) confirms high mean-expression correlation ( r > 0.999) 615 
+
+but near-zero variance correlation, reinforcing that mean-level fidelity does not extend 616 
+
+to distributional agreement. Expanded DE concordance across five contrasts (Figure A1) 617 
+
+yields log-fold-change correlations from r = 0.17 to r = 0.58 with >85% sign agreement. 618 
+
+OOD evaluation of six novel cell types and eight free-form prompts (Figures A1 and A1) 619 
+
+shows limited marker recovery due to vocabulary constraints but maintained embedding 620 
+
+coherence. Marker gene program completeness (Figure A1) varies from near-zero to 0.60 621 
+
+recall@100 across cell types. Embedding-level augmentation of rare cell types (Figure A1) 622 
+
+yields marginal gains ( ∆F1 = + 0.001), confirming mean-collapse as the primary augmenta- 623 
+
+tion bottleneck. A validation synthesis (Figure A1) summarizes these findings. 624 
+
+Ablation, reproducibility, and decoder analysis. The CLOP ablation heatmap (Fig- 625 
+
+ure A1) consolidates 15 experiments, confirming cohesion and noise regularization as the 626 
+
+most impactful components (Table 5). Multi-seed validation (Figure A1) shows stable 627 
+
+steering ( σ = 0.009) and diversity ( σ ≤ 0.016) across three independent runs (Table 3). 628 
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint
+
+Version March 26, 2026 submitted to Genes 22 of 33 0.000 0.005 0.010 0.015 0.020 
+
+SWD 
+
+Inhibitory GABAer 
+
+Mast are tissue-r 
+
+Multiciliated epi 
+
+Oligodendrocytes 
+
+Club (Clara) secr 
+
+Intermediate neur 
+
+Pancreatic delta 
+
+Hippocampal denta 
+
+Excitatory glutam 
+
+Spinal cord inter 
+
+Smooth muscle are 
+
+Urothelial (trans 
+
+Capillary endo. a 
+
+Pericytes and mur 
+
+Hematopoietic ste 
+
+Luminal epith. ar 
+
+Microglia are the 
+
+Vascular endo. ar 
+
+Cholangiocytes an 
+
+Antibody-secretin 
+
+Circulating monoc 
+
+CD4+ helper T lym 
+
+Actively cycling 
+
+MHC-II-high antig 
+
+> n=1,149 n=656 n=727 n=853 n=77 n=2,004 n=935
+
+Latent SWD per Cell Type 
+
+Mean = 0.0135 
+
++1 = 0.0166 
+
+0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 
+
+Variance ratio (gen/real) 
+
+Median = 0.703 
+
+IQR = [0.565, 0.817] 
+
+Per-Type Latent Variance Ratio 
+
+Ideal (1.0) 
+
+0.9 1.1 band 
+
+0.0 0.1 0.2 0.3 0.4 0.5 
+
+Per-dim variance corr. (real vs gen) 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Cumulative Proportion
+> Mean = 0.201
+> Median = 0.174
+> 100% positive
+
+Dimension-Wise Variance Correlation 
+
+Observed ECDF 
+
+Median = 0.174 
+
+10 2 10 3
+
+Training cells (log scale) 
+
+0.005 
+
+0.010 
+
+0.015 
+
+0.020 
+
+0.025 
+
+> Sliced Wasserstein Distance
+
+Pearson r = -0.645 
+
+Spearman = -0.788 
+
+> Neuroendocrine ar Dorsal horn senso
+> Inhibitory GABAer
+
+SWD vs. Training Cell Count 
+
+OLS fit 0.0 0.2 0.4 0.6 0.8 
+
+Upper-triangle Pearson r (real vs. gen corr. matrix) 
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10 
+
+12 
+
+14 
+
+> Density
+> Mean 95% CI: [0.624, 0.667]
+> Null mean: -0.000
+
+Gene-Gene Correlation Preservation 
+
+> Permuted null (n=3450)
+> Observed (n=69)
+> Median = 0.638
+> Mean = 0.645
+
+0 10 20 30 40 
+
+Gene index (top 50 HVG) 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+> Gene index
+
+r = 0.824 
+
+MAD = 0.011 
+
+RMSE = 0.015 
+
+Best: Hippocampal dentate gyrus granule 
+
+> 0.05
+> 0.00
+> 0.05
+> r
+
+0 10 20 30 40 
+
+Gene index (top 50 HVG) 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+> Gene index
+
+r = 0.438 
+
+MAD = 0.017 
+
+RMSE = 0.020 
+
+Worst: Inhibitory GABAergic neurons are n 
+
+> 0.075
+> 0.050
+> 0.025
+> 0.000
+> 0.025
+> 0.050
+> 0.075
+> r
+
+0.002 0.004 0.006 
+
+Mean Gene Expression Variance 
+
+0.45 
+
+0.50 
+
+0.55 
+
+0.60 
+
+0.65 
+
+0.70 
+
+0.75 
+
+0.80  
+
+> Upper-Tri Pearson r
+> Alveolar type 2 (
+> Inhibitory GABAer
+> Hepatocytes are t
+> Spearman = 0.381
+> Pearson r = 0.365
+
+Preservation vs. Expression Heterogeneity 
+
+OLS fit 
+
+Figure 9. Latent variance and gene–gene correlation analysis. Variance matching (a) Per-cell-type sliced Wasserstein distance (SWD) between real and generated latent distributions. ( b) Per-type latent variance ratios (generated/real), summarized with the median and interquartile range relative to the ideal unity band. ( c) Per-dimension variance-correlation ECDF, showing that most dimensions remain positively correlated but only weakly structured. ( d) SWD versus training cell count with Pearson and Spearman trend summaries. Gene–gene correlation (e) Distribution of per-type Mantel correlations with a permuted-null baseline overlay and bootstrap confidence interval on the mean preserved correlation. ( f–g ) Correlation-difference heatmaps for best- and worst-preserved cell types. (h) Mantel r versus mean gene expression variance per type, showing only a weak dependence of preservation on intrinsic heterogeneity. 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 23 of 33 
+
+Per-gene variance analysis (Figure A1) reveals systematic under-dispersion ( r ≈ 0.98 in- 629 
+
+distribution) that is consistent with the flow-matching mean-regression bias. A decoder 630 
+
+ablation comparing frozen scGPT, LoRA-adapted, and MLP decoders (Figure A1) confirms 631 
+
+equivalent expression profiles across all three architectures, localizing the expression-level 632 
+
+bottleneck in the embedding representation after ZCA whitening and L2 normalization 633 
+
+rather than in decoder architecture. 634 
+
+Benchmarking and operating regimes. On the primary common-metrics-only com- 635 
+
+parison, the Gaussian baseline outperforms CLOP-DiT, underscoring that mean-matching 636 
+
+remains competitive when evaluation ignores conditioning-sensitive biology. The more 637 
+
+informative result is that CLOP-DiT creates a controllable fidelity–diversity trade-off: CFG 638 
+
+= 2.0 with Euler sampling yields stronger type fidelity, whereas CFG = 1.0 with Midpoint 639 
+
+sampling preserves substantially more diversity. This trade-off does not erase the remaining 640 
+
+gap to real data (KNN 36.9%, discriminator AUC 0.656). 641 
+
+Limitations and scope. The 36.9% KNN accuracy implies an approximate 63% label- 642 
+
+noise rate; applications requiring high type-label confidence need post-hoc filtering. The 643 
+
+high-fidelity regime (DivR = 0.513) collapses toward centroids, erasing within-population 644 
+
+heterogeneity needed for trajectory inference or sub-clustering; the high-diversity regime 645 
+
+(DivR = 0.93) mitigates this at reduced type specificity (KNN ≈ 29%). The pilot rare-cell 646 
+
+augmentation was negative at both expression and embedding levels, consistent with mean- 647 
+
+collapse: generated cells cluster near type centroids rather than spanning the full within- 648 
+
+type distribution. All results are restricted to human and mouse cancer/developmental 649 
+
+datasets; comparison with CellWhisperer [42] and Cell2Sentence remains future work. 650 
+
+Modular architecture as a path forward. CLOP-DiT’s three-stage design enables 651 
+
+targeted improvements without full retraining: a variance-matching penalty (Equation 4) 652 
+
+can be added to the DiT objective alone; decoder fine-tuning via LoRA adapters can relieve 653 
+
+the frozen-decoder bottleneck; and richer prompt representations can be incorporated 654 
+
+by retraining only the CLOP aligner. This composability distinguishes CLOP-DiT from 655 
+
+joint-training approaches [43] and positions it as a framework for iterative improvement. 656 
+
+5. Conclusions 657 
+
+We introduced CLOP-DiT, a three-stage pipeline for structured-metadata-conditioned 658 
+
+single-cell latent generation. CLOP aligns BiomedBERT text embeddings and scGPT cell 659 
+
+embeddings in a shared 512-dimensional space, and a conditional Diffusion Transformer 660 
+
+then samples scGPT latents from a fixed five-field biological template. The method is a 661 
+
+structured-metadata-to-latent conditional sampler, not a free-form language model. Across 662 
+
+69 deduplicated cell types from 80 datasets, CLOP-DiT achieves 36.9% KNN accuracy and 663 
+
+81.0% steering in a high-fidelity regime, while a high-diversity regime reaches a diversity 664 
+
+ratio of 0.93 at 80.7% steering. Multi-seed replication confirms that steering and diversity are 665 
+
+stable across independent runs. A conditioning field ablation and swap-label permutation 666 
+
+test provide causal evidence that the conditioning signal is semantically functional. Five 667 
+
+downstream experiments—cross-dataset biological validation, expanded DE concordance, 668 
+
+OOD robustness, marker gene program completeness, and embedding-level augmen- 669 
+
+tation—collectively support the model’s specificity and highlight mean-collapse as the 670 
+
+primary practical limitation (Figure A1). 671 
+
+Scope of claims. All results are limited to in-distribution human and mouse can- 672 
+
+cer and developmental datasets; no stringent out-of-distribution generalization test has 673 
+
+been conducted. Claims about generative quality refer primarily to latent-space metrics; 674 
+
+expression-level concordance is strongly shaped by the frozen scGPT decoder and up- 675 
+
+stream embedding preprocessing and therefore does not constitute evidence of faithful 676 
+
+transcriptomic generation. 677   
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 24 of 33
+
+Future directions. The modular architecture enables targeted improvements applied 678 
+
+independently to each stage: (i) variance-aware training via Equation 4 to preserve within- 679 
+
+type heterogeneity; (ii) decoder fine-tuning via LoRA adapters [ 44]; (iii) adaptive ODE sampling 680 
+
+(dopri5) for improved distributional fidelity; (iv) out-of-distribution evaluation on unseen cell 681 
+
+types and organisms; (v) covariance-aware generation with explicit gene–gene correlation 682 
+
+matching; (vi) direct benchmarking against CellWhisperer [ 42 ] and scDesign3 [ 43 ] using 683 
+
+harmonised evaluation protocols. 684 
+
+Author Contributions: Z.F.: conceptualization, methodology, software, validation, formal analysis, 685 
+
+investigation, resources, data curation, writing—original draft preparation, writing—review and 686 
+
+editing, visualization, supervision, project administration, funding acquisition. 687 
+
+Funding: This work was supported by the National Key Research and Development Program of 688 
+
+China (Grant No. 2024YFA1107101), the Ministry of Science and Technology of the People's Republic 689 
+
+of China, and the National Key Laboratory of Trauma and Chemical Poisoning (Grant No. 2024K004). 690 
+
+Institutional Review Board Statement: Ethical review and approval were waived for this study, as 691 
+
+only publicly available, de-identified data from the Gene Expression Omnibus (GEO) were analyzed; 692 
+
+all datasets were deposited by their original investigators under institutional ethical approvals as 693 
+
+required by GEO submission policy. No new human subjects research, animal experiments, or clinical 694 
+
+interventions were conducted. 695 
+
+Informed Consent Statement: Not applicable. 696 
+
+Data Availability Statement: The training and validation data were curated from publicly available 697 
+
+GEO datasets; a full list of GEO accession identifiers is provided in Table A4 (Appendix A), and the 698 
+
+held-out validation study identifiers are in Table A5. Source code, trained model checkpoints (CLOP 699 
+
+aligner and DiT generator), configuration files, environment specifications (Python 3.10, PyTorch 2.1, 700 
+
+CUDA 12.0, scGPT v0.2.1, Transformers 4.36), multi-seed validation data, independent marker gene 701 
+
+validation data (PanglaoDB and CellMarker 2.0 cross-references), external marker ablation analysis, 702 
+
+and one-command figure reproduction instructions are publicly available on GitHub [ 45 ] and will 703 
+
+be archived on Zenodo upon acceptance of this manuscript. All figures use colormaps designed 704 
+
+for accessibility under common forms of color vision deficiency (deuteranopia, protanopia); critical 705 
+
+distinctions additionally use shape or pattern encoding. 706 
+
+Use of Artificial Intelligence: AI-assisted tools (Claude, Anthropic) were used for code development 707 
+
+(pipeline implementation, figure generation scripts, and evaluation infrastructure), manuscript 708 
+
+drafting assistance, and language editing. All AI-generated content was reviewed, verified, and 709 
+
+revised by the author, who takes full responsibility for the accuracy and integrity of the manuscript. 710 
+
+No AI tools were used for data collection, experimental design, or interpretation of results. 711 
+
+Acknowledgments: The author acknowledges the developers and communities behind scGPT, 712 
+
+BiomedBERT, and the Gene Expression Omnibus (GEO) for providing open-access tools and datasets 713 
+
+that made this work possible. 714 
+
+Conflicts of Interest: The author declares no conflicts of interest. 715 
+
+Abbreviations 716   
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 25 of 33
+
+The following abbreviations are used in this manuscript: 717 
+
+AdaLN Adaptive Layer Normalization CFG Classifier-free guidance CLOP Contrastive Language-Omics Pretraining DE Differential expression DiT Diffusion Transformer DivR Diversity Ratio EMA Exponential Moving Average FD Fréchet Distance GEO Gene Expression Omnibus KNN k-Nearest Neighbor LinAcc Linear Classifier Accuracy logFC Log Fold Change LoRA Low-Rank Adaptation ODE Ordinary Differential Equation OOD Out-of-Distribution scGPT Single-cell Generative Pre-trained Transformer scRNA-seq Single-cell RNA sequencing SigLIP Sigmoid Loss for Language-Image Pre-training ZCA Zero-phase Component Analysis 
+
+> 718
+
+Appendix A. Supplementary Material 719 
+
+Table A1. Architecture specifications. 
+
+Component Architecture Parameters 
+
+BiomedBERT-large (frozen) Transformer encoder 340M CLOP text projector MLP [1024 →1024 →1024 →512] 1.58M CLOP cell projector MLP [512 →512 →512 →512] 1.44M DiT1D 8× AdaLN-Zero blocks, 8 heads 22.10M scGPT encoder (frozen) Transformer ∼51M scGPT decoder (frozen) Gene token prediction head included 
+
+Table A2. CFG scale sweep (10-step Euler, 69 eval groups). Values are computed on a different subsample (69 groups × 200 cells) than the primary operating-point results in Table 2 (69 types × 200 cells with different random seeds), which accounts for minor numerical differences. 
+
+CFG KNN-1 Steering DivR KNN/Random 
+
+0.5 0.147 0.788 1.13 15 ×
+
+1.0 0.348 0.796 0.76 35 ×
+
+1.5 0.396 0.798 0.60 40 ×
+
+2.0 0.407 0.806 0.53 41 ×
+
+2.5 0.408 0.804 0.49 41 ×
+
+3.0 0.410 0.802 0.48 41 ×
+
+4.0 0.402 0.804 0.50 40 ×
+
+5.0 0.380 0.798 0.55 38 ×
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint
+
+Version March 26, 2026 submitted to Genes 26 of 33 
+
+Table A3. Training hyperparameters for both CLOP alignment and DiT flow-matching stages. 
+
+Hyperparameter CLOP DiT 
+
+Optimizer AdamW AdamW ( β1=0.9, β2=0.999) Learning rate 5 × 10 −4 2 × 10 −4
+
+Weight decay 0.06 0.01 Batch size 1024 1024 Epochs 60 200 Warmup epochs 5 5LR schedule Cosine with warmup Cosine with warmup Gradient clipping 1.0 1.0 Mixed precision FP16 (AMP) FP16 (AMP) Dropout 0.2 Proj: 0.1, Attn: 0.0 EMA decay — 0.9999 Temperature 14.0 (fixed; see Section 2.2) —Loss PrototypeSigLIP Flow matching MSE Cohesion weight 0.15 —Label smoothing 0.1 —CFG drop prob — 0.15 Time sampling — Logit-normal ( μ=0, σ=1) 
+
+Table A4. All 80 GEO datasets used in CLOP-DiT training and validation. Datasets were preprocessed to 2,000 highly variable genes per dataset. Split: Train or held-out Validation (study-level, seed 42). Hs: Homo sapiens ; Mm: Mus musculus .
+
+# Accession Organism Description ncells Split 1 GSE103867 Hs scRNA-seq (GEO-DataHub) 2,787 Val 2 GSE110686 Hs scRNA-seq (GEO-DataHub) 2,992 Train 3 GSE115571 Mm Mouse cells, LPS stimulation 442 Train 4 GSE117988 Hs PBMCs, Merkel cell carcinoma 2,638 Train 5 GSE117988 Hs Merkel cell carcinoma tumor 2,990 Train 6 GSE120505 Hs Aged blood cells 3,000 Train 7 GSE123813 Hs Basal cell carcinoma skin 3,000 Train 8 GSE123813 Hs Cutaneous squamous cell carci-noma 3,000 Train 9 GSE123902 Hs Lung adenocarcinoma 2,753 Train 10 GSE124310 Hs Multiple myeloma bone marrow 2,833 Train 11 GSE130148 Hs Fetal lung development 3,000 Train 12 GSE132509 Hs Pediatric ALL bone marrow 2,984 Train 13 GSE138709 Hs Intrahepatic cholangiocarcinoma 2,891 Train 14 GSE142653 Hs Pituitary gland development 2,885 Train 15 GSE143423 Hs Leptomeningeal brain metastasis 3,000 Train 16 GSE143423 Hs Triple-neg. breast cancer brain met. 2,332 Train 17 GSE145929 Mm Adult mouse prostate 2,830 Train 18 GSE145929 Mm Adult mouse urethra 2,745 Train 19 GSE148218 Hs Bone marrow, ALL 2,807 Train 20 GSE149655 Hs Early-stage lung adenocarcinoma 2,087 Train 21 GSE155109 Hs Endothelial cells, breast cancer 3,000 Train 22 GSE155109 Hs Stromal cells, breast cancer 3,000 Train 23 GSE163558 Hs Stomach cancer 2,467 Train 24 GSE165784 Hs Retina development 2,622 Train 25 GSE165844 Mm LSK hematopoietic progenitors 2,881 Train 26 GSE167597 Mm Spinal cord development 3,000 Val 27 GSE168181 Hs Breast cancer tissue 2,863 Train 28 GSE175975 Hs scRNA-seq (GEO-DataHub) 2,728 Train 29 GSE183904 Hs Gastric cancer 3,000 Val 30 GSE189070 Mm Astrocytes, spinal cord injury 2,960 Train 31 GSE189357 Hs Lung adenocarcinoma 2,886 Train 32 GSE192857 Hs hESC differentiation time-series 2,696 Train 33 GSE212502 Hs Forebrain organoids 3,000 Train 34 GSE213740 Hs Ascending aortic wall dissection 2,704 Val 35 GSE220913 Hs HL-60 cell lines, CFTR 2,972 Train 
+
+Continued on next page 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 27 of 33 # Accession Organism Description ncells Split 36 GSE222002 Hs T cells from cancer 2,962 Train 37 GSE222369 Hs NK cells, lymphoma 2,778 Train 38 GSE225600 Hs Breast cancer tumor 2,333 Train 39 GSE225857 Hs Colorectal cancer liver metastases 2,986 Train 40 GSE226131 Mm Aged hematopoietic stem cells 2,608 Train 41 GSE226762 Hs scRNA-seq (GEO-DataHub) 830 Val 42 GSE227644 Hs scRNA-seq (GEO-DataHub) 3,000 Train 43 GSE227719 Mm KrasG12D/P53 lung organoids 2,990 Train 44 GSE228499 Hs Breast cancer 2,448 Train 45 GSE235787 Hs B cells, ALL 2,798 Train 46 GSE236565 Mm Splenic CD4+ T cells 2,556 Train 47 GSE248214 Hs scRNA-seq (GEO-DataHub) 2,998 Train 48 GSE253355 Hs Bone marrow niche 2,835 Train 49 GSE262288 Hs Metastatic breast cancer 2,321 Train 50 GSE272187 Hs scRNA-seq (GEO-DataHub) 2,639 Train 51 GSE275119 Mm Dental tissue development 2,963 Train 52 GSE277740 Mm Thalamus, SBS vs DNBSEQ 2,644 Val 53 GSE279781 Hs scRNA-seq (GEO-DataHub) 2,654 Train 54 GSE280847 Mm CD45+ leukocytes, MC38 tumor 2,864 Train 55 GSE283205 Hs Hepatoblastoma tumor tissue 2,994 Train 56 GSE283397 Hs CD8+ T cells, CLL 2,856 Train 57 GSE288211 Mm Pancreatic islets, Zzef1 KO 2,724 Train 58 GSE289611 Hs Pulmonary pleomorphic carci-noma 2,983 Train 59 GSE291166 Mm Mesenteric lymph node 2,901 Train 60 GSE299623 Hs scRNA-seq (GEO-DataHub) 2,991 Train 61 GSE300862 Mm Kras/Trp53 lung adenocarcinoma 2,716 Val 62 GSE302433 Mm B16F10 melanoma, ZDHHC13 2,953 Val 63 GSE303309 Mm Brain CD45+ immune cells, AD 2,999 Train 64 GSE306567 Mm ESCs and neural progenitors 2,454 Train 65 GSE306676 Mm Spinal cord, SOD1-G93A ALS 2,959 Train 66 GSE307261 Hs B and T cells, melanoma 2,921 Train 67 GSE307774 Mm Colorectal tumors, Kras/Braf 2,505 Train 68 GSE308428 Mm Hippocampal microglia, ASD 2,991 Train 69 GSE309368 Hs Myeloid cells, oral SCC 1,361 Train 70 GSE315628 Mm scRNA-seq (GEO-DataHub) 2,895 Train 71 GSE318353 Hs scRNA-seq (GEO-DataHub) 2,964 Train 72 GSE98638 Hs HCC T cell landscape 3,000 Train 73 GSE120446 Hs Bone marrow, hematopoietic dev. 2,890 Train 74 GSE104323 Mm Dentate gyrus, brain development 3,000 Train 75 GSE75748 Hs Endoderm differentiation 2,531 Train 76 GSE144024 Hs Human embryonic stem cells 3,000 Train 77 GSE72857 Mm Hematopoiesis 3,000 Train 78 GSE226824 Hs IFN-treated HSPCs 2,739 Train 79 GSE141259 Mm Lung development 3,000 Train 80 GSE139369 Hs Hematopoiesis (Setty et al.) 2,995 Train 
+
+Total 220,304 
+
+Table A6. Full CFG scale sweep. 200 cells generated per group (69 groups). KNN: type-identity accuracy; Steer.: alignment; DivR: diversity ratio (1.0 = ideal); LinAcc: linear classifier accuracy; FD: Fréchet distance. 
+
+CFG Solver Steps KNN-1 KNN-5 Steer. DivR LinAcc FD 
+
+Primary configurations (Table 2) 
+
+3.0 Euler 10 0.367 0.554 0.802 0.473 0.508 3.46 2.0 Euler 10 0.369 0.553 0.810 0.513 0.511 3.17 1.0 Euler 10 0.313 0.483 0.810 0.745 0.390 2.84 0.0 Euler 10 0.010 0.051 0.475 1.833 0.010 0.58 3.0 Midpoint 10 0.340 0.528 0.792 0.628 0.477 3.38 2.0 Midpoint 10 0.340 0.525 0.800 0.686 0.475 3.13 1.0 Midpoint 10 0.288 0.461 0.807 0.929 0.357 2.64 3.0 Euler 50 0.348 0.545 0.795 0.622 0.489 3.33 1.0 Euler 50 0.293 0.466 0.807 0.919 0.365 2.65 
+
+Continued on next page 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 28 of 33 CFG Solver Steps KNN-1 KNN-5 Steer. DivR LinAcc FD — Gaussian — 0.011 0.048 0.466 2.277 0.009 0.03 
+
+Fine-grained CFG sweep (Euler solver) 
+
+0.5 Euler 10 0.147 0.284 0.788 1.129 — 2.33 1.0 Euler 10 0.348 0.515 0.796 0.757 — 2.94 1.5 Euler 10 0.396 0.553 0.798 0.600 — 3.36 2.0 Euler 10 0.407 0.580 0.806 0.526 — 3.54 2.5 Euler 10 0.408 0.590 0.804 0.493 — 3.70 3.0 Euler 10 0.410 0.592 0.802 0.484 — 3.80 4.0 Euler 10 0.402 0.586 0.804 0.502 — 4.01 5.0 Euler 10 0.380 0.576 0.798 0.548 — 4.34 0.5 Euler 20 0.137 0.269 0.788 1.230 — 2.07 1.0 Euler 20 0.334 0.504 0.794 0.842 — 2.83 1.5 Euler 20 0.380 0.545 0.798 0.679 — 3.19 2.0 Euler 20 0.391 0.569 0.798 0.600 — 3.43 2.5 Euler 20 0.394 0.578 0.800 0.559 — 3.66 3.0 Euler 20 0.398 0.582 0.800 0.540 — 3.77 4.0 Euler 20 0.388 0.578 0.802 0.535 — 3.97 5.0 Euler 20 0.379 0.567 0.792 0.551 — 4.16 0.5 Euler 50 0.132 0.259 0.792 1.318 — 1.95 1.0 Euler 50 0.324 0.495 0.794 0.933 — 2.72 1.5 Euler 50 0.370 0.538 0.796 0.776 — 3.14 2.0 Euler 50 0.384 0.563 0.796 0.699 — 3.31 2.5 Euler 50 0.388 0.576 0.796 0.658 — 3.48 3.0 Euler 50 0.392 0.581 0.792 0.637 — 3.64 4.0 Euler 50 0.379 0.579 0.790 0.622 — 3.86 5.0 Euler 50 0.378 0.570 0.790 0.626 — 4.10 https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 29 of 33 
+
+Table A5. The 8 held-out validation datasets (study-level split, seed 42, val_split = 0.1). No cells from these studies were seen during CLOP or DiT training. Hs: Homo sapiens ; Mm: Mus musculus .
+
+# Accession Organism Description ncells 
+
+1 GSE103867 Hs scRNA-seq (GEO-DataHub) 2,787 2 GSE167597 Mm Mouse spinal cord develop-ment 3,000 3 GSE183904 Hs Gastric cancer 3,000 4 GSE213740 Hs Ascending aortic wall dissec-tion 2,704 5 GSE226762 Hs scRNA-seq (GEO-DataHub) 830 6 GSE277740 Mm Thalamus, SBS vs DNBSEQ 2,644 7 GSE300862 Mm Kras/Trp53 lung adenocarci-noma 2,716 8 GSE302433 Mm B16F10 melanoma, ZD-HHC13 2,953 
+
+Total 20,634 
+
+Table A7. The 5 biological validation datasets used for marker gene correlation, expression distribu-tion fidelity, and Gene Ontology enrichment analysis (Section 3.9). These datasets were selected to span diverse human cancer tissue types and immune cell populations. Four of the five datasets are from the training split; only GSE183904 is held-out (Table S2). This analysis therefore primarily evaluates in-distribution decoder-reconstructed fidelity, not out-of-distribution generalization. 
+
+# Accession Tissue Description Split ncells 
+
+1 GSE123902 Lung Lung adenocarcinoma TME Train 2,753 2 GSE183904 Gastric Gastric cancer TME Val 3,000 3 GSE123813 Skin Basal cell carcinoma Train 3,000 4 GSE98638 Liver HCC T cell landscape Train 3,000 5 GSE132509 Blood ALL bone marrow cells Train 2,984 
+
+Total 14,737  
+
+> All datasets are Homo sapiens . Validation purpose for each: marker gene correlation, expression distribution fidelity, and GO enrichment.
+
+Table A8. Bootstrap 95% confidence intervals (percentile method, B=1,000) for headline generation metrics. Resampling unit: cell types ( n=69 types resampled with replacement). Classifiers (KNN, logistic regression) were trained once on real data; only the composition of evaluated types varies across bootstrap iterations. Generation configuration: CFG = 1.5, Midpoint solver, 20 steps. Point estimates reflect the full (non-resampled) evaluation over all 69 types (100 generated cells per type, 6,900 total). 
+
+Metric Point Est. 95% CI Lower 95% CI Upper Boot. SE KNN Top-1 Accuracy 0.509 0.421 0.586 0.043 KNN Top-5 Accuracy 0.728 0.658 0.794 0.035 Steering Accuracy 1.000 1.000 1.000 0.000 Diversity Ratio (DivR) 0.969 0.963 0.974 0.003 Linear Classifier Acc. 0.583 0.518 0.646 0.034 Centroid Cosine Sim. 0.898 0.875 0.913 0.009 
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint
+
+Version March 26, 2026 submitted to Genes 30 of 33 
+
+Appendix A.1. Supplementary Figures 720 Proto Acc Top-5 Acc Top-10 Acc Val Loss Best Epoch 
+
+smaller proj 
+
+wider proj 
+
+no duplicate mask 
+
+fixed temperature 
+
+low temperature cap 
+
+no label smoothing 
+
+baseline 
+
+high variant prob 
+
+lighter dropout 
+
+no cell noise 
+
+no cohesion 
+
+no mixup 
+
+no rdrop 
+
+no regularization 
+
+no variants 
+
+0.762 0.994 0.998 0.005 18.0 
+
+0.759 0.993 0.998 0.005 18.0 
+
+0.767 0.993 0.998 0.005 18.0 
+
+0.716 0.991 0.998 0.006 23.0 
+
+0.768 0.993 0.998 0.005 18.0 
+
+0.767 0.993 0.998 0.005 18.0 
+
+0.762 0.994 0.998 0.005 17.0 
+
+0.701 0.967 0.986 0.006 28.0 
+
+0.773 0.994 0.998 0.005 16.0 
+
+0.862 0.997 0.999 0.004 15.0 
+
+0.864 0.997 0.999 0.004 13.0 
+
+0.760 0.994 0.998 0.005 17.0 
+
+0.768 0.993 0.998 0.005 18.0 
+
+0.761 0.994 0.998 0.005 17.0 
+
+0.769 0.993 0.998 0.005 18.0 
+
+CLOP Ablation Comparison 
+
+Architecture 
+
+Conditioning 
+
+Optimization 
+
+Reference 
+
+Regularization 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Normalized (higher = better)
+
+kNN Top-1 kNN Top-5 Steering Acc Diversity Ratio Linear Acc Centroid Cos FD 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Score
+
+3.1 
+
+n = 3 seeds 
+
+Multi-Seed Generation Robustness 
+
+High Fidelity 
+
+High Diversity 
+
+Cell Type Prompt Excerpt 
+
+Goblet cells Mucus-secreting goblet cells from human intestinal 
+
+Purkinje cells Purkinje neurons from human cerebellar cortex. Lar 
+
+Podocytes Glomerular podocytes from human kidney. Highly spe 
+
+Leydig cells Interstitial Leydig cells from human testis. Stero 
+
+Club cells Non-ciliated bronchiolar club cells (formerly Clar 
+
+Merkel cells Merkel cells from human skin epidermis. Neuroendoc 
+
+Novel Cell Types 
+
+Prompt ID Free-form Description 
+
+informal cd8 immune cells that kill infected cells in the 
+
+informal macrophage the big cells that eat bacteria and dead cell 
+
+informal stem undifferentiated cells that can become many d 
+
+informal neuron brain cells that fire electrical signals and 
+
+verbose treg I am looking for a type of T cell that suppre 
+
+question style what would a fibroblast in a wound healing co 
+
+shorthand nk NK cells, cytotoxic, blood 
+
+clinical note style Patient sample shows atypical large B-cells c 
+
+Free-form Prompts Lung 
+
+> Gastric
+> Skin
+> Liver
+> Blood
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+> Correlation
+
+Cross-Dataset Correlation 
+
+Pearson r 
+
+Spearman 
+
+> Pearson r
+> Spearman
+> Jaccard@100
+> Sign Agr.
+
+CD8+ cytoto v CD4+ helper 
+
+Tissue-resi v Circulating 
+
+Generic epi v Fibroblasts 
+
+B lymph. v Antibody-se 
+
+CD4+FOXP3+ v CD4+ helper 
+
+0.17 0.14 0.08 0.86 
+
+0.56 0.47 0.20 1.00 
+
+0.45 0.34 0.21 0.97 
+
+0.58 0.46 0.24 1.00 
+
+0.41 0.31 0.15 1.00 
+
+DE Concordance 
+
+0.0 0.5 1.0 
+
+Hit Rate 
+
+Goblet cells 
+
+Purkinje cells 
+
+Podocytes 
+
+Leydig cells 
+
+Club cells 
+
+Merkel cells 
+
+OOD Marker Hit Rate 
+
+Novel 
+
+10 20 50 100 
+
+K (top-K genes) 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Recall
+
+Marker Recall@K 
+
+CD8+ cytotoxic T 
+
+CD4+ helper T lym 
+
+B lymphocytes 
+
+Antibody-secretin 
+
+Tissue-resident m 
+
+Circulating monoc 
+
+0.2 0.4 0.6 0.8 1.0 
+
+Type 
+
+Specificity 
+
+Text 
+
+Steering 
+
+DE 
+
+Concordance 
+
+Marker 
+
+Recall 
+
+OOD 
+
+Handling 
+
+Cross-dataset 
+
+Corr. 
+
+Validation Radar 
+
+CLOP-DiT 
+
+Chance 10 4 10 3 10 2 10 1
+
+Real per-gene variance 
+
+10 4
+
+10 3
+
+10 2
+
+10 1
+
+> Generated per-gene variance
+
+r = 0.990 
+
+n = 1790 genes 
+
+Variance Scatter 
+
+0.00 0.25 0.50 0.75 1.00 1.25 
+
+log 2 (var gen / var real )
+
+0
+
+20 
+
+40 
+
+60 
+
+> Gene count
+
+>2-fold deficit: 0.0% 
+
+of 1790 genes 
+
+Variance Ratio Distribution 
+
+Perfect match 
+
+1x 5x 10x 
+
+Augmentation ratio 
+
+0.0000 
+
+0.0002 
+
+0.0004 
+
+0.0006 
+
+0.0008 
+
+0.0010 
+
+> F1 (augmented  baseline)
+
++0.0009 +0.0010 +0.0010 
+
+Embedding Augmentation 
+
+scGPT (frozen) scGPT +LoRA MLP (trained) 
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+0.04 
+
+0.05 
+
+> Per-gene std
+
+Decoder Comparison 
+
+Real 
+
+Gen: scGPT (frozen) 
+
+Gen: scGPT +LoRA 
+
+Gen: MLP (trained) 
+
+Figure A1. Supplementary validation and ablation overview. (a–c) Robustness and ablation: (a) CLOP ablation heatmap showing normalised metrics across 15 configuration variants with category markers, (b) multi-seed generation robustness across the high-fidelity and high-diversity regimes ( n = 3seeds), and (c) OOD generation showcase listing six novel cell types and eight free-form prompts. 
+
+(d–h) Downstream validation suite: (d) cross-dataset mean-expression correlation (Pearson r and Spearman ρ) across five tissues, (e) expanded DE concordance heatmap across five contrasts, (f) OOD marker-hit rates by prompt category, (g) marker recall@ K curves for six representative cell types, and (h) six-axis validation radar summarising type specificity, text steering, DE concordance, marker recall, OOD handling, and cross-dataset correlation. (i–l) Expression fidelity and decoder analysis: (i) per-gene variance scatter (log-log, coloured by fold deviation), (j) variance-ratio distribution highlighting the fraction of genes with >2-fold deficit, (k) embedding-level augmentation ∆F1 at 1×, 5 ×, and 10 × ratios, and (l) decoder ablation comparing frozen scGPT, LoRA-adapted, and MLP decoders. 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 31 of 33 0.0 0.2 0.4 0.6 0.8 1.0                  
+
+> Pseudobulk Pearson r
+> Multiciliated e
+> Lymphatic endo.
+> Mesenchymal ste
+> Plasmacytoid de
+> CD4+FOXP3+ reg.
+> Mucus-secreting
+> Interferon-stim
+> Alveolar type 1
+> Excitatory glut
+> Alveolar type 2
+> Pancreatic alpha
+> Mature red bloo
+> Radial glial an
+> CD4+ helper T l
+> Kidney proximal
+> CD8+ cytotoxic
+> Lower motor neu
+> Pancreatic beta
+> Per-Type Pseudobulk Correlation
+> Median = 1.000
+> r = 0.8
+> 0.999900
+> 0.999925
+> 0.999950
+> 0.999975
+> Pearson r
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> Count  n = 69 types
+> r > 0.9: 100%
+> r > 0.8: 100%
+> Distribution of Pseudobulk Correlations
+> Median = 1.000
+> Mean = 1.000 0510 15
+> Number of cell types
+> Cycling
+> Endothelial
+> Erythroid
+> B cells
+> Granulocytes
+> NK cells
+> Megakaryocyte
+> Parenchymal
+> T cells
+> Other
+> S/Progenitor
+> Epithelial
+> Myeloid
+> Stromal
+> Neural
+> Quality Tiers by Biological Family
+> Pass
+> Warn
+> Fail
+> 10 210 310 4
+> Training cells (log scale)
+> 5
+> 6
+> 7
+> 8
+> Quality score (0-8)
+> r=0.434
+> Quality vs Sample Size
+> 0.25 0.50
+> Max cosine overlap with other type
+> 5
+> 6
+> 7
+> 8
+> Quality score (0-8)
+> r=-0.030
+> Quality vs Confusability 0.00 0.05 0.10 0.15
+> KNN Accuracy
+> Full prompt
+> Markers only
+> Cell type only
+> No markers
+> No cell type
+> Tissue only
+> Organism only
+> Disease only
+> 0.189
+> 0.015
+> 0.072
+> 0.188
+> 0.012
+> 0.014
+> 0.015
+> 0.015
+> Steering Quality by Prompt Variant
+> 025 50 75 100
+> Retention vs Full Prompt (%)
+> Markers only
+> Cell type only
+> No markers
+> No cell type
+> Tissue only
+> Organism only
+> Disease only
+> 7.8%
+> 38.4%
+> 99.4%
+> 6.6%
+> 7.7%
+> 8.1%
+> 7.8%
+> Per-Field Contribution to Steering Mean shift Variance shift
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> |Pearson r| with discriminator coefs
+> r=0.670
+> r=0.020
+> Primary driver: Mean shift
+> What Drives Separability?
+> Top 10 Top 20 Top 50
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> % of total discriminative weight
+> 7% 12%
+> 26%
+> Gini = 0.418
+> Dimension Concentration
+> 0.0 0.5 1.0
+> Discriminator AUC
+> Venous endo.
+> Lower motor n
+> Hippocampal d
+> Intermediate
+> Mesenchymal s
+> B lymphocytes
+> Pancreatic al
+> Megakaryocytes
+> Capillary end
+> Basal epith.
+> Müller glial
+> Pericytes and
+> Actively cycl
+> Antibody-secr
+> MHC-II-high a
+> Per-Type Real/Gen Separability
+> Chance (0.5)
+> Mean = 0.924
+
+Figure A2. Expression-level validation and manuscript-rescue analyses. (a, b) Per-cell-type pseu-dobulk correlation between real and generated mean expression profiles ( n = 69 types): (a) sorted Pearson r per type and (b) distribution of correlations with median and mean indicators. (c–e) Failure analysis: (c) quality-tier distribution (pass/warn/fail) by biological family, (d) quality score vs. train-ing sample size ( r = 0.43), and (e) quality score vs. embedding confusability ( r = −0.03). (f, g) Prompt field ablation: (f) per-variant KNN accuracy showing that cell-type name dominates steering and (g) retention relative to the full prompt (cell type alone retains 38%; removing cell type drops accuracy to 7%). (h–j) Discriminator feature importance: (h) separability is mean-driven ( |r| = 0.67) rather than variance-driven, (i) discriminative-weight concentration across embedding dimensions (Gini = 0.42), and (j) per-type real-vs-generated AUC distribution (mean AUC = 0.92). 
+
+References 721 
+
+1. Svensson, V.; Vento-Tormo, R.; Teichmann, S.A. Exponential scaling of single-cell RNA-seq in the past decade. Nat. Protoc. 2018 , 722 
+
+13 , 599–604. 723 
+
+2. Zheng, G.X.Y.; Terry, J.M.; Belgrader, P.; Ryvkin, P.; Bent, Z.W.; Wilson, R.; Ziraldo, S.B.; Wheeler, T.D.; McDermott, G.P.; Zhu, J.; 724 
+
+et al. Massively parallel digital transcriptional profiling of single cells. Nat. Commun. 2017 , 8, 14049. 725 
+
+3. Lopez, R.; Regier, J.; Cole, M.B.; Jordan, M.I.; Yosef, N. Deep generative modeling for single-cell transcriptomics. Nat. Methods 726 
+
+2018 , 15 , 1053–1058. 727 
+
+4. Gayoso, A.; Lopez, R.; Xing, G.; Boyeau, P.; Valiber Wu, K.; Jayasuriya, M.; Mehlman, E.; Lancel, M.; Regier, J.; et al. A Python 728 
+
+library for probabilistic analysis of single-cell omics data. Nat. Biotechnol. 2022 , 40 , 163–166. 729 
+
+5. Lotfollahi, M.; Wolf, F.A.; Theis, F.J. scGen predicts single-cell perturbation responses. Nat. Methods 2019 , 16 , 715–721. 730 
+
+6. Ding, J.; Regev, A. Deep generative model embedding of single-cell RNA-Seq profiles on hyperspheres and hyperbolic spaces. 731 
+
+Nat. Commun. 2021 , 12 , 2554. 732 
+
+7. Theodoris, C.V.; Xiao, L.; Chopra, A.; Chaffin, M.D.; Al Sayed, Z.R.; Hill, M.C.; Mantineo, H.; Brydon, E.M.; Zeng, Z.; Liu, X.S.; 733 
+
+et al. Transfer learning enables predictions in network biology. Nature 2023 , 618 , 616–624. 734 
+
+8. Yang, F.; Wang, W.; Wang, F.; Fang, Y.; Tang, D.; Huang, J.; Lu, H.; Yao, J. scBERT as a large-scale pretrained deep language model 735 
+
+for cell type annotation of single-cell RNA-seq data. Nat. Mach. Intell. 2022 , 4, 852–861. 736 
+
+9. Hao, M.; Gong, J.; Zeng, X.; Liu, C.; Guo, Y.; Cheng, X.; Wang, T.; Ma, J.; Zhang, X.; Song, L. Large-scale foundation model on 737 
+
+single-cell transcriptomics. Nat. Methods 2024 , 21 , 1481–1491. 738 
+
+10. Wen, H.; Tang, W.; Dai, X.; Ding, J.; Jin, W.; Xie, Y.; Tang, J. CellPLM: Pre-training of cell language model beyond single cells. In 739 
+
+Proceedings of the 12th International Conference on Learning Representations (ICLR), Vienna, Austria, 7–11 May 2024. 740 
+
+11. Rosen, Y.; Roohani, Y.H.; Agrawal, A.; Leskovec, J. Universal cell embeddings: A foundation model for cell biology. In NeurIPS 741 
+
+Workshop on New Frontiers in Learning, Control, and Dynamical Systems, New Orleans, LA, USA, 15 December 2023. 742 
+
+12. Levine, D.; Rizvi, S.A.; Lévy, S.; Pallikkavaliyaveetil, N.; Zhang, D.; Chen, X.; Ghadermarzi, S.; Wu, R.; Zheng, Z.; Vrkic, I.; et al. 743 
+
+Cell2Sentence: Teaching Large Language Models the Language of Biology. bioRxiv 2023 , 2023.09.11.557287. 744 
+
+13. Chen, Y.; Zou, J. GenePT: A Simple but Effective Foundation Model for Genes and Cells Built from ChatGPT. bioRxiv 2023 , 745 
+
+2023.10.16.562533. 746 
+
+14. Radford, A.; Kim, J.W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; et al. Learning 747 
+
+transferable visual models from natural language supervision. In Proceedings of the 38th International Conference on Machine 748 
+
+Learning (ICML), Virtual, 18–24 July 2021; pp. 8748–8763. 749 
+
+15. Zhai, X.; Mustafa, B.; Kolesnikov, A.; Beyer, L. Sigmoid loss for language image pre-training. In Proceedings of the IEEE/CVF 750 
+
+International Conference on Computer Vision (ICCV), Paris, France, 2–6 October 2023; pp. 11975–11986. 751 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint Version March 26, 2026 submitted to Genes 32 of 33 
+
+16. Peebles, W.; Xie, S. Scalable diffusion models with transformers. In Proceedings of the IEEE/CVF International Conference on 752 
+
+Computer Vision (ICCV), Paris, France, 2–6 October 2023; pp. 4195–4205. 753 
+
+17. Lipman, Y.; Chen, R.T.Q.; Ben-Hamu, H.; Nickel, M. Flow matching for generative modeling. In Proceedings of the 11th 754 
+
+International Conference on Learning Representations (ICLR), Kigali, Rwanda, 1–5 May 2023. 755 
+
+18. Albergo, M.S.; Vanden-Eijnden, E. Building normalizing flows with stochastic interpolants. In Proceedings of the 11th International 756 
+
+Conference on Learning Representations (ICLR), Kigali, Rwanda, 1–5 May 2023. 757 
+
+19. Liu, X.; Gong, C.; Liu, Q. Flow straight and fast: Learning to generate and transfer data with rectified flow. In Proceedings of the 758 
+
+11th International Conference on Learning Representations (ICLR), Kigali, Rwanda, 1–5 May 2023. 759 
+
+20. Stuart, T.; Butler, A.; Hoffman, P.; Hafemeister, C.; Papalexi, E.; Mauck, W.M.; Hao, Y.; Stoeckius, M.; Smibert, P.; Satija, R. 760 
+
+Comprehensive integration of single-cell data. Cell 2019 , 177 , 1888–1902. 761 
+
+21. Brennecke, P.; Anders, S.; Kim, J.K.; Kolodziejczyk, A.A.; Zhang, X.; Proserpio, V.; Baying, B.; Benes, V.; Teichmann, S.A.; 762 
+
+Marioni, J.C.; Heisler, M.G. Accounting for technical noise in single-cell RNA-seq experiments. Nat. Methods 2013 , 10 , 1093–1095. 763 
+
+22. Wilcoxon, F. Individual comparisons by ranking methods. Biom. Bull. 1945 , 1, 80–83. 764 
+
+23. Franzén, O.; Gan, L.M.; Björkegren, J.L.M. PanglaoDB: A web server for exploration of mouse and human single-cell RNA 765 
+
+sequencing data. Database 2019 , 2019 , baz046. 766 
+
+24. Hu, C.; Li, T.; Xu, Y.; Zhang, X.; Li, F.; Bai, J.; Chen, J.; Jiang, W.; Yang, K.; Ou, Q.; et al. CellMarker 2.0: An updated database of 767 
+
+manually curated cell markers in human/mouse and web tools based on scRNA-seq data. Nucleic Acids Res. 2023 , 51 , D870–D876. 768 
+
+25. Traag, V.A.; Waltman, L.; van Eck, N.J. From Louvain to Leiden: Guaranteeing well-connected communities. Sci. Rep. 2019 , 9, 769 
+
+5233. 770 
+
+26. Tabula Muris Consortium. Single-cell transcriptomics of 20 mouse organs creates a Tabula Muris. Nature 2018 , 562 , 367–372. 771 
+
+27. Ioffe, S.; Szegedy, C. Batch normalization: Accelerating deep network training by reducing internal covariate shift. In Proceedings 772 
+
+of the 32nd International Conference on Machine Learning (ICML), Lille, France, 6–11 July 2015; pp. 448–456. 773 
+
+28. Hendrycks, D.; Gimpel, K. Gaussian error linear units (GELUs). arXiv 2016 , 1606.08415. 774 
+
+29. Srivastava, N.; Hinton, G.; Krizhevsky, A.; Sutskever, I.; Salakhutdinov, R. Dropout: A simple way to prevent neural networks 775 
+
+from overfitting. J. Mach. Learn. Res. 2014 , 15 , 1929–1958. 776 
+
+30. Loshchilov, I.; Hutter, F. Decoupled weight decay regularization. In Proceedings of the 7th International Conference on Learning 777 
+
+Representations (ICLR), New Orleans, LA, USA, 6–9 May 2019. 778 
+
+31. Loshchilov, I.; Hutter, F. SGDR: Stochastic gradient descent with warm restarts. In Proceedings of the 5th International Conference 779 
+
+on Learning Representations (ICLR), Toulon, France, 24–26 April 2017. 780 
+
+32. Tong, A.; Malkin, N.; Huguet, G.; Zhang, Y.; Rector-Brooks, J.; Fatras, K.; Wolf, G.; Bengio, Y. Improving and generalizing 781 
+
+flow-based generative models with minibatch optimal transport. Trans. Mach. Learn. Res. 2024 . 782 
+
+33. Esser, P.; Kulal, S.; Blattmann, A.; Entezari, R.; Müller, J.; Saini, H.; Levi, Y.; Lorenz, D.; Sauer, A.; Boesel, F.; et al. Scaling rectified 783 
+
+flow transformers for high-resolution image synthesis. In Proceedings of the 41st International Conference on Machine Learning 784 
+
+(ICML), Vienna, Austria, 21–27 July 2024. 785 
+
+34. Ho, J.; Salimans, T. Classifier-free diffusion guidance. In Proceedings of the NeurIPS 2021 Workshop on Deep Generative Models 786 
+
+and Downstream Applications, Virtual, 13 December 2021. 787 
+
+35. Polyak, B.T.; Juditsky, A.B. Acceleration of stochastic approximation by averaging. SIAM J. Control Optim. 1992 , 30 , 838–855. 788 
+
+36. Hubert, L.; Arabie, P. Comparing partitions. J. Classif. 1985 , 2, 193–218. 789 
+
+37. Strehl, A.; Ghosh, J. Cluster ensembles—A knowledge reuse framework for combining multiple partitions. J. Mach. Learn. Res. 790 
+
+2002 , 3, 583–617. 791 
+
+38. Heusel, M.; Ramsauer, H.; Unterthiner, T.; Nessler, B.; Hochreiter, S. GANs trained by a two time-scale update rule converge to a 792 
+
+local Nash equilibrium. Adv. Neural Inf. Process. Syst. 2017 , 30 , 6626–6637. 793 
+
+39. McInnes, L.; Healy, J.; Melville, J. UMAP: Uniform manifold approximation and projection for dimension reduction. arXiv 2018 , 794 
+
+1802.03426. 795 
+
+40. Wolf, F.A.; Angerer, P.; Theis, F.J. SCANPY: Large-scale single-cell gene expression data analysis. Genome Biol. 2018 , 19 , 15. 796 
+
+41. Luecken, M.D.; Buttner, M.; Chaichoompu, K.; Danese, A.; Interlandi, M.; Mueller, M.F.; Strobl, D.C.; Zappia, L.; Dugas, M.; 797 
+
+Colome-Tatche, M.; Theis, F.J. Benchmarking atlas-level data integration in single-cell genomics. Nat. Methods 2022 , 19 , 41–50. 798 
+
+42. Schaefer, M.; Peneder, P.; Malzl, D.; Lombardo, S.D.; Peycheva, M.; Burton, J.; Hakobyan, A.; Sharma, V.; Krausgruber, T.; Sin, C.; 799 
+
+et al. Multimodal learning enables chat-based exploration of single-cell data. Nat. Biotechnol. 2025 , 1–11. 800 
+
+43. Song, D.; Wang, Q.; Yan, G.; Liu, T.; Sun, T.; Li, J.J. scDesign3 generates realistic in silico data for multimodal single-cell and 801 
+
+spatial omics. Nat. Biotechnol. 2024 , 42 , 247–252. 802 
+
+44. Cui, H.; Wang, C.; Maan, H.; Pang, K.; Luo, F.; Duan, N.; Wang, B. scGPT: Toward building a foundation model for single-cell 803 
+
+multi-omics using generative AI. Nat. Methods 2024 , 21 , 1470–1480. 804 
+
+> https://doi.org/10.3390/genes1010000
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint
+
+Version March 26, 2026 submitted to Genes 33 of 33 
+
+45. Fu, Z. CLOP-DiT: Structured-Metadata-Conditioned Single-Cell Latent Generation via Contrastive Language-Omics Pretraining 805 
+
+and Diffusion Transformers. GitHub repository 2025 . Available online: https://github.com/PeterPonyu/CLOP-DiT (accessed on 806 
+
+26 March 2026). 807 
+
+Disclaimer/Publisher’s Note: The statements, opinions and data contained in all publications are solely those of the individual 808 
+
+author(s) and contributor(s) and not of MDPI and/or the editor(s). MDPI and/or the editor(s) disclaim responsibility for any injury to 809 
+
+people or property resulting from any ideas, methods, instructions or products referred to in the content. 810 
+
+https://doi.org/10.3390/genes1010000 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted March 30, 2026. ;https://doi.org/10.64898/2026.03.26.714457 doi: bioRxiv preprint

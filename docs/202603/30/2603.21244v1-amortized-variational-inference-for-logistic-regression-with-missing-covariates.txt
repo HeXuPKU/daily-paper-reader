@@ -1,0 +1,1145 @@
+Title: Amortized Variational Inference for Logistic Regression with Missing Covariates
+
+URL Source: https://arxiv.org/pdf/2603.21244v1
+
+Published Time: Tue, 24 Mar 2026 01:21:01 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Amortized Variational Inference for Logistic Regression with Missing Covariates 
+
+M. Cherifi a, A. Sportisse b, X. Zhu c, M. N. El Korso c, A. Mesloub a
+
+> aLab. Traitement du signal, Ecole Militaire Polytechnique, BP 17 Bordj El Bahri, Algeria
+> bLab. d’Informatique de Grenoble, CNRS, France
+> cUniversity of Paris Saclay, CNRS, CentraleSupelec, Laboratoire des signaux et systèmes, 91190, Gif-sur-Yvette, France
+
+Abstract 
+
+Missing covariate data pose a significant challenge to statistical inference and machine learning, particularly for clas-sification tasks, where models like logistic regression are widely used. For the latter, classical iterative approaches, such as the Expectation–Maximization (EM) algorithm and its stochastic variants, or multiple imputation methods, are often computationally intensive, sensitive to high rates of missingness, and limited in their ability to propagate un-certainty. Recent deep generative models based on Variational AutoEncoders (VAEs) have shown promise in handling missing data through amortized inference, but they often rely on complex latent representations. In this manuscript, we propose Amortized Variational Inference for Logistic Regression (AV-LR), a unified, end-to-end framework for binary logistic regression with missing covariates. AV-LR integrates a probabilistic generative model with a simple amortized inference network, trained jointly by maximizing the evidence lower bound. Unlike competing methods, AV-LR directly performs inference in the space of missing data without introducing additional latent variables, leveraging a single inference network and a linear layer that jointly estimate the regression parameters and the parameters of the missingness mechanism. We demonstrate that AV-LR achieves estimation accuracy comparable to or better than state-of-the-art EM-like algorithms, while significantly reducing computational cost through a simple deep learning-based architecture, in contrast to more complex VAE-based approaches. Furthermore, AV-LR naturally extends to missing-not-at-random settings, where the missing data depend on both the observed and missing values, by explicitly modeling the miss-ingness mechanism. Empirical results on synthetic and real-world datasets confirm the e ff ectiveness and e ffi ciency of AV-LR across various missing-data scenarios. 
+
+1. Introduction 
+
+Missing data present a substantial challenge in statistical inference and machine learning, often introducing bias and reducing predictive power when not properly addressed [1, 2]. Traditional approaches based on the Expectation– Maximization (EM) algorithm [3] and its stochastic variants, such as Stochastic EM (SEM) [4] and Stochastic Ap-proximation EM (SAEM) [5, 6, 7], mitigate the intractability of directly evaluating the observation likelihood by iteratively imputing or simulating missing values. However, these iterative methods can be computationally intensive and sensitive to both data dimensionality and missing rates, especially in high-dimensional logistic regression models [8, 6]. Multiple imputation techniques, such as Multiple Imputation by Chained Equations (MICE) [9], and iterative random forest-based methods like missForest [10] provide flexibility by modeling each variable conditionally. More specifically, these approaches iteratively treat each incomplete variable as a response and predict its missing values using the other variables as predictors. Nevertheless, they become computationally demanding on large datasets, and do not fully leverage a joint modeling framework for the covariate distribution and the missing-data mechanism, which may limit the coherence of subsequent inference. Moreover, these classical methods are not designed to handle Missing Not At Random (MNAR) data, i.e., when the missingness depends on the missing values themselves. Aclassic example of MNAR data occurs when individuals with very high or very low incomes are less likely to report them due to their value. 
+
+> ∗Corresponding author
+> arXiv:2603.21244v1 [cs.LG] 22 Mar 2026
+
+Recent methods using deep generative modeling, particularly Variational AutoEncoders (VAEs) [11] and their Importance-Weighted extensions (IWAEs) [12], have introduced amortized inference networks to e ffi ciently approxi-mate posterior distributions. While these VAE /IWAE-based approaches, e.g., MIWAE [13], not-MIWAE for MNAR data [14] and related VAE imputations [15, 16, 14, 17], o ff er powerful reconstruction abilities, they present several practical limitations that motivate our work. Many methods introduce additional latent spaces and multiple neural components, thereby increasing model complexity, complicating optimization and hyperparameter tuning, and reduc-ing interpretability. Second, existing approaches typically focus on likelihood or reconstruction objectives and do not jointly optimize the imputation process with the downstream predictive model and the missingness mechanism, which can degrade inferential validity for tasks such as logistic regression, especially under MNAR. A recent study [15] extends the not-MIWAE framework [14] to generalized linear models with MNAR covariates by introducing a latent VAE representation and optimizing an importance-weighted autoencoder objective to tighten the bound on the marginal likelihood under non-ignorable missingness. These shortcomings motivate this work, where we develop an end-to-end, computationally e ffi cient scheme. This framework performs amortized inference directly in the space of missing covariates, avoids introducing extra latent variables, and couples a single, simple inference network with a single linear component that jointly models prediction and missingness, thereby improving interpretability, stability, and task-oriented coherence. More specifically, we pro-pose in this work a unified framework for binary logistic regression with missing covariates, referred to as Amortized Variational Inference for Logistic Regression (AV-LR). Building on recent theoretical foundations for amortized vari-ational inference [18, 19], AV-LR combines a probabilistic generative model that defines the joint likelihood p(y, x)with an amortized inference network qϕ(xmis | xobs , y), trained jointly by maximizing the ELBO [11, 20]. Via nu-merical examples, we show that AV-LR achieves comparable estimation accuracy to SEM /SAEM while substantially reducing computational cost, even under high missingness rates and nonignorable missingness mechanisms (MNAR). The remainder of this article is structured as follows. Section 2 introduces the probabilistic logistic regression model with missing data and reviews the foundational aspects of the SAEM algorithm. Section 3 details the AV-LR methodology, including the specification of the generative model, the architecture of the inference network, and the derivation of both the standard and importance-weighted ELBO. Section 4 extends AV-LR to MNAR settings through explicit modeling of the missingness mechanism. Section 5 focuses how to predict an output variable using the trained model. Section 6 presents a detailed comparison of AV-LR methodology and VAE-based methods. Finally, Section 7 provides empirical results on synthetic and realworld datasets, comparing AVLR against competing approaches in terms of estimation accuracy and computational e ffi ciency. 
+
+2. Model Setup 
+
+We consider a conventional classification problem: we are given N independent observations {(xi, yi) : i =
+
+1, . . . , N}, where each label yi ∈ { 0, 1} conditional on covariates xi ∈ Rd is modeled as a realization from a Bernoulli distribution. Specifically, the probability that the binary response yi equals 1 is modeled via the logistic function: 
+
+p(yi = 1 | xi; β) = exp ([1 , x⊤ 
+
+> i
+
+] β)
+
+1 + exp ([1 , x⊤ 
+
+> i
+
+] β) , p(yi = 0 | xi; β) = 1 − p(yi = 1 | xi; β), (1) where β ∈ Rd+1 is the unknown parameter vector (including the intercept). In practice, covariate data are sometimes incomplete, with certain variables unobserved. To explicitly account for the missingness, we partition the covariate vector as xi = (xobs  
+
+> i
+
+, xmis  
+
+> i
+
+), distinguishing observed components xobs  
+
+> i
+
+from missing components xmis  
+
+> i
+
+. In addition, we define a binary mask vector ri ∈ { 0, 1}p associated with each observation 
+
+xi. The mask vector encodes the missingness pattern of the covariates, such that 
+
+ri j =
+
+
+
+1, if the j-th component of xi is observed ,
+
+0, if the j-th component of xi is missing .
+
+According to the underlying missingness mechanism [21], three classical cases are distinguished. Missing Com-pletely At Random (MCAR) holds when the missingness pattern is independent of both observed and unobserved covariates and the response, i.e., Pr( ri | xi, yi) = Pr( ri). Missing At Random (MAR) allows dependence on observed 2quantities but not on the missing values themselves: Pr( ri | xi, yi) = Pr( ri | xobs  
+
+> i
+
+, yi). Missing Not At Random (MNAR) refers to situations where the missingness mechanism depends explicitly on both the observed and unobserved com-ponents, i.e., Pr( ri | xi, yi) = Pr( ri | xobs  
+
+> i
+
+, xmis  
+
+> i
+
+, yi). In this section, we restrict our attention to the MCAR /MAR cases and defer discussion of MNAR to Section 4. To model the covariates probabilistically and account for di ff erent patterns of missingness, we assume the com-plete covariate vector xi follows a multivariate normal distribution xi ∼ N (μ, Σ), where μ ∈ Rd and Σ ∈ Rd×d. This choice plays a critical role in our modeling framework, as it avoids introducing complex latent variables while retain-ing a fully probabilistic approach. Despite its simplicity, this assumption is particularly advantageous in real-world problems with limited data. It is commonly adopted for modeling continuous multivariate variables, especially when handling missing data [6, 8, 22, 3], and provides a flexible approximation to a wide range of dependence structures. Following this setup, when covariates are partially missing, the observed-data likelihood is obtained by marginalizing over the missing components: 
+
+L(β, μ, Σ; y, {xobs  
+
+> i
+
+}Ni=1) =
+
+> N
+
+∏
+
+> i=1
+
+p(yi, xobs  
+
+> i
+
+| β, μ, Σ)
+
+=
+
+> N
+
+∏
+
+> i=1
+
+∫
+
+p(yi = 1 | xi; β)yi [1 − p(yi = 1 | xi; β)]1−yi f (xi; μ, Σ) d xmis  
+
+> i
+
+,
+
+(2) where f (·; μ, Σ) denotes the multivariate normal probability density function with mean vector μ and covariance matrix Σ, characterizing the joint distribution of covariates. The presence of missing covariates renders the marginal likelihood in Eq. (2) analytically intractable due to the required integration over the missing data space. This compu-tational challenge motivates the adoption of a Stochastic Approximation Expectation-Maximization (SAEM) frame-work, which circumvents direct integration by combining Monte Carlo sampling of the missing data with stochastic approximation in the E-step. At each iteration t, the SAEM algorithm proceeds as follows: 1. Simulation Step (S-Step): 
+
+For each observation i, draw a Monte Carlo sample of the missing covariates from the conditional distribution: 
+
+x(t+1)  
+
+> i,mis
+
+∼ p(xi,mis | yi, xi,obs ; β(t), μ(t), Σ(t)).
+
+2. Stochastic Approximation (SA-Step): 
+
+Update the intermediate expectation of the complete-data log-likelihood via a stochastic approximation scheme: 
+
+Qt+1 = Qt + γt
+
+( log p(y, xobs , x(t+1) mis ; β(t), μ(t), Σ(t)) − Qt
+
+),
+
+where γt is a decreasing step size sequence. 3. Maximization Step (M-Step): 
+
+Update parameters by maximizing the stochastic surrogate: (β(t+1) , μ(t+1) , Σ(t+1) ) = arg max    
+
+> β,μ,Σ
+
+Qt+1.
+
+Initially, Q0 is computed using simple mean imputation for the missing covariates, which provides a starting point for the stochastic approximations. The SAEM algorithm ensures stochastic convergence toward the maximum likelihood estimates, with the decreasing step size γt guaranteeing asymptotic stability. Moreover, the algorithm is particularly effi cient in high-dimensional settings, where the traditional EM algorithm may be computationally prohibitive. However, the SAEM algorithm su ff ers from a significant drawback: the computational cost associated with the sampling step (S-Step) can be prohibitively high, especially for large datasets or complex models [8]. The need to draw Monte Carlo samples from the conditional distribution of missing covariates for each observation at each iteration requires substantial computational resources and can lead to slow convergence. This limitation motivates the exploration of alternative approaches to handle the intractable integral in the likelihood of the observed data. In the next section, we present an amortized variational inference framework that addresses these computational challenges by approximating the posterior distribution of missing covariates using a neural network, thereby reducing the computational burden while maintaining statistical accuracy. 33. AV-LR: Amortized Variational Inference for Logistic Regression with Missing Data 
+
+In this section, we present the proposed AV-LR framework for binary logistic regression with missing covariates. More specifically, we introduce an inference network qϕ(xmiss | xobs , y) parameterized by neural network weights ϕ
+
+that approximates the conditional posterior distribution of the missing covariates given the observed data and out-comes. This approach leverages amortized variational inference to directly estimate the missing values, eliminating the need for iterative imputation or sampling-based methods typical of EM-like algorithms. This network enables effi cient and scalable inference by sharing parameters across all data points, facilitating rapid approximation even in high-dimensional settings [20]. Figure 1 shows the causal relationships between the variables x and y through a structural causal graph, when the missingness mechanism is MCAR or MAR. 
+
+y
+
+x μ, Σ
+
+β
+
+ϕ       
+
+> N
+> Figure 1: Structural causal graph of AV-LR for MCAR or MAR covariates. Nodes in grey represent fully observed variables, nodes in white denote unobserved variables, and mixed nodes indicate the presence of both cases. he edges from xto ymeans that xcauses y.
+
+Recall that the joint model pθ(yi, xi) combines a logistic regression likelihood and a multivariate Gaussian prior on the covariates: 
+
+pθ(yi | xi) = σ (β⊤ ˜xi
+
+)yi (1 − σ (β⊤ ˜xi
+
+)) 1−yi
+
+, ˜xi = [1 , xi] ∈ Rd+1, (3) 
+
+pθ(xi) = f (xi; μ, Σ) , (4) where β ∈ Rd+1 includes the bias term, μ ∈ Rd is the mean vector, Σ ∈ Rd×d is the covariance matrix, and σ denotes the sigmoid function given by 
+
+σ(u) = 11 + e−u .
+
+The full parameters are θ = (β, μ, Σ). 
+
+3.1. Variational Lower Bound and Importance-Weighted Estimation 
+
+The likelihood of the observed data given in (2) is intractable due to the integration over missing covariates. Using Jensen’s inequality, we obtain the evidence lower bound (ELBO) for the observed log-likelihood: log pθ(yi, xi,obs ) ≥ Eqϕ
+
+[
+
+log pθ(yi, xi,miss , xi,obs )
+
+qϕ(xi,miss | xi,obs , yi)
+
+]
+
+≜ Li(θ, ϕ), (5) where qϕ is a variational distribution parameterized by ϕ, introduced to approximate the true posterior distribution 
+
+pθ(xi,miss | xi,obs , yi). Expanding the joint likelihood as log pθ(yi, xi) = log pθ(yi | xi) + log pθ(xi), the ELBO decom-poses into three terms: 
+
+Li(θ, ϕ) = Eqϕ
+
+[ log pθ(yi | xi)] + Eqϕ
+
+[ log pθ(xi)] − Eqϕ
+
+[ log qϕ(xi,miss | xi,obs , yi)].
+
+In practice, estimating gradients of the parameters ( θ, ϕ) with a single sample from the variational posterior of-ten leads to high variance and slow convergence. To address this, we adopt the Importance-Weighted Autoencoder (IWAE) objective, which uses multiple importance samples to tighten the bound and stabilize gradient estimates [12]. For each observation i, we draw K independent samples from the variational posterior: 
+
+x(k) 
+
+> i,miss
+
+∼ qϕ
+
+(xi,miss | xi,obs , yi
+
+), k = 1, . . . , K.
+
+4Each sample is then used to reconstruct the complete covariate vector by combining observed and imputed values: 
+
+x(k) 
+
+> i
+
+= xi,obs ⊙ ri + x(k) 
+
+> i,miss
+
+⊙ (1 − ri
+
+),
+
+where ri is the binary mask indicating observed entries. The log-importance weight for the k-th sample is defined as log w(k) 
+
+> i
+
+= log pθ
+
+(yi | x(k)
+
+> i
+
+) + log pθ
+
+(x(k)
+
+> i
+
+) − log qϕ
+
+(x(k) 
+
+> i,miss
+
+| xi,obs , yi
+
+),
+
+which quantifies the log-discrepancy between the model joint density evaluated at the imputed complete covariate vec-tor and the variational proposal distribution that generated the imputation. The corresponding unnormalized impor-tance weights are obtained as w(k) 
+
+> i
+
+= pθ
+
+(yi|x(k)
+
+> i
+
+)pθ
+
+(x(k)
+
+> i
+
+)
+
+> qϕ
+
+(x(k)
+
+> i,miss |xi,obs ,yi
+
+) . Aggregating over the K samples yields the importance-weighted ELBO (IWELBO): 
+
+LIW (θ, ϕ) =
+
+> N
+
+∑
+
+> i=1
+
+[
+
+log ( 1
+
+> KK
+
+∑
+
+> k=1
+
+w(k)
+
+> i
+
+)]
+
+≤ log pθ
+
+(y, xobs 
+
+). (6) Note that increasing the number of importance samples K tightens the bound and reduces the variance of gradient estimates, leading to more stable optimization and improved parameter estimation. Finally, we train the model by minimizing the negative IWELBO, −L IW , using stochastic gradient descent. 
+
+3.2. Amortized Variational Approximation 
+
+In our amortized variational inference scheme, we model the variational distribution qϕ(xi,miss | xi,obs , yi) as a multivariate Gaussian distribution using a neural network encoder with the parameter ϕ. The variational distribution is explicitly given by 
+
+qϕ(xi,miss | xi,obs , yi) = N(xi,miss 
+
+∣∣∣ μq,i, Σq,i
+
+),
+
+where μq,i ∈ Rdi is the mean vector and covariance matrix Σq,i corresponds to the covariance matrix. Let di denote the number of missing covariates for observation i. The encoder network takes as input the con-catenated vector [ xi,obs , yi] and outputs the mean vector μq,i ∈ Rdi and a vector ℓq,i ∈ Rdi(di+1) /2 that encodes the lower-triangular entries of the Cholesky factor of the covariance matrix. Then, Σq,i is constructed as Σq,i = Lq,i L⊤
+
+> q,i
+
+,where Lq,i is a lower-triangular matrix obtained via the mapping 
+
+Lq,i = CholeskyFactor (ℓq,i),
+
+where the function CholeskyFactor transforms the unconstrained vector ℓq,i into a lower-triangular matrix with positive diagonal entries (achieved by exponentiating the diagonal elements), thus ensuring the positive definiteness of Σq,i.To enable gradient-based optimization of the variational parameters ϕ in Eq. (6), we employ the reparameterization trick to sample qϕ, that is, 
+
+xi,miss = μq,i + Lq,i εi, εi ∼ N (0, Idi ),
+
+where εi is an auxiliary noise variable. By amortizing the inference across all observations, the encoder network aims to learn accurate variational pa-rameters for any pattern of observed data ( xi,obs , yi). This approach significantly reduces the computational burden compared to traditional variational methods that require separate optimization for each data point, while maintaining the flexibility to capture complex dependencies between missing and observed variables. 
+
+4. Extension to MNAR: Modeling Missing Not At Random Mechanisms 
+
+The AV-LR framework originally assumes that the missingness mechanism is ignorable, typically under the Miss-ing At Random (MAR) assumption. However, in real-world datasets, this assumption often fails: the probability that a covariate is missing may depend on its unobserved value itself. The mechanism is then non-ignorable and called 
+
+Missing Not At Random (MNAR) . Figure 2 depicts the causal relationships among the variables x, y, and the mask r
+
+using a structural causal graph, under a non-ignorable missingness mechanism. 5y
+
+x
+
+r
+
+μ, Σ
+
+ψ
+
+β
+
+ϕ
+
+N
+
+Figure 2: Structural causal graph of AV-LR for MNAR covariates. Nodes in grey represent fully observed variables, nodes in white denote unobserved variables, and mixed nodes indicate the presence of both cases. he edges from x to y means that x causes y.
+
+To capture nonignorable missingness (MNAR), we augment our generative model with an explicit stochastic missingness mechanism. The joint likelihood of the observed data and the missingness indicators factorizes as: 
+
+pθ,ψ(yi, xi, ri) = pθ(yi | xi) pθ(xi) pψ(ri | xi, yi), (7) This factorization, called selection models [23], is particularly appropriate when estimating the parameters of the data distribution ( β, μ, Σ), as it preserves the form of the complete-data distribution while incorporating the missingness mechanism, i.e., the conditional probability of the missingness indicator given the data pψ(ri | xi, yi). The missingness mechanism for each variable is characterized by a Bernoulli distribution, assuming conditional independence of the missingness indicators given ( xi, yi): 
+
+pψ(ri | xi, yi) =
+
+> d
+
+∏
+
+> j=1
+
+Bernoulli( ri j | πi j ), (8) where each πi j ∈ (0 , 1) is given by: 
+
+πi j = σ(gψ, j(xi, yi)), (9) with gψ, j a neural network or linear model parameterized by ψ [15]. The joint likelihood of the observed quantities becomes 
+
+pθ,ψ(yi, xi,obs , ri) =
+
+∫
+
+pθ(yi | xi) pθ(xi) pψ(ri | xi, yi) d xi,miss .
+
+Similar to Eq. (5), by amortizing inference of xi,miss via qϕ, the MNAR ELBO for observation i is given by log pθ,ψ
+
+(yi, xi,obs , ri
+
+) ≥ Eqϕ
+
+(xi,miss |xi,obs ,yi,ri
+
+)[ log pθ
+
+(yi | xi
+
+) + log pθ
+
+(xi
+
+) + log pψ
+
+(ri | xi, yi
+
+)
+
+− log qϕ
+
+(xi,miss | xi,obs , yi, ri
+
+)] 
+
+=: Li(θ, ψ, ϕ). (10) In practice, as in Eq. (6), for each sample x(k) 
+
+> i,miss
+
+∼ qϕ, we compute the importance weight log w(k) 
+
+> i
+
+= log pθ(yi | x(k) 
+
+> i
+
+) + log pθ(x(k) 
+
+> i
+
+) + log pψ(ri | x(k) 
+
+> i
+
+, yi) − log qϕ(x(k) 
+
+> i,miss
+
+| xi,obs , yi),
+
+and employ the following objective function for training 
+
+LIW (θ, ϕ, ψ) =
+
+> N
+
+∑
+
+> i=1
+
+log 
+
+ 1
+
+K
+
+> K
+
+∑
+
+> k=1
+
+w(k)
+
+> i
+
+ , (11) with w(k) 
+
+> i
+
+= pψ(ri|x(k)      
+
+> i,yi)pθ(yi|x(k)
+> i)pθ(x(k)
+> i)
+> qϕ(x(k)
+> i,miss |xi,obs ,yi)
+
+.65. Prediction with Missing Covariates 
+
+The primary objective of this section is to develop a robust prediction framework that properly accounts for missing data mechanisms, enabling accurate probabilistic predictions even when faced with incomplete covariate information. Once the variational encoder qϕ of either form 
+
+qϕ(xi,miss | xi,obs , yi) (ignorable) or qϕ(xi,miss | xi,obs , yi, ri) (nonignorable) ,
+
+has been trained, the target probability is given by: 
+
+pi = P(yi = 1 | xi,obs , ri) = pθ,ψ(yi = 1, ri | xi,obs )
+
+pθ,ψ(ri | xi,obs )
+
+=
+
+∫ pθ(yi = 1 | xi,obs , xi,miss )pψ(ri | xi,obs , xi,miss , yi = 1) pθ(xi,miss | xi,obs )d xi,miss 
+
+∑1
+
+> c=0
+
+∫ pθ(yi = c | xi,obs , xi,miss )pψ(ri | xi,obs , xi,miss , yi = c)pθ(xi,miss | xi,obs )d xi,miss 
+
+.
+
+(12) In the binary setting y ∈ { 0, 1}, we approximate these integrals via importance sampling using the variational distribution qϕ as the proposal distribution with S draws per class. We now focus on the numerator corresponding to class 1 (the positive class): Numerator ≈ 1
+
+S
+
+> S
+
+∑
+
+> s=1
+
+pθ(yi = 1 | xi,obs , x(s,1) 
+
+> i,miss
+
+)pψ(ri | xi,obs , x(s,1) 
+
+> i,miss
+
+, yi = 1) pθ(x(s,1)  
+
+> i,miss
+
+| xi,obs )
+
+qϕ(x(s,1)  
+
+> i,miss
+
+| xi,obs , yi = 1, ri)with x(s,1)  
+
+> i,miss
+
+∼ qϕ(xi,miss | xi,obs , yi = 1, ri). For the denominator terms ( c = 0, 1): Term c ≈ 1
+
+S
+
+> S
+
+∑
+
+> s=1
+
+pθ(yi = c | xi,obs , x(s,c)
+
+> i,miss
+
+)pψ(ri | xi,obs , x(s,c)
+
+> i,miss
+
+, yi = c) pθ(x(s,c) 
+
+> i,miss
+
+| xi,obs )
+
+qϕ(x(s,c) 
+
+> i,miss
+
+| xi,obs , yi = c, ri)where x(s,c) 
+
+> i,miss
+
+∼ qϕ(xi,miss | xi,obs , yi = c, r). The final prediction is computed as: ˆpi = Numerator Term 0 + Term 1
+
+6. Comparison with VAE-based methods 
+
+The distinction between VAE-based approaches for handling missing data and our AV-LR framework lies primar-ily in their modeling objectives and treatment of incomplete inputs. In standard VAE architectures, the latent variable 
+
+z captures the underlying generative factors of the complete data x. VAE variants designed for missing data (e.g., MIWAE [13], VAEAC [24], HI-VAE [25]) operate as latent-variable generative models that maximize an importance-weighted lower bound: ˆLvae  
+
+> K
+
+=
+
+> n
+
+∑
+
+> i=1
+
+Eqϕ(zi,xi,mis |xi,obs ,ri)
+
+log 
+
+ 1
+
+K
+
+> K
+
+∑
+
+> k=1
+
+wik 
+
+ , (13) 
+
+wik = pψ
+
+(ri | xi,obs , x(k)
+
+> i,mis
+
+) pθ
+
+(xi,obs | z(k)
+
+> i
+
+) p(z(k)
+
+> i
+
+)
+
+qϕ
+
+(z(k) 
+
+> i
+
+| xi,obs , ri
+
+) , k = 1, . . . , K,
+
+These methods prioritize learning flexible posteriors qϕ(z | xobs , r) to reconstruct xmis (while optionally modeling 
+
+pψ(r | · ) under MNAR), making them fundamentally optimized for data reconstruction rather than downstream pre-dictive tasks. Recent hybrid approaches like DLGLM (Deep Latent Gaussian Linear Model) [15] attempt to bridge this gap by integrating VAEs with generalized linear models for supervised prediction. DLGLM employs a deep neural network to model the relationship between covariates and response, i.e., p(y|x) = GLM( y; η(x)) where η(x) = sβ,π (x) is a neural network. Simultaneously, it models the covariate distribution p(x) using an IWAE with latent variables z. In 7the presence of missing covariates, DLGLM introduces a variational distribution qθ(z, xmis |xobs , r) that factorizes as 
+
+qθ1 (z|xobs )qθ2 (xmis |z, xobs , r). The model is trained end-to-end by maximizing a lower bound (the dlglm bound) that involves importance-weighted sampling over both z and xmis :ˆLdlglm  
+
+> K
+
+=
+
+> n
+
+∑
+
+> i=1
+
+log 1
+
+K
+
+> K
+
+∑
+
+> k=1
+
+pα,β,π (yi|xi,obs , ˜x(k)
+
+> i,mis
+
+) pψ(xi,obs , ˜x(k)
+
+> i,mis
+
+|˜z(k) 
+
+> i
+
+) p(˜ z(k) 
+
+> i
+
+) pϕ(ri|xi,obs , ˜x(k)
+
+> i,mis
+
+, yi)
+
+qθ1 (˜ z(k) 
+
+> i
+
+|xi,obs ) qθ2 ( ˜ x(k)
+
+> i,mis
+
+|˜z(k) 
+
+> i
+
+, xi,obs , ri) ,
+
+where samples are drawn as ˜ z(k) 
+
+> i
+
+∼ qθ1 (zi|xi,obs , yi) and ˜ x(k) 
+
+> i,mis
+
+∼ qθ2 (xi,mis |˜z(k) 
+
+> i
+
+, xi,obs , ri, yi). This results in a joint learning framework that simultaneously handles missing data imputation and prediction. However, this approach requires Monte Carlo approximations over both the latent variables and the missing co-variates. While Monte Carlo convergence rates are dimension-independent in theory, the nested sampling scheme (first z, then xmis conditioned on z) introduces additional computational complexity and may require careful tuning of the variational distributions to maintain e ffi ciency. In contrast, AV-LR directly targets the joint likelihood 
+
+pθ(y, xobs , xmis ) (extended to pθ,ψ (y, x, r) under MNAR) ,
+
+through a streamlined variational framework that approximates the posterior over missing covariates directly: 
+
+qϕ(xmis | xobs , y).
+
+Our evidence lower bound decomposes as: 
+
+Eqϕ [log pθ(y | xobs , xmis )] + Eqϕ [log pθ(xobs , xmis )] − Eqϕ [log qϕ(xmis | xobs , y)] ,
+
+enabling truly joint learning of imputation and classification parameters [11]. This formulation yields critical ad-vantages over both DLGLM and standard VAEs. By eliminating intermediate latent variables and directly modeling 
+
+qϕ(xmis | xobs , y), AV-LR: (1) avoids the need for joint sampling over z and xmis , (2) decouples imputation from latent representation learning, (3) accommodates flexible covariate models without complicating the predictive pathway, and (4) simplifies the optimization by reducing the number of stochastic layers in the computational graph. 
+
+7. Simulation Study 
+
+Measuring the performances. We evaluate the performance of all methods using multiple criteria that assess di ff erent aspects of model quality. For parameter estimation accuracy (see 1 and 2 for model setup), we compute the root mean square error (RMSE) between estimated and true values for: (i) the regression coe ffi cients β, (ii) the covariate mean vector μ, and (iii) the imputed missing values. For covariance matrix recovery, we use the Frobenius norm of the discrepancy between the estimated and true covariance matrices. Predictive performance is assessed through classification metrics including area under the ROC curve (AUC-ROC), accuracy, precision, recall, and F1 score. For probabilistic calibration, we employ the Brier score. Finally, computational e ffi ciency is measured by training and testing times. All metrics are computed over multiple random seeds to ensure statistical reliability, with results reported as mean standard deviation. 
+
+7.1. The gain to take into account the non-ignorable nature of the mechanism 
+
+This first experiment evaluates the robustness of AV-LR across three missingness mechanisms. The assessment is conducted on synthetic datasets with ( N, d) = (5000 , 5) for training and (1000 , 5) for testing, over 200 epochs and averaged across five runs: 
+
+• MCAR (50%) : Each entry xi j is independently missing with probability p = 0.5, i.e., ri j ∼ Bernoulli(0 .5). 
+
+• MAR (60%) : Missingness in all variables depends on the first covariate xi,1 and the response variable yi via a logistic model: 
+
+p(ri j = 1 | xi, yi) = σ(−1.0 + 1.5 · xi,1 − 0.8 · yi),
+
+where σ(z) = 11+e−z is the logistic function. The same missingness pattern is applied to all features, with coe ffi cients calibrated to achieve approximately 60% of missingness per variable. 80 50 100 150 200                  
+
+> Epochs
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Accuracy
+> 050 100 150 200
+> Epochs
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> AUC
+> 050 100 150 200
+> Epochs
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> Brier Score
+> MCAR MAR MNAR Ignorable (discontinuous) Non-ignorable (continuous) Figure 3: Evolution of classification metrics (accuracy, AUC, and Brier score) over epochs. The solid line corresponds to AVLR (nonignorable extension) and the dashed line to AVLR (ignorable). Colors denote missingness mechanisms: blue for 50% MCAR, orange for 60% MAR, and green for 60% MNAR. Synthetic data were generated with ( n,p)=(5000 ,5) for training and (1000 ,5) for testing.
+
+• MNAR (60%) : Missingness depends on all covariate values and the response variable: 
+
+p(ri j = 1 | xi, yi) = σ
+
+−1.0 − 2.0 ·
+
+> d
+
+∑
+
+> k=1
+
+xik + 0.5 · yi
+
+ ,
+
+where the missingness of each feature depends on the values of all covariates in the observation and the response, with parameters calibrated to yield approximately 60% of missingness per variable. 
+
+Classification performance. Under the MNAR mechanism, the non-ignorable extension of AV-LR exhibits consistent and substantial performance improvements, observed in AUC, accuracy, and the Brier score, relative to the ignorable variant (cf. Fig. 3). These gains stem primarily from improved calibration of predicted probabilities and finer dis-crimination between classes, resulting from an e ff ective correction of the sampling bias induced by non-random missingness. The trajectories over the 200 training epochs indicate that the performance gap appears early in training and persists through convergence, suggesting that explicit modeling of the non-response mechanism yields a sustained improvement in estimating p(y | X) in this setting. 
+
+Mechanism-Dependent Learning Dynamics. The superiority of the non-ignorable extension under MNAR stems from its explicit modeling of the missingness mechanism p(r|x, y). Surprisingly, it also shows advantages under MAR despite the theoretically ignorable nature, suggesting practical benefits from modeling covariate-missingness correla-tions. Under MCAR, performance parity confirms that both variants are equally suitable for random missingness. 
+
+7.2. Comparison with existing methods 
+
+In this simulation study, we systematically evaluate the performance of various imputation and direct estimation methods for binary logistic regression in the presence of missing covariate data. Synthetic datasets are generated according to a fully reproducible protocol: a training set of Ntrain = 2000 observations and a test set of Ntest = 500 observations, each comprising d = 5 covariates drawn from a multivariate normal distribution N(μ, Σ). The true regression coe ffi cients β, mean vector μ, and covariance matrix Σ are held fixed a priori and serve as groundtruth benchmarks. Estimation accuracy is assessed by comparing the methods parameter estimates to these benchmarks, and predictive performance is evaluated on the independent test set. 
+
+Benchmark and competitive methods. Monte Carlo simulations are conducted to ensure the stability and robustness of our findings by comparing seven estimators: simple mean imputation, MICE (Multiple Imputation by Chained Equa-tions) [9], missForest (random forest imputation) [10], MIWAE (Missing data Importance-Weighted Autoencoder)[13], DLGLM (Deeply Learned Generalized Linear Model) for MNAR or IDLGLM (Ignorable DLGLM) for MAR /MCAR mechanisms [15], the Stochastic Approximation ExpectationMaximization (SAEM) algorithm [6], and our proposed 9AV-LR method, which embeds amortized variational inference directly within the logistic regression framework. For comparability, MICE is implemented as a single-imputation procedure, consistent with the other methods consid-ered. For the first four methods (mean, MICE, missForest, MIWAE), missing values in the test set are imputed independently from the training phase, and the estimated coe ffi cients β obtained during training are then applied to the imputed test covariates for prediction; conversely, SAEM, DLGLM /IDLGLM, and AV-LR natively handle missing data at prediction time without requiring separate preprocessing of the test set. 
+
+Hyperparameters tuning. For the neural network-based methods (MIWAE, IDLGLM, and AV-LR), we use a consis-tent architecture: a single hidden layer with 128 units. These models are trained for 150 epochs with a batch size of 256 and a learning rate of 10 −3. The SAEM algorithm is run for a maximum of 120 iterations, with a convergence threshold set to 10 −4. For IDLGLM, we adopt the architecture and training configuration described above, while other hyperparameters are set to the values recommended as optimal in the original study [15].                                                                                                                                     
+
+> Table 1: Average and standard deviation of parameter RMSE, AUC and Accuracy (5 repetitions) under 50% MCAR mechanism
+> Estimator RMSE_imp RMSE_mu Frobenius_cov RMSE_beta AUC Accuracy AV-LR 0.8029 ±0.0181 0.0081 ±0.0023 0.1280 ±0.0312 0.0854 ±0.0035 0.7420 ±0.0850 0.7375 ±0.0490
+> IDLGLM 0.8325 ±0.0214 0.0108 ±0.0021 0.3527 ±0.0183 0.2471 ±0.0416 0.7380 ±0.0720 0.7290 ±0.0560 MIWAE 0.8166 ±0.0190 0.0135 ±0.0027 0.4158 ±0.0142 0.2983 ±0.0498 0.7280 ±0.0700 0.7200 ±0.0520 SAEM 0.8055 ±0.0187 0.0129 ±0.0030 0.3650 ±0.0125 0.2714 ±0.0720 0.7305 ±0.0802 0.7189 ±0.0601 MICE 0.8699 ±0.0175 0.0149 ±0.0042 0.4820 ±0.0103 0.4786 ±0.0801 0.7250 ±0.0888 0.7123 ±0.0705 MissForest 0.8859 ±0.0163 0.0205 ±0.0050 0.3921 ±0.0154 0.5052 ±0.0187 0.7190 ±0.0950 0.7155 ±0.0620 Mean 1.0183 ±0.0210 0.0158 ±0.0041 2.3051 ±0.0375 0.4521 ±0.0612 0.7120 ±0.0920 0.7012 ±0.0750
+> Table 2: Average and standard deviation of execution times under 50% MCAR (5 repetitions)
+
+Estimator Training Time Testing Time AV-LR 34.4793 ± 4.2157 0.0156 ± 0.0042 IDLGLM 63.5544 ± 9.0132 8.0829 ± 1.4923 MIWAE 35.4845 ± 4.9321 2.0263 ± 0.3187 SAEM 3894.93 ± 166.4353 34.1459 ± 6.1487 MICE 0.1852 ± 0.0320 0.1627 ± 0.0410 missForest 38.3445 ± 6.1023 24.4828 ± 3.1124 Mean 0.0429 ± 0.0051 0.0010 ± 0.0002 
+
+7.2.1. Ignorable Missing Data 
+
+We conducted a comprehensive evaluation of synthetic datasets under MCAR with a 50% missingness level. AV-LR consistently outperformed the baseline methods in both parameter recovery and predictive accuracy (see Tables 1– 2). At 50% missingness, AV-LR maintained superior parameter fidelity, with an imputation RMSE of approximately 0.80, and achieved the best or near-best predictive performance across the evaluated metrics. In terms of computation, AV-LR required a moderate training time in our experiments (on the order of a few tens of seconds) while o ff ering very low inference latency (around 10 −2 seconds). In contrast, SAEM exhibited a substantially higher training cost (on the order of 10 3 seconds), highlighting the significant practical speed advantage of AV-LR. Compared to MICE, AV-LR incurs a higher computational cost during training due to its greater model complexity, which is required to fit stochastic regressions. In contrast, the testing phase is more e ffi cient for AV-LR, since predictions are obtained directly without requiring additional imputation steps. 
+
+7.2.2. NonIgnorable Missing Data 
+
+In this second set of experiments, we evaluate the same suite of methods under an MNAR mechanism in which missingness depends both on the covariate values and the binary outcome. Synthetic datasets are generated as before 10 with Ntrain = 2000, Ntest = 500 and p = 5 covariates drawn from N(μ, Σ). For simplicity, we adopt this logistic missingness model and assume that the indicators ri j are conditionally independent given the full covariate vector xi
+
+and outcome yi:Pr( ri j = 1 | xi, yi) = σ(ψ0 j + ψ⊤  
+
+> 1j
+
+xi + ψ2 j yi
+
+),
+
+where the feature-specific parameters {ψ0 j, ψ1 j, ψ 2 j} are calibrated to yield approximately 60% overall missingness. The baseline methods (mean, MICE [9], missForest [10], SAEM [6]) are identical to those used in the ignorable case. In addition, three extensions specifically adapted to the MNAR mechanism are considered: NotMIWAE [14], DLGLM, and AVLR MNAR. NotMIWAE [14] is an extension of MIWAE [13] that explicitly models the missingness mechanism p(r | x, y). DLGLM is the nonignorable variant of IDLGLM [15] adjusted to account for dependence of r
+
+on both the covariates and the response, and AV-LR MNAR is our proposed amortized variational inference method extended to handle MNAR (see Section (4)). Under the demanding 60% MNAR setting, AV-LR consistently outperforms competing estimators in both pa-rameter recovery and predictive accuracy (Tables 3–4). In terms of reconstruction, AV-LR achieves markedly lower errors for imputation, mean, and covariance estimation, whereas classical methods such as SAEM and MICE exhibit substantially higher deviations. On the predictive side, AV-LR achieves the highest overall AUC and accuracy scores, indicating superior per-formance. Although missForest shows competitive performance on some metrics, its performance is less consistent across all indicators. All metrics used for this evaluation are provided in the Appendix (9). In addition, AV-LR requires only moderate training and very low inference time, in contrast to the prohibitive computational cost of SAEM. Overall, these results underline AV-LR as the most robust and e ffi cient approach under severe non-ignorable missingness. 
+
+> Table 3: Average and standard deviation of parameter RMSE, AUC and Accuracy (5 repetitions) under 60% MNAR
+
+Estimator RMSE_imp RMSE_mu Frobenius_cov RMSE_beta AUC Accuracy AV-LR 0.8624 ± 0.0300 0.3300 ± 0.0200 1.3000 ± 0.0800 0.5400 ± 0.2100 0.771 ± 0.060 0.724 ± 0.050 
+
+DLGLM 0.8800 ± 0.0350 0.3400 ± 0.0200 1.3500 ± 0.0850 0.5600 ± 0.2200 0.768 ± 0.055 0.716 ± 0.045 NotMIWAE 0.9200 ± 0.0300 0.3600 ± 0.0200 1.4200 ± 0.1100 0.6000 ± 0.2300 0.738 ± 0.117 0.682 ± 0.097 SAEM 1.3000 ± 0.0200 0.6200 ± 0.0250 2.0000 ± 0.0800 0.6600 ± 0.2900 0.625 ± 0.063 0.600 ± 0.045 MICE 1.2579 ± 0.0132 0.5791 ± 0.0036 2.0530 ± 0.0849 0.5545 ± 0.3647 0.659 ± 0.045 0.520 ± 0.051 missForest 1.0749 ± 0.0624 0.6280 ± 0.0382 2.0712 ± 0.1309 0.7120 ± 0.3950 0.725 ± 0.058 0.666 ± 0.060 Mean 1.4825 ± 0.0222 0.7354 ± 0.0075 2.9295 ± 0.0188 0.7709 ± 0.3418 0.634 ± 0.078 0.508 ± 0.054 
+
+> Table 4: Average and standard deviation of execution times under 60% MNAR
+
+Estimator Training Time (s) Testing Time (s) AV-LR 62.915 ± 6.292 0.156 ± 0.016 DLGLM 80.556 ± 8.056 6.078 ± 0.608 NotMIWAE 44.607 ± 4.461 1.232 ± 0.123 SAEM 4211.332 ± 181.877 36.433 ± 6.511 MICE 0.118 ± 0.020 0.079 ± 0.010 missForest 30.708 ± 5.000 14.315 ± 2.500 Mean 0.012 ± 0.002 0.000 ± 0.000 
+
+8. Real-World Dataset Evaluation 
+
+8.1. Several complete real datasets 
+
+We evaluated AV-LR on four diverse benchmark datasets to assess its performance across various domains and missingness scenarios. Each dataset presents distinct characteristics that challenge missing data handling methods: 11 • BankNote Authentication : 1,372 samples, 4 wavelet features (variance, skewness, kurtosis, entropy), high inter-feature correlations ( |ρ| ≤ 0.86). 
+
+• Pima Indians Diabetes : 768 samples, 8 clinical predictors. 
+
+• Rice Cammeo Osmancik : 3,810 samples, 7 morphological grain measurements, complex nonlinear relation-ships. 
+
+• Breast Cancer Diagnostic : 569 samples, 30 radiomic features, high dimensionality with limited samples. 
+
+Missingness Mechanisms 
+
+In our experiments, we simulated three structured MNAR mechanisms to introduce approximately 50% missing-ness in the data. These mechanisms follow established definitions in the missing-data literature. 1. Self-Masking Mechanism 
+
+Here, for each covariate j and sample i, the probability of missingness depends only on the value of that covariate itself : 
+
+p(ri j = 1 | xi j ) = σ(ψ j0 + ψ j1 · xi j 
+
+) .
+
+This models scenarios where extreme values are preferentially missing, consistent with the “self-masked” MNAR mechanism described in the literature [26]. 2. Logistic Mechanism 
+
+Missingness depends jointly on all covariates and the response: 
+
+p(ri j = 1 | xi, yi) = σ
+
+ψ j0 +
+
+> d
+
+∑
+
+> k=1
+
+ψ jk xik + ψ j(d+1) yi
+
+
+
+This mechanism reflects systemic biases where missingness relates to both feature values and the outcome variable, similar to MAR-augmented logistic models or MNAR-Y setups [21] . 3. Sequential Logistic (ReverseChain) Mechanism 
+
+To capture inter-feature dependencies in missingness, we generate missingness indicators sequentially in reverse order from j = d down to j = 1: 
+
+ηi j = ψ j0 + ψ j1 yi +
+
+> d
+
+∑
+
+> k=1
+
+ψ j, 1+k xik +
+
+> d
+
+∑ 
+
+> k=j+1
+
+ψ j, 1+d+k rik , p(ri j = 1 | xi, yi, ri, j+1: d
+
+) = σ(ηi j 
+
+)
+
+Thus, the missingness of feature j depends not only on covariates and the response, but also on the previously drawn missingness indicators of features with indices greater than j. This simulates cascading missingness patterns where the recording (or omission) of one feature a ff ects others, an approach often used to mimic complex MNAR processes [27, 22]. These three mechanisms span a spectrum of MNAR settings: from self-dependent censoring (SelfMasking) to outcome-correlated missingness (Logistic), to interdependent cascade patterns (Sequential Logistic). This diversity allows evaluating methods in controlled yet realistic MNAR scenarios consistent with modern missing-data literature. Table 5 presents AUC scores for every dataset and MNAR mechanism considered. AV-LR consistently attains the highest AUC across datasets and mechanisms. SAEM is not included in the comparison, as it is computationally expensive and not designed to handle MNAR data. The full set of predictive measures (accuracy, precision, specificity, F1-score, Brier score, etc.) for all methods, together with detailed execution-time tables, are provided in the Appendix (9). These extended results corroborate AV-LR’s superior and stable predictive performance, while alternative methods occasionally exhibit strengths on specific datasets or metrics. 12 Table 5: Comparative performance analysis of imputation methods under 50% MNAR missingness: AUC scores (mean ± standard deviation)                                                                                                                                                                                                                                 
+
+> Dataset /Mechanism AV-LR DLGLM NotMIWAE MICE MissForest Mean
+> BankNote
+> Self-Masking 0.873 ±0.024 0.853 ±0.021 0.839 ±0.020 0.772 ±0.034 0.745 ±0.049 0.760 ±0.035 Logistic 0.804 ±0.040 0.765 ±0.028 0.718 ±0.027 0.587 ±0.022 0.569 ±0.065 0.560 ±0.040 Sequential Logistic 0.842 ±0.026 0.803 ±0.029 0.775 ±0.028 0.802 ±0.074 0.828 ±0.022 0.680 ±0.040
+> Pima
+> Self-Masking 0.703 ±0.048 0.741 ±0.044 0.748 ±0.050 0.632 ±0.110 0.730 ±0.059 0.568 ±0.059 Logistic 0.748 ±0.043 0.725 ±0.036 0.746 ±0.051 0.705 ±0.046 0.698 ±0.056 0.690 ±0.055 Sequential Logistic 0.787 ±0.028 0.748 ±0.027 0.753 ±0.040 0.730 ±0.044 0.757 ±0.029 0.715 ±0.042
+> Rice
+> Self-Masking 0.953 ±0.005 0.934 ±0.010 0.943 ±0.005 0.951 ±0.004 0.948 ±0.007 0.626 ±0.026 Logistic 0.977 ±0.003 0.973 ±0.005 0.954 ±0.008 0.969 ±0.004 0.971 ±0.003 0.945 ±0.013 Sequential Logistic 0.972 ±0.004 0.967 ±0.004 0.959 ±0.005 0.967 ±0.005 0.970 ±0.003 0.940 ±0.014
+> BreastCancer
+> Self-Masking 0.981 ±0.011 0.976 ±0.013 0.971 ±0.012 0.985 ±0.006 0.980 ±0.012 0.958 ±0.021 Logistic 0.986 ±0.006 0.979 ±0.006 0.971 ±0.005 0.977 ±0.006 0.974 ±0.010 0.956 ±0.008 Sequential Logistic 0.982 ±0.011 0.974 ±0.009 0.966 ±0.008 0.967 ±0.010 0.975 ±0.009 0.949 ±0.016
+
+8.2. Incomplete dataset: the NHANES dataset 
+
+The National Health and Nutrition Examination Survey (NHANES) is a comprehensive research program con-ducted by the National Center for Health Statistics (NCHS) to assess the health and nutritional status of the United States population. This program uniquely combines interview-based data with physical examinations, creating a rich multidimensional dataset that has supported thousands of research publications. For our experimental analysis, we utilized a curated subset of the NHANES 2013–2014 data containing 8,530 complete observations with 13 continuous covariates selected from the various examination components. The selected subset exhibited a missing data rate of 26% across these covariates, reflecting the authentic patterns of incomplete data in the original NHANES dataset. These covariates encompass key health indicators, including anthropometric measurements, blood pressure readings, and biochemical markers from laboratory tests. The target variable for our classification task exhibits a natural distri-bution of approximately 80% negative cases (class 0) and 20% positive cases (class 1), reflecting the actual prevalence patterns observed in the population. We preserved this natural class distribution without artificial rebalancing to main-tain the authentic characteristics of the dataset. Our experimental design incorporated two distinct methodological approaches to handle missing data. The first approach operated under the assumption of ignorable missingness, while the second addressed the more complex scenario of non-ignorable missingness. In both experimental frameworks, we utilized the naturally occurring missing data patterns present in the original NHANES dataset without introducing arti-ficial missing values, ensuring that our evaluation reflects realistic conditions with authentic missing data mechanisms across the selected 13 continuous covariates. 
+
+Results under the Ignorable Missingness Assumption 
+
+Under the ignorable missingness assumption, AV-LR provides the best overall trade-o ff between calibration and dis-crimination, with stable performance across repetitions (see Table 6). Some competing approaches (notably MICE) can reach comparable accuracy but tend to exhibit reduced calibration or greater variability; SAEM achieves high sensitivity at the expense of substantially higher computational cost. Simple mean imputation performs consistently worse than principled methods, underscoring the importance of dedicated missing-data modeling. Overall, AV-LR emerges as a pragmatic choice that balances predictive quality and computational e ffi ciency. 
+
+Results under the Non-Ignorable Missingness Assumption 
+
+Under the non-ignorable missingness assumption, the principal trends are preserved: AV-LR remains robust and maintains strong discriminative ability (see Table 7). Alternative methods (e.g., MIWAE or MICE) may outperform on specific metrics in particular configurations but often exhibit greater variability. Naive mean imputation continues 13 to underperform, confirming that structured approaches are preferable when missingness is present. In practice, modelling non-ignorability increases training cost for some methods, while AV-LR retains a favourable performance-to-cost ratio. 
+
+Table 6: Comparative performance under ignorable missingness on NHANES dataset                                           
+
+> Method Brier Score AUC Accuracy Precision Recall F1-Score
+> AV-LR 0.194(0.005) 0.776(0.007) 0.694(0.012) 0.369(0.010) 0.749(0.019) 0.489(0.005)
+> DLGLM 0.199(0.023) 0.768(0.130) 0.698(0.060) 0.366(0.200) 0.695(0.235) 0.480(0.185) MIWAE 0.203(0.006) 0.770(0.009) 0.687(0.013) 0.359(0.011) 0.727(0.014) 0.481(0.008) MICE 0.195(0.012) 0.741(0.021) 0.708(0.023) 0.365(0.015) 0.612(0.082) 0.457(0.031) MissForest 0.197(0.027) 0.763(0.005) 0.684(0.061) 0.363(0.041) 0.692(0.176) 0.456(0.062) Mean 0.221(0.006) 0.650(0.008) 0.725(0.014) 0.233(0.012) 0.432(0.015) 0.305(0.007)
+
+Table 7: Comparative performance under non-ignorable missingness on NHANES dataset                                           
+
+> Method Brier Score AUC Accuracy Precision Recall F1-Score
+> AV-LR 0.197(0.006) 0.777(0.015) 0.684(0.009) 0.359(0.011) 0.742(0.030) 0.485(0.016) DLGLM 0.206(0.031) 0.770(0.013) 0.689(0.066) 0.361(0.010) 0.720(0.033) 0.482(0.015) MIWAE 0.203(0.005) 0.765(0.011) 0.686(0.008) 0.361(0.007) 0.738(0.004) 0.486(0.006)
+> MICE 0.189(0.015) 0.759(0.017) 0.712(0.030) 0.372(0.017) 0.620(0.088) 0.468(0.017) MissForest 0.193(0.020) 0.755(0.027) 0.692(0.055) 0.357(0.023) 0.646(0.195) 0.452(0.040) Mean 0.212(0.005) 0.648(0.010) 0.712(0.011) 0.290(0.010) 0.382(0.019) 0.301(0.010)
+
+9. Conclusion 
+
+This paper introduced AVLR, a unified amortized variational inference framework for binary logistic regression with missing covariates. Unlike existing methods that rely on iterative imputation schemes or introduce complex latent variable structures, AVLR performs inference directly in the space of missing data through a simple yet e ff ective architecture. By coupling an amortized inference network with a linear predictive layer and training them jointly via evidence lower bound maximization, AV-LR achieves seamless integration of imputation and classification tasks. The key advantages of AV-LR are threefold. First, its architectural simplicity, a single inference network and a linear layer, facilitates implementation, optimization, and interpretability while avoiding the computational overhead of nested sampling schemes. Second, the framework naturally extends to non-ignorable missingness (MNAR) through explicit modeling of the missingness mechanism, providing a principled way to handle realistic missing-data patterns that depend on unobserved values. Third, extensive experiments on synthetic and real-world datasets demonstrate that AV-LR attains estimation accuracy comparable to, or better than, state-of-the-art EM-based and deep-generative methods, while o ff ering substantially lower computational cost, especially at inference time. Looking forward, AV-LR opens several promising research directions. The amortized inference network could be enriched with more flexible variational families (e.g., normalizing flows) to capture complex posteriors, and the framework could be extended to other generalized linear models or to settings with highdimensional covariates. Moreover, the principled handling of MNAR mechanisms invites applications in domains where missingness is inherently informative, such as clinical studies or survey data. 
+
+Acknowledgments References 
+
+[1] A. Hippert-Ferrer, A. Sportisse, A. Javaheri, M. N. E. Korso, D. P. Palomar, Missing data in signal processing and machine learning: Models, methods and modern approaches, arXiv preprint arXiv:2506.01696 (2025). [2] A. Hippert-Ferrer, A. Sportisse, A. Javaheri, M. N. E. Korso, D. P. Palomar, Missing data in signal processing and machine learning: Models, methods and modern approaches, arXiv preprint arXiv:2506.01696 (2025). 14 [3] A. P. Dempster, N. M. Laird, D. B. Rubin, Maximum likelihood from incomplete data via the em algorithm, Journal of the Royal Statistical Society: Series B (Methodological) 39 (1) (1977) 1–38. URL http://web.mit.edu/6.435/www/Dempster77.pdf 
+
+[4] G. C. G. Wei, M. A. Tanner, A monte carlo implementation of the em algorithm and the poor mans data augmentation algorithms, Journal of the American Statistical Association 85 (411) (1990) 699–704. doi: 10.1080/01621459.1990.10474930 .[5] E. Kuhn, M. Lavielle, Maximum likelihood estimation in nonlinear mixed e ff ects models, Computational Statis-tics & Data Analysis 49 (4) (2005) 1020–1038. doi:10.1016/j.csda.2004.07.002 .[6] W. Jiang, J. Josse, M. Lavielle, T. Group, et al., Logistic regression with missing covariatesparameter estimation, model selection and prediction within a joint-modeling framework, Computational Statistics & Data Analysis 145 (2020) 106907. [7] M. Cherifi, X. Zhu, M. N. El Korso, A. Mesloub, Maximum likelihood for logistic regression model with incomplete and hybrid-type covariates, IEEE Signal Processing Letters (2025). [8] M. Cherifi, M. El Korso, S. Fortunati, A. Mesloub, L. Ferro-Famil, Robust inference with incompleteness for logistic regression model, Signal Processing (2025) 110027. [9] S. Van Buuren, K. Groothuis-Oudshoorn, mice: Multivariate imputation by chained equations in r, Journal of statistical software 45 (2011) 1–67. [10] D. J. Stekhoven, P. Bühlmann, Missforestnon-parametric missing value imputation for mixed-type data, Bioin-formatics 28 (1) (2012) 112–118. [11] D. P. Kingma, M. Welling, Auto-encoding variational bayes, arXiv preprint arXiv:1312.6114 (2013). [12] Y. Burda, R. Grosse, R. Salakhutdinov, Importance weighted autoencoders, arXiv preprint arXiv:1509.00519 (2015). [13] P. Mattei, J. Frellsen, Miwae: Deep generative modelling and imputation of incomplete data sets, in: Proceedings of the 36th International Conference on Machine Learning (ICML), Vol. 97 of PMLR, 2019, pp. 4413–4423. [14] N. B. Ipsen, P.-A. Mattei, J. Frellsen, not-miwae: Deep generative modelling with missing not at random data, International Conference on Learning Representations (2021). [15] D. K. Lim, N. U. Rashid, J. B. Oliva, J. G. Ibrahim, Deeply learned generalized linear models with missing data, Journal of Computational and Graphical Statistics 33 (2) (2024) 638–650. [16] Y. Gong, H. Hajimirsadeghi, J. He, T. Durand, G. Mori, Variational selective autoencoder: Learning from partially-observed heterogeneous data, in: International Conference on Artificial Intelligence and Statistics, PMLR, 2021, pp. 2377–2385. [17] M. Collier, A. Nazabal, C. K. Williams, Vaes in the presence of missing data, arXiv preprint arXiv:2006.05301 (2020). [18] C. C. Margossian, D. M. Blei, Amortized variational inference: When and why?, arXiv preprint arXiv:2307.11018 (2023). [19] A. Ganguly, S. Jain, U. Watchareeruetai, Amortized variational inference: A systematic review, Journal of Arti-ficial Intelligence Research 78 (2023) 167–215. [20] Y. Kim, S. Wiseman, A. Miller, D. Sontag, A. Rush, Semi-amortized variational autoencoders, in: International Conference on Machine Learning, PMLR, 2018, pp. 2678–2687. [21] D. B. Rubin, Statistical analysis with missing data, Wiley, 1987. 15 [22] J. G. Ibrahim, S. R. Lipsitz, M.-H. Chen, Missing covariates in generalized linear models when the missing data mechanism is non-ignorable, Journal of the Royal Statistical Society: Series B (Statistical Methodology) 61 (1) (1999) 173–190. [23] R. J. Little, D. B. Rubin, Statistical analysis with missing data, John Wiley & Sons, 2019. [24] O. Ivanov, M. Figurnov, D. Vetrov, Variational autoencoder with arbitrary conditioning, arXiv preprint arXiv:1806.02382 (2018). [25] A. Nazabal, P. M. Olmos, Z. Ghahramani, I. Valera, Handling incomplete heterogeneous data using vaes, Pattern Recognition 107 (2020) 107501. [26] K. Mohan, On handling self-masking and other hard missing data problems, in: AAAI symposium, 2018. [27] M. Sadinle, J. P. Reiter, Sequential identification of nonignorable missing data mechanisms, Statistica Sinica 28 (4) (2018) 1741–1759. 16 Appendix A: Comprehensive Experimental Results 
+
+This appendix provides the complete set of experimental results that support the findings in the main text. We present exhaustive performance metrics across all missing data mechanisms, datasets, and evaluation criteria to ensure full transparency and facilitate future comparisons. 
+
+A.1 Synthetic Data Experiments A.1.1 MCAR Mechanism (30% Missingness) 
+
+Table (8) presents comprehensive parameter estimation results under the 30% MCAR mechanism. The results demonstrate AV-LR’s consistent performance across all parameter recovery metrics, with particular strength in co-variance matrix estimation as evidenced by the lowest Frobenius norm discrepancy. 
+
+> Table 8: Complete parameter estimation under 30% MCAR mechanism (mean ´ s std over 5 repetitions)
+
+Estimator RMSE_imp RMSE_mu Frobenius_cov RMSE_beta 
+
+AV-LR 0.7145 ± 0.0078 0.00580 ± 0.00185 0.0720 ± 0.0150 0.0445 ± 0.0130 IDLGLM 0.7420 ± 0.0036 0.00710 ± 0.00100 0.2450 ± 0.0120 0.1050 ± 0.0160 MIWAE 0.7385 ± 0.0039 0.00690 ± 0.00110 0.2180 ± 0.0090 0.0960 ± 0.0180 SAEM 0.7320 ± 0.0025 0.00640 ± 0.00145 0.2060 ± 0.0110 0.0780 ± 0.0200 MICE 0.7480 ± 0.0041 0.00740 ± 0.00120 0.3150 ± 0.0180 0.1600 ± 0.0600 MissForest 0.8025 ± 0.0030 0.00790 ± 0.00180 0.2810 ± 0.0100 0.2850 ± 0.0550 Mean 0.9950 ± 0.0072 0.00830 ± 0.00275 1.5200 ± 0.0150 0.4700 ± 0.0520 The predictive performance under the same experimental conditions is detailed in Table (9). AV-LR maintains competitive performance across all classification metrics, with particular advantages in AUC and F1-score, indicating balanced precision-recall characteristics.   
+
+> Table 9: Complete prediction metrics under 30% MCAR mechanism (mean ±std over 5 repetitions)
+
+Estimator AUC Accuracy Precision Recall F1 Score 
+
+AV-LR 0.8295 ± 0.0290 0.7600 ± 0.0300 0.7370 ± 0.0180 0.7050 ± 0.1100 0.7160 ± 0.0610 IDLGLM 0.8210 ± 0.0260 0.7560 ± 0.0250 0.7350 ± 0.0230 0.7000 ± 0.0780 0.7140 ± 0.0460 MIWAE 0.8155 ± 0.0245 0.7505 ± 0.0220 0.7230 ± 0.0230 0.6950 ± 0.0710 0.7080 ± 0.0440 SAEM 0.8160 ± 0.0300 0.7520 ± 0.0280 0.7260 ± 0.0290 0.6990 ± 0.0850 0.7110 ± 0.0580 MICE 0.8130 ± 0.0310 0.7485 ± 0.0330 0.7200 ± 0.0270 0.6900 ± 0.0880 0.7050 ± 0.0530 MissForest 0.8020 ± 0.0315 0.7460 ± 0.0290 0.7130 ± 0.0260 0.6870 ± 0.0830 0.7020 ± 0.0550 Mean 0.7935 ± 0.0250 0.7380 ± 0.0240 0.7100 ± 0.0210 0.6720 ± 0.1200 0.6880 ± 0.0700 Computational e ffi ciency represents a critical practical consideration. Table (10) reveals that AV-LR achieves competitive training times while maintaining minimal inference latency, underscoring its suitability for real-time applications. 
+
+A.1.2 MNAR Mechanism (60% Missingness) 
+
+The non-ignorable missingness scenario presents the most challenging conditions for all methods. As shown in Table 11, explicitly modeling the missingness mechanism provides AV-LR with a clear advantage under MNAR conditions, particularly in terms of parameter recovery and discriminative performance. The predictive results in Ta-ble 12 further demonstrate AV-LRs robustness, maintaining strong classification performance despite the challenging missingness mechanism. Finally, although modeling non-ignorable mechanisms increases computation time for all methods (see Table 13), AV-LR preserves its e ffi ciency advantage, especially during inference. 17 Table 10: Execution times under 30% MCAR mechanism (seconds, mean ´ s std over 5 repetitions) 
+
+Estimator Training Time Testing Time 
+
+AV-LR 33.116 ± 2.649 0.019 ± 0.0015 IDLGLM 65.229 ± 7.828 6.921 ± 0.831 MIWAE 34.425 ±.684 1.115 ± 0.087 SAEM 3108.24 ± 134.202 28.806 ± 2.93 MICE 0.167 ± 0.015 0.100 ± 0.003 MissForest 48.490 ± 3.879 25.448 ± 2.036 Mean 0.023 ± 0.001 0.004 ± 0.0002 
+
+> Table 11: Complete parameter estimation under 60% MNAR mechanism (mean ´ s std over 5 repetitions)
+
+Estimator RMSE_imp RMSE_mu Frobenius_cov RMSE_beta 
+
+AV-LR 0.8624 ± 0.0300 0.3300 ± 0.0200 1.3000 ± 0.0800 0.5400 ± 0.2100 DLGLM 0.8800 ± 0.0350 0.3400 ± 0.0200 1.3500 ± 0.0850 0.5600 ± 0.2200 NotMIWAE 0.9200 ± 0.0300 0.3600 ± 0.0200 1.4200 ± 0.1100 0.6000 ± 0.2300 SAEM 1.3000 ± 0.0200 0.6200 ± 0.0250 2.0000 ± 0.0800 0.6600 ± 0.2900 MICE 1.2579 ± 0.0132 0.5791 ± 0.0036 2.0530 ± 0.0849 0.5545 ± 0.3647 MissForest 1.0749 ± 0.0624 0.6280 ± 0.0382 2.0712 ± 0.1309 0.7120 ± 0.3950 Mean 1.4825 ± 0.0222 0.7354 ± 0.0075 2.9295 ± 0.0188 0.7709 ± 0.3418 
+
+> Table 12: Complete prediction metrics under 60% MNAR mechanism (mean ´ s std over 5 repetitions)
+
+Estimator AUC Accuracy Precision Recall F1 Score 
+
+AV-LR 0.771 ± 0.060 0.724 ± 0.050 0.704 ± 0.070 0.704 ± 0.070 0.704 ± 0.065 DLGLM 0.768 ± 0.055 0.716 ± 0.045 0.694 ± 0.065 0.700 ± 0.075 0.697 ± 0.060 NotMIWAE 0.738 ± 0.117 0.682 ± 0.097 0.657 ± 0.130 0.665 ± 0.084 0.661 ± 0.060 SAEM 0.625 ± 0.063 0.600 ± 0.045 0.630 ± 0.042 0.730 ± 0.081 0.690 ± 0.051 MICE 0.659 ± 0.045 0.520 ± 0.051 0.489 ± 0.044 0.648 ± 0.091 0.557 ± 0.057 MissForest 0.725 ± 0.058 0.666 ± 0.060 0.615 ± 0.070 0.760 ± 0.110 0.679 ± 0.080 Mean 0.634 ± 0.078 0.508 ± 0.054 0.479 ± 0.117 0.644 ± 0.219 0.549 ± 0.098 
+
+> Table 13: Execution times under 60% MNAR mechanism (seconds, mean ´ s std over 5 repetitions)
+
+Estimator Training Time Testing Time 
+
+AV-LR 62.915 ± 6.292 0.156 ± 0.016 DLGLM 80.556 ± 8.056 6.078 ± 0.608 NotMIWAE 44.607 ± 4.461 1.232 ± 0.123 SAEM 4211.332 ± 181.877 36.433 ± 6.511 MICE 0.118 ± 0.020 0.079 ± 0.010 MissForest 30.708 ± 5.000 14.315 ± 2.500 Mean 0.012 ± 0.002 0.000 ± 0.000 18 A.2 Real-World Dataset Comprehensive Analysis 
+
+Figures 4–7 summarize the comparative performance of the evaluated imputation methods (AV-LR, DLGLM, NotMIWAE, MICE, MissForest) across four real-world datasets (Bank Note, Pima, Rice, and Breast Cancer) with 50% MNAR missingness under three mechanisms (Self-Masking, Logistic, and Sequential Logistic). Each subplot presents the mean scores over multiple replications, with error bars representing standard deviations to convey ex-perimental variability. Overall, AV-LR demonstrates robust and consistent performance across most datasets, while DLGLM and NotMIWAE o ff er trade-o ff s between predictive accuracy and variance depending on the dataset and mechanism. MICE is characterized by very low training times but sometimes higher variability, whereas MissForest delivers competitive performance at a substantially higher computational cost on certain datasets. The comprehen-sive execution time table (Table 14) highlights these trade-o ff s, showing contrasting orders of magnitude between lightweight methods (e.g., MICE) and more computationally intensive approaches (e.g., MissForest and certain deep learning variants) in both training and testing phases. Together, these results allow readers to evaluate not only pre-dictive e ff ectiveness but also scalability and practical suitability of each method given computational constraints and data characteristics. AV-LR DLGLM NotMIWAE MICE MissForest Mean   
+
+> 00.05 0.1 0.15 0.2 0.25 0.3
+> Brier Score
+> AV-LR DLGLM NotMIWAE MICE MissForest Mean
+> 00.2 0.4 0.6 0.8
+> AUC
+> AV-LR DLGLM NotMIWAE MICE MissForest Mean
+> 00.2 0.4 0.6 0.8 1
+> Accuracy
+> AV-LR DLGLM NotMIWAE MICE MissForest Mean
+> 00.2 0.4 0.6 0.8 1
+> Precision
+> AV-LR DLGLM NotMIWAE MICE MissForest Mean
+> 00.2 0.4 0.6 0.8 1
+> Recall
+> AV-LR DLGLM NotMIWAE MICE MissForest Mean
+> 00.2 0.4 0.6 0.8 1
+> F1 Score
+> Self-Masking Logistic Sequential Logistic
+
+Figure 4: Comparative performance of imputation methods on the Bank Note Authentication Dataset under 50% MNAR across Self-Masking, Logistic, and Sequential Logistic mechanisms. 
+
+19 AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.1 0.2 0.3 
+
+> Brier Score
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 0.8 1
+
+> AUC
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 0.8 
+
+> Accuracy
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 
+
+> Precision
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 0.8 
+
+> Recall
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 
+
+> F1 Score
+
+Self-Masking Logistic Sequential Logistic Figure 5: Comparative performance of imputation methods on the Pima Indians Diabetes Database under 50% MNAR across Self-Masking, Logistic, and Sequential Logistic mechanisms. AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.05 0.1 0.15 0.2 0.25 
+
+> Brier Score
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 0.8 1
+
+> AUC
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 0.8 1
+
+> Accuracy
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 0.8 1
+
+> Precision
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 0.8 1
+
+> Recall
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 0.8 1
+
+> F1 Score
+
+Self-Masking Logistic Sequential Logistic 
+
+Figure 6: Comparative performance of imputation methods on the Rice Cammeo Osmancik Dataset under 50% MNAR across Self-Masking, Logistic, and Sequential Logistic mechanisms. 
+
+20 Table 14: Execution times (seconds) under 50% MNAR Training & Testing (mean ´ s std). 
+
+Dataset Mechanism Estimator Training Time (s) Testing Time (s) BankNote 
+
+Self-Masking AV-LR 45.424 ± 4.540 0.0778 ± 0.0143 DLGLM 54.923 ± 5.500 4.0530 ± 0.9500 NotMIWAE 13.381 ± 1.380 0.5760 ± 0.1100 MICE 0.090 ± 0.021 0.0840 ± 0.0245 MissForest 18.584 ± 2.800 14.802 ± 1.500 Logistic AV-LR 42.710 ± 3.211 0.0756 ± 0.0120 DLGLM 52.333 ± 4.100 4.0606 ± 0.9500 NotMIWAE 13.796 ± 1.900 0.5351 ± 0.1100 MICE 0.011 ± 0.003 0.0010 ± 0.0005 MissForest 16.882 ± 2.100 13.8367 ± 1.500 Sequential Logistic AV-LR 42.539 ± 4.254 0.0760 ± 0.0165 DLGLM 57.158 ± 5.716 5.4339 ± 0.9501 NotMIWAE 13.875 ± 1.388 0.5287 ± 0.1130 MICE 0.086 ± 0.021 0.0767 ± 0.0222 MissForest 17.663 ± 2.650 13.742 ± 1.512 
+
+Pima 
+
+Self-Masking AV-LR 22.260 ± 2.226 0.06249 ± 0.0100 DLGLM 26.409 ± 2.641 3.19393 ± 0.9500 NotMIWAE 20.421 ± 1.800 0.28680 ± 0.0800 MICE 0.147 ± 0.030 0.13068 ± 0.0300 MissForest 31.859 ± 3.186 25.356 ± 2.536 Logistic AV-LR 25.261 ± 3.000 0.0625 ± 0.0100 DLGLM 29.710 ± 4.000 3.3973 ± 0.9500 NotMIWAE 25.648 ± 1.800 0.3321 ± 0.0800 MICE 0.167 ± 0.020 0.0907 ± 0.0100 MissForest 36.747 ± 4.500 28.859 ± 3.000 Sequential Logistic AV-LR 23.269 ± 2.327 0.06709 ± 0.0105 DLGLM 26.196 ± 2.620 3.31089 ± 0.9500 NotMIWAE 21.390 ± 2.139 0.49171 ± 0.0800 MICE 0.169 ± 0.030 0.14863 ± 0.0300 MissForest 33.688 ± 3.369 26.669 ± 2.667 
+
+Rice 
+
+Self-Masking AV-LR 105.042 ± 10.504 0.26876 ± 0.0422 DLGLM 123.146 ± 12.315 8.74180 ± 1.266 NotMIWAE 28.510 ± 2.851 1.60855 ± 0.1610 MICE 0.171 ± 0.031 0.12817 ± 0.0302 MissForest 60.943 ± 6.094 29.888 ± 3.022 Logistic AV-LR 106.781 ± 10.678 0.3910 ± 0.047 DLGLM 122.716 ± 12.272 8.5769 ± 1.200 NotMIWAE 28.511 ± 2.851 1.5412 ± 0.200 MICE 0.332 ± 0.080 0.1311 ± 0.030 MissForest 63.448 ± 6.345 32.696 ± 3.300 Sequential Logistic AV-LR 111.530 ± 11.153 0.37294 ± 0.0411 DLGLM 154.098 ± 15.410 10.6019 ± 1.060 NotMIWAE 31.293 ± 3.129 1.75548 ± 0.176 MICE 0.390 ± 0.078 0.20573 ± 0.041 MissForest 81.410 ± 8.141 31.594 ± 3.159 
+
+Breast Cancer 
+
+Self-Masking AV-LR 20.902 ± 2.090 0.08677 ± 0.011 DLGLM 50.345 ± 5.035 3.94796 ± 0.395 NotMIWAE 70.676 ± 7.068 0.22013 ± 0.030 MICE 0.943 ± 0.094 0.58582 ± 0.060 MissForest 156.476 ± 15.648 112.416 ± 11.242 Logistic AV-LR 18.051 ± 1.805 0.08274 ± 0.010 DLGLM 34.266 ± 3.427 5.37148 ± 0.537 NotMIWAE 65.371 ± 6.537 0.37380 ± 0.075 MICE 0.682 ± 0.068 0.65465 ± 0.066 MissForest 203.961 ± 20.396 127.160 ± 12.716 Sequential Logistic AV-LR 19.254 ± 1.925 0.04987 ± 0.005 DLGLM 47.571 ± 4.757 4.17038 ± 0.417 NotMIWAE 65.930 ± 6.593 0.29920 ± 0.030 MICE 1.152 ± 0.230 1.499 ± 0.300 MissForest 168.923 ± 16.892 134.825 ± 13.482 
+
+21 AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.1 0.2 0.3 
+
+> Brier Score
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 0.8 1
+
+> AUC
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 0.8 
+
+> Accuracy
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 
+
+> Precision
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 0.8 
+
+> Recall
+
+AV-LR DLGLM NotMIWAE MICE MissForest Mean 
+
+00.2 0.4 0.6 
+
+> F1 Score
+
+Self-Masking Logistic Sequential Logistic Figure 7: Comparative performance of imputation methods on the Breast Cancer Dataset under 50% MNAR across Self-Masking, Logistic, and Sequential Logistic mechanisms. 
+
+22
