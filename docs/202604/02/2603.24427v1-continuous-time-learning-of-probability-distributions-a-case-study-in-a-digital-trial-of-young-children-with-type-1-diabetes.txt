@@ -1,0 +1,1427 @@
+Title: Continuous-Time Learning of Probability Distributions: A Case Study in a Digital Trial of Young Children with Type 1 Diabetes
+
+URL Source: https://arxiv.org/pdf/2603.24427v1
+
+Published Time: Thu, 26 Mar 2026 01:34:02 GMT
+
+Number of Pages: 53
+
+Markdown Content:
+# Continuous-Time Learning of Probability Distributions: A Case Study in a Digital Trial of Young Children with Type 1 Diabetes 
+
+Antonio Álvarez-López ∗
+
+Universidad Autónoma de Madrid and Marcos Matabuena †
+
+Mohamed bin Zayed University of Artificial Intelligence March 26, 2026 
+
+Abstract 
+
+Understanding how biomarker distributions evolve over time is a central challenge in digital health and chronic disease monitoring. In diabetes, changes in the distribu-tion of glucose measurements can reveal patterns of disease progression and treatment response that conventional summary measures miss. Motivated by a 26-week clini-cal trial comparing the closed-loop insulin delivery system t:slim X2 with standard therapy in children with type 1 diabetes, we propose a probabilistic framework to model the continuous-time evolution of time-indexed distributions using continuous glucose monitoring data (CGM) collected every five minutes. We represent the glu-cose distribution as a Gaussian mixture, with time-varying mixture weights governed by a neural ODE. We estimate the model parameter using a distribution-matching criterion based on the maximum mean discrepancy. The resulting framework is in-terpretable, computationally efficient, and sensitive to subtle temporal distributional changes. Applied to CGM trial data, the method detects treatment-related improve-ments in glucose dynamics that are difficult to capture with traditional analytical approaches. 
+
+Keywords: Continuous glucose monitoring; Digital health; Distribution dynamics; Neural ODEs; Gaussian mixture models; Maximum Mean Discrepancy. 
+
+> ∗
+
+Universidad Autónoma de Madrid 
+
+> †
+
+Mohamed bin Zayed University of Artificial Intelligence 
+
+1
+
+> arXiv:2603.24427v1 [stat.ML] 25 Mar 2026
+
+# 1 Introduction 
+
+Characterizing the distribution of a random variable is a classical problem in statistics Silverman (2018) and remains a central challenge in modern machine learning LeCun et al. (2015), where accurate distribution representations are essential for tasks such as text generation and automated reporting Meskó & Topol (2023). More broadly, many scientific questions require understanding not only individual observations but also how the full distribution of a process evolves over time. This perspective is particularly relevant in clinical applications. In digital health, estimating the distribution of individual physiological time-series data over specific time periods enables the construction of individual representations that cap-ture their underlying physiological processes with high precision Matabuena et al. (2021), Matabuena & Petersen (2023), Ghosal et al. (2023). Recent studies show that, when used properly, such representations can reveal clinically relevant patterns that traditional (non-digital) biomarkers do not detect Katta et al. (2024), Matabuena, Ghosal, Aguilar, Keshet, Wagner, Fernández Merino, Sánchez Castro, Zipunnikov, Onnela & Gude (2025), Park et al. (2025), Matabuena et al. (2026). In this paper, motivated by digital health applications, we study the problem of contin-uously estimating a time-indexed distribution {𝐹 𝑡 }𝑡∈[0,𝑇 ] from sequentially observed data. The goal is to learn how the underlying distribution evolves and to represent that evolution in a way that is both flexible and interpretable. Standard approaches are often unsatisfac-tory in this setting. Extending classical kernel density estimators (KDEs) Chacón & Duong (2018) to include time typically leads to a strong sensitivity to tuning parameters and to the curse of dimensionality, while flow-based generative models Papamakarios et al. (2021) may be less interpretable and can require substantial training efforts. Semiparametric al-ternatives offer partial remedies. For example, time-varying models such as Generalized 2Additive Models for Location, Scale, and Shape (GAMLSS) Rigby & Stasinopoulos (2005) alleviate some of these issues, but most implementations are designed for scalar responses and may impose rigid functional forms. More recent multilevel functional approaches based on functional-quantile representations Matabuena & Crainiceanu (2026) offer interpretabil-ity but rely on linear dynamics, which limits their ability to capture complex non-linear relationships and multivariate distributions. To address these limitations, we propose a continuous-time Gaussian mixture framework in which distributional dynamics are represented through time-varying mixture weights governed by a neural ODE. 
+
+Problem formulation 
+
+Let 𝑇 > 0 . For each 𝑡 ∈ [0, 𝑇 ] , let 𝑋 𝑡 ∈ ℝ 𝑑 denote a random vector representing the quantity of interest at time 𝑡 . Its (cumulative) distribution function is 
+
+𝐹 𝑡 (𝑥) ≔ ℙ(𝑋 𝑡 ≤ 𝑥) = ∫ 
+
+> (−∞,𝑥]
+
+𝑓 𝑡 (𝑟) d𝑟, 𝑥 ∈ ℝ 𝑑 , (1) where inequality and integral are taken component-wise when 𝑑 > 1 , and 𝑓 𝑡 (⋅) is the probability density function (when it exists) at time 𝑡 .Our target object is 𝐹 𝑡 (⋅) , or equivalently, the density curve 𝑡 ↦ 𝑓 𝑡 , from which 𝐹 𝑡 can be recovered through (1). In practice, however, the process is not observed continuously in time. Instead, data are available on a discrete time grid 
+
+𝜏 𝑚 ≔ {𝑡 0, … , 𝑡 𝑚 } ⊂ [0, 𝑇 ]. (2) At each 𝑡 𝑖 ∈ 𝜏 𝑚 , we observe a sample drawn from the distribution 𝜇 𝑡 𝑖 ,
+
+𝑋 𝑡 𝑖 ,1 , … , 𝑋 𝑡 𝑖 ,𝑁 𝑖 ∼ 𝜇 𝑡 𝑖 , 𝑡 𝑖 ∈ 𝜏 𝑚 . (3) Depending on the application, these observations may be treated either as approximately independent snapshots across time or as part of a longitudinal setting with temporal de-3pendence. In both cases, the statistical problem is to recover a coherent continuous-time representation of the underlying distributional dynamics from these discrete observations. We model each 𝑓 𝑡 as a Gaussian mixture with 𝐾 components, 
+
+𝑓 𝑡 (𝑥) = 
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+𝛼 𝑠 (𝑡) 𝒩(𝑥 ∣ 𝑚 𝑠 , Σ 𝑠 ), 
+
+where 𝑚 𝑠 ∈ ℝ 𝑑 and Σ𝑠 ∈ 𝒮 +𝑑 (ℝ) are the mean vector and covariance matrix of the 𝑠 th Gaussian component, respectively, and the weight vector 𝛼(𝑡) ≔ [𝛼 1(𝑡), … , 𝛼 𝐾 (𝑡)] ⊤ lies in the probability simplex 
+
+𝛼(𝑡) ∈ Δ 𝐾−1 ≔ { 𝑤 ∈ (ℝ ≥0 )𝐾 ∣
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+𝑤 𝑠 = 1 }. (4) The component means and covariance matrices are shared over time, while the mixture weights vary continuously with 𝑡 . This shared-dictionary representation is natural in our motivating application, where the Gaussian components may be viewed as latent glycemic regimes whose locations and scales remain relatively stable over the study period, while their relative prevalence changes over time. At the same time, this is a strong structural assumption: by allowing temporal variation only through the mixture weights, we trade some modeling flexibility for interpretability and a more parsimonious characterization of distributional change. We model the resulting weight dynamics through a neural ODE. As 
+
+𝐾 increases, Gaussian mixtures provide substantial approximation flexibility, whereas for moderate values of 𝐾 the resulting weight trajectories remain smooth, interpretable and statistically tractable. 
+
+Digital health motivation and distributional data analysis 
+
+Our motivation comes from the analysis of glucose distributions in longitudinal diabetes trials Battelino et al. (2023), where glucose is constantly recorded using continuous glu-cose monitoring (CGM). Under free-living conditions, individual glucose time series can-4not be directly aligned, making the raw temporal stochastic process difficult to compare between participants Ghosal & Matabuena (2024), Matabuena et al. (2021), Matabuena, Ghosal, Aguilar, Keshet, Wagner, Fernández Merino, Sánchez Castro, Zipunnikov, On-nela & Gude (2025). In this setting, the time-varying probability distribution provides a more natural biomarker to characterize the evolution of glucose metabolism Katta et al. (2024), Park et al. (2025), Matabuena et al. (2021). Compared to conventional CGM summary statistics—such as mean glucose or time-in-range metrics—this representation conveys richer information by capturing the full spectrum of low, moderate and high glu-cose values within a unified functional profile Matabuena et al. (2021), Katta et al. (2024). More broadly, distributional data analysis Ghosal et al. (2023), Szabó et al. (2016) is an emerging area that treats probability distributions, or collections of them, as statistical ob-jects for unsupervised and supervised learning, including the prediction of clinical outcomes Matabuena et al. (2021). Biomedical applications are among their most prominent use cases. In digital health, measurements collected by continuous glucose monitors, accelerometers, or imaging modalities such as functional magnetic resonance imaging (fMRI) are increas-ingly represented through empirical distributions that serve as latent descriptions of under-lying physiological processes Ghosal et al. (2025), Ghosal & Matabuena (2024), Matabuena, Ghosal, Aguilar, Keshet, Wagner, Fernández Merino, Sánchez Castro, Zipunnikov, Onnela & Gude (2025), Matabuena et al. (2022). In recent years, several regression frameworks have been proposed in which predictors, responses, or both are represented as probabil-ity distribution functions Matabuena & Petersen (2023), Ghosal et al. (2025), Ghosal & Matabuena (2024), Ghosal et al. (2026), Matabuena, Ghosal, Meiring & Petersen (2025). A related line of work represents probability distributions as random objects in metric spaces and develops statistical procedures for that setting (see, e.g., Lugosi & Matabuena (2024)). Despite this progress, there remains no general framework for modeling moderate-5to high-dimensional distributions that simultaneously offers flexibility and interpretability. The methodology introduced here is intended to help bridge this gap. 
+
+Contributions 
+
+This paper develops a statistical framework to model the continuous-time evolution of probability distributions from longitudinal data and shows its practical value in a case study of digital health. Our main contributions are as follows: 1. We propose a general framework for modeling the dynamics of multivariate probabil-ity distributions in continuous time by combining Gaussian mixture representations with neural ODE smoothing, yielding an interpretable estimator. 2. We introduce an estimation procedure based on a Maximum Mean Discrepancy ob-jective Gretton et al. (2012). This avoids the need to specify and optimize a full likelihood under temporal dependence, while producing a simple differentiable loss with closed-form expressions for Gaussian mixtures under Gaussian kernels. At each time point, the empirical loss function takes the form of a V-statistic Serfling (2009). 3. We demonstrate the practical utility of the proposed methods in a biomedical appli-cation by analyzing continuous glucose monitoring data from a longitudinal trial in young children with type 1 diabetes Wadwa et al. (2023). Our approach provides clin-ically meaningful insights on glucose dynamics and the benefits of the new closed-loop insulin system compared to standard therapy, including treatment-related changes that are less apparent from conventional analytical approaches. 4. We provide theoretical support for the first stage of the procedure, prior to tempo-ral smoothing. In particular, we establish an approximation result for the shared-dictionary representation and a finite-sample bound for the minimum-MMD estima-tor of the mixture weights at each observed time point. The mathematical results 6and the corresponding proofs are given in the Supplementary Material (Section A). 
+
+# 2 Case study: closed-loop insulin delivery in young children with type 1 diabetes 
+
+Treatment of type 1 diabetes in young children remains a particularly challenging task Schoelwer et al. (2024), Ware et al. (2024). In children younger than 6 years of age, insulin doses are small, while food intake, meal timing, and physical activity are often unpredictable, making dosing decisions especially difficult. Young children may also exhibit greater glycemic variability than older children and adults. As a result, treatment strategies and therapeutic goals are often harder to define in this population, and only a limited number of hybrid closed-loop systems Kitagawa et al. (2025), Hughes et al. (2023) have received formal approval from the U.S. Food and Drug Administration for children under 6 years of age. This case study is motivated by a randomized clinical trial evaluating the t:slim X2 insulin pump with Control-IQ Technology (Tandem Diabetes Care) in young children with type 1 diabetes Wadwa et al. (2023). The t:slim X2 system is a hybrid closed-loop device that uses continuous glucose monitoring (CGM) measurements to guide automated insulin delivery through basal rate adjustments and correction boluses every five minutes. Although this technology has been extensively studied in older children, adolescents and adults Beck et al. (2023), Stahl-Pehe et al. (2025), the evidence in children under 6 years of age has remained relatively limited. The trial Wadwa et al. (2023) enrolled 102 children aged 2–5 years and randomized them in a 2:1 ratio to closed-loop control ( 𝑛 = 68 ) or standard care ( 𝑛 = 34 ) for 26 weeks. Our goal in revisiting these data is not simply to reassess treatment efficacy using conventional 7endpoints, but to examine whether a distributional representation of CGM measurements can reveal treatment-related changes in glucose regulation that are less apparent from standard summary measures. This question is motivated by the growing need for analytical tools that characterize glucose behavior beyond conventional CGM summaries, such as mean glucose, time in range, and related compositional metrics. Although these summaries are clinically useful, they do not fully capture the richness of CGM data, which contain information on multiple time scales, including short-term fluctuations and rate of change. These features may reflect clinically significant differences in glucose regulation and response to treatment. Recent work has proposed glucodensity as a functional representation of a glucose time series through the marginal distribution of CGM measurements Matabuena et al. (2021). This framework can capture aspects of glucose behavior that are not fully summarized by stan-dard scalar metrics. However, a univariate glucodensity does not directly capture temporal dynamics, such as whether glucose levels change rapidly or more gradually over time. To address this limitation, multivariate extensions incorporate dynamic features Matabuena, Ghosal, Aguilar, Keshet, Wagner, Fernández Merino, Sánchez Castro, Zipunnikov, Onnela & Gude (2025), including the rate of change and, potentially, acceleration, through joint density representations such as (𝐺,̇ 𝐺) or (𝐺,̇ 𝐺,̈ 𝐺) . These multivariate representations provide a natural framework for studying how glucose levels and glucose dynamics evolve over time. In this paper, we reanalyze the trial data Wadwa et al. (2023) using a multivariate glu-codensity framework Matabuena, Ghosal, Aguilar, Keshet, Wagner, Fernández Merino, Sánchez Castro, Zipunnikov, Onnela & Gude (2025) designed to capture both the distribu-tion of glucose values and key aspects of glucose dynamics. We summarize each participant’s time-varying distribution using a Gaussian mixture model with 𝐾 = 5 components and 8a shared component dictionary over time. The weights of the participant-specific mixture then define longitudinal trajectories that characterize the evolution of individual glucose distributions and, in the multivariate setting, the corresponding glucose dynamics during follow-up. Figure 1 illustrates the structure of the data and the proposed representation for three representative participants (two in the intervention group and one in the control group). For each participant, we show the raw CGM time series, the estimated trajectories of the mixture weights, and the fitted bivariate densities based on glucose and its rate of change at the beginning and end of the trial. Our primary objective in this case study is to assess whether this distributional frame-work yields clinically interpretable comparisons between treatment groups and whether incorporating glucose dynamics into the glucodensity representation provides additional insight beyond conventional summary measures. In the original article, Wadwa et al. (2023) found that glucose levels were within the target range for a greater proportion of time under the closed-loop system than in standard care. However, the authors did not find clear differences in the time spent in other glycemic ranges such as hypoglycemia or, for some subgroups of individuals, in other common diabetes biomarkers such as glycated hemoglobin (HbA1c). We analyze this dataset from a distributional perspective with the goal of enriching and extending the original analysis. 
+
+# 3 Methodology 
+
+We introduce a Gaussian mixture framework for learning time-varying distributions from longitudinal data observed on a discrete time grid. The method represents distributional dynamics in continuous time, yields interpretable subject-specific trajectories, and supports distributional comparisons across groups (intervention arms) and downstream statistical 90 50 100 150 200 250 
+
+Time slot (5-min intervals) 
+
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> 350
+> 400
+> Glucose (mg/dL)
+
+0.0 0.2 0.4 0.6 0.8 1.0 
+
+Time 
+
+0.0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7 
+
+0.8 50 100 150 200 250 300 350 
+
+Glucose concentration (mg/dL) 
+
+10 
+
+5
+
+0
+
+5
+
+10 
+
+> Glucose rate of change (mg/dL/time)
+
+50 100 150 200 250 300 350 
+
+Glucose concentration (mg/dL) 
+
+10 
+
+5
+
+0
+
+5
+
+10 
+
+> Glucose rate of change (mg/dL/time)
+
+Participant 20 (Treatment) 0 50 100 150 200 250 
+
+Time slot (5-min intervals) 
+
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> 350
+> 400
+> Glucose (mg/dL)
+
+0.0 0.2 0.4 0.6 0.8 1.0 
+
+Time 
+
+0.0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7 
+
+0.8 50 100 150 200 250 300 350 
+
+Glucose concentration (mg/dL) 
+
+10 
+
+5
+
+0
+
+5
+
+10 
+
+15 
+
+> Glucose rate of change (mg/dL/time)
+
+50 100 150 200 250 300 350 
+
+Glucose concentration (mg/dL) 
+
+10 
+
+5
+
+0
+
+5
+
+10 
+
+15 
+
+> Glucose rate of change (mg/dL/time)
+
+Participant 58 (Treatment) 0 50 100 150 200 250 
+
+Time slot (5-min intervals) 
+
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> 350
+> 400
+> Glucose (mg/dL)
+
+0.0 0.2 0.4 0.6 0.8 1.0 
+
+Time 
+
+0.0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7 
+
+0.8 50 100 150 200 250 300 350 
+
+Glucose concentration (mg/dL) 
+
+7.5 
+
+5.0 
+
+2.5 
+
+0.0 
+
+2.5 
+
+5.0 
+
+7.5 
+
+10.0 
+
+12.5 
+
+> Glucose rate of change (mg/dL/time)
+
+50 100 150 200 250 300 350 
+
+Glucose concentration (mg/dL) 
+
+7.5 
+
+5.0 
+
+2.5 
+
+0.0 
+
+2.5 
+
+5.0 
+
+7.5 
+
+10.0 
+
+12.5 
+
+> Glucose rate of change (mg/dL/time)
+
+Participant 82 (Control) 
+
+Figure 1: Individual participant analysis for the bivariate model (glucose and its first derivative) using 𝐾 = 5 Gaussian components. Each row corresponds to one participant (IDs 20, 58, and 82). Left: raw CGM time series showing glucose concentration (mg/dL) over the observation period. Middle left: estimated weight trajectories 𝛼(𝑡) = (𝛼 𝑘 (𝑡)) 5𝑘=1 
+
+learned by the neural ODE, representing the evolution of the mixture proportions over normalized time 𝑡 ∈ [0, 1] . Middle right and right: contours of the fitted bivariate Gaussian mixture density at the initial and final times, summarizing the joint distribution of glucose level and its rate of change. inference. Although motivated by digital health applications, the framework is broadly applicable to settings in which an underlying distribution evolves continuously over time. 10 3.1 Background 
+
+Our proposed framework combines two mathematical ingredients: maximum mean discrep-ancy, which we use to fit the model at the observed time points, and neural ODEs, which model the continuous-time evolution of the underlying distribution. 
+
+Maximum Mean Discrepancy. 
+
+To compare probability distributions 𝜇 and 𝜈 on a common measurable space 𝒳 , we use the maximum mean discrepancy (MMD) Gretton et al. (2012), Muandet et al. (2017). To do so, MMD represents each distribution as an element in a Hilbert space. Let ℋ be the reproducing kernel Hilbert space (RKHS) induced by a positive definite kernel 𝑘 ∶ 𝒳 × 𝒳 → ℝ . If 𝜇 is a probability distribution such that ∫ 𝑘(𝑥, 𝑥) d𝜇(𝑥) < ∞ 
+
+(e.g., if 𝑘 is bounded), then the kernel mean embedding of 𝜇 , denoted by 𝑚 𝜇 ∈ ℋ , is well defined: 
+
+𝑚 𝜇 (⋅) ≔ ∫ 𝑘( ⋅ , 𝑥) d𝜇(𝑥). 
+
+Formally, MMD evaluates the distance between two distributions as the ℋ-norm of the difference between their embeddings: MMD 2(𝜇, 𝜈) ≔ ‖𝑚 𝜇 − 𝑚 𝜈 ‖2ℋ = 𝔼[𝑘(𝑋, 𝑋 ′)] + 𝔼[𝑘(𝑌 , 𝑌 ′)] − 2 𝔼[𝑘(𝑋, 𝑌 )], (5) where 𝑋, 𝑋 ′ i.i.d. 
+
+∼ 𝜇 and 𝑌 , 𝑌 ′ i.i.d. 
+
+∼ 𝜈 .If the mapping 𝜇 ↦ 𝑚 𝜇 is injective, equivalently if the kernel 𝑘 is characteristic , then MMD defines a valid metric, satisfying MMD (𝜇, 𝜈) = 0 if and only if 𝜇 = 𝜈 , see Sriperumbudur et al. (2011), Sejdinovic et al. (2013). Throughout the paper, we fix 𝒳 = ℝ 𝑑 and use the Gaussian kernel: 
+
+𝑘(𝑥, 𝑦) ≔ exp (− ‖𝑥 − 𝑦‖ 22
+
+2𝜎 2 ) , (6) 11 where 𝜎 > 0 is a bandwidth parameter. Since the Gaussian kernel is bounded and char-acteristic, the kernel mean embedding is well-defined, and the associated MMD defines a metric on probability distributions. In practice, the choice of 𝜎 strongly impacts the sensitivity of the metric to different scales. We set it using the median heuristic Garreau et al. (2017): 𝜎 is chosen as the median of the pairwise Euclidean distances between sample points. 
+
+Intuition. MMD measures how far apart two distributions are in the feature space induced by the kernel 𝑘 . In our setting, at each observed time point 𝑡 𝑖 in the grid (2), we use MMD to compare the empirical distribution associated with the observations in (3) to a fitted Gaussian mixture distribution. 
+
+Why MMD? (i) With a Gaussian kernel, the discrepancy between an empirical distribu-tion and a Gaussian mixture admits closed-form terms, which leads to stable and computa-tionally efficient updates. (ii) Characteristic kernels yield well-posed fitting objectives. (iii) Empirical evidence suggests that MMD-based procedures are more robust than likelihood-based methods under temporal dependence and model misspecification Chérief-Abdellatif & Alquier (2022), Alquier & Gerber (2024), Gao et al. (2021), Alquier et al. (2023). 
+
+Neural ODEs. 
+
+We replace discrete layers by the continuous evolution of a hidden state ̇𝑧(𝑡) = 𝑣 𝜙 (𝑧(𝑡), 𝑡), 𝑧(𝑡 0) = 𝑧 0,
+
+where 𝑣 𝜙 ∶ ℝ 𝑞 × [𝑡 0, 𝑡 1] → ℝ 𝑞 is a learnable vector field, typically parameterized by a multilayer perceptron. The trajectory 𝑧(𝑡) is computed numerically, and gradients with respect to 𝜙 can be obtained using adjoint methods Massaroli et al. (2020). Neural ODEs have been used to model latent trajectories in continuous time Kidger et al. (2020), Rubanova et al. (2019), Jia & Benson (2019), including in biomedical applications 12 Qian et al. (2021). In our framework, the latent trajectory is used to parameterize the mixture weights over time. This provides a smooth continuous-time interpolation of the weights estimated on the discrete grid (2), without imposing a rigid parametric form on their evolution. 
+
+Why a neural ODE? Our object of interest is the continuous-time distribution of CGM in free-living environments, where measurements are irregular and not directly aligned across participants. Modeling the weight trajectories 𝛼(𝑡) through a neural ODE is advantageous for several reasons. (i) It naturally accommodates irregularly sampled data without re-quiring ad hoc grid alignment, while its continuous nature mitigates sensor noise. (ii) It provides a parameter-efficient framework (a single vector field encodes arbitrary depth) to generate smooth, continuous latent trajectories. (iii) By contrast, discrete sequence models Wang (2024), Wu et al. (2023) are effective in forecasting raw traces but do not directly target the continuous-time distributional dynamics central to our aims. 
+
+3.2 Our model 
+
+We model the continuous-time density 𝑓 𝑡 as a Gaussian mixture: 
+
+𝑓 𝜃(𝑡) (𝑥) = 
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+𝛼 𝑠 (𝑡) 𝒩(𝑥 ∣ 𝑚 𝑠 , Σ 𝑠 ), (7) where the component means {𝑚 𝑠 }𝑠∈[𝐾] and covariance matrices {Σ 𝑠 }𝑠∈[𝐾] are shared across time, while the mixing weights 𝛼 𝑠 (𝑡) vary continuously with 𝑡 (within the simplex). This shared-dictionary structure makes the representation comparable across both time points and individuals. This modeling choice is theoretically grounded in Wiener–Tauberian approximation argu-ments Wiener (1932). As detailed in Theorem A.1, under mild regularity conditions, these shared-dictionary mixtures can uniformly approximate any continuous curve of densities 13 in 𝐿 1(ℝ 𝑑 ). Specifically, for any 𝜀 > 0 , choosing a sufficiently large 𝐾 ensures: sup 
+
+> 𝑡∈[0,𝑇 ]
+
+‖𝑓 𝑡 − 𝑓 𝜃(𝑡) ‖𝐿 1(ℝ 𝑑 ) < 𝜀. 
+
+In practice, we fix a moderate 𝐾 to preserve interpretability, selecting its value based on the specific application (cf. Section 5). Formally, our model is defined by the time-dependent parameter vector: 
+
+𝜃(𝑡) ≔ (𝛼 1(𝑡), … , 𝛼 𝐾 (𝑡), 𝑚 1, … , 𝑚 𝐾 , Σ 1, … , Σ 𝐾 ) ∈ Δ 𝐾−1 × ℝ 𝐾𝑑 × 𝒮 +𝑑 (ℝ) 𝐾 ,
+
+whose effective dimension at any fixed 𝑡 is 𝑝 = 𝐾(1 + 𝑑 + 𝑑(𝑑+1) 2 ) − 1 .
+
+3.2.1 Discrete-time MMD fitting 
+
+Given the observation grid 𝜏 𝑚 = {𝑡 0, … , 𝑡 𝑚 } and the sample 𝑋 𝑡 𝑖 ,1 , … , 𝑋 𝑡 𝑖 ,𝑁 𝑖 ∼ 𝜇 𝑡 𝑖 —recall (2) and (3)—, we define the empirical distribution by 
+
+𝜇 𝑡 𝑖 ,𝑁 𝑖 ≔ 1𝑁 𝑖 𝑁 𝑖 
+
+∑
+
+> 𝑗=1
+
+𝛿 𝑋 𝑡 𝑖 ,𝑗 , 𝑖 = 0, … , 𝑚. 
+
+At each discrete time step 𝑡 𝑖 , we fit a static Gaussian mixture 
+
+𝑓 𝜃 𝑖 (𝑥) = 
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+𝛼 𝑖,𝑠 𝒩(𝑥 ∣ 𝑚 𝑠 , Σ 𝑠 ), 𝛼 𝑖 = (𝛼 𝑖,1 , … , 𝛼 𝑖,𝐾 ) ∈ Δ 𝐾−1 ,
+
+by minimizing MMD 2(𝜇 𝑡 𝑖 ,𝑁 𝑖 , 𝜇 𝜃 𝑖 ), where 𝜇 𝜃 𝑖 is the distribution with density 𝑓 𝜃 𝑖 . We use a Gaussian kernel 𝑘 𝑖 of the form (6), with bandwidth 𝜎 𝑖 selected by the median heuristic from the sample {𝑋 𝑡 𝑖 ,𝑗 }𝑁 𝑖 
+
+> 𝑗=1
+
+.By expanding the squared MMD, the objective function reduces to a convenient quadratic form in the mixing weights 𝛼 𝑖 :MMD 2(𝜇 𝑡 𝑖 ,𝑁 𝑖 , 𝜇 𝜃 𝑖 ) = 𝛼 ⊤𝑖 𝐼 𝑖 𝛼 𝑖 − 2 𝛼 ⊤𝑖 𝐽 𝑖 + 𝐶 𝑖 , (8) where 𝐶 𝑖 = 1𝑁 2𝑖 
+
+∑𝑁 𝑖  
+
+> 𝑗=1
+
+∑𝑁 𝑖  
+
+> ℓ=1
+
+𝑘 𝑖 (𝑋 𝑡 𝑖 ,𝑗 , 𝑋 𝑡 𝑖 ,ℓ ) depends solely on the empirical data and can therefore be omitted from the minimization, while the matrix 𝐼 𝑖 ∈ ℳ 𝐾×𝐾 (ℝ) and the 14 vector 𝐽 𝑖 ∈ ℝ 𝐾 admit closed-form expressions for their entries: 
+
+(𝐼 𝑖 )𝑠,𝑟 = (𝜎 2𝑖 )𝑑/2 
+
+√det (Σ 𝑠 + Σ 𝑟 + 𝜎 2𝑖 Id ) exp (− 12(𝑚 𝑠 − 𝑚 𝑟 )⊤(Σ 𝑠 + Σ 𝑟 + 𝜎 2𝑖 Id )−1 (𝑚 𝑠 − 𝑚 𝑟 )), (𝐽 𝑖 )𝑠 = 1𝑁 𝑖 𝑁 𝑖 
+
+∑
+
+> 𝑗=1
+
+(𝜎 2𝑖 )𝑑/2 
+
+√det (Σ 𝑠 + 𝜎 2𝑖 Id ) exp (− 12(𝑋 𝑡 𝑖 ,𝑗 − 𝑚 𝑠 )⊤(Σ 𝑠 + 𝜎 2𝑖 Id )−1 (𝑋 𝑡 𝑖 ,𝑗 − 𝑚 𝑠 )). 
+
+Optimization. We minimize (8) using the following alternating scheme: 
+
+1. Initialization. We run 𝐾 -means clustering Jain (2010) on ⋃𝑖,𝑗 𝑋 𝑡 𝑖 ,𝑗 to initialize the parameters: the means {𝑚 𝑠 }𝐾 𝑠=1 are the centroids of the identified clusters; {Σ 𝑠 }𝐾 𝑠=1 are the empirical covariance matrices of the points within each cluster; and the initial weights 
+
+{𝛼 𝑖,𝑠 }𝐾 𝑠=1 correspond to the proportion of data points at time 𝑡 𝑖 assigned to cluster 𝑠 .
+
+2. Local update. For each 𝑡 𝑖 , keeping means and covariances fixed, we update the weights 
+
+𝛼 𝑖 ∈ Δ 𝐾−1 via the quadratic program: 
+
+𝛼 𝑖 = argmin 
+
+> 𝛼∈Δ 𝐾−1
+
+{𝛼 ⊤𝐼 𝑖 𝛼 − 2 𝛼 ⊤𝐽 𝑖 +
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+𝜆 𝑠 𝛼 2𝑠 } , (9) where 𝜆 = (𝜆 𝑠 )𝐾 𝑠=1 ∈ ℝ 𝐾 is a vector of ridge hyperparameters that improves numerical conditioning and stabilizes the solution when Gaussian components become nearly collinear in the RKHS feature space. 
+
+3. Global update. Update 𝑚 𝑠 and Σ𝑠 iteratively via (Adam) gradient descent on the MMD objective, keeping the current weights 𝛼 𝑖 fixed. 
+
+3.2.2 Continuous-time weight evolution 
+
+Once the discrete-time weights {𝛼 𝑖 }𝑚 𝑖=0 are fitted, we use a continuous-time model for their evolution. On ℝ𝐾 , we solve: 
+
+⎧{{⎨{{⎩̇ 𝑧(𝑡) = 𝑣 𝜙 (𝑧(𝑡), 𝑡), 𝑡 ∈ [0, 𝑇 ], 𝑧(0) = 𝛼 0,
+
+(10) 15 where 𝑣 𝜙 ∶ ℝ 𝐾 × [0, 𝑇 ] → ℝ 𝐾 is a multilayer perceptron (architecture and solver hyperpa-rameters are reported in Table 2), and then map 𝑧(𝑡) to valid mixture weights by a simplex normalization operator. Define 
+
+𝛼(𝑡) ≔ 𝑧(𝑡) +
+
+⟨1, 𝑧(𝑡) +⟩ ∈ Δ 𝐾−1 , (11) (with the convention that if ⟨1, 𝑧(𝑡) +⟩ = 0 , we replace 𝑧(𝑡) + by 𝑧(𝑡) + +𝜀 1 for a small 𝜀 > 0 ). The parameters 𝜙 are optimized by matching the ODE predictions to the fitted weights 𝛼 𝑖 :
+
+ℒ(𝜙) = 
+
+> 𝑚
+
+∑
+
+> 𝑖=0
+
+‖𝛼(𝑡 𝑖 ; 𝜙) − 𝛼 𝑖 ‖2 + 𝜈‖𝜙‖ 2, (12) where 𝛼(𝑡 𝑖 ; 𝜙) is obtained by integrating (10) and applying (11) at time 𝑡 𝑖 , and 𝜈 ≥ 0 is a ridge hyperparameter. 
+
+Permutation symmetry. Because (𝑚 𝑠 , Σ 𝑠 ) are shared over time and kept fixed after the global fit, component labels are anchored. The neural ODE stage only evolves 𝛼 𝑠 (𝑡) ,so trajectories cannot exchange labels, removing permutation ambiguity. 
+
+Remark 3.1. As an alternative to the simplex normalization based on the positive part (see (11)), one may evolve logits 𝑢(𝑡) ∈ ℝ 𝐾 and set ̇𝑢(𝑡) = 𝑣 𝜙 (𝑢(𝑡), 𝑡), 𝛼(𝑡) = softmax (𝑢(𝑡)) ∈ Δ 𝐾−1 .
+
+If 𝛼(0) = 𝛼 0 ∈ Δ 𝐾−1 has strictly positive components, then choosing 
+
+𝑢(0) = log (𝛼 0) + 𝑐 1 (𝑐 ∈ ℝ arbitrary )
+
+ensures 𝛼(0) = 𝛼 0, since softmax is invariant under shifts by 𝑐 1. If some components of 𝛼 0
+
+are zero, one may initialize with 𝛼 (𝜀) 0 ∝ 𝛼 0 + 𝜀 1 for a small 𝜀 > 0 and set 𝑢(0) = log (𝛼 (𝜀) 0 ).16 4 Simulation study 
+
+We benchmark finite-sample performance against representative baselines. Unlike compet-ing approaches, our method prioritizes interpretability through the time-varying weights 
+
+𝛼 𝑠 (⋅) for 𝑠 = 1, … , 𝐾 . The results indicate that this emphasis on interpretability does not come at the expense of accuracy: the proposed method remains competitive in statistical error and, in several multivariate settings, outperforms the alternatives. Additional details are provided in the Supplementary Material (Section C). 
+
+# 5 Case Study: CGM Trial 
+
+From a distributional data analysis perspective, the objective of this case study is to show that the proposed methodology can leverage the thousands of glucose measurements recorded by continuous glucose monitoring (CGM) more effectively than conventional scalar summaries. Standard CGM metrics are naturally embedded in the glucodensity framework Matabuena et al. (2021); however, our objective here is to show that multivariate functional representations can also reveal clinically significant aspects of glucose regulation that are not fully captured by standard summaries alone. From a modeling perspective, our goal is to illustrate the interpretability of the proposed framework to characterize longitudinal differences in glycemic profiles between the two study arms. In particular, we focus on identifying distributional differences between treat-ment and control over time and on assessing whether incorporating glucose dynamics through rates of change improves the characterization of these differences between groups over the course of follow-up. 17 Preliminaries and scientific questions 
+
+As described in Section 2, our analysis is motivated by data from the randomized clinical trial published in the New England Journal of Medicine entitled “Trial of Hybrid Closed-Loop Control in Young Children with Type 1 Diabetes” Wadwa et al. (2023). 1 This study evaluated hybrid closed-loop control in children under 6 years of age and represents an important clinical setting in which to assess longitudinal changes in glucose regulation. A total of 102 participants Wadwa et al. (2023) with type 1 diabetes mellitus were random-ized in a 2:1 ratio to a closed-loop treatment arm or to a control arm receiving standard diabetes care. The clinical background and additional details of the study were presented in Section 2. To illustrate the continuous-time model introduced in Section 3, we consider the case 𝑑 = 2 ,in which glucose is treated as the first coordinate and the rate of glucose change as the second coordinate. Our analysis addresses the following questions: 1. Are there statistically significant differences between the treatment and control groups in their glucodensity representations from baseline to the end of follow-up? 2. How do these differences evolve over time, including at intermediate time points, and do they reveal temporal response patterns that are not captured by endpoint summaries alone? 3. Do the two groups differ not only in the distribution of glucose values, but also in glucose dynamics, as reflected by the rate of glucose change? More broadly, does incorporating rate-of-change information improve the detection or characterization of differences between groups? 
+
+> 1Data are publicly available at https://public.jaeb.org/datasets/diabetes.
+
+18 Modeling the bivariate distribution of glucose trajectories 
+
+Let 𝐺 𝑖 (𝑢) denote the CGM measurement of participant 𝑖 at time 𝑢 ∈ [0, 𝜏 𝑖 ], and let 𝑉 𝑖 (𝑢) 
+
+denote its rate of change. In practice, CGM is observed on a discrete time grid, and our analysis is carried out over longitudinal windows indexed by 𝑡 (for example, weekly or 10-day intervals). For participant 𝑖 , let (𝑡 − 1, 𝑡] denote a generic analysis window and let 𝑛 𝑖𝑡 
+
+be the number of CGM measurements recorded in that window. For each participant 𝑖 and window (𝑡 − 1, 𝑡] , we consider the bivariate sample 
+
+(𝐺 𝑖𝑡ℓ , 𝑉 𝑖𝑡ℓ ), ℓ = 1, … , 𝑛 𝑖𝑡 ,
+
+where 𝐺 𝑖𝑡ℓ is the glucose measurement at the ℓth observation in the window and 
+
+𝑉 𝑖𝑡ℓ = 𝐺 𝑖𝑡ℓ − 𝐺 𝑖𝑡,ℓ−1 
+
+Δ𝑢 
+
+is the corresponding finite-difference rate of change, with Δ𝑢 denoting the CGM sampling interval. Our target is the joint distribution 
+
+𝐹 𝑖𝑡 (𝑔, 𝑣) = ℙ(𝐺 𝑖𝑡 ≤ 𝑔, 𝑉 𝑖𝑡 ≤ 𝑣), 
+
+together with its associated density 𝑓 𝑖𝑡 (𝑔, 𝑣) .To obtain a representation that is both computationally tractable and directly comparable across participants, we approximate 𝑓 𝑖𝑡 using a dynamic Gaussian mixture model, 
+
+𝑓 𝑖𝑡 (𝑔, 𝑣) = 
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+𝛼 𝑖𝑡𝑠 𝒩((𝑔, 𝑣) ∣ 𝑚 𝑠 , Σ 𝑠 ), 
+
+where 𝒩(⋅ ∣ 𝑚 𝑠 , Σ 𝑠 ) denotes the bivariate Gaussian density with mean 𝑚 𝑠 ∈ ℝ2
+
+and positive-definite covariance matrix Σ𝑠 ∈ 𝒮 +2 . The component-specific parameters 
+
+{(𝑚 𝑠 , Σ 𝑠 )} 𝐾 𝑠=1 are shared across participants and time windows, whereas the mixing weights 𝛼 𝑖𝑡𝑠 are allowed to vary across participants and over time, subject to 
+
+𝛼 𝑖𝑡𝑠 ≥ 0, 
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+𝛼 𝑖𝑡𝑠 = 1. 
+
+19 For the bivariate analysis, we fix 𝐾 = 5 to balance flexibility and interpretability. This choice is rich enough to capture heterogeneous joint patterns in glucose level and short-term glucose dynamics while preserving a common reference structure across participants. Consequently, the global component parameters {(𝑚 𝑠 , Σ 𝑠 )} 5𝑠=1 are estimated once from a common reference sample, whereas only the weights 𝛼 𝑖𝑡𝑠 vary across participants and over time. From a clinical point of view, the five components may be interpreted as a dictionary of glycemic regimes, defined by their estimated locations and covariance structure in the 
+
+(glucose , rate-of-change ) space. These regimes can be grouped into broader profiles ranging from more favorable to less favorable glucose control, thereby providing a parsimonious clinical summary while preserving the finer resolution of the 𝐾 = 5 representation. Table 1 reports the global means and covariance matrices of the five Gaussian components. 
+
+Overview of findings 
+
+Throughout follow-up, the treatment arm exhibits a gradual redistribution of mixture weight toward more favorable glycemic regimes, whereas the control arm remains com-paratively stable or shifts toward less favorable profiles. These differences between groups are modest at early follow-up, but become more pronounced toward the end of the in-tervention. The bivariate representation further shows that the effect of treatment is not limited to glucose levels alone, but also involves changes along the rate-of-change dimension, suggesting reduced short-term glucose fluctuations. Finally, quantile-based summaries in-dicate that these changes are heterogeneous between participants and are primarily driven by a subset of individuals rather than by a uniform shift throughout the cohort. 20 Temporal evolution of mixture weights between groups 
+
+To assess whether differences between arms emerge gradually during follow-up, Figure 2 dis-plays the estimated trajectories of the component weights in the treatment and control arms for the five components of the bivariate model. In general, the trajectories are smooth and fairly stable, indicating that the underlying glucose distribution evolves gradually rather than abruptly. This temporal regularity suggests that treatment-related differences are unlikely to be fully captured by baseline-versus-endpoint comparisons alone and motivates the use of a continuous longitudinal representation. Although the group-average trajectories remain relatively close for some components, sev-eral systematic differences emerge. In particular, component 1 tends to carry a larger average weight in the treatment arm, whereas components 2 and 5 tend to be somewhat more prominent in the control arm. By contrast, components 3 and 4 show weaker separa-tion at the level of group means. Since higher weights indicate that a participant spends more time in the glycemic regime represented by the corresponding component, these pat-terns suggest a gradual redistribution of time spent in clinically distinct glucose profiles over the course of follow-up. From a clinical perspective, the most relevant descriptive pattern is the increasing weight of the component associated with more favorable glucose control in the treatment arm, together with the relative persistence of less favorable components in the control arm. Thus, even at the descriptive level, the dynamic mixture representation suggests that the intervention is associated with a progressive shift toward improved glycemic regulation. 
+
+Redistribution in the bivariate glucose space 
+
+To examine how the joint glucose distribution changes over time, Figure 3 summarizes the evolution of the bivariate densities in the (glucose , rate-of-change ) space over six-week 21 intervals, for example, between weeks 20 and 26 at the group level. In the control arm, the initial and final densities remain relatively similar, and the corresponding difference surface is spatially heterogeneous, with alternating positive and negative regions and no clear dominant direction of change. In addition, the baseline density in the control arm appears to assign relatively more mass to hypoglycemic regions and to higher glucose concentrations than in the treatment arm. By contrast, the treatment arm displays a more structured mass redistribution in the bivariate space, characterized by a marked positive band in the mid-to-high glucose range and compensatory negative regions elsewhere. Taken together, these patterns suggest that the intervention is associated with a more systematic modification of the joint glucose distribution than is observed in the control arm. Importantly, the observed redistribution is not confined to the glucose axis alone: changes along the rate-of-change axis indicate that the intervention also affects short-term glucose dynamics, with a pattern consistent with reduced glucose fluctuations over time. This figure directly addresses the third scientific question. Compared to a univariate glu-codensity analysis, the bivariate representation reveals how treatment-related changes are jointly organized in glucose level and glucose dynamics, providing a richer characterization of the evolving metabolic profile. 
+
+Temporal inference for between-group differences 
+
+To formally assess whether mixture-weight trajectories differ between groups, we apply the exploratory wild bootstrap MMD procedure described in the Supplementary Material (Section B). For each component-specific trajectory ̂ 𝛼 𝑠 (𝑡) (with 𝑡 ∈ [0, 𝑇 ] and 𝑠 ∈ [5] ), the test evaluates whether the treatment and control groups differ at the distributional level over time, while adjusting for the sequential structure and serial dependence of the 22 longitudinal CGM data. The resulting time-varying 𝑝 -values are reported in Figure 4. The strongest evidence of between-group differences is observed for components 3 and 4, whose 𝑝 -values remain below the 0.05 threshold for most of the follow-up period. Component 1 approaches the thresh-old during the middle of follow-up and becomes clearly significant near the end, whereas components 2 and 5 remain non-significant throughout. These findings show that the treatment effect is not uniformly distributed across the com-ponent representation but is instead concentrated in a subset of glycemic regimes. More generally, the inferential evidence strengthens towards the end of the intervention, consis-tent with the gradual separation seen in the estimated weight trajectories. This temporal pattern suggests that the effect of the closed-loop intervention accumulates over time rather than appearing immediately after the initiation of treatment. 
+
+Heterogeneity of response 
+
+To characterize the heterogeneity of the response to treatment, Figure 5 reports, for each component 𝑠 ∈ [5] , the empirical quantile curves of the centered weight trajectories 
+
+𝑍 𝑖𝑠 (𝑡) =̂ 𝛼 𝑖𝑠 (𝑡) −̂ 𝛼 𝑖𝑠 (0), 𝑡 ∈ [0, 𝑇 ], 𝑖 ∈ [𝑛], 
+
+in the two arms. For each fixed 𝑡 ∈ [0, 𝑇 ] , these curves describe the cross-sectional dis-tribution of deviations from baseline within each treatment arm. In most components, the pointwise median trajectory remains close to zero during follow-up, indicating that the typical participant experiences only a modest change relative to baseline. However, the interquartile envelopes and the outer quantile bands widen with time, showing that the dispersion of 𝑍 𝑖𝑠 (𝑡) is substantial and that the temporal redistribution of the mixture weights is driven primarily by a subset of individuals. 23 The clearest separation between groups is observed for components 1 and 2. In component 1, which is associated with a more favorable glucose-control region, the treatment arm remains more tightly concentrated around zero, while its upper quantiles become positive at later follow-up times. This indicates that a subgroup of treated participants gradually shifts weight toward this favorable component. By contrast, the control arm exhibits a more pronounced negative displacement of its central quantiles, indicating a reduction relative to baseline. For component 2, the control arm shows a stronger positive shift in both the central and upper quantiles, suggesting increasing weight in a less favorable glycemic profile over time. For the remaining components, the pointwise quantile curves are more similar across groups, although their spread still indicates appreciable subject-specific variability. This heterogeneity analysis complements the MMD results. Although the MMD test detects global distributional differences over time and is most sensitive for components 3 and 4, the quantile summaries reveal that the most clinically interpretable subgroup-level separation occurs in components 1 and 2. The two analyses therefore highlight different aspects of the treatment effect: one at the level of global distributional inference and the other at the level of subject-specific response heterogeneity. In general, these quantile summaries indicate that the treatment effect is not well de-scribed by a homogeneous location shift that acts uniformly between participants. Rather, the effect is heterogeneous, with the main temporal redistribution concentrated in specific subpopulations and in a limited subset of mixture components. In particular, the treatment arm shows evidence of an increase in weight in the component associated with the normo-glycemic range, whereas the control arm tends to shift toward a less favorable profile. This supports the view that responses to the intervention are individualized, while still revealing an overall trend toward improved glucose regulation under treatment. 24 Summary of the results 
+
+Together, the bivariate glucodensity analysis yields four main conclusions. First, the treat-ment and control arms differ not only in their endpoint distributions but also in the way their glycemic profiles evolve over time. Second, these differences become more apparent toward the end of follow-up, indicating a progressive treatment effect rather than an im-mediate separation after the initiation of treatment. Third, incorporating rate-of-change information reveals treatment-related changes in glucose dynamics that would not be visi-ble from a purely marginal analysis of glucose values alone. Fourth, the effect of treatment is heterogeneous between participants, with the clearest improvements concentrated in a subset of children who move toward mixture components associated with more favorable glycemic regulation. Our results complement and extend those of Wadwa et al. (2023) by highlighting the importance of glucose rate-of-change information to detect differences between treatment arms in children younger than six years of age. The role of the glucose rate-of-change Richardson (2025) remains relatively underexplored in clinical trials, partic-ularly in the pediatric population considered here. More broadly, these findings provide a more holistic distributional view of the data and extend the conclusions that can be drawn from conventional automated summary measures based on glucodensity representations. 
+
+# 6 Final remarks 
+
+We developed an interpretable statistical framework to model the dynamics of time-indexed probability distributions in longitudinal digital health studies. The proposed methodology combines a shared mixture representation with continuous-time evolution, allowing complex distributional changes to be tracked over follow-up while preserving a clinically interpretable low-dimensional structure. The simulation results reported in the Supplementary Material (Section C) further indicate that this approach achieves an estimation precision that is 25 0.0 0.2 0.4 0.6 0.8 1.0Time 0.00.10.20.30.40.50.60.70.8(a) Component 1 0.0 0.2 0.4 0.6 0.8 1.0Time 0.00.10.20.30.40.50.60.70.8 (b) Component 2 0.0 0.2 0.4 0.6 0.8 1.0Time 0.00.10.20.30.40.50.60.70.8 (c) Component 3 0.0 0.2 0.4 0.6 0.8 1.0Time 0.00.10.20.30.40.50.60.70.8
+
+(d) Component 4 0.0 0.2 0.4 0.6 0.8 1.0Time 0.00.10.20.30.40.50.60.70.8 (e) Component 5 
+
+Figure 2: Comparison of weight trajectory dynamics between Treatment (green) and Con-trol (red) groups for the 𝑑 = 2 bivariate model with 𝐾 = 5 mixture components. Each panel shows the evolution of component weights 𝛼 𝑠 (𝑡) between weeks 20–26 over normalized time 𝑡 ∈ [0, 1] . Group means are shown as thick dashed lines. The shaded bands represent a statistical envelope around the mean (e.g., between the 5th and 95th percentiles). competitive with existing alternatives. In the CGM application, the framework provides a distributional view of the response to treatment that goes beyond conventional scalar summaries Battelino et al. (2022). Rather than reducing each subject trajectory to a small set of isolated metrics, the proposed ap-proach captures how the full glucose distribution and its short-term dynamics evolve jointly over time. This yields a richer characterization of glycemic regulation and makes it possi-ble to distinguish global distributional changes from subject-specific response heterogeneity within a common modeling framework. More broadly, the present work illustrates the value of multivariate continuous-time dis-26 50 100 150 200 250 300 350 
+
+> Glucose concentration (mg/dL)
+> 6
+> 4
+> 2
+> 0
+> 2
+> 4
+> 6
+> Glucose rate of change (mg/dL/time)
+
+(a) Control: Initial 50 100 150 200 250 300 350  
+
+> Glucose concentration (mg/dL)
+> 6
+> 4
+> 2
+> 0
+> 2
+> 4
+> 6
+> Glucose rate of change (mg/dL/time)
+
+(b) Control: Final 50 100 150 200 250 300 350   
+
+> Glucose concentration (mg/dL)
+> 6
+> 4
+> 2
+> 0
+> 2
+> 4
+> 6
+> Glucose rate of change (mg/dL/time)
+> -7.1
+> -5.4
+> -3.6
+> -1.8
+> 0.0
+> 1.8
+> 3.6
+> 5.4
+> 7.1
+> ×10 4
+
+(c) Control: Difference 50 100 150 200 250 300 350 
+
+> Glucose concentration (mg/dL)
+> 6
+> 4
+> 2
+> 0
+> 2
+> 4
+> 6
+> Glucose rate of change (mg/dL/time)
+
+(d) Treatment: Initial 50 100 150 200 250 300 350  
+
+> Glucose concentration (mg/dL)
+> 6
+> 4
+> 2
+> 0
+> 2
+> 4
+> 6
+> Glucose rate of change (mg/dL/time)
+
+(e) Treatment: Final 50 100 150 200 250 300 350   
+
+> Glucose concentration (mg/dL)
+> 6
+> 4
+> 2
+> 0
+> 2
+> 4
+> 6
+> Glucose rate of change (mg/dL/time)
+> -7.1
+> -5.4
+> -3.6
+> -1.8
+> 0.0
+> 1.8
+> 3.6
+> 5.4
+> 7.1
+> ×10 4
+
+(f) Treatment: Difference 
+
+Figure 3: Predicted glucose density distributions between weeks 20 and 26, comparing Treatment (green) and Control (red) groups for the 𝑑 = 2 model with 𝐾 = 5 mixture components. The marginal density over glucose concentration and speed is computed by drawing samples from each participant’s GMM, estimating the sliced-Wasserstein barycen-ter in 2D, and converting the barycenter samples into a smooth density via a Gaussian KDE on the grid. The top row corresponds to the Control group and the bottom row to the Treatment group. In both rows, the first column shows the initial distribution at week 20, the second column displays the final distribution at week 26, and the third column presents the difference between the two distributions. tributional modeling for modern digital health data Matabuena, Ghosal, Aguilar, Keshet, Wagner, Fernández Merino, Sánchez Castro, Zipunnikov, Onnela & Gude (2025), where re-peated dense measurements are becoming increasingly common. The proposed framework is particularly appealing in settings where both interpretability and temporal resolution are important, since it enables changes in clinically meaningful latent regimes to be followed 27 19 20 21 22 23 24 25 26 
+
+> Weeks
+> 0.001
+> 0.01
+> 0.05
+> 0.1
+> 1
+> p − value
+
+Figure 4: Wild Bootstrap MMD test 𝑝 -values comparing Treatment vs. Control groups over time for the 𝑑 = 2 model with 𝐾 = 5 mixture components. The dashed black line indicates the significance threshold 𝛼 = 0.05 . The colors correspond to the different components: blue (component 1), orange (component 2), green (component 3), red (component 4), and violet (component 5). continuously throughout an intervention. Several limitations and directions remain for future work. First, the framework should be evaluated across a broader range of digital health studies and intervention settings in order to better assess its robustness and generalizability. Second, scalable online and distributed implementations would enhance their utility in large-scale epidemiological studies. Third, extensions to higher-dimensional distributional representations and to functional biomark-ers, including those arising in biomechanics Matabuena et al. (2023), could substantially broaden their applicability. In general, this work shows that distributional modeling can yield clinically significant insights beyond conventional scalar summaries and provides a foundation for further statistical methodology in digital health. 
+
+# References 
+
+Alquier, P., Chérief-Abdellatif, B.-E., Derumigny, A. & Fermanian, J.-D. (2023), ‘Estima-tion of copulas via maximum mean discrepancy’, Journal of the American Statistical 
+
+28 0.0 0.2 0.4 0.6 0.8 1.0 
+
+> Time
+> 0.20
+> 0.15
+> 0.10
+> 0.05
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+
+(a) Component 1 0.0 0.2 0.4 0.6 0.8 1.0  
+
+> Time
+> 0.20
+> 0.15
+> 0.10
+> 0.05
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+
+(b) Component 2 0.0 0.2 0.4 0.6 0.8 1.0  
+
+> Time
+> 0.20
+> 0.15
+> 0.10
+> 0.05
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+
+(c) Component 3 0.0 0.2 0.4 0.6 0.8 1.0 
+
+> Time
+> 0.20
+> 0.15
+> 0.10
+> 0.05
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+
+(d) Component 4 0.0 0.2 0.4 0.6 0.8 1.0  
+
+> Time
+> 0.20
+> 0.15
+> 0.10
+> 0.05
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+
+(e) Component 5 
+
+Figure 5: Quantile curves (median and 25%–75% bands) of the change in GMM mixture weights for each of the 𝐾 = 5 components over time, relative to their initial value, for Treatment (green) and Control (red) groups. Each panel shows the temporal evolution of a component’s weight deviation from baseline. 
+
+Association 118 (543), 1997–2012. Alquier, P. & Gerber, M. (2024), ‘Universal robust regression via maximum mean discrep-ancy’, Biometrika 111 (1), 71–92. Battelino, T., Alexander, C. M., Amiel, S. A., Arreaza-Rubin, G., Beck, R. W., Bergenstal, R. M., Buckingham, B. A., Carroll, J., Ceriello, A. & Chow, E. (2022), ‘Continuous glucose monitoring and metrics for clinical trials: an international consensus statement’, 
+
+The Lancet Diabetes & Endocrinology .Battelino, T., Alexander, C. M., Amiel, S. A., Arreaza-Rubin, G., Beck, R. W., Bergenstal, R. M., Buckingham, B. A., Carroll, J., Ceriello, A. & Chow, E. (2023), ‘Continuous glucose monitoring and metrics for clinical trials: an international consensus statement’, 29 The lancet Diabetes & endocrinology 11 (1), 42–57. Beck, R. W., Kanapka, L. G., Breton, M. D., Brown, S. A., Wadwa, R. P., Buckingham, B. A., Kollman, C. & Kovatchev, B. (2023), ‘A meta-analysis of randomized trial out-comes for the t: slim x2 insulin pump with control-iq technology in youth and adults from age 2 to 72’, Diabetes Technology & Therapeutics 25 (5), 329–342. Chacón, J. E. & Duong, T. (2018), Multivariate kernel smoothing and its applications , CRC Press. Chérief-Abdellatif, B.-E. & Alquier, P. (2022), ‘Finite-sample properties of parametric MMD estimation: Robustness to misspecification and dependence’, Bernoulli 28 (1), 181– 213. Chwialkowski, K., Sejdinovic, D. & Gretton, A. (2014), A wild bootstrap for degenerate kernel tests, in Z. Ghahramani, M. Welling, C. Cortes, N. Lawrence & K. Weinberger, eds, ‘Advances in Neural Information Processing Systems’, Vol. 27, Curran Associates, Inc. Gao, R., Liu, F., Zhang, J., Han, B., Liu, T., Niu, G. & Sugiyama, M. (2021), Maximum mean discrepancy test is aware of adversarial attacks, in ‘Proceedings of the International Conference on Machine Learning (ICML)’, ML Research Press, pp. 3564–3575. Garreau, D., Jitkrittum, W. & Kanagawa, M. (2017), ‘Large sample analysis of the median heuristic’, arXiv preprint arXiv:1707.07269 .Ghosal, R., Cho, S. E. & Matabuena, M. (2026), ‘Survival on image regression with applica-tion to partially functional distributional representation of physical activity’, Statistical Analysis and Data Mining: An ASA Data Science Journal 19 (1), e70068. e70068 SAM-25-505.R1. Ghosal, R., Ghosh, S. K., Schrack, J. A. & Zipunnikov, V. (2025), ‘Distributional outcome 30 regression via quantile functions and its application to modelling continuously monitored heart rate and physical activity’, Journal of the American Statistical Association pp. 1– 20. Ghosal, R. & Matabuena, M. (2024), ‘Multivariate scalar on multidimensional distribution regression with application to modeling the association between physical activity and cognitive functions’, Biometrical Journal 66 (7), e202400042. Ghosal, R., Varma, V. R., Volfson, D., Hillel, I., Urbanek, J., Hausdorff, J. M., Watts, A. & Zipunnikov, V. (2023), ‘Distributional data analysis via quantile functions and its application to modeling digital biomarkers of gait in alzheimer’s disease’, Biostatistics 
+
+24 (3), 539–561. Gretton, A., Borgwardt, K. M., Rasch, M. J., Schölkopf, B. & Smola, A. (2012), ‘A kernel two-sample test’, The journal of machine learning research 13 (1), 723–773. Hughes, M. S., Addala, A. & Buckingham, B. (2023), ‘Digital technology for diabetes’, New England Journal of Medicine 389 (22), 2076–2086. Jain, A. K. (2010), ‘Data clustering: 50 years beyond k-means’, Pattern recognition letters 
+
+31 (8), 651–666. Jia, J. & Benson, A. R. (2019), Neural jump stochastic differential equations, in ‘Advances in Neural Information Processing Systems (NeurIPS)’, Vol. 32, Curran Associates, Inc. Katta, S., Parikh, H., Rudin, C. & Volfovsky, A. (2024), Interpretable causal inference for analyzing wearable, sensor, and distributional data, in ‘International Conference on Artificial Intelligence and Statistics’, PMLR, pp. 3340–3348. Kidger, P., Morrill, J., Foster, J. & Lyons, T. (2020), Neural controlled differential equa-tions for irregular time series, in ‘Advances in Neural Information Processing Systems (NeurIPS)’, Vol. 33, Curran Associates, Inc., pp. 6696–6707. 31 Kitagawa, H., Munekage, M., Seo, S. & Hanazaki, K. (2025), ‘Artificial pancreas: the past and the future’, Journal of Artificial Organs 28 (4), 514–521. LeCun, Y., Bengio, Y. & Hinton, G. (2015), ‘Deep learning’, Nature 521 (7553), 436–444. Lehmann, E. L. & Romano, J. P. (2005), Testing statistical hypotheses , Springer. Leucht, A. & Neumann, M. H. (2013), ‘Dependent wild bootstrap for degenerate u-and v-statistics’, Journal of Multivariate Analysis 117 , 257–280. Lugosi, G. & Matabuena, M. (2024), ‘Uncertainty quantification in metric spaces’, arXiv preprint arXiv:2405.05110 .Massaroli, S., Poli, M., Park, J., Yamashita, A. & Asama, H. (2020), Dissecting neural ODEs, in ‘Advances in Neural Information Processing Systems (NeurIPS)’, Vol. 33, Cur-ran Associates, Inc., pp. 3952–3963. Matabuena, M. & Crainiceanu, C. M. (2026), ‘Multilevel functional distributional models with applications to continuous glucose monitoring in diabetes clinical trials’, The Annals of Applied Statistics 20 (1), 476 – 495. 
+
+URL: https://doi.org/10.1214/26-AOAS2139 
+
+Matabuena, M., Félix, P., Hammouri, Z. A. A., Mota, J. & del Pozo Cruz, B. (2022), ‘Physical activity phenotypes and mortality in older adults: a novel distributional data analysis of accelerometry in the NHANES’, Aging Clinical and Experimental Research 
+
+34 (12), 3107–3114. Matabuena, M., Ghosal, A., Meiring, W. & Petersen, A. (2025), ‘Predicting distributions of physical activity profiles in the national health and nutrition examination survey database using a partially linear fréchet single index model’, Biostatistics 26 (1), kxaf013. Matabuena, M., Ghosal, R., Aguilar, J. E., Keshet, A., Wagner, R., Fernández Merino, C., 32 Sánchez Castro, J., Zipunnikov, V., Onnela, J.-P. & Gude, F. (2025), ‘Glucodensity func-tional profiles outperform traditional continuous glucose monitoring metrics’, Scientific Reports 15 (1), 33662. 
+
+URL: https://doi.org/10.1038/s41598-025-18119-2 
+
+Matabuena, M., Karas, M., Riazati, S., Caplan, N. & Hayes, P. R. (2023), ‘Estimating knee movement patterns of recreational runners across training sessions using multilevel functional regression models’, The American Statistician 77 (2), 169–181. 
+
+URL: https://doi.org/10.1080/00031305.2022.2105950 
+
+Matabuena, M. & Petersen, A. (2023), ‘Distributional data analysis of accelerometer data from the nhanes database using nonparametric survey regression models’, Journal of the Royal Statistical Society Series C: Applied Statistics 72 (2), 294–313. Matabuena, M., Petersen, A., Vidal, J. C. & Gude, F. (2021), ‘Glucodensities: A new representation of glucose profiles using distributional data analysis’, Statistical methods in medical research 30 (6), 1445–1464. Matabuena, M., Straczkiewicz, M., Calcagno, N., Burke, K. M., Royse, T. B., Iyer, A., Carney, K. T., Hall, S., Berry, J. D. & Onnela, J.-P. (2026), ‘Exploratory analysis of smartphone-based step counts as a digital biomarker for survival in als patients’, Fron-tiers in Digital Health 7, 1705368. Meskó, B. & Topol, E. J. (2023), ‘The imperative for regulatory oversight of large language models (or generative AI) in healthcare’, NPJ digital medicine 6(1), 120. Muandet, K., Fukumizu, K., Sriperumbudur, B. & Schölkopf, B. (2017), ‘Kernel mean embedding of distributions: A review and beyond’, Foundations and Trends® in Machine Learning 10 (1-2), 1–141. Papamakarios, G., Nalisnick, E., Rezende, D. J., Mohamed, S. & Lakshminarayanan, B. 33 (2021), ‘Normalizing flows for probabilistic modeling and inference’, Journal of Machine Learning Research 22 (57), 1–64. 
+
+URL: https://jmlr.org/papers/v22/19-1028.html 
+
+Papamakarios, G., Pavlakou, T. & Murray, I. (2017), Masked autoregressive flow for density estimation, in ‘Advances in Neural Information Processing Systems (NeurIPS)’, Vol. 30, Curran Associates, Inc. Park, J., Kok, N. & Gaynanova, I. (2025), ‘Beyond fixed thresholds: optimizing summaries of wearable device data via piecewise linearization of quantile functions’, arXiv preprint arXiv:2501.11777 .Qian, Z., Zame, W., Fleuren, L., Elbers, P. & van der Schaar, M. (2021), Integrating expert ODEs into neural ODEs: pharmacology and disease progression, in ‘Advances in Neural Information Processing Systems (NeurIPS)’, Vol. 34, pp. 11364–11383. Richardson, R. R. (2025), ‘Normal reference range for glucose rates of change in nondiabetic individuals using continuous glucose monitoring’, Diabetes Technology & Therapeutics 
+
+p. 15209156251390822. Rigby, R. A. & Stasinopoulos, D. M. (2005), ‘Generalized additive models for location, scale and shape’, Journal of the Royal Statistical Society Series C: Applied Statistics 
+
+54 (3), 507–554. Rubanova, Y., Chen, R. T. Q. & Duvenaud, D. K. (2019), Latent ordinary differential equa-tions for irregularly-sampled time series, in ‘Advances in Neural Information Processing Systems (NeurIPS)’, Vol. 32, Curran Associates, Inc. Schoelwer, M. J., DeBoer, M. D. & Breton, M. D. (2024), ‘Use of diabetes technology in children’, Diabetologia 67 (10), 2075–2084. Sejdinovic, D., Sriperumbudur, B., Gretton, A. & Fukumizu, K. (2013), ‘Equivalence of 34 distance-based and RKHS-based statistics in hypothesis testing’, The Annals of Statistics 
+
+pp. 2263–2291. Serfling, R. J. (2009), Approximation theorems of mathematical statistics , John Wiley & Sons. Silverman, B. W. (1986), Density estimation for statistics and data analysis , Vol. 26, CRC press. Silverman, B. W. (2018), Density estimation for statistics and data analysis , Routledge. Sriperumbudur, B. K., Fukumizu, K. & Lanckriet, G. R. (2011), ‘Universality, characteristic kernels and RKHS embedding of measures.’, Journal of Machine Learning Research 12 (7). Stahl-Pehe, A., Shokri-Mashhadi, N., Wirth, M., Schlesinger, S., Kuss, O., Holl, R. W., Bächle, C., Warz, K.-D., Bürger-Büsing, J., Spörkel, O. et al. (2025), ‘Efficacy of auto-mated insulin delivery systems in people with type 1 diabetes: a systematic review and network meta-analysis of outpatient randomised controlled trials’, EClinicalMedicine 
+
+82 (103190). Szabó, Z., Sriperumbudur, B. K., Póczos, B. & Gretton, A. (2016), ‘Learning theory for distribution regression’, Journal of Machine Learning Research 17 (152), 1–40. Tsybakov, A. B. (2008), Introduction to Nonparametric Estimation , 1st edn, Springer Pub-lishing Company, Incorporated. Wadwa, R. P., Reed, Z. W., Buckingham, B. A., DeBoer, M. D., Ekhlaspour, L., Forlenza, G. P., Schoelwer, M., Lum, J., Kollman, C., Beck, R. W. et al. (2023), ‘Trial of hybrid closed-loop control in young children with type 1 diabetes’, New England Journal of Medicine 388 (11), 991–1001. 35 Wang, S. (2024), Timemixer: Decomposable multiscale mixing for time series forecasting, 
+
+in ‘International Conference on Learning Representations (ICLR)’. Ware, J., Allen, J. M., Boughton, C. K., Wilinska, M. E., Hartnell, S., Thankamony, A., de Beaufort, C., Campbell, F. M., Fröhlich-Reiterer, E., Fritsch, M. et al. (2024), ‘Eighteen-month hybrid closed-loop use in very young children with type 1 diabetes: A single-arm multicenter trial’, Diabetes Care 47 (12), 2189–2195. Wiener, N. (1932), ‘Tauberian theorems’, Annals of Mathematics 33 (1), 1–100. Wu, H., Hu, T., Liu, Y., Zhou, H., Wang, J. & Long, M. (2023), Timesnet: Temporal 2d-variation modeling for general time series analysis, in ‘International Conference on Learning Representations (ICLR)’. 36 Supplementary Material 
+
+# A Statistical theory and proofs 
+
+We provide theoretical guarantees for the discrete-time MMD fitting step at each observed time point 𝑡 𝑖 ∈ 𝜏 𝑚 , prior to the neural-ODE smoothing stage. The results below formalize (i) approximation by a shared Gaussian dictionary and (ii) finite-sample stability of the weight estimator in (9). 
+
+Theorem A.1 (Universality) . Let {𝑓 𝑡 }𝑡∈[0,𝑇 ] ⊂ 𝐿 1(ℝ 𝑑 ) be a family of probability densities. Assume: 1. For every 𝜂 > 0 there exists 𝑅 < ∞ such that ∫‖𝑥‖>𝑅 𝑓 𝑡 (𝑥) d𝑥 < 𝜂 for all 𝑡 ∈ [0, 𝑇 ] ;2. lim  
+
+> ‖ℎ‖→0
+
+sup 
+
+> 𝑡∈[0,𝑇 ]
+
+‖𝑓 𝑡 (⋅ + ℎ) − 𝑓 𝑡 (⋅)‖ 𝐿 1(ℝ 𝑑 ) = 0 .Then for every 𝜀 > 0 there exist 𝐾 ∈ ℕ , 𝜎 2 > 0 and centers {𝜇 𝑠 }𝑠∈[𝐾] ⊂ ℝ 𝑑 such that, for each 𝑡 ∈ [0, 𝑇 ] , one can choose 𝛼(𝑡) ∈ Δ 𝐾−1 with 
+
+sup 
+
+> 𝑡∈[0,𝑇 ]
+
+∥𝑓 𝑡 (⋅) − 
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+𝛼 𝑠 (𝑡) 𝒩 (⋅ ∣ 𝑚 𝑠 , 𝜎 2Id )∥ 
+
+> 𝐿 1(ℝ 𝑑 )
+
+< 𝜀, 
+
+If, in addition, 𝑡 ↦ 𝑓 𝑡 is continuous in 𝐿 1, then 𝑡 ↦ 𝛼(𝑡) can be chosen continuous. 
+
+Since Gaussian location mixtures with common variance form a subclass of the shared-dictionary Gaussian mixture model introduced in Section 3.2, this result provides theoret-ical support for the approximation capacity of the proposed representation. 
+
+Theorem A.2 (Finite-sample stability) . Fix 𝑡 𝑖 ∈ 𝜏 and consider the quadratic program 
+
+(9) , with solution ̂ 𝛼 𝑖 based on the sample (𝑋 𝑡 𝑖 ,𝑗 )𝑁 𝑖 
+
+> 𝑗=1
+
+. Let 𝐽 ⋆𝑖 ∈ ℝ 𝐾 be defined by 
+
+(𝐽 ⋆𝑖 )𝑠 ≔ 𝔼 [𝐽 𝑖,𝑠,1 ] , 𝐽 𝑖,𝑠,1 = ∫ 𝑘 𝑖 (𝑋 𝑡 𝑖 ,1 , 𝑦) 𝒩(𝑦 ∣ 𝑚 𝑠 , Σ 𝑠 ) d𝑦, 𝑠 ∈ [𝐾], 
+
+37 and, in addition, define 𝛼 ⋆𝑖 by 
+
+𝛼 ⋆𝑖 ≔ argmin 𝛼∈Δ 𝐾−1 {𝛼 ⊤𝐼 𝑖 𝛼 − 2𝛼 ⊤𝐽 ⋆𝑖 +
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+𝜆 𝑠 𝛼 2𝑠 } . 
+
+Assume 𝜆 min ≔ min 𝑠∈[𝐾] 𝜆 𝑠 > 0 and sup 𝑥 𝑘 𝑖 (𝑥, 𝑥) ≤ 1 . Then, for any 𝛿 ∈ (0, 1) , with probability at least 1 − 𝛿 ,
+
+‖̂𝛼 𝑖 − 𝛼 ⋆𝑖 ‖2 ≤ 1𝜆 min 
+
+√𝐾 log (2𝐾/𝛿) 2𝑁 𝑖 
+
+.
+
+Moreover, with probability at least 1 − 𝛿 ,
+
+max  
+
+> 0≤𝑖≤𝑚
+
+‖̂𝛼 𝑖 − 𝛼 ⋆𝑖 ‖2 ≤ 1𝜆 min 
+
+√𝐾 log (2𝐾(𝑚 + 1)/𝛿) 2𝑁 ∗
+
+, 𝑁 ∗ = min  
+
+> 0≤𝑖≤𝑚
+
+𝑁 𝑖 .
+
+Remark A.3. For fixed (𝑚 𝑠 , Σ 𝑠 )𝑠∈[𝐾] , the mixture density is linear in the weights. Hence 
+
+‖𝑓 ̂𝜃 𝑖 
+
+− 𝑓 𝜃 ⋆𝑖 ‖𝐿 1(ℝ 𝑑 ) ≤ ‖̂𝛼 𝑖 − 𝛼 ⋆𝑖 ‖1 ≤ √𝐾 ‖̂𝛼 𝑖 − 𝛼 ⋆𝑖 ‖2.
+
+Moreover, for the component.wise distribution function defined in (1), we have 
+
+|𝐹 ̂ 𝜃 𝑖 
+
+(𝑥) − 𝐹 𝜃 ⋆𝑖 (𝑥)| ≤ ‖̂𝛼 𝑖 − 𝛼 ⋆𝑖 ‖1 for all 𝑥 ∈ ℝ 𝑑 .
+
+Proofs 
+
+Proof of Theorem A.1. Fix 𝜀 > 0 . By assumption 1, choose 𝑅 < ∞ such that sup 
+
+> 𝑡∈[0,𝑇 ]
+
+∫
+
+> ‖𝑥‖>𝑅
+
+𝑓 𝑡 (𝑥) d𝑥 < 𝜀/4. 
+
+Let 𝜑 𝜎 be the Gaussian mollifier and set 𝑔 𝑡 = 𝑓 𝑡 ∗𝜑 𝜎 . By the approximate-identity property and assumption 2, for 𝜎 sufficiently small we have sup 
+
+> 𝑡∈[0,𝑇 ]
+
+‖𝑓 𝑡 − 𝑔 𝑡 ‖𝐿 1(ℝ 𝑑 ) < 𝜀/4. 
+
+Fix such a value of 𝜎 . Partition 𝐵 𝑅 = {𝑥 ∈ ℝ 𝑑 ∶ ‖𝑥‖ ≤ 𝑅} into finitely many sets (𝐶 𝑠 )𝐾 𝑠=1 
+
+of diameter at most ℎ, and pick 𝑚 𝑠 ∈ 𝐶 𝑠 . Define ̃𝛼 𝑠 (𝑡) = ∫ 
+
+> 𝐶 𝑠
+
+𝑓 𝑡 (𝑦) d𝑦, 𝑍 𝑡 =
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+̃𝛼 𝑠 (𝑡) = ∫ 
+
+> 𝐵 𝑅
+
+𝑓 𝑡 (𝑦) d𝑦 ∈ [1 − 𝜀/4, 1], 
+
+38 and then set 𝛼 𝑠 (𝑡) =̃ 𝛼 𝑠 (𝑡)/𝑍 𝑡 . We decompose 
+
+𝑔 𝑡 (𝑥) = 
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+∫
+
+> 𝐶 𝑠
+
+𝑓 𝑡 (𝑦)𝜑 𝜎 (𝑥 − 𝑦) d𝑦 + ∫ 
+
+> 𝐵 𝑐 𝑅
+
+𝑓 𝑡 (𝑦)𝜑 𝜎 (𝑥 − 𝑦) d𝑦. 
+
+The last term has 𝐿 1-norm bounded by 1 − 𝑍 𝑡 ≤ 𝜀/4 . For the first term, use 
+
+‖𝜑 𝜎 (⋅ − 𝑦) − 𝜑 𝜎 (⋅ − 𝑚 𝑠 )‖ 𝐿 1 ≤ ‖∇𝜑 𝜎 ‖𝐿 1 ‖𝑦 − 𝑚 𝑠 ‖ ≤ 𝐶 𝑑 
+
+ℎ𝜎 ,
+
+to obtain sup 
+
+> 𝑡∈[0,𝑇 ]
+
+∥𝑔 𝑡 −
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+̃𝛼 𝑠 (𝑡)𝜑 𝜎 (⋅ − 𝑚 𝑠 )∥ 
+
+> 𝐿 1
+
+≤ 𝜀/4 + 𝐶 𝑑 
+
+ℎ𝜎 .
+
+Passing from ̃ 𝛼 to 𝛼 changes the 𝐿 1-error by at most |1 − 𝑍 𝑡 | ≤ 𝜀/4 , since ‖𝜑 𝜎 ‖𝐿 1 = 1 .Choosing ℎ ≤ 𝜎𝜀/(4𝐶 𝑑 ) and combining the bounds yields sup 
+
+> 𝑡∈[0,𝑇 ]
+
+∥𝑓 𝑡 (⋅) − 
+
+> 𝐾
+
+∑
+
+> 𝑠=1
+
+𝛼 𝑠 (𝑡) 𝜑 𝜎 (⋅ − 𝑚 𝑠 )∥ 
+
+> 𝐿 1(ℝ 𝑑 )
+
+< 𝜀. 
+
+Since 𝜑 𝜎 (⋅ − 𝑚 𝑠 ) is the density of 𝒩(𝑚 𝑠 , 𝜎 2Id ), this proves the approximation claim. Finally, if 𝑡 ↦ 𝑓 𝑡 is continuous in 𝐿 1(ℝ 𝑑 ), then each map 
+
+𝑡 ↦̃ 𝛼 𝑠 (𝑡) = ∫ 
+
+> 𝐶 𝑠
+
+𝑓 𝑡 (𝑦) d𝑦 
+
+is continuous, because 
+
+|̃𝛼 𝑠 (𝑡) −̃ 𝛼 𝑠 (𝑡 ′)| ≤ ∫ 
+
+> 𝐶 𝑠
+
+|𝑓 𝑡 (𝑦) − 𝑓 𝑡 ′ (𝑦)| d𝑦 ≤ ‖𝑓 𝑡 − 𝑓 𝑡 ′ ‖𝐿 1(ℝ 𝑑 ).
+
+Since 𝑍 𝑡 ≥ 1 − 𝜀/4 > 0 , the normalization 𝑡 ↦ 𝛼 𝑠 (𝑡) =̃ 𝛼 𝑠 (𝑡)/𝑍 𝑡 is also continuous. 
+
+Proof of Theorem A.2. Let 𝐴 𝑖 ≔ 𝐼 𝑖 + diag (𝜆) , which satisfies 𝐴 𝑖 ⪰ 𝜆 min Id because 𝐼 𝑖 ⪰ 0 
+
+and 𝜆 min > 0 . The optimality conditions for minimizers over Δ𝐾−1 give 
+
+⟨2𝐴 𝑖 ̂ 𝛼 𝑖 − 2𝐽 𝑖 , 𝛼 −̂ 𝛼 𝑖 ⟩ ≥ 0, ⟨2𝐴 𝑖 𝛼 ⋆𝑖 − 2𝐽 ⋆𝑖 , 𝛼 − 𝛼 ⋆𝑖 ⟩ ≥ 0, for all 𝛼 ∈ Δ 𝐾−1 .
+
+Taking 𝛼 = 𝛼 ⋆𝑖 in the first inequality and 𝛼 =̂ 𝛼 𝑖 in the second, and then adding, yields 
+
+⟨𝐴 𝑖 (̂𝛼 𝑖 − 𝛼 ⋆𝑖 ),̂ 𝛼 𝑖 − 𝛼 ⋆𝑖 ⟩ ≤ ⟨𝐽 𝑖 − 𝐽 ⋆𝑖 ,̂ 𝛼 𝑖 − 𝛼 ⋆𝑖 ⟩. 
+
+39 Using 𝐴 𝑖 ⪰ 𝜆 min Id and Cauchy–Schwarz, we obtain 
+
+‖̂𝛼 𝑖 − 𝛼 ⋆𝑖 ‖2 ≤ 𝜆 −1 
+
+> min
+
+‖𝐽 𝑖 − 𝐽 ⋆𝑖 ‖2.
+
+For each 𝑠 ∈ [𝐾] , define 
+
+𝑊 𝑖,𝑠,𝑗 ≔ ∫ 𝑘 𝑖 (𝑋 𝑡 𝑖 ,𝑗 , 𝑦) 𝒩(𝑦 ∣ 𝑚 𝑠 , Σ 𝑠 ) d𝑦. 
+
+Then (𝐽 𝑖 )𝑠 = 𝑁 −1 𝑖 ∑𝑁 𝑖  
+
+> 𝑗=1
+
+𝑊 𝑖,𝑠,𝑗 , and the variables 𝑊 𝑖,𝑠,𝑗 are i.i.d. with mean (𝐽 ⋆𝑖 )𝑠 . Since 
+
+0 ≤ 𝑘 𝑖 (𝑥, 𝑦) ≤ 1 and 𝒩(⋅ ∣ 𝑚 𝑠 , Σ 𝑠 ) integrates to 1, we have 0 ≤ 𝑊 𝑖,𝑠,𝑗 ≤ 1. 
+
+By Hoeffding’s inequality and a union bound over 𝑠 ∈ [𝐾] , with probability at least 1 − 𝛿 ,max 
+
+> 𝑠∈[𝐾]
+
+|(𝐽 𝑖 )𝑠 − (𝐽 ⋆𝑖 )𝑠 | ≤ √ log (2𝐾/𝛿) 2𝑁 𝑖 
+
+.
+
+Therefore, 
+
+‖𝐽 𝑖 − 𝐽 ⋆𝑖 ‖2 ≤ √𝐾 max 
+
+> 𝑠∈[𝐾]
+
+|(𝐽 𝑖 )𝑠 − (𝐽 ⋆𝑖 )𝑠 | ≤ √ 𝐾 log (2𝐾/𝛿) 2𝑁 𝑖 
+
+.
+
+Combining the last display with the previous bound yields 
+
+‖̂𝛼 𝑖 − 𝛼 ⋆𝑖 ‖2 ≤ 1𝜆 min 
+
+√𝐾 log (2𝐾/𝛿) 2𝑁 𝑖 
+
+,
+
+which proves the first claim. For the uniform-in-𝑖 bound, apply the same argument together with a union bound over 
+
+𝑖 = 0, … , 𝑚 , and use 𝑁 ∗ = min 0≤𝑖≤𝑚 𝑁 𝑖 .
+
+# B Inference based on estimated weight trajectories 
+
+We now turn to statistical inference and describe how the estimated mixture-weight trajec-tories can be used to compare treatment arms in a randomized clinical trial. For simplicity, suppose that there are two study arms, indexed by 𝑎 ∈ {0, 1} , where 𝑎 = 0 denotes the control group and 𝑎 = 1 the treatment group. Let 𝑛 𝑎 be the number of subjects in the arm 40 𝑎 , with the total sample size 𝑛 = 𝑛 0 + 𝑛 1, and assume that the subjects are independent within and between groups. For subject 𝑝 ∈ [𝑛 𝑎 ] in arm 𝑎 , let ̂𝛼 (𝑝,𝑎) 𝑘 (𝑡), 𝑘 ∈ [𝐾], 𝑡 ∈ [0, 𝑇 ], 
+
+denote the estimated weight trajectory of the mixture component 𝑘 . At any fixed time 𝑡 ,the quantity ̂ 𝛼 (𝑝,𝑎) 𝑘 (𝑡) represents the estimated contribution of component 𝑘 to the subject-specific latent distribution. Consequently, the trajectory 𝑡 ↦̂ 𝛼 (𝑝,𝑎) 𝑘 (𝑡) summarizes how the subject’s distributional profile evolves over time. Comparing these trajectories across treatment arms provides a natural and interpretable way to assess treatment-related dis-tributional differences, while also allowing for heterogeneity within each arm. Let 0 = 𝑡 1 < ⋯ < 𝑡 𝑚 ∈ [0, 𝑇 ] be a common grid of time points at which inference is made. For each component 𝑘 ∈ [𝐾] and time point 𝑡 𝑗 , we consider the two samples 
+
+𝒳 𝑘,𝑗 = {̂𝛼 (𝑝,0) 𝑘 (𝑡 𝑗 ) ∶ 𝑝 ∈ [𝑛 0]} , 𝒴 𝑘,𝑗 = {̂𝛼 (𝑞,1) 𝑘 (𝑡 𝑗 ) ∶ 𝑞 ∈ [𝑛 1]} , 
+
+corresponding to the estimated weights of the component 𝑘 in the control and treatment groups, respectively. To formalize the comparison, let 𝐹 (𝑗) 𝑘,𝑎 denote the distribution of the random mixture coef-ficient 𝛼 𝑘 (𝑡 𝑗 ) in arm 𝑎 . For each (𝑘, 𝑗) , we test the pointwise null hypothesis 
+
+𝐻 0,𝑘,𝑗 ∶ 𝐹 (𝑗) 𝑘,0 = 𝐹 (𝑗) 𝑘,1 .
+
+Equivalently, 
+
+𝐻 0,𝑘,𝑗 ∶ ℒ(𝛼 𝑘 (𝑡 𝑗 ) ∣ 𝑎 = 0) = ℒ(𝛼 𝑘 (𝑡 𝑗 ) ∣ 𝑎 = 1) . 
+
+Thus, under 𝐻 0,𝑘,𝑗 , the distribution of the weight of the 𝑘 th mixture at time 𝑡 𝑗 is the same in the two study arms. This is a fully distributional hypothesis, not merely a comparison of means, and is therefore sensitive to differences in spread, skewness, or multimodality in addition to location shifts. In practice, inference is based on plug-in estimates ̂ 𝛼 (𝑝,𝑎) 𝑘 (𝑡 𝑗 ).41 B.0.0.1 Two-sample MMD statistic. Fix 𝑘 ∈ [𝐾] and 𝑡 𝑗 ∈ [0, 𝑇 ] , and write 
+
+𝑋 𝑝 =̂ 𝛼 (𝑝,0) 𝑘 (𝑡 𝑗 ), 𝑝 = 1, … , 𝑛 0,
+
+and 
+
+𝑌 𝑞 =̂ 𝛼 (𝑞,1) 𝑘 (𝑡 𝑗 ), 𝑞 = 1, … , 𝑛 1.
+
+To compare the distributions of {𝑋 𝑝 }𝑛 0 
+
+> 𝑝=1
+
+and {𝑌 𝑞 }𝑛 1
+
+> 𝑞=1
+
+, we use the maximum mean discrep-ancy (MMD) Gretton et al. (2012) with the Gaussian radial basis function kernel 
+
+𝜅 𝜎 (𝑥, 𝑦) = exp (− ‖𝑥 − 𝑦‖ 22
+
+2𝜎 2 ) , 
+
+where the bandwidth 𝜎 > 0 is selected using the median heuristic on the pooled sample 
+
+𝒳 𝑘,𝑗 ∪ 𝒴 𝑘,𝑗 .The empirical MMD in V-statistic form is ̂
+
+MMD 2𝑘,𝑗 = 1𝑛 20𝑛 0
+
+∑
+
+> 𝑝=1 𝑛 0
+
+∑
+
+> 𝑝 ′=1
+
+𝜅 𝜎 (𝑋 𝑝 , 𝑋 𝑝 ′ ) + 1𝑛 21𝑛 1
+
+∑
+
+> 𝑞=1 𝑛 1
+
+∑
+
+> 𝑞 ′=1
+
+𝜅 𝜎 (𝑌 𝑞 , 𝑌 𝑞 ′ ) − 2𝑛 0𝑛 1𝑛 0
+
+∑
+
+> 𝑝=1 𝑛 1
+
+∑
+
+> 𝑞=1
+
+𝜅 𝜎 (𝑋 𝑝 , 𝑌 𝑞 ). 
+
+We use the scaled statistic 
+
+𝑇 𝑘,𝑗 ≔ 𝑛 0𝑛 1
+
+𝑛 0 + 𝑛 1̂ MMD 2𝑘,𝑗 .
+
+Large values of 𝑇 𝑘,𝑗 indicate stronger evidence against 𝐻 0,𝑘,𝑗 , corresponding to a greater discrepancy between the two arm-specific distributions of 𝛼 𝑘 (𝑡 𝑗 ).
+
+B.0.0.2 Wild bootstrap calibration. 
+
+The null distribution of 𝑇 𝑘,𝑗 is generally not available in closed form, especially in finite sam-ples, and remains difficult to derive even asymptotically under dependence. We therefore approximate it using a multiplier (wild) bootstrap Chwialkowski et al. (2014), following 42 Leucht & Neumann (2013). . Specifically, for each (𝑘, 𝑗) , we generate bootstrap replicates of 𝐵 .
+
+𝑇 ∗(1) 𝑘,𝑗 , … , 𝑇 ∗(𝐵) 𝑘,𝑗 ,
+
+under 𝐻 0,𝑘,𝑗 , where 𝐵 is chosen sufficiently large. The bootstrap 𝑝 -value is then ̂𝑝 𝑘,𝑗 = 1𝐵 
+
+> 𝐵
+
+∑
+
+> 𝑏=1
+
+1{𝑇 ∗(𝑏) 𝑘,𝑗 ≥ 𝑇 𝑘,𝑗 } . 
+
+Hence, ̂ 𝑝 𝑘,𝑗 is the proportion of bootstrap replicas that is at least as large as the observed test statistic. Small values of ̂ 𝑝 𝑘,𝑗 indicate that the observed discrepancy between treatment arms would be unlikely under the null. Consequently, for a nominal significance level 𝛼 ,we reject 𝐻 0,𝑘,𝑗 whenever ̂𝑝 𝑘,𝑗 < 𝛼. 
+
+The appeal of the wild bootstrap in this setting is that it perturbs the statistic through auxiliary mean-zero multipliers while keeping the observed sample fixed. This is particularly convenient for kernel-based statistics such as MMD and is also well suited to extensions in which weak dependence must be taken into account. 
+
+B.0.0.3 Relation to permutation calibration. When observations are independent and identically distributed among subjects at a fixed time point 𝑡 𝑗 , permutation calibration is also valid and may be used as a simpler alternative to calibrate an exact test statistic Lehmann & Romano (2005). We prefer the wild bootstrap because it extends more natu-rally to settings in which a dependence-aware calibration is desired. 
+
+B.0.0.4 Temporal interpretation. Repeating the above test on the time grid 
+
+𝑡 1, … , 𝑡 𝑚 yields, for each component 𝑘 , a sequence of values 𝑝 .
+
+{̂𝑝 𝑘,𝑗 ∶ 𝑗 = 1, … , 𝑚}. 
+
+43 Plotting these values as a function of time produces a significance curve that indicates when the treatment and control groups differ in the distribution of the weight of the 𝑘 th mixture component. In this way, the trajectory 𝑡 ↦ 𝛼 𝑘 (𝑡) serves as an interpretable temporal marker of distributional differences between treatment arms. 44 C Simulation study 
+
+Below, we describe the synthetic data, the competing methods against which we benchmark our proposed approach, and the simulation results. 
+
+C.0.0.1 Data-generating process. Fix 𝑇 = 1 and 𝑑 ≥ 1 . The target density is a 3-component Gaussian mixture with time-varying means and a common time-varying variance: 
+
+𝑓 𝑡 (𝑥) = 13
+
+> 3
+
+∑
+
+> 𝑠=1
+
+𝒩(𝑥 ∣ 𝑚 𝑠 (𝑡), 𝜎 2(𝑡) Id ), (𝑡, 𝑥) ∈ [0, 1] × ℝ 𝑑 , (13) where 𝜎 2(𝑡) = 1 + 𝑡, and 
+
+𝑚 1(𝑡) = −2 + 20𝑡, 𝑚 2(𝑡) = 16𝑡, 𝑚 3(𝑡) = 5 + 6𝑡. (14) If 𝑑 ≥ 2 , then each 𝑚 𝑠 (𝑡) ∈ ℝ 𝑑 has identical coordinates given by (14). This data-generating process design captures both multimodal and unimodal regimes over time. We evaluate the models on the regular grid 𝑡 𝑖 = 𝑖/10 for 𝑖 = 0, … , 10 (yielding 𝑚 + 1 = 11 
+
+time points) and generate 𝐵 = 100 independent replicates. At each 𝑡 𝑖 ∈ 𝜏 𝑚 , we draw 𝑛 
+
+independent observations, with sample sizes 
+
+𝑛 ∈ {20, 50, 100, 200, 300, 500}. 
+
+This simulation scenario is intentionally more general than the working model in Section 3.2, because both the component means and the variance vary with time. It is included to evaluate how well the method approximates smoothly evolving distributions beyond the ideal shared-dictionary setting. 
+
+Competitors 
+
+We compare the proposed estimator with three baselines for estimating the time-indexed density 𝑓 𝑡 from snapshot samples observed on the discrete time grid: 45 (i) a univariate generalized additive model for location, scale, and shape (GAMLSS) Rigby & Stasinopoulos (2005); (ii) a time-conditional kernel density estimator (KDE), see Silverman (1986), Chacón & Duong (2018), Tsybakov (2008); (iii) a conditional masked autoregressive flow (MAF), see Papamakarios et al. (2017, 2021). Hyperparameters for KDE and MAF are reported in Table 2. 
+
+Generalized additive models for location, scale, and shape. We fit a univariate Gaussian distributional regression model with time-varying mean and variance, 
+
+𝑋 𝑡 ∼ 𝒩(𝑚(𝑡), 𝜎 2(𝑡)), 
+
+where 𝑚(⋅) and log 𝜎(⋅) are modeled as smooth spline functions of 𝑡 and estimated using the gamlss package in R, see Rigby & Stasinopoulos (2005). We include this baseline only for 𝑑 = 1 , as multivariate extensions would require additional strong modeling assumptions on the dependence structure. 
+
+Time-conditional kernel density estimator. At each observed time 𝑡 𝑖 ∈ 𝜏 𝑚 , we estimate 𝑓 𝑡 𝑖 using a KDE: 
+
+𝑓 KDE  
+
+> 𝑡 𝑖
+
+(𝑥) = 1𝑁 𝑖 𝑁 𝑖 
+
+∑
+
+> 𝑗=1
+
+𝐾 ℎ𝑖 (𝑥 − 𝑋 𝑡 𝑖 ,𝑗 ) , 𝐾 ℎ(𝑧) = ℎ −𝑑 𝐾(𝑧/ℎ), 
+
+using a Gaussian kernel 𝐾 and Scott’s bandwidth rule for ℎ𝑖 Silverman (1986), Chacón & Duong (2018). For intermediate times 𝑡 ∈ [𝑡 𝑖 , 𝑡 𝑖+1 ], we linearly interpolate the endpoint densities: 
+
+𝑓 KDE  
+
+> 𝑡
+
+(𝑥) ≔ (1 − 𝜆)𝑓 KDE  
+
+> 𝑡 𝑖
+
+(𝑥) + 𝜆𝑓 KDE  
+
+> 𝑡 𝑖+1
+
+(𝑥), 𝜆 = 𝑡 − 𝑡 𝑖 
+
+𝑡 𝑖+1 − 𝑡 𝑖 
+
+.
+
+As a fully nonparametric method, KDE is inherently affected by the curse of dimensionality, see Tsybakov (2008). 46 Masked autoregressive flow. We model 𝑓 𝑡 with a conditional normalizing flow 𝑓 𝜃 (𝑥 ∣ 𝑡) built from an invertible map 𝑥 = Φ 𝜃 (𝑢; 𝑡) with base noise 𝑢 ∼ 𝒩(0, Id ). The conditional density is given by the change-of-variables formula: 
+
+𝑓 𝜃 (𝑥 ∣ 𝑡) = 𝒩 ((Φ 𝜃 )−1 (𝑥; 𝑡) ∣ 0, Id ) ∣ det ∇𝑥 (Φ 𝜃 )−1 (𝑥; 𝑡)∣ . 
+
+In MAF (Papamakarios et al. (2017)), the inverse map is autoregressive (implemented via masked networks), rendering the Jacobian triangular and the log-likelihood tractable. Parameters 𝜃 are learned via conditional maximum likelihood over the full sample 
+
+{(𝑡 𝑖 , 𝑋 𝑡 𝑖 ,𝑗 )} 𝑖,𝑗 , see Papamakarios et al. (2021). 
+
+Results 
+
+We report results for a low-dimensional ( 𝑑 = 1 ) and a higher-dimensional setting ( 𝑑 = 10 ). 
+
+Low dimension ( 𝑑 = 1 ). Figure 6 shows that our model is competitive with the baselines. While MAF can achieve slightly smaller 𝐿 2 errors in certain sample-size regimes, our approach remains accurate while simultaneously providing directly interpretable weight trajectories 𝛼(𝑡) .
+
+High dimension ( 𝑑 = 10 ). Figure 7 shows that our model performs better overall. The KDE performs the worst, which is consistent with its well-known sensitivity to high dimensionality Tsybakov (2008). 47 Figure 6: Pointwise 𝐿 2-error over time for 𝑑 = 1 . We compare our model, KDE, MAF, and GAMLSS. Curves represent averages over 100 independent runs. Errors corresponding to the discrete-time MMD stage are shown as 
+
+> ■
+
+. 𝐿 2-errors are approximated by Monte Carlo integration. 
+
+# D Case study for univariate model with 𝐾 = 3 .
+
+To examine how the analysis changes with fewer mixture components, and thus with re-duced model expressiveness, we applied the method to univariate probability distributions (𝑑 = 1 ) with a smaller number of components, namely 𝐾 = 3 . Overall, the conclusions differ somewhat: (i) statistical power decreases and the differences become more borderline; (ii) the responder analysis becomes more heterogeneous, with fewer clear differences, likely because more components are needed to adequately capture the complexity of glucose dy-namics over time; and (iii) while differences between the densities across treatment arms remain, they appear less substantial than those reported in the main paper. These findings indicate that increasing the number of components in the mixture is important to improve 48 Figure 7: Pointwise 𝐿 2-error over time for 𝑑 = 10 . We compare our model, KDE and MAF. Curves represent averages over 100 independent runs. Errors corresponding to the discrete-time MMD stage are shown as 
+
+> ■
+
+.the expressive capacity of the models and to ensure their practical relevance in this type of digital health application. Taken together, these results support the use of the richer bivariate 𝐾 = 5 representation in the main text. 49 0.0 0.2 0.4 0.6 0.8 1.0Time 0.00.10.20.30.40.50.60.70.8(a) Component 1 0.0 0.2 0.4 0.6 0.8 1.0Time 0.00.10.20.30.40.50.60.70.8 (b) Component 2 0.0 0.2 0.4 0.6 0.8 1.0Time 0.00.10.20.30.40.50.60.70.8 (c) Component 3 
+
+Figure 8: Comparison of weight trajectory dynamics between Treatment (green) and Con-trol (red) groups for the univariate model ( 𝑑 = 1 ) with 𝐾 = 3 mixture components. Each panel shows the evolution of component weights 𝛼 𝑠 (𝑡) between weeks 20–26 over normal-ized time 𝑡 ∈ [0, 1] . Group means are shown as thick dashed lines. The shaded bands represent a statistical envelope around the mean, where darker shading indicates a higher density of trajectories. 0.0 0.2 0.4 0.6 0.8 1.0 
+
+> Time
+> 0.20
+> 0.15
+> 0.10
+> 0.05
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+
+(a) Component 1 0.0 0.2 0.4 0.6 0.8 1.0  
+
+> Time
+> 0.20
+> 0.15
+> 0.10
+> 0.05
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+
+(b) Component 2 0.0 0.2 0.4 0.6 0.8 1.0  
+
+> Time
+> 0.20
+> 0.15
+> 0.10
+> 0.05
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+
+(c) Component 3 
+
+Figure 9: Quantile curves (median and 25%–75% bands) of the change in GMM mixture weights for each of the 𝐾 = 3 components over time, relative to their initial value, for Treatment (green) and Control (red) groups in the univariate model ( 𝑑 = 1 ). Each panel shows the temporal evolution of a component’s weight deviation from baseline. 
+
+# E Implementation details 
+
+We report the main hyperparameters used in our experiments. Unless stated otherwise, we reuse the same settings in simulations and in the diabetes case study. 50 0 100 200 300 400 
+
+> Glucose concentration (mg/dL)
+> 0.000
+> 0.002
+> 0.004
+> 0.006
+> 0.008
+
+(a) Initial (Week 20): Treatment vs. Control 0 100 200 300 400  
+
+> Glucose concentration (mg/dL)
+> 0.000
+> 0.002
+> 0.004
+> 0.006
+> 0.008
+
+(b) Final (Week 26): Treatment vs. Control 0 100 200 300 400  
+
+> Glucose concentration (mg/dL)
+> 0.00075
+> 0.00050
+> 0.00025
+> 0.00000
+> 0.00025
+> 0.00050
+> 0.00075
+> Density difference (final - initial)
+> -8.0
+> -6.0
+> -4.0
+> -2.0
+> 0.0
+> 2.0
+> 4.0
+> 6.0
+> 8.0
+> ×10 4
+
+(c) Difference: Control 0 100 200 300 400   
+
+> Glucose concentration (mg/dL)
+> 0.00075
+> 0.00050
+> 0.00025
+> 0.00000
+> 0.00025
+> 0.00050
+> 0.00075
+> Density difference (final - initial)
+> -8.0
+> -6.0
+> -4.0
+> -2.0
+> 0.0
+> 2.0
+> 4.0
+> 6.0
+> 8.0
+> ×10 4
+
+(d) Difference: Treatment 
+
+Figure 10: Predicted glucose density distributions for the univariate model ( 𝑑 = 1 ) with 
+
+𝐾 = 3 mixture components. The curves represent the marginal density over glucose con-centration, computed as the Fréchet mean (1D Wasserstein barycenter) across individuals within each group. The top row compares the Treatment (green) and Control (red) groups at the initial observation (week 20, left) and final observation (week 26, right). The bottom row displays the difference between the final and initial distributions for the Control group (left) and the Treatment group (right). 51 19 20 21 22 23 24 25 26 
+
+> Weeks
+> 0.001
+> 0.01
+> 0.05
+> 0.1
+> 1
+> p − value
+
+Figure 11: Wild Bootstrap MMD test 𝑝 -values comparing Treatment vs. Control groups over time for the univariate model ( 𝑑 = 1 ) with 𝐾 = 3 mixture components. The dashed black line indicates the significance threshold 𝛼 = 0.05 . The colors correspond to the different components: blue (component 1), orange (component 2), and green (component 3). Table 1: Calibrated global statistics for univariate and bivariate data. 
+
+Univariate ( 𝑑 = 1 )Param. 𝑠 = 1 𝑠 = 2 𝑠 = 3 𝜇 𝑠 109.38 178.38 275.16 𝜎 2𝑠 421.86 613.47 1692.82 
+
+Bivariate ( 𝑑 = 2 )Param. 𝑠 = 1 𝑠 = 2 𝑠 = 3 𝑠 = 4 𝑠 = 5 𝜇 𝑠 
+
+⎡⎢⎢⎣90.74 −0.0081 ⎤⎥⎥⎦⎡⎢⎢⎣129.24 −0.0152 ⎤⎥⎥⎦⎡⎢⎢⎣173.03 −0.0165 ⎤⎥⎥⎦⎡⎢⎢⎣229.53 0.0902 ⎤⎥⎥⎦⎡⎢⎢⎣305.20 −0.1327 ⎤⎥⎥⎦Σ𝑠 
+
+⎡⎢⎢⎣194.95 −0.1161 −0.1161 0.9723 ⎤⎥⎥⎦⎡⎢⎢⎣129.48 0.0554 0.0554 1.0150 ⎤⎥⎥⎦⎡⎢⎢⎣194.27 −0.4217 −0.4217 1.6905 ⎤⎥⎥⎦⎡⎢⎢⎣367.18 0.0451 0.0451 5.8084 ⎤⎥⎥⎦⎡⎢⎢⎣889.62 7.1861 7.1861 5.4221 ⎤⎥⎥⎦
+
+52 Table 2: Hyperparameters for the proposed estimator and baselines. 
+
+Proposed Two-Stage Estimator 
+
+Step 1: per-time MMD mixture fit Step 2: time-series neural ODE fit 
+
+Mixture components ( 𝐾 ) 5 Vector field MLP 2 layers, width 64 Kernel bandwidth ( 𝜎 ) median heuristic Integration horizon ( 𝑇 ) 1.0 Ridge regularization ( 𝜆 ) 10 −2 Solver step size 0.01 Adam learning rate 10 −3 Adam learning rate 10 −3 
+
+Iterations / inner grad. steps 50 / 20 Max epochs 2000 Ridge regularization ( 𝜈 ) 10 −10 
+
+Normalizing Flow Baseline (MAF) 
+
+Context embedding MLP 128 Epochs 50 Flow transform hidden 64 Batch size 64 Blocks (Coupling/AR) 6 Optimizer Adam Stacked blocks 2 Learning rate 10 −3 
+
+Time-Conditional KDE Baseline 
+
+Context embedding MLP 128 Bandwidth selection scott 
+
+53

@@ -1,0 +1,1355 @@
+Title: AutoCSF: Provably Space-Efficient Indexing of Skewed Key-Value Workloads via Filter-Augmented Compressed Static Functions
+
+URL Source: https://arxiv.org/pdf/2603.24882v1
+
+Published Time: Fri, 27 Mar 2026 00:26:55 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# AutoCSF: Provably Space-Efficient Indexing of Skewed Key-Value Workloads via Filter-Augmented Compressed Static Functions 
+
+# David Torres Ramos 
+
+Distill New York, USA detorresramos1@gmail.com 
+
+# Vihan Lakshman 
+
+MIT CSAIL Cambridge, USA vihan@mit.edu 
+
+# Chen Luo 
+
+Amazon Palo Alto, USA cheluo@amazon.com 
+
+# Todd Treangen 
+
+Rice University Houston, USA treangen@rice.edu 
+
+# Benjamin Coleman 
+
+Google DeepMind Mountain View, USA colemanben@google.com 
+
+## Abstract 
+
+We study the problem of building space-efficient, in-memory in-dexes for massive key-value datasets with highly skewed value distributions. This challenge arises in many data-intensive domains and is particularly acute in computational genomics, where 𝑘 -mer count tables can contain billions of entries dominated by a single frequent value. While recent work has proposed to address this problem by augmenting compressed static functions (CSFs) with pre-filters, existing approaches rely on complex heuristics and lack formal guarantees. In this paper, we introduce a principled algo-rithm, called AutoCSF, for combining CSFs with pre-filtering to provably handle skewed distributions with near-optimal space us-age. We improve upon prior CSF pre-filtering constructions by (1) deriving a mathematically rigorous decision criterion for when filter augmentation is beneficial; (2) presenting a general algorith-mic framework for integrating CSFs with modern set membership data structures beyond the classic Bloom filter; and (3) establishing theoretical guarantees on the overall space usage of the resulting in-dexes. Our open-source implementation of AutoCSF demonstrates space savings over baseline methods while maintaining low query latency. 
+
+## 1 Introduction 
+
+Key-value stores are indispensable components of modern data infrastructure. As data volumes continue to balloon in size, there is increasingly a need to design new data structures for key-value lookups with small memory footprints while still enabling fast queries. When the set of key-value pairs is fixed (or changing in-frequently), succinct retrieval data structures have emerged as a state-of-the-art class of techniques for indexing data with minimal space overhead. These retrieval structures offer the guarantee of returning the correct value when queried with any key in the index, but may return arbitrary outputs for any key not in the set. Amongst these succinct retrieval methods, compressed static func-tions (CSFs) achieve space usage proportional to the empirical en-tropy of the value set. Thus, when the list of values in the index is highly repetitive, CSFs can achieve significantly improved com-pression rates compared to distribution-agnostic methods, typically within a constant factor of the information-theoretic lower bound. However, one limitation of CSFs is that, by construction, the index must use a lower bound of at least 1 bit per key. Consequently, if the value distribution is highly skewed, namely when a single value is associated with the majority of the keys, CSFs fall short of achieving optimal compression rates. This barrier is especially prominent in computational genomics where long read 𝑘 -mer count tables, which map keys of 𝑘 -length nucleotide substrings to their frequency of occurrence in a given genome, often exhibit extreme skew with over 90% of 𝑘 -mers having a value of 1. This challenge was previously identified in the literature by Shibuya et al . [27] who proposed a new index called a Bloom-enhanced Compressed Static Function (BCSF) which augments a CSF with a Bloom filter to handle the dominating value. In particular, a BCSF index first inserts all keys not associated with the dominating value into a Bloom filter. Additionally, since Bloom filters admit false positives, the BCSF index will insert the false positive keys associated with the dominating value into the CSF. At query time, given a key 𝑘 , a BCSF first checks if 𝑘 is in the Bloom filter. If the filter returns false, then we can conclude that the associated value must be the dominating entity and simply return that value. If the filter returns true, we query the CSF and return the output. This construction guarantees correctness while eliminating the need to index the dominating value directly. Inspired in part by this work, Hermann et al . [13] also leverage this idea of filter augmentation to develop a learned CSF index that allows for improved compression via machine learning. Despite the effectiveness of filter-augmented CSFs, as demon-strated in these prior works in the literature, these data structure compositions introduce additional complexity. In particular, it is not completely clear which key-value distributions might benefit from filter-augmented CSFs or how to set the false positive rate of the filter to minimize the overall space usage. Unlike standalone approximate set membership data structures, which maintain a monotonic relationship between the false positive rate and the size of the resulting filter, the relationship between the false positive rate and the overall index size in filter-augmented CSFs is complex to model. As an illustrative example, increasing the false positive rate of a filter might allow more values to pass through to the CSF, causing the value frequency distribution to be more closely-aligned to powers of 2 and thus more highly compressible by Huffman codes. While the work of [ 27 ] present a set of criteria for making these parameter choices in a BCSF, they are heuristic-driven as opposed to mathematically principled and, as we will demonstrate in this paper, can be misleading and result in suboptimal decisions. 
+
+> arXiv:2603.24882v1 [cs.DS] 25 Mar 2026 David Torres Ramos, Vihan Lakshman, Chen Luo, Todd Treangen, and Benjamin Coleman
+
+Motivated by these shortcomings, we ask the following research questions: (1) Can we develop a mathematically principled decision cri-terion to determine when a set of key-value pairs would benefit from filter-augmentation to save space versus sim-ply using only a CSF? (2) Given a filter-augmented CSF, can we design an efficient algorithm for determining the optimal parameters for the pre-filter that minimizes the total space usage of the index? (3) Can we design a general framework for Questions (1) and (2) that can be applied to all set membership data structures in the literature, as opposed to just the classical Bloom filter? In this paper, we affirmatively answer all three of these research questions through a single algorithm, which we call AutoCSF. The key insight behind AutoCSF is that while modeling the exact mem-ory cost of a filter-augmented CSF appears to be intractable – or at least unwieldy to analyze – we can derive analytically clean upper and lower bounds on the difference in space usage between a CSF and filter-augmented CSF. In other words, instead of attempting to develop separate cost models for the space usage of a CSF and filter-augmented CSF, we bound the difference in bits per key between the two data structures without ever having to explicitly construct either index . This observation drives the development of our Au-toCSF algorithm, which first determines if filter-augmentation is beneficial and then, if a filter is helpful, provides near-optimal set-tings for the filter parameters. The AutoCSF framework can be applied to any approximate set membership data structure with a known relationship between the memory usage and false posi-tive rate, allowing our results to easily extend to the large number of membership filters that have been developed over the last 50 years [ 1 , 3 , 8 , 9 , 11 , 17 , 20 – 25 , 29 ]. We implement AutoCSF in prac-tice and verify that our theoretical results align closely with empir-ical results (i.e. the bounds are tight), thus providing a principled algorithm to effectively compose CSFs with prefilters. In summary, we make the following contributions 
+
+• We demonstrate that the existing state-of-the-art heuristic-based decision criterion for filter-augmented CSFs (BCSF) can actively degrade performance, recommending filter configurations that increase space usage by up to 1 bit per key relative to a plain CSF (Figure 3). 
+
+• We derive lower and upper bounds on the difference in space usage between a standard CSF and a filter-augmented CSF (Theorems 4.2 and 4.4). The key insight is to bound the cost difference directly using Huffman code optimality, rather than attempting to model the cost of each index inde-pendently. The lower bound yields a provably safe decision criterion: it never recommends a filter that increases space. 
+
+• We present a general algorithmic framework, AutoCSF, for determining when to use a filter-augmented CSF and how 
+
+to set the parameters for the prefilter for space efficiency. AutoCSF applies to any approximate set membership data structure with a known cost-vs-false-positive-rate trade-off, including XOR filters, binary fuse filters, and Bloom filters with arbitrary hash counts. This extends the filter-augmented CSF paradigm beyond the classical Bloom filter used in prior work. In addition, unlike prior approaches, AutoCSF does not require estimating the full value distribu-tion or entropy. Instead, it relies only on the dominant value fraction and a filter cost model, making it both simpler and more robust in practice. 
+
+• We empirically validate 1 that our bounds are tight across three synthetic distributions and five filter types, that the theory-guided parameter selection matches or comes within one discrete step of the empirical optimum, and that Au-toCSF achieves Pareto-optimal memory-latency tradeoffs on real genomics workloads with up to 70 million keys. 
+
+## 2 Related Work 
+
+Succinct retrieval data structures, including CSFs, have garnered intense research interest in the theoretical computer science com-munity for decades. The original CSF constructions involved using a minimal-perfect hash function to index a set of constant-size values, later followed by algorithms that store Huffman codes of the values, and finally culminating in algorithms that compute the Huffman codes of the values through the solution of a randomized binary linear system [2, 7, 18]. This binary, XOR-based system undergoes a phase transition as we reduce the space, and there has been considerable theoret-ical work to migrate from the easier, larger-overhead regime [ 4](where hypergraph peeling solves the system in linear time with high probability) to the minimum-space regime where the system is not easily solvable [ 7 ]. This minimum-space regime was primarily considered a theoretical curiosity and not feasible in practice due to a construction time cubic in the number of keys. The work of [ 10 ]refuted this conventional wisdom by presenting a practical CSF con-struction algorithm that leverages both sophisticated algorithmic techniques, such as lazy Gaussian elimination and hypergraph peel-ing, as well as implementation-level optimizations like broadword programming. Following the pioneering work of Genuzio et al . [10] , which provided the first practically implementable CSF construction, sev-eral works have proposed building data systems with CSFs as the foundational indexing primitive [ 5 , 13 , 27 ]. The most relevant prior work to our contributions in this paper is that of Shibuya et al . [27] who proposed the idea of Bloom-enhanced CSFs to handle skewed value distributions, motivated by the problem of indexing skewed 
+
+𝑘 mer count datasets in computational genomics. Our contributions in this paper directly build off the ideas in [ 27 ]. Specifically, as we discuss further in the next section, the heuristic-driven decision criteria used in [ 27 ] to determine when to apply a Bloom filter and how to set the false positive rate can lead to suboptimal configu-rations in practice. We improve upon this construction with our AutoCSF algorithm. In addition to the work of Shibuya et al . [27] , several other re-cent works have studied CSFs from a practical lens. CARAMEL [ 5 ]explores indexing a multi-set of values for each key via an array of CSFs. More recently, Hermann et al . [13] proposed a learned CSF (LCSF) that combines tools from the rich literature on learned 
+
+> 1Our experimetal code is available at https://github.com/detorresramos/CaramelDB-Benchmarks. AutoCSF: Provably Space-Efficient Indexing of Skewed Key-Value Workloads via Filter-Augmented Compressed Static Functions
+
+index structures [ 16 ] as well as Bloom filter augmentations to re-duce the memory footprint of CSFs even further, though at the cost of increased query latency and long model training times. In this paper, we include an experimental comparison of our proposed AutoCSF framework with LCSF on skewed distributions where we find that we can in fact achieve comparable space savings without the overhead of training a learned model. This result may be of independent interest in demonstrating that learned indexes, despite their power, may provide limited utility in settings where we can analytically model the cost of an index directly. 
+
+## 3 Warmup: The BCSF Algorithm 
+
+In this section, we review the BCSF heuristic introduced by [ 27 ] as the design of this algorithm will motivate our efforts to improve upon it in this paper. Let 𝐾 denote the set of all items in the dataset and let 𝐾 0 denote the set of items with the most common frequency. We have that |𝐾 0 | = 𝛼 |𝐾 | for some 0 ≤ 𝛼 ≤ 1. Our goal is to minimize space by storing the set of non-dominating values in a Bloom filter and the associated counts of these non-dominating values in a CSF (plus the false positives). Assume that the Bloom filter takes 𝐶 𝐵𝐹 log 1 
+
+> 𝜀
+
+bits per key where 
+
+𝜀 denotes the false positive rate. Also assume the CSF takes 𝐶 𝐶𝑆𝐹 
+
+bits per key. The total space usage of this Bloom-enhanced CSF data structure is thus 
+
+𝐶 𝐵𝐹 (1 − 𝛼 )| 𝐾 | log 1
+
+𝜀 + 𝐶 𝐶𝑆𝐹 |𝐾 |(( 1 − 𝛼 ) + 𝜀𝛼 )
+
+where we assume the logarithm is base 2. To determine if we need a Bloom filter, BCSF needs to verify if the following inequality holds 
+
+𝐶 𝐵𝐹 (1 − 𝛼 )| 𝐾 | log 1
+
+𝜀 + 𝐶 𝐶𝑆𝐹 |𝐾 |(( 1 − 𝛼 ) + 𝜀𝛼 ) < 𝐶 𝐶𝑆𝐹 |𝐾 |
+
+We can rewrite this inequality as 
+
+𝐶 𝐵𝐹 
+
+𝐶 𝐶𝑆𝐹 
+
+ 1 − 𝛼 𝛼 
+
+
+
+log 1
+
+𝜀 + 𝜀 < 1
+
+The left-hand side of the previous inequality reaches its mini-mum at 
+
+𝜀 ∗ = 𝐶 𝐵𝐹 
+
+𝐶 𝐶𝑆𝐹 
+
+ 1 − 𝛼 𝛼 
+
+
+
+log 𝑒 
+
+This gives us our decision criteria. We conclude that the Bloom filter helps reduce space if 𝜀 ∗ < 1 and 
+
+𝛼 > 𝐶 𝐵𝐹 log 𝑒 𝐶 𝐶𝑆𝐹 + 𝐶 𝐵𝐹 log 𝑒 
+
+If 𝛼 is sufficiently large, we can then construct a Bloom filter with false positive rate 𝜀 ∗.The question remains: how do we compute 𝐶 𝐵𝐹 and 𝐶 𝐶𝑆𝐹 , the bits-per-key cost of the Bloom filter and the CSF? The BCSF algo-rithm estimates 𝐶 𝐵𝐹 by the theoretical space coefficient of idealized Bloom filters of 1.44. However, this idealized model is not realistic because it assumes the number of hash functions used by filter is continuous as opposed to a discrete parameter, which is the case in practice. In this paper, we explore whether we can do better by having a more accurate Bloom filter cost model. Secondly, the BCSF algorithm, as described in [ 27 ], estimates 𝐶 𝐶𝑆𝐹 in terms of the empirical entropy 𝐻 0, producing the piecewise equation 
+
+𝐶 𝐶𝑆𝐹 =
+
+(
+
+0.22 𝐻 20 + 0.18 𝐻 0 + 1.16 , if 𝐻 0 < 21.1𝐻 0 + 0.2 otherwise However, this CSF cost model is a heuristic and not theoretically principled. In Figure 3 we demonstrate that this heuristic can pro-vide misleading guidance in practice, which motivates our work to design a more principled algorithm with provable guarantees with AutoCSF. The key challenge in designing a principled algorithm is that the cost of the CSF space usage, particularly when coupled with random false positives from the filter, is difficult to model analytically, which is why a data-driven heuristic as in BCSF is a natural choice. However, as we demonstrate in the next section, we can circumvent this difficulty by bounding the difference in cost between a CSF and filter-enhanced CSF as opposed to modeling the cost of each index individually. This insight allows us to derive tight, usable bounds on the bit per key. 
+
+## 4 The AutoCSF Algorithm 
+
+We describe AutoCSF, our new algorithm for filter-enhanced CSFs in Algorithm 1. The algorithm is responsible for making two key design decisions: (1) first determine if a given set of key-value pairs would achieve more compression with filter-augmentation as op-posed to just a standard CSF; and (2) if filter-augmentation helps, set the filter parameters near-optimally. Algorithm 1 is parameterized by a filter bits-per-key cost function 𝑏 (𝜀 ) and can thus be applied to any approximate set membership data structure, including recent powerful techniques like XOR filters [ 11 ] and binary fuse filters [ 12 ] that provide a closed-form cost function 𝑏 (𝜀 ). The crucial step in Algorithm 1 is to optimize a lower bound on the difference in cost between a CSF and filter-enhanced CSF (which we denote as FSF). By maximizing this lower bound in terms of the filter false posi-tive rate 𝜀 , Algorithm 1 aims to find a parameter setting that max-imizes the space savings of using a filter-augmented CSF over a regular CSF. If these savings, even after maximization, are nega-tive, then we conclude that a filter does not help. Otherwise, we build a filter-augmented CSF using the optimal false positive rate 
+
+𝜖 ∗. In the next subsection, we formally prove this lower bound on the bits per key difference in cost between the respective indexes. Then, in the following subsection, we prove an analogous upper bound. Although we do not use the upper bound directly in the AutoCSF algorithm, it is nevertheless a useful theoretical result in establishing the first such bound for this problem. In addition, the upper bound can be used for predicting the maximum possible space savings from a filter-augmented CSF, which can be used for making cost-effective decisions on infrastructure to serve these indexes. 
+
+## 4.1 Proving the Lower Bound 
+
+We will now proceed with proving our lower bound on filter-augmented CSF space savings. Our proof of this bound critically leverages the optimality of Huffman codes. 
+
+Theorem 4.1 (Huffman [14] ). Given frequencies 𝐹 = {𝑓 1, 𝑓 2, ...𝑓 𝑧 }
+
+of values 𝑉 = {𝑣 1, 𝑣 2, ...𝑣 𝑧 } and a Huffman code 𝐻 (𝐹 ) with lengths David Torres Ramos, Vihan Lakshman, Chen Luo, Todd Treangen, and Benjamin Coleman 
+
+Algorithm 1 AutoCSF 
+
+Require: A set of key–value pairs {( 𝑘 𝑖 , 𝑣 𝑖 )} 𝑁 𝑖 =1 with 𝑛 unique val-ues, most frequent token ratio 𝛼 , and a filter cost function 𝑏 (𝜀 )
+
+Ensure: A chosen data structure (CSF or CSF+Filter) built on the full dataset  
+
+> 1:
+
+Compute the optimal 𝜀 by maximizing the equation 
+
+𝜀 ∗ = arg max 
+
+> 𝜀
+
+ 𝛼𝛿 (1 − 𝜀 ) − ( 1 − 𝛼 )𝑏 (𝜀 ) 
+
+> 2:
+
+if 𝛼𝛿 (1 − 𝜀 ∗) − ( 1 − 𝛼 )𝑏 (𝜀 ∗) − 𝑛 /𝑁 > 0 then  
+
+> 3:
+
+Build a CSF+Filter using the optimal false positive rate 𝜀 ★ 
+
+> 4:
+
+else  
+
+> 5:
+
+Build a CSF without a filter  
+
+> 6:
+
+end if 
+
+{𝑙 1, 𝑙 2, ...𝑙 𝑧 }, 𝑧 ∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 𝑖 ≤
+
+> 𝑧
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 ′
+
+> 𝑖
+
+for any other uniquely decodable code with lengths 𝑙 ′ 
+
+> 𝑖
+
+.
+
+Using this foundational result on the optimality of Huffman codes, we now state and prove our new lower bound theorem, which we crucially leverage in the AutoCSF algorithm. 
+
+Theorem 4.2. Let 𝐶 FSF and 𝐶 𝐶𝑆𝐹 denote the memory costs of fil-tered and non-filtered CSFs, where the filter is a set membership oracle with false positive rate 𝜖 that requires 𝑏 (𝜖 ) bits per key. 
+
+(𝐶 CSF − E[𝐶 FSF ]) / 𝑁 ≥ 𝛼𝛿 (1 − 𝜖 ) − ( 1 − 𝛼 )𝑏 (𝜖 ) − 𝑛 /𝑁 
+
+Note that, for practical distributions, the vocabulary size 𝑛 is typically 
+
+𝑜 (𝑁 ), making 𝑛 /𝑁 = 𝑜 (1).
+
+Proof. We suppose that there are 𝑛 unique values, sorted in order of decreasing frequency 𝑉 = {𝑣 0, ...𝑣 𝑛 }. We use 𝑒 to denote the Huffman encoding, 𝑙 𝑖 for the length of the encoding 𝑒 (𝑣 𝑖 ) and 
+
+𝑓 𝑖 for the frequency of 𝑣 𝑖 .
+
+Cost of the CSF: The cost to store a compressed static function of 𝑛 = |𝑉 | distinct values is: 
+
+𝐶 CSF = 𝛿 
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =0
+
+𝑓 𝑖 𝑙 𝑖 + 𝐷 𝑉 + 𝐷 𝑒 
+
+where 𝛿 is a constant that depends on whether 3 or 4 hash functions are used to construct the linear system. With 3 hashes, 
+
+𝛿 3 ≈ 1.089 and with 4 hashes, 𝛿 4 ≈ 1.024 . The canonical Huffman dictionary requires 𝐷 𝑉 space to store the unique values and 𝐷 𝑒 =
+
+𝑛 ⌈log 2 max 𝑖 𝑙 𝑖 ⌉ bits to store the encoding lengths for the set of values. 
+
+Cost of the filtered CSF: When we prefilter the CSF, we remove (some of) the majority keys from the CSF and change the frequency distribution for the Huffman encoding. Specifically, we reduce the frequency of the majority value from 𝑓 0 to 𝑓 ′ 
+
+> 0
+
+, causing the Huffman encoding to change from 𝑒 to 𝑒 ′. Removal of the majority value can potentially update all of the Huffman code lengths, causing them to change from {𝑙 0, ...𝑙 𝑛 } to {𝑙 ′
+
+> 0
+
+, ...𝑙 ′ 
+
+> 𝑛
+
+}. The cost 𝐷 𝑉 to store the vocabulary remains the same. The cost of the prefiltered CSF also includes the cost to store the filter, which is 𝑏 (𝜖 ) multiplied by the number of keys in the filter. 
+
+𝐶 FSF = 𝛿 𝑓 ′ 
+
+> 0
+
+𝑙 ′ 
+
+> 0
+
++ 𝛿 
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 ′ 
+
+> 𝑖
+
++ 𝐷 𝑉 + 𝐷 𝑒 ′ + 𝑏 (𝜖 )( 𝑁 − 𝑓 0)
+
+Here, 𝑓 ′ 
+
+> 0
+
+denotes the number of keys with value 𝑣 0 that erro-neously pass through the filter. We insert (𝑁 − 𝑓 0) minority keys into the filter at a cost of 𝑏 (𝜖 ) bits per key, so the filter overhead is 
+
+𝑏 (𝜖 )( 𝑁 − 𝑓 0).
+
+Bounding the expected cost: We wish to find a lower bound on the performance improvement offered by the filter. Note that because 𝐶 FSF measures the storage cost (entropy), we want 𝐶 FSF <
+
+𝐶 CSF . We will analyze the following expression. 
+
+𝐶 CSF − 𝐶 FSF = 𝛿 
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =0
+
+𝑓 𝑖 𝑙 𝑖 + 𝐷 𝑉 + 𝐷 𝑒 
+
+− 𝛿 𝑓 ′ 
+
+> 0
+
+𝑙 ′ 
+
+> 0
+
++ 𝛿 
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 ′ 
+
+> 𝑖
+
++ 𝐷 𝑉 + 𝐷 𝑒 ′ + 𝑏 (𝜖 )( 𝑁 − 𝑓 0)
+
+!
+
+We may reorganize this expression into the following form. 
+
+𝐶 CSF − 𝐶 FSF = 𝛿 𝑓 0𝑙 0 +
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 𝑖 − 𝑓 ′ 
+
+> 0
+
+𝑙 ′ 
+
+> 0
+
+−
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 ′
+
+> 𝑖
+
+!
+
++ 𝐷 𝑒 − 𝐷 𝑒 ′
+
++ 𝐷 𝑉 − 𝐷 𝑉 
+
+− 𝑏 (𝜖 )( 𝑁 − 𝑓 0)
+
+We will bound each of these terms individually. 
+
+Bounding the Huffman code entropy: To bound the terms involving 𝑓 𝑖 𝑙 𝑖 and 𝑓 𝑖 𝑙 ′ 
+
+> 𝑖
+
+, we use the optimality of Huffman codes. Specifically, we have that 
+
+𝑓 ′ 
+
+> 0
+
+𝑙 ′ 
+
+> 0
+
++
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 ′ 
+
+> 𝑖
+
+≤ 𝑓 ′ 
+
+> 0
+
+𝑙 0 +
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 𝑖 
+
+because the code 𝑒 ′ designed for {𝑓 ′ 
+
+> 0
+
+, 𝑓 1, 𝑓 2, ...𝑓 𝑛 } will have smaller average space than the code 𝑒 designed for 𝐹 = {𝑓 0, 𝑓 1, 𝑓 2, ...𝑓 𝑛 } (by Theorem 4.1). Therefore, 
+
+𝛿 𝑓 0𝑙 0 +
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 𝑖 − 𝑓 ′ 
+
+> 0
+
+𝑙 ′ 
+
+> 0
+
+−
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 ′
+
+> 𝑖
+
+!
+
+≥ 𝑓 0𝑙 0 +
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 𝑖 − 𝑓 ′ 
+
+> 0
+
+𝑙 0 −
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 𝑖 
+
+!
+
+= 𝑙 0 (𝑓 0 − 𝑓 ′ 
+
+> 0
+
+)
+
+Bounding the Huffman codebook size: To bound the size of the difference 𝐷 𝑒 ′ − 𝐷 𝑒 , we rely on some basic properties of canonical Huffman codes. Canonical Huffman codes only need to store the lengths of each code in 𝑒 (𝑉 ) and 𝑒 ′ (𝑉 ), not the codes themselves. Let 𝑙 max = max 𝑖 𝑙 𝑖 and 𝑙 ′ 
+
+> max
+
+= max 𝑖 𝑙 ′ 
+
+> 𝑖
+
+.Then 
+
+𝐷 𝑒 = 𝑛 ⌈log 2 𝑙 max ⌉ 𝐷 𝑒 ′ = 𝑛 ⌈log 2 𝑙 ′
+
+> max
+
+⌉
+
+By replacing 𝑓 0 with 𝑓 ′ 
+
+> 0
+
+, we increase the depth of the Huffman tree for 𝑒 ′ by at most 1. Therefore, 𝑙 ′ 
+
+> max
+
+≤ 𝑙 max + 1. This implies the following bound on the canonical Huffman codebooks. 
+
+𝐷 𝑒 ′ − 𝐷 𝑒 ≤ 𝑛 ⌈log 2 (𝑙 max + 1)⌉ − 𝑧 ⌈log 2 𝑙 max ⌉ ≤ 𝑛 
+
+Taking the expectation: By combining the previous two parts of the proof, we have the bound AutoCSF: Provably Space-Efficient Indexing of Skewed Key-Value Workloads via Filter-Augmented Compressed Static Functions 
+
+𝐶 CSF − 𝐶 FSF ≥ 𝛿𝑙 0 (𝑓 0 − 𝑓 ′ 
+
+> 0
+
+) − 𝑛 − 𝑏 (𝜖 )( 𝑁 − 𝑓 0)
+
+The headroom expression 𝐶 CSF −𝐶 FSF contains 𝑓 ′ 
+
+> 0
+
+, the number of keys with value 𝑣 0 that erroneously pass through the filter. It should be noted that 𝑓 ′ 
+
+> 0
+
+is a random variable, where the randomness comes from the hash functions and other randomization techniques used in the approximate set membership algorithm. Because the set membership algorithm returns a false positive with probability 𝜖 , the expected value of 𝑓 ′ 
+
+> 0
+
+is E[𝑓 ′ 
+
+> 0
+
+] = 𝜖 𝑓 0. Thus we have 
+
+𝐶 CSF − E[𝐶 FSF ] ≥ 𝛿𝑙 0 𝑓 0 (1 − 𝜖 ) − 𝑛 − 𝑏 (𝜖 )( 𝑁 − 𝑓 0)
+
+To complete the proof, we divide both sides of the equation by 
+
+𝑁 , the total number of keys in the key-value store. 
+
+1
+
+𝑁 (𝐶 CSF − E[𝐶 FSF ]) ≥ 𝛿𝑙 0𝛼 (1 − 𝜖 ) − 𝑛 /𝑁 − 𝑏 (𝜖 )( 1 − 𝛼 )
+
+□
+
+## 4.2 Proving the Upper Bound 
+
+Now we develop an upper bound on the memory cost of the filtered CSF relative to the regular CSF. In order to do this, we will leverage an additional result from information theory. The following theo-rem is a well-known consequence of the Kraft-McMillan inequality [15, 19] and the Shannon noiseless coding theorem [6, 26]. 
+
+Theorem 4.3. Given frequencies 𝐹 = {𝑓 1, 𝑓 2, ...𝑓 𝑧 } of values 𝑉 =
+
+{𝑣 1, 𝑣 2, ...𝑣 𝑧 } and a Huffman code 𝐻 (𝐹 ) with lengths {𝑙 1, 𝑙 2, ...𝑙 𝑧 }−
+
+> 𝑧
+
+∑︁ 
+
+> 𝑖 =0
+
+𝑓 𝑖 
+
+𝑁 log 2
+
+𝑓 𝑖 
+
+𝑁 ≤
+
+> 𝑧
+
+∑︁ 
+
+> 𝑖 =0
+
+𝑓 𝑖 
+
+𝑁 𝑙 𝑖 ≤ 1 −
+
+> 𝑧
+
+∑︁ 
+
+> 𝑖 =0
+
+𝑓 𝑖 
+
+𝑁 log 2
+
+𝑓 𝑖 
+
+𝑁 
+
+where 𝑁 = Í𝑧 𝑖 =1 𝑓 𝑖 .
+
+Now, we state and prove our new upper bound result. 
+
+Theorem 4.4. Let 𝐶 FSF and 𝐶 𝐶𝑆𝐹 denote the memory costs of fil-tered and non-filtered CSFs, where the filter is a set membership oracle with false positive rate 𝜖 that requires 𝑏 (𝜖 ) bits per key. 
+
+E[𝐶 CSF − 𝐶 FSF ]/ 𝑁 ≤ 2𝛿 − 12 𝛼𝛿𝜖 + 𝑛 /𝑁 − 𝑏 (𝜖 )( 𝑁 − 𝑓 0)
+
+Proof. We follow the same development as the previous theo-rem, up to the point where we obtain the following cost expression: 
+
+𝐶 CSF − 𝐶 FSF = 𝛿 𝑓 0𝑙 0 +
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 𝑖 − 𝑓 ′ 
+
+> 0
+
+𝑙 ′ 
+
+> 0
+
+−
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 ′
+
+> 𝑖
+
+!
+
++ 𝐷 𝑒 − 𝐷 𝑒 ′
+
++ 𝐷 𝑉 − 𝐷 𝑉 
+
+− 𝑏 (𝜖 )( 𝑁 − 𝑓 0)
+
+Rather than find lower bounds for each term as before, now we will find upper bounds. By replacing 𝑓 0 with 𝑓 ′ 
+
+> 0
+
+, we may decrease the depth of the Huffman tree by at most 1, yielding 𝐷 𝑒 − 𝐷 𝑒 ′ ≤ 𝑛 .As before, we leave the −𝑏 (𝜖 )( 𝑁 − 𝑓 0) term alone, and turn our attention to the more difficult term involving the code lengths. The main idea behind this proof is to use both the upper and lower bounds from Theorem 4.3 to get an upper bound on the difference. Therefore, we use the upper entropy bound for the 𝑓 𝑖 𝑙 𝑖 
+
+terms and the lower entropy bound for the −𝑓 ′ 
+
+> 𝑖
+
+𝑙 ′ 
+
+> 𝑖
+
+terms. 
+
+−
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =0
+
+𝑓 𝑖 
+
+𝑁 log 2
+
+𝑓 𝑖 
+
+𝑁 ≤ 𝑓 0
+
+𝑁 𝑙 0 +
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 
+
+𝑁 𝑙 𝑖 ≤ 1 −
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =0
+
+𝑓 𝑖 
+
+𝑁 log 2
+
+𝑓 𝑖 
+
+𝑁 
+
+This yields the following pair of inequalities. 
+
+𝑓 ′
+
+> 0
+
+𝑁 𝑙 ′ 
+
+> 0
+
++
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 
+
+𝑁 𝑙 ′ 
+
+> 𝑖
+
+≥ − 𝑓 ′
+
+> 0
+
+𝑁 ′ log 2
+
+𝑓 ′
+
+> 𝑖
+
+𝑁 ′ −
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 
+
+𝑁 ′ log 2
+
+𝑓 𝑖 
+
+𝑁 ′
+
+𝑓 ′
+
+> 0
+
+𝑁 𝑙 ′ 
+
+> 0
+
++
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 
+
+𝑁 𝑙 ′ 
+
+> 𝑖
+
+≤ 1 − 𝑓 ′
+
+> 0
+
+𝑁 ′ log 2
+
+𝑓 ′
+
+> 0
+
+𝑁 ′ −
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 
+
+𝑁 ′ log 2
+
+𝑓 𝑖 
+
+𝑁 ′
+
+Note that 𝑁 ′ = 𝑁 − 𝑓 0 + 𝑓 ′ 
+
+> 0
+
+because the two Huffman codes are constructed on different sets: one on the original data and the second on the filtered data. This allows us to bound the following expression: 
+
+𝑍 = 𝑓 0𝑙 0 +
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 𝑖 − 𝑓 ′ 
+
+> 0
+
+𝑙 ′ 
+
+> 0
+
+−
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 𝑙 ′
+
+> 𝑖
+
+≤ 𝑁 − 𝑓 0 log 2
+
+𝑓 0
+
+𝑁 + 𝑓 ′ 
+
+> 0
+
+log 2
+
+𝑓 ′
+
+> 0
+
+𝑁 ′ −
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 
+
+
+
+log 2
+
+𝑓 𝑖 
+
+𝑁 − log 2
+
+𝑓 𝑖 
+
+𝑁 ′
+
+
+
+= 𝑁 − 𝑓 0 log 2
+
+𝑓 0
+
+𝑁 + 𝑓 ′ 
+
+> 0
+
+log 2
+
+𝑓 ′
+
+> 0
+
+𝑁 ′ −
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 
+
+ log 2 𝑁 ′ − log 2 𝑁 
+
+= 𝑁 − 𝑓 0 log 2
+
+𝑓 0
+
+𝑁 + 𝑓 ′ 
+
+> 0
+
+log 2
+
+𝑓 ′
+
+> 0
+
+𝑁 ′ − log 2
+
+ 𝑁 ′
+
+𝑁 
+
+ 𝑛 ∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 
+
+For the 𝑓 ′ 
+
+> 0
+
+log 2 𝑓 ′ 
+
+> 0
+
+/𝑁 ′ term, note that 
+
+𝑓 ′ 
+
+> 0
+
+log 2
+
+𝑓 ′
+
+> 0
+
+𝑁 ′ = 𝑓 ′ 
+
+> 0
+
+log 2
+
+ 𝑓 ′
+
+> 0
+
+𝑁 − 𝑓 0 + 𝑓 ′
+
+> 0
+
+
+
+= 𝑓 ′ 
+
+> 0
+
+log 2
+
+©«
+
+1  
+
+> 𝑁 −𝑓 0
+> 𝑓 ′
+> 0
+
++ 1
+
+ª®¬
+
+= −𝑓 ′ 
+
+> 0
+
+log 2
+
+
+
+1 + 𝑁 − 𝑓 0
+
+𝑓 ′
+
+> 0
+
+
+
+Recall the inequality − ln (1 + 𝑧 ) ≤ − 2𝑧  
+
+> 2+𝑧
+
+for 𝑧 ≥ 0 [ 28 ]. Applying this inequality to our expression with 𝑧 = (𝑁 − 𝑓 0)/ 𝑓 ′ 
+
+> 0
+
+, we obtain 
+
+−𝑓 ′ 
+
+> 0
+
+log 2
+
+
+
+1 + 𝑁 − 𝑓 0
+
+𝑓 ′
+
+> 0
+
+
+
+≤ − 2𝑓 ′
+
+> 0
+
+𝑁 − 𝑓 0
+
+𝑓 ′
+
+> 0
+
+
+
+2 + 𝑁 −𝑓 0 
+
+> 𝑓 ′
+> 0
+
+ = −2𝑓 ′
+
+> 0
+
+𝑁 − 𝑓 0
+
+2𝑓 ′ 
+
+> 0
+
++ 𝑁 − 𝑓 0
+
+≤ − 2𝑓 ′
+
+> 0
+
+𝑁 − 𝑓 0
+
+3𝑁 − 𝑓 0
+
+where the second inequality is because 𝑓 ′ 
+
+> 0
+
+≤ 𝑁 . This leaves us with the overall inequality 
+
+𝑍 ≤ 𝑁 − 𝑓 0 log 2
+
+𝑓 0
+
+𝑁 − 2𝑓 ′
+
+> 0
+
+𝑁 − 𝑓 0
+
+3𝑁 − 𝑓 0
+
+− log 2
+
+ 𝑁 ′
+
+𝑁 
+
+ 𝑛 ∑︁ 
+
+> 𝑖 =1
+
+𝑓 𝑖 
+
+Now we address the − log 2
+
+ 𝑁 ′
+
+> 𝑁
+
+ Í𝑛 𝑖 =1 𝑓 𝑖 term, observing that the function 
+
+− log 2
+
+ 𝑁 ′
+
+𝑁 
+
+
+
+= − log 2
+
+ 𝑁 − 𝑓 0 + 𝑓 ′
+
+> 0
+
+𝑁 
+
+
+
+≤ − log 2
+
+ 𝑁 − 𝑓 0
+
+𝑁 
+
+David Torres Ramos, Vihan Lakshman, Chen Luo, Todd Treangen, and Benjamin Coleman 
+
+because it is a monotonically decreasing function of 𝑓 ′ 
+
+> 0
+
+that attains a maximum at 𝑓 ′ 
+
+> 0
+
+= 0. Finally, note that Í𝑛 𝑖 =1 𝑓 𝑖 = 𝑁 − 𝑓 0 by the definition of 𝑁 , yielding the following overall bounds. 
+
+𝑍 ≤ 𝑁 − 𝑓 0 log 2
+
+𝑓 0
+
+𝑁 − 2𝑓 ′
+
+> 0
+
+𝑁 − 𝑓 0
+
+3𝑁 − 𝑓 0
+
+− log 2
+
+ 𝑁 − 𝑓 0
+
+𝑁 
+
+
+
+(𝑁 − 𝑓 0)
+
+We may reorganize this expression into the following form by reordering terms and using the fact that 𝛼 = 𝑓 0/𝑁 .
+
+𝑍 ≤ 𝑁 − 𝑓 0 log 2 𝛼 − 2𝑓 ′
+
+> 0
+
+1 − 𝛼 
+
+3 − 𝛼 − log 2 (1 − 𝛼 ) ( 𝑁 − 𝑓 0)
+
+By combining this bound with the previous bound on 𝐷 𝑒 − 𝐷 𝑒 ′
+
+we have the following bound on Δ = 𝐶 CSF − 𝐶 FSF 
+
+Δ = 𝛿 
+
+
+
+𝑁 − 𝑓 0 log 2 𝛼 − 2𝑓 ′
+
+> 0
+
+1 − 𝛼 
+
+3 − 𝛼 − ( 𝑁 − 𝑓 0) log 2 (1 − 𝛼 )
+
+
+
++ 𝑛 − 𝑏 (𝜖 )( 𝑁 − 𝑓 0)
+
+Taking the expectation and dividing by 𝑁 , we obtain 
+
+E[Δ]/ 𝑁 ≤ 𝛿 
+
+
+
+1 − 𝛼 log 2 𝛼 − 2𝛼𝜖 1 − 𝛼 
+
+3 − 𝛼 − ( 1 − 𝛼 ) log 2 (1 − 𝛼 )
+
+
+
++ 𝑛 /𝑁 − 𝑏 (𝜖 )( 𝑁 − 𝑓 0)
+
+Observe that −𝛼 log 2 𝛼 − ( 1 − 𝛼 ) log 2 (1 − 𝛼 ) is the entropy of a Bernoulli trial with success rate 𝛼 , which is trivially bounded above by 1 bit. This gives rise to the expression 
+
+E[Δ]/ 𝑁 ≤ 2𝛿 − 2𝛼𝛿𝜖 1 − 𝛼 
+
+3 − 𝛼 + 𝑛 /𝑁 − 𝑏 (𝜖 )( 1 − 𝛼 )
+
+which can be further simplified to 
+
+E[Δ]/ 𝑁 ≤ 2𝛿 − 12 𝛼𝛿𝜖 + 𝑛 /𝑁 − 𝑏 (𝜖 )( 1 − 𝛼 )
+
+□
+
+Putting the two bounds together, 
+
+E[𝐶 CSF − 𝐶 FSF ]/ 𝑁 ≥ 𝛼𝛿 (1 − 𝜖 ) − ( 1 − 𝛼 )𝑏 (𝜖 ) − 𝑛 /𝑁 
+
+E[𝐶 CSF − 𝐶 FSF ]/ 𝑁 ≤ 2𝛿 − 12 𝛼𝜖 − 𝑏 (𝜖 )( 1 − 𝛼 ) + 𝑛 /𝑁 
+
+The gap is 2𝛿 + 12 𝛼𝛿𝜖 − 𝛼𝛿 which is greater than 0. 
+
+## 5 Theory Validation 
+
+The AutoCSF algorithm is based on three theoretical claims: (1) The space savings from filter augmentation are bounded between our lower and upper bounds (Theorems 5.2 and 5.4). (2) The sign of the lower bound provides a reliable decision criterion for when filtering is beneficial. (3) Maximizing the lower bound over the filter’s parameter space yields the parameter with the largest provable space savings. In this section, we evaluate each of these claims empirically. Our goal is to determine whether the bounds are tight enough to be practically useful, whether the decision criterion produces false positives or false negatives, and how much space the theory-guided parameter sacrifices, if any, relative to an exhaustive search over all discrete parameter settings. We construct synthetic key-value datasets that sweep the major-ity fraction 𝛼 from 0.50 to 0.99 and evaluate three minority value distributions that span a range of minority entropy. 
+
+• Unique : each minority key has a distinct value (worst case for the bounds). 
+
+• Zipfian : power-law with exponent 𝑠 = 1.5.
+
+• Uniform-100 : values drawn uniformly from 100 symbols. We evaluated four types of filters: XOR filter, binary fuse filter, and Bloom filters with 𝑘 ∈ { 1, 3} hash functions. Figure 1 shows the results of sweeping 𝛼 for each distribution across all four filter types. Each panel plots four curves: the lower bound (blue dashed), best empirical savings (red dashed), and the upper bound evaluated at the theory-guided parameter (light blue solid) and at the empirical-best parameter (dark blue solid). A verti-cal dashed line marks where the lower bound crosses zero. 
+
+## 5.1 Bound Tightness 
+
+Figure 1 shows four curves per panel. The lower bound (blue dashed) is Theorem 5.2 evaluated at the discrete parameter 𝜀 LB that max-imizes the lower bound. The best empirical curve (red dashed) is the measured bits/key saved at the discrete parameter 𝜀 emp that yields the largest savings, found by exhaustive search over discrete filter parameters. The UB at 𝜀 LB curve (light blue solid) is the upper bound (Theorem 5.4) evaluated at the theory-guided parameter, and the UB at 𝜀 emp curve (dark blue solid) is the upper bound at the empirical-best parameter. A vertical dashed line marks the 𝛼 
+
+value where the lower bound crosses zero, indicating the decision boundary for filter augmentation. We observe that across all filter-distribution combinations and all 50 values of 𝛼 , the empirical savings consistently fall between the lower bound and the upper bound at 𝜀 emp . We note that this is not a formal proof of correctness. The bounds assume a continuous 
+
+𝜀 while the experiments operate over discrete filter parameters, and the measured space includes implementation overheads (metadata, alignment) not captured by the theory. Nonetheless, empirical val-ues stay within the predicted range across all configurations, which provides strong evidence that the bounds are practically valid. The upper bound is looser, with a gap of up to ∼1.5 bits/key at moderate 𝛼 for the unique distribution, and a smaller gap for zipfian and uniform-100. This looseness does not affect AutoCSF’s practical decisions, which are driven entirely by the lower bound. The value of the upper bound is primarily theoretical in establishing, to our knowledge, the first such non-trivial guarantee on the total space savings. This upper bound establishes the current best-known result. A promising direction for future work might be to tighten this bound further, perhaps by making more fine-grained assumptions on the value distribution. 
+
+## 5.2 Validating the Decision Criterion 
+
+To further validate AutoCSF, we sweep the false positive rate 𝜀 
+
+across all discrete filter configurations for each distribution at two values of 𝛼 : 𝛼 = 0.7, where filtering is marginal, and 𝛼 = 0.9, where filtering provides clear benefits. Each panel in Figure 2 sweeps 𝜀 on a log scale and plots the continuous lower and upper bounds (shaded AutoCSF: Provably Space-Efficient Indexing of Skewed Key-Value Workloads via Filter-Augmented Compressed Static Functions 
+
+Figure 1: Results of sweeping 𝛼 for each distribution across all four filter types. Each panel plots the lower bound (blue dashed), best empirical savings (red dashed), and the upper bound at the theory-guided and empirical-best parameters (light and dark blue solid). The vertical dashed line marks where the lower bound crosses zero. 
+
+region). The empirical bits/key saved are overlaid at the discrete 
+
+𝜀 values corresponding to each filter parameter (e.g., fingerprint bits or bits per element), and the theory-optimal 𝜀 ∗ is marked as the continuous maximum of the lower bound. 
+
+Decision criterion. The lower bound crossing zero provides a decision boundary: when LB > 0 at the theory-optimal 𝜀 ∗, AutoCSF recommends filtering; otherwise, it defaults to a plain CSF. Across all filter types, distributions, and 𝛼 values in the alpha sweep, we find that whenever the lower bound recommends filtering, the empirical savings are positive, i.e. the criterion never recommends a filter that increases space. The criterion is conservative, however, for the unique distribution: there is a range of 𝛼 values (roughly 
+
+0.71 –0.80 for XOR) where filtering produces small empirical savings (∼0.05 –0.2 bits/key) but the lower bound remains negative. This gap is driven by the 𝑛 /𝑁 term, which is large for the unique distribution where 𝑛 ≈ 𝑁 (1 − 𝛼 ). For zipfian and uniform-100, where 𝑛 /𝑁 ≈ 0,the lower bound crossing aligns closely with the point at which filtering first becomes empirically helpful. 
+
+Parameter selection. In practice, each filter type admits only a small set of discrete configurations (e.g., fingerprint_bits ∈ { 1, . . . , 8}
+
+for XOR filters, or all (𝑘, bpe ) pairs for Bloom filters), each corre-sponding to a specific 𝜀 . AutoCSF evaluates the lower bound at each available 𝜀 and selects the configuration whose lower bound is largest. This search is inexpensive since the parameter space is small, and it avoids any mismatch between a continuous optimum and the discrete 𝜀 values that filters can actually realize. To evaluate how well the lower bound serves as a proxy for actual savings, we compare the parameter selected by the lower bound against the empirically optimal parameter found by exhaustive search. The two agree in the large majority of cases, and when they disagree it is always by a single discrete step, with the theory-guided parameter saving at most 0.02 bits/key less than the empirical optimum. 
+
+## 5.3 Comparison with Prior Work 
+
+The closest prior work to AutoCSF is the Bloom-enhanced CSF (BCSF) of Shibuya et al. [ 27 ]. Like AutoCSF, their method augments a CSF with a Bloom filter to handle the majority value. Their ap-proach differs from ours in three respects: 
+
+• CSF cost model. They derive the optimal false positive rate 𝜀 ∗ using a heuristic cost model 𝐶 CSF (𝐻 0) fit empirically to observed CSF sizes, rather than from provable bounds. David Torres Ramos, Vihan Lakshman, Chen Luo, Todd Treangen, and Benjamin Coleman 
+
+Figure 2: Results of sweeping 𝜀 for each distribution across all four filter types. AutoCSF: Provably Space-Efficient Indexing of Skewed Key-Value Workloads via Filter-Augmented Compressed Static Functions 
+
+• Bloom filter cost model. Their Bloom filter cost model uses the idealized constant 𝐶 BF = log 2 𝑒 ≈ 1.44 bits per key, which assumes a continuous (real-valued) number of hash functions, rather than a parameterized model that accounts for the discrete choice of hash count 𝑘 and bits per element. 
+
+• Decision criterion. Their method recommends no filter when 𝜀 ∗ ≥ 1, but this criterion is rarely triggered in practice: the heuristic 𝐶 CSF (𝐻 0) produces values large enough that the method recommends filtering even at 𝛼 = 0.50 , where filtering does not reduce space. To compare the two approaches, we restrict AutoCSF to Bloom filters only (selecting the best (𝑘, bpe ) pair via the lower bound) and measure the resulting bits per key across all three distributions. Figure 3 shows the measured bits per key for each method alongside a no-filter baseline. The comparison reveals a clear difference in the decision to filter. At low 𝛼 , the heuristic recommends filter configurations that in-crease space usage relative to a plain CSF, with the heuristic curve exceeding the no-filter baseline by up to 1 bit/key for the unique dis-tribution at 𝛼 = 0.50 . This gap persists across all three distributions up to 𝛼 ≈ 0.7–0.8 depending on the minority entropy. AutoCSF avoids this by defaulting to a plain CSF whenever the lower bound is negative. When filtering is beneficial (roughly 𝛼 ≳ 0.8), both methods achieve comparable space usage, with AutoCSF matching or improving upon the heuristic. These results confirm that Au-toCSF improves upon the heuristic both in the decision of when to apply a filter and in the selection of filter parameters. We restrict both methods to Bloom filters in this comparison for fairness, since the BCSF framework only supports Bloom filters. However, as shown in the alpha sweep experiments, AutoCSF can also leverage XOR filters, binary fuse filters, and other set member-ship structures, which consistently yield further space savings. 
+
+## 6 Experiments 
+
+The previous section validates AutoCSF’s theoretical bounds and decision criterion in isolation. We now evaluate AutoCSF as a com-plete, end-to-end index and compare it against four baselines that span the landscape of practical approaches to static key-value in-dexing. Our goal is to answer three questions: (1) Does AutoCSF’s theory-guided filter selection translate into real space savings over competing methods? (2) What are the latency and construction costs, if any, of filter-augmented CSFs? (3) How do these trade-offs change on real-world workloads where the value distributions are not synthetically controlled? 
+
+## 6.1 Baselines 
+
+We compare AutoCSF against the following methods: 
+
+• BCSF (Shibuya) [27 ]. The Bloom-enhanced CSF described in Section 3. We use Shibuya et al .’s heuristic cost model to set the Bloom filter parameters. This baseline isolates the effect of AutoCSF’s improved parameter selection: both methods use a CSF with a pre-filter, but differ in how the filter parameters are chosen. 
+
+• C++ Hash Table . A standard std::unordered_map stor-ing all key-value pairs. This baseline represents the naive approach with no compression, providing a reference point for memory usage and query latency. 
+
+• MPH Table . A minimal perfect hash function (via Sux4J’s GOV construction [ 10 ]) paired with a compact value array. This is a distribution-agnostic baseline as it does not exploit value skew and its memory usage depends only on the vocabulary size. 
+
+• Learned CSF [ 13 ]. A learned static function that trains a small neural network to predict value distributions from keys. These predictions are used to derive key-specific pre-fix codes, which are stored in a pair of ribbon-based retrieval structures. By learning correlations between keys and val-ues, this method can break the zero-order entropy barrier of standard CSFs, but at the cost of higher query latency and construction time due to model training. 
+
+## 6.2 Setup 
+
+Synthetic datasets. We generate key-value datasets with 𝑁 =
+
+100 ,000 keys, sweeping the majority fraction 𝛼 from 0.50 to 0.99. The majority value is assigned to an 𝛼 -fraction of keys uniformly at random; the remaining (1 − 𝛼 )𝑁 minority keys draw values from one of three distributions: Uniform-100 (100 equally likely symbols), Zipfian (power-law with exponent 𝑠 = 1.5), and Unique 
+
+(every minority key has a distinct value). These distributions span a wide range of minority entropy and stress-test different aspects of each method’s compression strategy. 
+
+Genomics datasets. We evaluate on the three real 𝑘 -mer count datasets used in [ 27 ] derived from whole-genome sequencing data, using 𝑘 = 15 :
+
+• E. coli (Sakai strain): 𝑛 = 5.3M keys, 𝛼 = 0.97 , 42 distinct values. 
+
+• SRR10211353 : 𝑛 = 9.8M keys, 𝛼 = 0.20 , 228 distinct values. 
+
+• C. elegans : 𝑛 = 69 .7M keys, 𝛼 = 0.82 , 760 distinct values. These datasets exhibit the diversity of real genomics workloads: E. coli has extreme skew ( 𝛼 = 0.97 ) with very few distinct values, SRR has low skew ( 𝛼 = 0.20 ) with moderate vocabulary, and C. elegans is a large-scale dataset (70M keys) with intermediate skew. 
+
+Metrics. We report three metrics: memory in bits per key (bpk), 
+
+query latency as the mean inference time per key in nanoseconds, and construction time in seconds. For AutoCSF and BCSF, we use binary fuse filters [ 11 ], which offer lower false positive rates per bit than Bloom filters. 
+
+Learned CSF configuration. We follow the training pipeline of Hermann et al . [13] , sweeping four MLP architectures (linear, one hidden layer with 50 or 100 units, and two hidden layers with 50 units each) with float16 quantization and early stopping. For genomics datasets, we use ordinal 𝑘 -mer encoding as input fea-tures, mapping each nucleotide position to {0, 1, 2, 3}/ 3, since the character-level structure of 𝑘 -mers is learnable unlike the hash-derived features used for synthetic data. The best model is selected by minimum total size (ribbon storage plus model weights). Con-struction time includes both model training and index construction. 
+
+## 6.3 Synthetic Benchmarks 
+
+Pareto frontier. Figure 4 plots memory (bpk) against query la-tency (ns) on log-log axes for all five methods across the three David Torres Ramos, Vihan Lakshman, Chen Luo, Todd Treangen, and Benjamin Coleman 
+
+Figure 3: Results of comparing heuristic and AutoCSF cost models 
+
+synthetic distributions plus genomics data. Each method traces a trajectory as 𝛼 sweeps from 0.5 to 0.99; larger markers highlight 
+
+𝛼 ∈ { 0.5, 0.8, 0.95 }.Several patterns emerge from the Pareto plot. AutoCSF and BCSF consistently occupy the lower-left corner of the Pareto frontier—low memory and low latency—across all three distributions. The hash table offers competitive latency (107–204 ns) but does not compress the data. MPH Table uses 7–70 × more memory than AutoCSF and its latency is 10–20 × higher. Learned CSF achieves tighter memory than AutoCSF on Uniform-100 at all 𝛼 values (e.g., 4.4 vs. 5.2 bpk at 
+
+𝛼 = 0.5) and on Unique at low-to-moderate 𝛼 (e.g., 11.4 vs. 26.3 bpk at 𝛼 = 0.5), but at 2–4 orders of magnitude higher query latency. On Zipfian, AutoCSF achieves lower memory than Learned CSF at all 𝛼 values. The log-log scale in Figure 4 is necessary to display these extremes on the same axes. The Unique distribution is the hardest case for all methods: at 
+
+𝛼 = 0.5, half the keys have distinct values, so the CSF must store nearly log 2 (𝑁 /2) ≈ 16 bits of entropy per minority key. Learned CSF achieves 11.4 bpk versus AutoCSF’s 26.3 bpk, demonstrating that a trained model can significantly reduce effective entropy when the value space is large. However, this comes at extreme cost: 4.0M ns query latency ( 34 ,000 × slower than AutoCSF’s 116 ns) and 983 seconds to construct ( 15 ,000 × slower). At higher skew (𝛼 = 0.95 ), AutoCSF overtakes Learned CSF in memory (2.7 vs. 3.5 bpk) while maintaining 3,000 × faster queries. 
+
+Construction time. Table 1 reports memory, latency, and con-struction time for all five methods at 𝛼 ∈ { 0.5, 0.8, 0.95 }. AutoCSF and BCSF build in under 0.1 seconds across all configurations. C++ Hash Table is the fastest to construct ( ∼0.006 s). MPH Table builds in 0.4–0.6 seconds. Learned CSF is the most expensive to build: 5– 983 seconds depending on distribution complexity, with the Unique distribution requiring over 16 minutes at 𝛼 = 0.5. At 𝛼 = 0.95 on Uniform-100, where Learned CSF’s memory advantage over Au-toCSF is only 0.1 bpk, it takes 440 × longer to construct (5.7 s vs. 0.013 s). 
+
+## 6.4 Genomics Benchmarks 
+
+Table 2 reports results on the three genomics datasets. The datasets span a wide range of skew: E. coli is highly skewed ( 𝛼 = 0.97 ), C. elegans has moderate skew ( 𝛼 = 0.82 ), and SRR has low skew (𝛼 = 0.20 ). This diversity tests whether AutoCSF’s decision criterion correctly adapts its strategy to the data. On E. coli, where 𝛼 = 0.97 , AutoCSF achieves 0.31 bpk, less than one-third of a bit per key to index 5.3 million 𝑘 -mers. This is 37 ×
+
+smaller than MPH Table (11.55 bpk). Learned CSF is competitive in memory (0.32 bpk) but requires 161 seconds to build versus AutoCSF’s 0.2 seconds ( 805 × slower) and has 85 × higher query latency (7,843 ns vs. 92 ns). The SRR dataset ( 𝛼 = 0.20 ) represents a case where filter aug-mentation is not beneficial. AutoCSF correctly defaults to a plain CSF, achieving 4.21 bpk with 443 ns query latency. Learned CSF achieves the best memory (3.49 bpk) but at a cost: 677 seconds to build ( 294 × slower than AutoCSF) and 72 × higher query latency (31,811 ns vs. 443 ns). On C. elegans ( 𝑛 = 69 .7M, 𝛼 = 0.82 ), AutoCSF scales to the largest dataset while maintaining its advantages: 1.26 bpk with 466 ns latency and a 6.6-second build time. For context, this means the entire 70-million-entry 𝑘 -mer count table is indexed in approxi-mately 11 MB of memory. MPH Table would require 100.6 MB for the same data. Learned CSF uses 1.68 bpk (33% more memory than AutoCSF) with 29,558 ns latency ( 63 × slower) and requires over 76 minutes to build. 
+
+## 6.5 Discussion 
+
+Across all experiments, a consistent picture emerges. AutoCSF domi-nates the Pareto frontier of memory versus latency, especially when the majority fraction 𝛼 is moderate to high ( ≳ 0.7). The margin over heuristic construction is modest (up to 11% in memory) but systematic, confirming that the theory-guided parameter selection from Section 4 translates to measurable improvements in practice over the heuristic approach. The comparison with Learned CSF is particularly instructive. Learned CSF can achieve tighter compression than AutoCSF in several regimes: it consistently uses less memory on Uniform-100, and on Unique it achieves substantially lower bits per key at low-to-moderate 𝛼 (e.g., 11.4 vs. 26.3 bpk at 𝛼 = 0.5), demonstrating that a trained model can exploit distributional structure beyond what a static Huffman code captures. However, these memory sav-ings come at 2–4 orders of magnitude higher query latency due to per-key neural network inference, and construction times ranging AutoCSF: Provably Space-Efficient Indexing of Skewed Key-Value Workloads via Filter-Augmented Compressed Static Functions 
+
+Figure 4: Memory–latency Pareto frontier across synthetic distributions and genomics datasets ( 𝑁 = 100 ,000 for synthetic, real sizes for genomics). Each trajectory sweeps 𝛼 from 0.5 (right, more memory) to 0.99 (left, less memory). Log-log scale. 
+
+𝛼 =0.5 𝛼 =0.8 𝛼 =0.95 
+
+Method bpk query (ns) build (s) bpk query (ns) build (s) bpk query (ns) build (s) 
+
+Uniform-100 
+
+AutoCSF 5.2 92 0.030 2.5 116 0.030 0.8 78 0.013 BCSF (Shibuya) 5.5 95 0.028 2.7 120 0.020 0.8 87 0.008 C++ Hash Table 95.1 150 0.006 95.1 121 0.006 95.1 157 0.007 
+
+MPH Table 35.0 1412 0.569 49.0 1505 0.438 55.9 1551 0.572 Learned CSF 4.4 6435 5.173 2.2 6160 5.480 0.7 3199 5.733 
+
+Zipfian 
+
+AutoCSF 4.6 98 0.025 2.3 95 0.014 0.8 78 0.007 BCSF (Shibuya) 4.9 93 0.026 2.4 90 0.013 0.8 94 0.008 C++ Hash Table 95.1 111 0.006 95.1 142 0.006 95.1 107 0.006 
+
+MPH Table 35.4 1195 0.569 49.2 1344 0.490 56.0 1323 0.470 Learned CSF 4.9 76811 32.064 2.4 39387 22.474 1.4 13530 13.284 
+
+Unique 
+
+AutoCSF 26.3 116 0.067 10.6 103 0.032 2.7 79 0.012 BCSF (Shibuya) 27.3 101 0.057 11.0 93 0.026 2.7 88 0.012 C++ Hash Table 95.1 114 0.007 95.1 204 0.006 95.1 171 0.006 
+
+MPH Table 43.9 1363 0.496 52.2 1236 0.487 56.4 1390 0.472 Learned CSF 11.4 3997545 983.000 6.9 1431918 359.657 3.5 243241 85.772 
+
+Table 1: Synthetic benchmark results ( 𝑁 = 100 ,000 ). Memory in bits/key (bpk), query latency in nanoseconds (ns), and construction time in seconds. Bold indicates best in each column. 
+
+from seconds to over 16 minutes due to model training. On Zip-fian distributions, where the value distribution follows a smoother power law, AutoCSF achieves lower memory than Learned CSF at all 𝛼 values without any training overhead. These results suggest that learned approaches offer genuine compression advantages in specific regimes, but for practical deployments where query latency and build time are important, AutoCSF provides a more favorable overall tradeoff. 
+
+## 7 Conclusion 
+
+We presented AutoCSF, a novel, theoretically principled algorithm that determines both when to augment a compressed static function with an approximate set membership data structure and how to optimally set the parameters for this index to enable fast key-value lookups with a small memory footprint. While the idea of augment-ing a CSF with a filter was previously proposed in the literature [ 27 ], the existing state of the art relied on data-driven heuristics, which, as we showed in this paper, can provide misleading guidance in practice. The core innovation in AutoCSF is the development of novel lower and upper bounds on the difference in cost between David Torres Ramos, Vihan Lakshman, Chen Luo, Todd Treangen, and Benjamin Coleman 
+
+E. coli ( 𝑁 =5.3M, 𝛼 =0.97) SRR ( 𝑁 =9.8M, 𝛼 =0.20) C. elegans ( 𝑁 =69.7M, 𝛼 =0.82) Method bpk query (ns) build (s) bpk query (ns) build (s) bpk query (ns) build (s) AutoCSF 0.31 92 0.2 4.21 443 2.3 1.26 466 6.6 
+
+BCSF (Shibuya) 0.35 126 0.3 4.24 355 2.3 1.39 274 7.0 C++ Hash Table 152.00 488 0.8 152.00 742 1.5 152.00 1034 15.2 MPH Table 11.55 1666 8.1 11.55 1716 13.6 11.55 2054 136.3 Learned CSF 0.32 7843 161.0 3.49 31811 676.9 1.68 29558 4573.5 
+
+Table 2: Genomics benchmark results. Memory in bits/key (bpk), query latency in nanoseconds (ns), and construction time in seconds. Bold indicates best in each column. 
+
+a CSF and filter-augmented CSF, using mathematical tools from information theory. We validate that our theoretical results closely align with empirical observations and provide accurate guidance in parameter selection for practitioners. We also compare AutoCSF to other succinct retrieval systems in the literature, such as BCSF and Learned CSF, on both synthetic and real genomics workloads where we find that AutoCSF provides a Pareto-optimal tradeoff in query latency and memory footprint while maintaining low index build times. 
+
+## Acknowledgements 
+
+We thank Bryce Kille for valuable discussions on early drafts of this work. This material is based upon work supported by the U.S. National Sci-ence Foundation under Grant No. 2313998. Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the U.S. National Science Foundation. 
+
+## References 
+
+[1] Paulo Sérgio Almeida, Carlos Baquero, Nuno Preguiça, and David Hutchison. 2007. Scalable bloom filters. Inform. Process. Lett. 101, 6 (2007), 255–261. [2] Djamal Belazzougui and Rossano Venturini. 2013. Compressed static functions with applications. In Proceedings of the Twenty-Fourth Annual ACM-SIAM Sym-posium on Discrete Algorithms . SIAM, 229–240. [3] Burton H Bloom. 1970. Space/time trade-offs in hash coding with allowable errors. Commun. ACM 13, 7 (1970), 422–426. [4] Fabiano C Botelho, Rasmus Pagh, and Nivio Ziviani. 2013. Practical perfect hashing in nearly optimal space. Information Systems 38, 1 (2013), 108–131. [5] Benjamin Coleman, David Torres Ramos, Vihan Lakshman, Chen Luo, and An-shumali Shrivastava. 2023. CARAMEL: A Succinct Read-Only Lookup Table via Compressed Static Functions. arXiv preprint arXiv:2305.16545 (2023). [6] Thomas M Cover. 1999. Elements of information theory . John Wiley & Sons. [7] Martin Dietzfelbinger and Rasmus Pagh. 2008. Succinct data structures for retrieval and approximate membership. In International Colloquium on Automata, Languages, and Programming . Springer, 385–396. [8] Peter C. Dillinger, Lorenz Hübschle-Schneider, Peter Sanders, and Stefan Walzer. 2022. Fast Succinct Retrieval and Approximate Membership using Ribbon. In 
+
+20th International Symposium on Experimental Algorithms (SEA 2022) . 4:1–4:20. https://doi.org/10.4230/LIPIcs.SEA.2022.4 [9] Bin Fan, Dave G Andersen, Michael Kaminsky, and Michael D Mitzenmacher. 2014. Cuckoo filter: Practically better than bloom. In Proceedings of the 10th ACM International on Conference on emerging Networking Experiments and Technologies .75–88. [10] Marco Genuzio, Giuseppe Ottaviano, and Sebastiano Vigna. 2020. Fast scalable construction of ([compressed] static| minimal perfect hash) functions. Informa-tion and Computation 273 (2020), 104517. [11] Thomas Mueller Graf and Daniel Lemire. 2020. Xor filters: Faster and smaller than bloom and cuckoo filters. Journal of Experimental Algorithmics (JEA) 25 (2020), 1–16. [12] Thomas Mueller Graf and Daniel Lemire. 2022. Binary fuse filters: Fast and smaller than xor filters. Journal of Experimental Algorithmics (JEA) 27, 1 (2022), 1–15. [13] Stefan Hermann, Hans-Peter Lehmann, Giorgio Vinciguerra, and Stefan Walzer. 2025. Learned Static Function Data Structures. arXiv preprint arXiv:2510.27588 
+
+(2025). [14] David A Huffman. 1952. A method for the construction of minimum-redundancy codes. Proceedings of the IRE 40, 9 (1952), 1098–1101. [15] Leon Gordon Kraft. 1949. A device for quantizing, grouping, and coding amplitude-modulated pulses . Ph.D. Dissertation. Massachusetts Institute of Technology. [16] Tim Kraska, Alex Beutel, Ed H Chi, Jeffrey Dean, and Neoklis Polyzotis. 2018. The case for learned index structures. In Proceedings of the 2018 international conference on management of data . 489–504. [17] Qiyu Liu, Libin Zheng, Yanyan Shen, and Lei Chen. 2020. Stable learned bloom filters for data streams. Proceedings of the VLDB Endowment 13, 12 (2020), 2355– 2367. [18] Bohdan S Majewski, Nicholas C Wormald, George Havas, and Zbigniew J Czech. 1996. A family of perfect hashing methods. Comput. J. 39, 6 (1996), 547–554. [19] Brockway McMillan. 1956. Two inequalities implied by unique decipherability. 
+
+IRE Transactions on Information Theory 2, 4 (1956), 115–116. [20] Michael Mitzenmacher. 2001. Compressed bloom filters. In Proceedings of the twentieth annual ACM symposium on Principles of distributed computing . 144–150. [21] Michael Mitzenmacher. 2018. A model for learned bloom filters and optimizing by sandwiching. Advances in Neural Information Processing Systems 31 (2018). [22] Michael Mitzenmacher, Salvatore Pontarelli, and Pedro Reviriego. 2020. Adaptive cuckoo filters. [23] David Pellow, Darya Filippova, and Carl Kingsford. 2017. Improving Bloom filter performance on sequence data using k-mer Bloom filters. Journal of Computational Biology 24, 6 (2017), 547–557. [24] Ely Porat. 2009. An optimal Bloom filter replacement based on matrix solving. In International Computer Science Symposium in Russia . Springer, 263–273. [25] Atsuki Sato and Yusuke Matsui. 2023. Fast partitioned learned bloom filter. 
+
+Advances in Neural Information Processing Systems 36 (2023), 39119–39146. [26] Claude Elwood Shannon. 1948. A mathematical theory of communication. The Bell system technical journal 27, 3 (1948), 379–423. [27] Yoshihiro Shibuya, Djamal Belazzougui, and Gregory Kucherov. 2022. Space-efficient representation of genomic k-mer count tables. Algorithms for Molecular Biology 17, 1 (2022), 1–15. [28] Flemming Topsøe. 2004. Some bounds for the logarithmic function. RGMIA Res. Rep. Collection 7, 2 (2004), 1–20. [29] Kapil Vaidya, Eric Knorr, Tim Kraska, and Michael Mitzenmacher. 2020. Parti-tioned learned bloom filter. arXiv preprint arXiv:2006.03176 (2020).

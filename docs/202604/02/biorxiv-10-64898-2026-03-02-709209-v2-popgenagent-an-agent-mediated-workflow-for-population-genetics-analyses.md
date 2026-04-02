@@ -1,0 +1,20 @@
+---
+title: "PopGenAgent: An Agent-Mediated Workflow for Population Genetics Analyses"
+authors: "su, h., Long, W., Feng, J., Hou, Y., Zhang, Y."
+date: 2026-04-01
+pdf: "https://www.biorxiv.org/content/10.64898/2026.03.02.709209v2.full.pdf"
+tags: ["query:med-ai"]
+score: 9.0
+evidence: 用于基因组分析的智能体介导工作流
+tldr: PopGenAgent利用智能体工作流自动化和管理复杂的群体遗传学分析任务。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-02-709209-v2/fig-001.webp\", \"caption\": \"Figure 1 Overview of PopGenAgent. PopGenAgent uses an agent-mediated interface to translate an analysis goal and genotype dataset into an explicit multi-step plan assembled from curated templates. Steps are executed via external analysis tools and plotting scripts, while intermediate and final artefacts are organized for inspection and revision within the same analysis context. The agent can also provide workflow-oriented assistance, including, when configured, literature-backed Q&A and Markdown report drafting grounded in the saved outputs.\", \"page\": 2, \"index\": 1, \"width\": 1056, \"height\": 597}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-02-709209-v2/fig-002.webp\", \"caption\": \"Figure 2 Summary statistics from the 1000 Genomes example analysis. (a) Observed heterozygosity distribution across populations. (b) Observed versus expected heterozygosity across populations. (c) Inbreeding coefficient (F ) distribution across populations. (d) Distribution of total ROH length and ROH segment count across populations. (e) Genome-wide LD decay curves across populations. (f) Representative f3 statistics for selected population triplets.\", \"page\": 4, \"index\": 2, \"width\": 1056, \"height\": 884}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-02-709209-v2/fig-003.webp\", \"caption\": \"Figure 3 Population-structure and graph-based outputs from the 1000 Genomes example analysis. (a) Principal component analysis (PCA) shown as pairwise projections of the first three principal components with variance explained on each axis. (b) TreeMix log-likelihood as a function of the number of migration edges (m) with YRI used as the outgroup for rooting. (c) ADMIXTURE cross-validation error across candidate numbers of clusters (K). (d) Population-level clustering dendrogram derived from the mean coordinates of the first five PCs (see Methods). (e) TreeMix residual covariance matrix for the fitted model shown in panel (f). (f) Example fitted TreeMix graph with migration edges. (g) ADMIXTURE ancestry proportions for K = 5.\", \"page\": 5, \"index\": 3, \"width\": 1057, \"height\": 1207}]"
+motivation: 用于基因组分析的智能体介导工作流。
+method: 方法与实现细节请参考摘要与正文。
+result: 结果与对比结论请参考摘要与正文。
+conclusion: 总体而言，该工作在所述任务上展示了有效性，并提供了可复用的思路或工具。
+---
+
+## Abstract
+Population genetics analyses typically require orchestrating multiple tools across heterogeneous tasks, from data curation to inference and visualization. In practice, a central bottleneck lies not only in reproducibility, but in maintaining consistency between intermediate diagnostics, analytical decisions, and downstream results as analyses evolve. Here we present PopGenAgent, an agentic workflow that formalizes population-genetic analyses as explicit, multi-step plans with declared inputs, outputs, and dependencies. Each step is instantiated from curated tool and visualization templates, while all intermediate artefacts are preserved within a unified, inspectable context. An interactive agent interface supports iterative plan construction and revision, and leverages accumulated outputs to assist interpretation and report drafting. In a case study of 26 populations from the 1000 Genomes Project, starting from a filtered PLINK dataset, PopGenAgent coordinated analyses including ROH, LD decay, PCA, ADMIXTURE, TreeMix, and $f_3$. By structuring analyses as explicit, revisable plans with preserved intermediate states, PopGenAgent provides a transparent and extensible environment for conducting population-genetic analyses.

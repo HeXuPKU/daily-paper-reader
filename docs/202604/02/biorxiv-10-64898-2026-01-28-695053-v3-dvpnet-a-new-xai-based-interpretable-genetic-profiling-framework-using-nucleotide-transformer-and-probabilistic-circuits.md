@@ -1,0 +1,22 @@
+---
+title: "DVPNet: A New XAI-Based Interpretable Genetic Profiling Framework Using Nucleotide Transformer and Probabilistic Circuits"
+authors: "Kusumoto, T."
+date: 2026-03-25
+pdf: "https://www.biorxiv.org/content/10.64898/2026.01.28.695053v3.full.pdf"
+tags: ["query:med-ai"]
+score: 9.0
+evidence: 使用 Nucleotide Transformer 基础模型的遗传分析框架
+tldr: DVPNet 将 Nucleotide Transformer 与概率电路结合，用于可解释的遗传分析。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-28-695053-v3/fig-001.webp\", \"caption\": \"Table 2: Representative GO enrichment terms (top5) for each module (ordered by S(genes | all samples) descending).\", \"page\": 11, \"index\": 1, \"width\": 1010, \"height\": 1396}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-28-695053-v3/fig-002.webp\", \"caption\": \"Table 5: Bottom GO terms by S(mean)\", \"page\": 15, \"index\": 2, \"width\": 1064, \"height\": 1264}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-28-695053-v3/fig-003.webp\", \"caption\": \"Figure 1: Overall experimental workflow: (a) Sample preparation using the Nucleotide Transformer, and (b) model training and extraction of gene-wise probabilistic contributions for each sample.\", \"page\": 3, \"index\": 3, \"width\": 852, \"height\": 1200}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-28-695053-v3/fig-004.webp\", \"caption\": \"Table 7: Top 100 genes among the 1,524 genes exhibiting contradictory count–score pairs.\", \"page\": 18, \"index\": 4, \"width\": 1064, \"height\": 1264}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-28-695053-v3/fig-005.webp\", \"caption\": \"Table 3: Top GO terms by S(mean)\", \"page\": 13, \"index\": 5, \"width\": 1064, \"height\": 1264}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-28-695053-v3/fig-006.webp\", \"caption\": \"Table 8: Bottom 100 genes among the 1,524 genes exhibiting contradictory count–score pairs. $\", \"page\": 19, \"index\": 6, \"width\": 1064, \"height\": 1264}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-28-695053-v3/fig-007.webp\", \"caption\": \"Figure 2: Relationship between label-wise gene occurrence count differences and the mean probabilistic contribution score S(gene). Pearson’s r and Spearman’s ρ are reported in the plot.\", \"page\": 9, \"index\": 7, \"width\": 940, \"height\": 866}]"
+motivation: 使用 Nucleotide Transformer 基础模型的遗传分析框架。
+method: 方法与实现细节请参考摘要与正文。
+result: 结果与对比结论请参考摘要与正文。
+conclusion: 总体而言，该工作在所述任务上展示了有效性，并提供了可复用的思路或工具。
+---
+
+## Abstract
+In this study, we present an XAI-based genetic profiling framework that quantifies gene importance for distinguishing cancer cells from normal cells based on an interpretable AI decision process. We propose a new explainable AI (XAI) classification model that combines probabilistic circuits with the Nucleotide Transformer. By leveraging the strong feature-extraction capability of the Nucleotide Transformer, we design a tractable classification framework based on probabilistic circuits while preserving probabilistic interpretability.
+
+To demonstrate the capability of this framework, we used the GSE131907 single-cell lung cancer atlas and constructed a dataset consisting of cancer-cell and normal-cell classes. From each sample, 900 gene types were randomly selected and converted into embedding vectors using the Nucleotide Transformer, after which the classification model was trained. We then extracted class-specific probabilistic contributions from the tractable model and defined a contribution score for the cancer-cell class. Genetic profiling was performed based on these scores, providing insights into which genes and biological pathways are most important for the classification task. Notably, 1,524 of the 9,540 observed genes showed contribution scores that contradicted what would be expected from their class-wise occurrence frequencies, suggesting that the profiling goes beyond simple statistics by leveraging biological feature representations encoded by the Nucleotide Transformer. The top-ranked genes among these contradictory cases include several well-studied genes in cancer research (e.g., ITGA5, SIGLEC9, NOTUM, and TP73). Overall, these analyses go beyond traditional statistical or gene-expression-level approaches and provide new academic insights for genetic research.
