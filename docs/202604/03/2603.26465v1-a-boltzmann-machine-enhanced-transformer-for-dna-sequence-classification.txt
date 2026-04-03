@@ -1,0 +1,1052 @@
+Title: A Boltzmann-machine-enhanced Transformer For DNA Sequence Classification
+
+URL Source: https://arxiv.org/pdf/2603.26465v1
+
+Published Time: Mon, 30 Mar 2026 01:22:45 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# A B OLTZMANN -M ACHINE -E NHANCED TRANSFORMER FOR DNA SEQUENCE CLASSIFICATION 
+
+Zhixuan Cao 
+
+Tsinghua University 
+
+czx666666nnn@163.com 
+
+Yishu Xu 
+
+University of California, Berkeley 
+
+kris-xu111shu@berkeley.edu 
+
+Xuang Wu 
+
+Tsinghua University 
+
+wxa22@mails.tsinghua.edu.cn 
+
+# ABSTRACT 
+
+DNA sequence classification requires not only strong predictive accuracy but also the ability to reveal latent site interactions, combinatorial regulation, and epistasis-like higher-order dependencies. Although the standard Transformer provides powerful global modeling capacity, its softmax attention is continuous, dense, and only weakly constrained; it is therefore better interpreted as an information routing mechanism than as an explicit structure discovery process. In this paper, we propose a Boltzmann-machine-enhanced Transformer for DNA sequence classification. Building on standard multi-head attention, we introduce structured binary gating variables to represent latent query–key connections and impose priors over these connections through a Boltzmann-style energy function. Specifically, query–key similarity defines local bias terms, learnable pairwise interactions capture synergy and competition between edges, and explicit latent hidden units model higher-order combi-natorial dependencies. Because exact posterior inference over discrete gating graphs is intractable, we adopt mean-field variational inference to estimate the approximate activation probability of each edge, and then combine it with Gumbel-Softmax to gradually compress continuous probabilities into near-discrete gates while preserving end-to-end differentiability. During training, we jointly optimize a classification loss and an energy loss so that the model not only predicts accurately but also prefers lower-energy, more stable, and more interpretable structures. We further provide a complete derivation from the energy function and variational free energy to mean-field fixed-point equations, Gumbel-Softmax relaxation, and the final joint objective. This framework offers a unified view of integrating Boltzmann machines, differentiable discrete optimization, and Transformers, and suggests a new direction for structured deep learning on biological sequences. 
+
+Keywords DNA sequence classification · Transformer · Boltzmann machine · mean-field inference · Gumbel-Softmax ·
+
+structured attention · epistasis 
+
+# 1 Introduction 
+
+DNA sequences contain abundant local motifs, long-range interactions, and higher-order combinatorial regulatory patterns. These properties jointly determine the difficulty of tasks such as regulatory element identification, transcription factor binding prediction, and sequence function classification. In recent years, deep learning has become the dominant paradigm for such problems, especially because it exhibits strong representation-learning ability on large-scale genomic sequences [ 9 , 10 , 18 ]. For tasks such as enhancer recognition, functional fragment classification, and transcription factor binding prediction, a useful model must provide not only strong discriminative performance but also some degree of structural interpretability, for example by revealing which sites exhibit synergistic behavior and which local patterns jointly influence the output label in a modular manner. In recent years, the Transformer has become a foundational architecture for sequence modeling. Its self-attention mechanism can capture dependencies among sites at a global scale and has achieved remarkable progress in both natural language processing and biological sequence modeling [ 1, 9 , 10 ]. However, in the standard Transformer, attention weights are generated through softmax normalization and therefore form a continuous, dense allocation of weights. Although such a mechanism is highly effective for prediction, it usually lacks explicit structural constraints and is 
+
+> arXiv:2603.26465v1 [cs.LG] 27 Mar 2026
+
+consequently difficult to interpret directly in terms of whether a specific edge exists or which sites form a stable interaction graph. From a biological perspective, one often hopes that the model will learn not merely a classifier but also a latent interaction graph. The edges in this graph should be statistically meaningful and ideally exhibit sparsity, synergy, competition, or modularity. To this end, we propose a Boltzmann-machine-enhanced Transformer that explicitly models query–key connections as gating variables and uses an energy function to characterize the plausibility of the entire gating graph. This modeling strategy is inspired by Boltzmann machines and energy-based models: the model learns not only the predictor itself but also a prior distribution that favors low-energy, low-conflict, and interpretable structures [2, 3]. The core idea of this paper is to replace standard softmax attention with a Boltzmann-style structural distribution. Rather than directly using softmax to normalize all keys associated with a query into a continuous weight distribution, we model whether a connection exists as a latent binary random variable and assign a Boltzmann distribution over the entire connection graph. In this way, attention becomes not only an information routing mechanism but also a process of structural discovery. This formulation also introduces new challenges. First, the gating variables are discrete, so direct optimization would make gradients non-differentiable. Second, the gating variables are not independent; they are coupled through pairwise interactions and latent hidden units, which makes exact posterior inference generally intractable. To address these issues, we introduce two key techniques. First, we use mean-field variational inference to approximately solve the coupled system, converting the complex posterior into a fixed-point problem over continuous probabilities [ 4, 5]. Second, we use Gumbel-Softmax to gradually push the soft structure toward a discrete 0/1 configuration while preserving gradient flow and improving the sharpness and sparsity of the gating graph [6, 7]. Moreover, classification loss alone cannot guarantee that the intermediate structure is biologically interpretable. We therefore introduce an energy loss in addition to the task loss, requiring the structure obtained from the current forward inference to have lower energy than negative structures generated by perturbation or sampling. As a result, the training objective is no longer merely to make the prediction correct, but to make the prediction correct through a plausible structure. The main contributions of this paper are as follows: (1) We propose a Boltzmann-machine-enhanced Transformer for DNA sequence classification, extending standard softmax attention into structured gated attention equipped with an energy-based prior; (2) We provide a complete derivation from the energy model to mean-field fixed-point iterations, clarifying the theoretical origin of the gating-probability updates; (3) We combine Gumbel-Softmax with mean-field inference so that complex coupled near-discrete structures can be trained end to end; (4) By jointly optimizing task loss and energy loss, we establish a unified optimization framework that balances predictive performance and structural plausibility; (5) We discuss the relationship between the proposed method and the standard Transformer, and explain why structured attention is better suited to interpretable modeling and higher-order interaction learning. 
+
+# 2 Background and Related Work 
+
+Recent work on DNA sequence modeling, interpretable attention, and alternatives to softmax has gradually converged into three technical trajectories: first, Transformer-based and foundation-model approaches for genomic sequence understanding; second, theoretical approaches that interpret attention as an energy model or a Boltzmann-like operator; and third, mechanism-design approaches that directly restructure, sparsify, or replace softmax attention. The method proposed here lies at the intersection of these three lines of research. 
+
+2.1 DNA Sequence Modeling 
+
+In biological sequence tasks, the Transformer has evolved from a generic sequence-modeling tool into an important class of genomic foundation models. DNABERT was the first to systematically transfer BERT-style pretraining to DNA sequences, emphasizing the importance of global context for recognizing promoters, splice sites, and transcription factor binding sites [ 9]. Enformer subsequently showed that long-range interactions are crucial for gene expression prediction, with an architecture capable of integrating sequence dependencies over distances of up to 100 kb, thereby demonstrating that local motifs alone are insufficient to explain complex regulatory relationships [ 10 ]. Building on this line of work, 2DNABERT-2 and Nucleotide Transformer extended the paradigm toward larger scale, multi-species learning, and multi-task transfer, highlighting the strengths of DNA foundation models in low-label settings, cross-task generalization, and variant-effect prediction [ 11 , 12 ]. A common feature of this trajectory is that models have become increasingly adept at representing sequences, while their attention weights are still usually treated as continuous importance scores rather than explicit interpretable structural variables. 
+
+2.2 The Connection Between Softmax and Boltzmann Formulations 
+
+Another important line of work arises from theoretical reinterpretations of the attention mechanism itself. In their analysis of the expressive power of single-layer self-attention, Kajitsuka and Sato showed that softmax-weighted aggregation can be written in the form of a Boltzmann operator, and used this connection to establish stronger expressive results than earlier analyses based on hardmax approximations [ 13 ]. Importantly, such work explains why standard softmax attention is effective; it does not propose a new Boltzmann-machine-style attention module. Closely related, Ota and Karakida studied a family of Boltzmann machines associated with attention through the lens of modern Hopfield networks, and proposed the attentional Boltzmann machine (AttnBM), thereby showing that attention modules can be embedded in a broader family of energy functions [ 14 ]. These results provide theoretical justification for rewriting or extending attention in Boltzmann-style structural terms, although they do not directly yield a softmax replacement tailored to DNA sequence classification. 
+
+2.3 Softmax Alternatives and Structured Attention 
+
+In addition to theoretical explanations of softmax, a substantial body of work has attempted to replace or modify softmax attention directly. Early methods focused primarily on computational efficiency and sparsity, for example by constructing linear attention through kernel tricks or reweighting mechanisms; among them, cosFormer redesigned the attention transformation to retain non-negativity while avoiding the quadratic complexity of standard softmax [ 15 ]. Subsequently, some studies challenged softmax more directly, such as replacing it with non-normalized activations like ReLU in vision Transformers and demonstrating feasibility on specific visual tasks [ 16 ]. More recently, BoltzFormer introduced Boltzmann distributions and annealing strategies into the sparse sampling process of Transformers for small-object image analysis, indicating that Boltzmann-inspired attention has begun to emerge at the level of concrete mechanism design [ 17 ]. However, these methods are mostly aimed at efficiency optimization, region sampling, or visual applications; they typically do not model query–key edges themselves as coupled binary random variables, nor do they explicitly introduce pairwise interactions and latent hidden units to capture higher-order structural dependence. 
+
+2.4 Distinctions Between the Proposed Method and Prior Work 
+
+Taken together, existing DNA foundation models demonstrate the effectiveness of Transformers for sequence discrimi-nation and representation learning [ 9, 10 , 11 , 12 ]; energy-based and Hopfield/Boltzmann perspectives reveal theoretical connections between attention and Boltzmann structures [ 13 , 14 ]; and research on non-softmax attention shows that softmax is not the only viable normalization mechanism for attention [ 15 , 16 , 17 ]. The present work differs from these studies in that it is explicitly designed for DNA sequence classification and replaces standard softmax attention with a Boltzmann-inspired structured gating mechanism. This mechanism does not merely alter the normalization function; instead, it treats the query–key connectivity graph as a discrete structural object endowed with an energy-based prior, and achieves end-to-end training through mean-field inference and Gumbel-Softmax relaxation. In other words, this paper advances the view of attention from weight allocation to structural discovery, thereby preserving the Transformer’s global modeling capacity while better aligning with the interpretive demands of latent interaction graphs in biological sequences. 
+
+# 3 Method 
+
+3.1 Task Definition and Overall Architecture 
+
+Given a DNA sequence x = ( x1, x 2, . . . , x L) of length L, where each position takes a value from the nucleotide alphabet {A, C, G, T, N }, the goal is to predict a binary label y ∈ { 0, 1}. The model first maps the input sequence to discrete embeddings, then extracts local motif features through a lightweight one-dimensional convolutional module, subsequently performs global modeling with a Transformer encoder, and finally outputs the logit through masked mean pooling and an MLP classification head. The principal difference between the proposed model and a standard Transformer lies in the attention layer. In a standard Transformer, attention is generated directly by softmax; in contrast, we introduce within each head a latent binary gating 3graph to represent whether a connection is established between a query and a key. The entire gating graph is modeled by a Boltzmann-style energy function and is inferred through a trainable approximation based on mean-field inference and Gumbel-Softmax. 
+
+3.2 From Softmax Attention to Structured Gated Attention 3.2.1 Standard Softmax Attention 
+
+For the h-th head, let qht ∈ Rdh denote the t-th query, khs ∈ Rdh denote the s-th key, and vhs ∈ Rdh denote the corresponding value. Standard softmax attention is defined as 
+
+Ahts = exp  q⊤
+
+> ht
+
+khs /√dh
+
+P 
+
+> s′
+
+exp  q⊤
+
+> ht
+
+khs ′ /√dh
+
+ . (1) which yields the head output 
+
+oht = X
+
+> s
+
+Ahts vhs . (2) A key characteristic of this mechanism is that all weights within a query row are normalized onto a probability simplex, so the operation is better viewed as weight allocation rather than structural decision-making. Moreover, aside from competition induced by normalization, there is no explicit coupling among different edges. 
+
+3.2.2 Gating Graph Variables 
+
+To endow attention with a clearer structural interpretation, we introduce binary gating variables 
+
+zhts ∈ { 0, 1}, (3) where zhts = 1 indicates that the connection between query position t and key position s is activated in head h, and 
+
+zhts = 0 indicates that the connection is inactive. We therefore wish the attention output to be controlled by the gating graph: 
+
+oht =
+
+P 
+
+> s
+
+zhts vhs 
+
+P 
+
+> s
+
+zhts + ε . (4) Because direct discrete optimization over z is infeasible, we introduce a continuous variable shts to approximate the marginal posterior probability of zhts :
+
+shts ≈ q(zhts = 1) . (5) In what follows, s serves as the soft version of the structured attention graph. 
+
+3.3 Boltzmann-Style Structural Distribution 3.3.1 Definition of the Structural Distribution 
+
+We define the probability of the entire gating graph z using a Boltzmann distribution, consistent with the classical energy-based formulation of Boltzmann machines [2, 3]: 
+
+p(z | x) = 1
+
+Z(x) exp  −E(z; x), (6) where E(z; x) is the energy function conditioned on input x, and Z(x) is the partition function: 
+
+Z(x) = X
+
+> z
+
+exp  −E(z; x). (7) Because z is a high-dimensional binary tensor, the number of possible structures grows exponentially, making exact computation of Z(x) and the marginal probabilities generally intractable. 
+
+3.3.2 Local Bias Term 
+
+We first define a local bias term based on query–key similarity: 
+
+hhts = q⊤
+
+> ht
+
+khs 
+
+√dh
+
+. (8) 4This quantity describes the tendency of an edge to be activated on the basis of local similarity alone, without considering other edges. The corresponding bias-energy term is defined as 
+
+Ebias (z; x) = − X
+
+> h
+
+X
+
+> t
+
+X
+
+> s
+
+hhts zhts . (9) Lower energy indicates that the structure more strongly favors activating edges with high similarity. 
+
+3.3.3 Pairwise Interaction Term 
+
+To explicitly model coupling between edges, we introduce pairwise interactions within each query row. Unlike traditional Boltzmann machines, which directly learn free coupling coefficients Wij , we express the coupling strength here as a dynamic quantity induced by the attention representations. For the h-th head and the t-th query, we define the coupling between candidate key positions s and s′ as 
+
+J(h,t ) 
+
+> ss ′
+
+= k⊤
+
+> hs
+
+W(h,t )sym khs ′ , (10) where W(h,t )sym is a symmetric parameter matrix. In implementation, one may use diagonal parameterization or explicit symmetrization to ensure that 
+
+J(h,t ) 
+
+> ss ′
+
+= J(h,t ) 
+
+> s′s
+
+, (11) thereby maintaining consistency with the symmetric-coupling assumption in the energy function. This construction means that J(h,t ) 
+
+> ss ′
+
+is no longer a static, input-independent parameter; instead, it is determined by the compatibility between the two key representations in the current sample, reflecting whether they tend to co-occur under the present attention context. On this basis, the pairwise energy term is written as 
+
+Epair (z; x) = − 12
+
+X
+
+> h
+
+X
+
+> t
+
+X
+
+> s̸=s′
+
+J(h,t ) 
+
+> ss ′
+
+zhts zhts ′ . (12) Here, zhts indicates whether query position t connects to key position s. When J(h,t ) 
+
+> ss ′
+
+> 0, the two edges tend to be activated synergistically; when J(h,t ) 
+
+> ss ′
+
+< 0, they tend to be mutually exclusive. Accordingly, this term can be interpreted as replacing the conventional pairwise interaction parameters in a Boltzmann machine with coupling terms induced by key–key interactions. It explicitly models cooperation and competition among candidate connections. This is also a key distinction from standard softmax attention: the model no longer decides solely on the basis of local similarity for individual edges, but instead directly encodes the structural prior that edges can influence one another into the energy function. 
+
+3.3.4 Latent Hidden Units Term 
+
+To model higher-order combinatorial relationships, we further introduce explicit latent variables uhtm ∈ { 0, 1}, where 
+
+m = 1 , . . . , M indexes the m-th latent hidden unit. We define 
+
+Elatent (z, u ; x) = − X
+
+> h
+
+X
+
+> t
+
+X
+
+> m
+
+b(u)
+
+> htm
+
+uhtm − X
+
+> h
+
+X
+
+> t
+
+X
+
+> s
+
+X
+
+> m
+
+W (h,t ) 
+
+> sm
+
+zhts uhtm . (13) This term means that when a group of edges jointly supports the activation of a latent unit, that latent unit in turn reinforces a related set of edges, thereby expressing modular or combinatorial regulatory patterns. After marginalizing out u, the latent units induce effective higher-order interactions over z.
+
+3.3.5 Overall Energy Function 
+
+The overall energy is defined as 
+
+E(z, u ; x) = Ebias (z; x) + Epair (z; x) + Elatent (z, u ; x). (14) Marginalizing out u yields an effective energy function over z. Because exact marginalization remains difficult, we adopt a mean-field approximation over both z and u during inference. 53.4 Mean-Field Variational Inference 3.4.1 Approximate Distribution 
+
+We adopt a factorized approximation (naive mean-field approximation) [4, 5]: 
+
+q(z, u ) = Y
+
+> h
+
+Y
+
+> t
+
+Y
+
+> s
+
+qhts (zhts ) · Y
+
+> h
+
+Y
+
+> t
+
+Y
+
+> m
+
+rhtm (uhtm ), (15) where 
+
+qhts (zhts = 1) = shts , rhtm (uhtm = 1) = rhtm . (16) Here, shts and rhtm are the mean-field parameters for the gated edges and latent units, respectively. 
+
+3.4.2 Variational Free Energy 
+
+Obtaining the optimal approximation by minimizing KL( q∥p) is equivalent to minimizing the variational free energy: 
+
+F(q) = Eq
+
+E(z, u ; x) − H(q), (17) where H(q) is the entropy term. Because q is a factorized Bernoulli distribution, its entropy is given by 
+
+H(q) = − X
+
+> h
+
+X
+
+> t
+
+X
+
+> s
+
+h
+
+shts log shts + (1 − shts ) log(1 − shts )
+
+i
+
+(18) 
+
+− X
+
+> h
+
+X
+
+> t
+
+X
+
+> m
+
+h
+
+rhtm log rhtm + (1 − rhtm ) log(1 − rhtm )
+
+i
+
+. (19) 
+
+3.4.3 Expected Energy 
+
+Taking the expectation of the bias term gives 
+
+Eq
+
+Ebias 
+
+ = − X
+
+> h
+
+X
+
+> t
+
+X
+
+> s
+
+hhts shts . (20) For the pairwise term, under the mean-field independence approximation, we have 
+
+Eq [zhts zhts ′ ] ≈ shts shts ′ , (21) therefore 
+
+Eq
+
+Epair 
+
+ = − 12
+
+X
+
+> h
+
+X
+
+> t
+
+X
+
+> s̸=s′
+
+J(h,t ) 
+
+> ss ′
+
+shts shts ′ . (22) For the latent term, we have 
+
+Eq
+
+Elatent 
+
+ = − X
+
+> h
+
+X
+
+> t
+
+X
+
+> m
+
+b(u)
+
+> htm
+
+rhtm − X
+
+> h
+
+X
+
+> t
+
+X
+
+> s
+
+X
+
+> m
+
+W (h,t ) 
+
+> sm
+
+shts rhtm . (23) Summing these three components yields the total expected energy. 
+
+3.4.4 Derivation of the Fixed-Point Update for s
+
+Taking the partial derivative of F(q) with respect to a particular shts gives 
+
+∂F
+
+∂s hts 
+
+= −hhts − X 
+
+> s′̸=s
+
+J(h,t ) 
+
+> ss ′
+
+shts ′ − X
+
+> m
+
+W (h,t ) 
+
+> sm
+
+rhtm + log shts 
+
+1 − shts 
+
+. (24) Setting it to zero yields 
+
+log shts 
+
+1 − shts 
+
+= hhts + X 
+
+> s′̸=s
+
+J(h,t ) 
+
+> ss ′
+
+shts ′ + X
+
+> m
+
+W (h,t ) 
+
+> sm
+
+rhtm , (25) that is, 
+
+shts = σ
+
+hhts + X 
+
+> s′̸=s
+
+J(h,t ) 
+
+> ss ′
+
+shts ′ + X
+
+> m
+
+W (h,t ) 
+
+> sm
+
+rhtm 
+
+ , (26) where σ(·) denotes the sigmoid function. This is the core mean-field update equation used in the present work. 63.4.5 Derivation of the Fixed-Point Update for r
+
+Similarly, taking the derivative of F(q) with respect to rhtm and setting it to zero gives 
+
+log rhtm 
+
+1 − rhtm 
+
+= b(u) 
+
+> htm
+
++ X
+
+> s
+
+W (h,t ) 
+
+> sm
+
+shts , (27) thus 
+
+rhtm = σ b(u) 
+
+> htm
+
++ X
+
+> s
+
+W (h,t ) 
+
+> sm
+
+shts 
+
+!
+
+. (28) Accordingly, the mean-field parameters for z and u form a coupled fixed-point system. 
+
+3.4.6 Iterative Solution 
+
+Given the initialization 
+
+s(0) = σ(h), (29) we then update alternately according to 
+
+r(k) = σ b(u) + W ⊤s(k), (30) 
+
+s(k+1) = σ h + Js (k) + W r (k). (31) After K iterations, we obtain a self-consistent soft structural solution s(K). This is the structural probability graph used in the current forward pass, namely the positive-phase structure spos .
+
+3.5 Replacing Softmax with Boltzmann-Machine Gating 
+
+Once s is obtained, we no longer use softmax weights; instead, we directly use the structural probability graph to control information aggregation: 
+
+oht =
+
+P 
+
+> s
+
+shts vhs 
+
+P 
+
+> s
+
+shts + ε . (32) This step is important for three reasons: (1) whether each edge is activated is determined by the energy model and coupled inference, rather than solely by local q · k similarity; (2) multiple edges within the same row can be strongly activated simultaneously, without being constrained by the softmax simplex; (3) the resulting graph structure can exhibit sparsity, modularity, and interpretability. Thus, the proposed method can be regarded as a structured extension that replaces standard softmax attention with Boltzmann-machine-gated attention. 
+
+3.6 Approximate Discretization via Gumbel-Softmax 3.6.1 Construction of Binary Classification Logits 
+
+Although s provides a reasonable posterior approximation, it remains continuous. To make the structure closer to an explicitly discrete graph, we construct binary classification logits: 
+
+α(0)  
+
+> hts
+
+= log(1 − shts ), α(1)  
+
+> hts
+
+= log( shts ). (33) 
+
+3.6.2 Gumbel-Softmax Sampling 
+
+Let g(0)  
+
+> hts
+
+and g(1)  
+
+> hts
+
+be independent Gumbel noises. Then 
+
+˜z(c) 
+
+> hts
+
+=exp 
+
+
+
+(α(c) 
+
+> hts
+
++ g(c)
+
+> hts
+
+)/τ 
+
+P 
+
+> c′∈{ 0,1}
+
+exp 
+
+
+
+(α(c′) 
+
+> hts
+
++ g(c′) 
+
+> hts
+
+)/τ 
+
+ . (34) 7We take the component with c = 1 as the approximate gate: 
+
+˜zhts = ˜ z(1) 
+
+> hts
+
+. (35) When the temperature τ is high, the output is relatively smooth; as τ gradually decreases, the output approaches a one-hot vector. In later stages of training, a straight-through estimator can be employed so that the forward pass uses hard binary gates while the backward pass continues to propagate gradients through the soft relaxation. The gradient provided by Gumbel-Softmax is not an unbiased gradient of the original discrete random variable, but it is a low-variance and stable differentiable approximation [ 6, 7]. For discriminative models such as ours, in which the intermediate structure serves as a latent variable, this biased but stable gradient is often more suitable for training than high-variance estimators of exact discrete gradients. 
+
+3.7 Positive and Negative Structures for Energy Learning 3.7.1 Positive-Phase Structure 
+
+The positive-phase structure spos is obtained from the current model through mean-field fixed-point iterations and can be further compressed into a near-discrete version by Gumbel-Softmax. It represents the structure that the model currently considers most plausible under the present parameters. 
+
+3.7.2 Negative-Phase Structure 
+
+To learn the structural energy, we also require a negative-phase structure sneg . We consider two approaches: (1) local random perturbation: randomly flipping a subset of edges in the neighborhood of spos to obtain a locally corrupted structure; (2) an external sampler: optionally using approximate solvers such as simulated annealing to search for more challenging negative samples within local Ising subproblems; this strategy of enhancing structural search with external optimizers also resonates with recent work on quantum-boosted high-fidelity deep learning frameworks [8]. Although random perturbation is simple, it offers the advantages of low variance and stable training, and can be understood as a form of local contrastive learning in the neighborhood of the current structure. 
+
+3.8 Joint Loss Function 3.8.1 Task Loss 
+
+For the final binary classification logit ˆy, we use binary cross-entropy: 
+
+Ltask = −
+
+h
+
+y log σ(ˆ y) + (1 − y) log  1 − σ(ˆ y)i
+
+. (36) 
+
+3.8.2 Energy Loss 
+
+Let the energy of the positive-phase structure be E(spos ) and that of the negative-phase structure be E(sneg ). We then define a margin-ranking-style energy loss: 
+
+Lenergy = max  0, E (spos ) − E(sneg ) + m, (37) where m > 0 is the margin. This loss encourages 
+
+E(spos ) + m ≤ E(sneg ). (38) That is, the structure obtained in the current forward pass should have lower energy than the negative-phase structure. 
+
+3.8.3 Overall Loss 
+
+The total loss is written as 
+
+L = Ltask + λ Lenergy . (39) Its gradient with respect to the parameters θ is 
+
+∇θ L = ∇θ Ltask + λ ∇θ Lenergy . (40) Thus, parameter updates are jointly driven by the task objective and the structural objective. 83.8.4 Optimization Perspective 
+
+This objective is equivalent to a regularized joint optimization problem: among all parameter settings that yield low task loss, the model prefers those associated with lower structural energy. In other words, Ltask enforces predictive correctness, whereas Lenergy enforces structural correctness. 
+
+3.8.5 Probabilistic Interpretation 
+
+If the energy is viewed as the negative log-probability of a structural prior, namely 
+
+E(s) ≈ − log p(s), (41) then the overall objective can be approximately written as 
+
+L ≈ − log p(y | x, s ) − λ log p(s). (42) This shows that the model is effectively jointly optimizing two probabilistic objectives: predictive correctness and structural plausibility. Figure 1 presents the overall computational graph of the proposed model during training. It simultaneously illustrates the forward classification branch, the energy-learning branch associated with positive- and negative-phase structures, and the joint backpropagation path induced by the task loss and energy loss, thereby clarifying the roles of Gumbel-Softmax, the energy function, and optional external solvers within a unified training framework. 
+
+3.9 Training Strategy 
+
+To avoid instability in the early stage of training, we adopt a curriculum-style strategy that proceeds from soft to hard structures: (1) in the initial stage, only the soft mean-field structure is used, without imposing a strong energy constraint; (2) the Gumbel temperature τ is gradually decreased during training; (3) after the model acquires basic discriminative ability, the weight λ of the energy loss is gradually increased; (4) in the later stage of training, hard sampling is enabled so that the forward gates more closely approximate an explicitly discrete graph structure. This strategy allows the model to first learn to solve the task correctly and then learn to do so through a clearer structure. 
+
+# 4 Relationship to the Standard Transformer 
+
+The proposed model is not intended to replace the Transformer, but rather to provide a structured extension of its attention mechanism. If structured gating, mean-field inference, Gumbel-Softmax, and the energy loss are all disabled, the model naturally reduces to a standard MultiheadAttention baseline. The standard Transformer is already a very strong baseline for many DNA classification tasks because the convolutional front end can extract local motifs, self-attention is sufficient to model medium- and long-range dependencies, and the optimization objective is simpler and more stable. By contrast, the added value of the proposed method lies primarily in the following aspects: (1) transforming continuous and weakly constrained soft attention into a gated graph equipped with a structural prior; (2) explicitly representing synergy and competition among edges; (3) expressing higher-order combinatorial regulation through latent hidden units; (4) improving the sparsity and interpretability of the intermediate structure. Accordingly, the proposed method is more suitable for settings in which one seeks both discriminative performance and structural interpretability. 9Figure 1: End-to-end training pipeline of the proposed BM-Transformer. The forward branch generates Q, K, and V ,constructs a differentiable positive-phase structure through Gumbel-Softmax, and feeds the resulting gated representation into the downstream classifier. In parallel, the energy-learning branch evaluates positive- and negative-phase structures with the energy function, where the negative phase can optionally be obtained from an external solver or sampler. The final objective jointly combines task loss and energy loss, and gradients flow back through both branches to update the underlying network and the energy parameters. 10 5 Experimental Design 
+
+5.1 Dataset and Task 
+
+We evaluate the proposed model on the Genomic_Benchmarks_human_enhancers_cohn dataset for binary DNA sequence classification. This dataset is drawn from the Genomic Benchmarks collection [ 18 ] and contains a DNA sequence field seq together with a corresponding binary label field label . The training set contains 20,843 samples and the test set contains 6,948 samples. Given an input sequence x, the model must determine whether it belongs to the target functional category; accordingly, we treat the task uniformly as supervised binary classification. 
+
+5.2 Input Representation and Preprocessing 
+
+The input DNA sequence is composed of characters from the alphabet {A, C, G, T, N }. In the experiments, we map the nucleotides to discrete indices 
+
+A/C/G/T/N → 0/1/2/3/4,
+
+and additionally introduce a padding token indexed as 5. To facilitate batch training and positional alignment, all sequences are standardized to a fixed length of 500: sequences longer than 500 are truncated, whereas shorter sequences are padded. On this basis, the discrete tokens are mapped into dense vector representations through an embedding layer, passed through the front-end convolutional module to extract local motif features, and then combined with learnable positional encodings before being fed into the Transformer encoder. 
+
+5.3 Training Configuration 
+
+Model training follows the supervised binary-classification setting, with a sigmoid output greater than 0.5 taken as the threshold for the positive class. We use the Adam optimizer with an initial learning rate of 1 × 10 −4, train for 10 epochs, and set the batch size to 64. A cosine annealing schedule is used for the learning rate, with a minimum learning rate of 1 × 10 −6. To improve training stability, gradient clipping is applied to all parameters before each update, with a maximum norm of 1.0. Unless otherwise noted, the default hyperparameters are as follows: hidden dimension dmodel = 128 , number of encoder layers 3, feed-forward dimension 512, dropout 0.1, number of latent hidden units 16, and initial coefficient of latent interaction strength 0.5. 
+
+5.4 Progressive Scheduling of Structural Constraints 
+
+To prevent structural constraints from interfering too early with the classification objective, we adopt a progressive scheduling strategy for both discrete gate sampling and energy regularization. Specifically, the gating variables are approximately discretized via Gumbel-Softmax, whose temperature parameter τ is gradually annealed from 1.0 to 0.5. Soft sampling is used during the first three epochs, after which hard sampling is enabled. Meanwhile, the weight of the energy term is fixed at 0 during the first three epochs and then increases linearly from the fourth epoch onward until it reaches the preset value of 0.1. This warm-up design allows the model to first learn a stable classification boundary and then gradually incorporate interaction-structure constraints, yielding a smoother optimization process that balances classification performance and structural interpretability. 
+
+5.5 Baselines 
+
+Because the currently completed and reproducible experimental results are concentrated on the comparison of the main models under a unified training setup, the final paper retains only the following three categories of baselines, around which the subsequent analysis is organized: (1) Provider CNN baseline: the public PyTorch CNN result for human_enhancers_cohn provided by the Genomic Benchmarks project is used as an external baseline [18, 19]; (2) Plain Transformer: the input embedding, convolutional front end, number of encoder layers, and training hyperparameters are kept unchanged, and only the structured gated attention is replaced with standard 
+
+MultiheadAttention ;(3) Full BM-Transformer: the complete Boltzmann-machine-enhanced Transformer proposed in this paper. These three model groups are adopted because they correspond, respectively, to the classical convolutional baseline reported by the public dataset provider, the standard Transformer baseline without a structural prior, and the structured-attention model proposed here. Together, they allow us to answer two central questions more clearly: whether the 11 Transformer outperforms the traditional convolutional baseline, and whether the Boltzmann-style structural prior provides additional modeling value while maintaining performance. 
+
+5.6 Evaluation Metrics 
+
+Given the completeness of the available experimental records, we use Accuracy as the primary evaluation metric and additionally report Final Train Acc, Final Val Acc, Best Val Acc or public Test Acc, and Best Val Loss. Because the Provider CNN baseline comes from a public notebook, only the reported test accuracy and corresponding loss are directly available; accordingly, entries that do not have a counterpart are marked as “–”. This presentation allows the public CNN baseline and the self-trained Transformer-family models to be included in a single main results table without conflating different evaluation protocols. 
+
+# 6 Results and Analysis 
+
+6.1 Main Results 
+
+Table 1 and Figure 2 summarize the main results of the three model classes on the human_enhancers_cohn dataset. First, compared with the public CNN baseline reported by the dataset provider, both Transformer architectures achieve higher accuracy: the public test accuracy of the Provider CNN is 0.6950, whereas the best validation accuracies of the Plain Transformer and Full BM-Transformer reach 0.7260 and 0.7248, respectively. Second, between the two Transformer variants, the Plain Transformer is slightly higher than the Full BM-Transformer in both final validation accuracy and best validation accuracy, although the difference is very small. Meanwhile, the Full BM-Transformer attains a slightly higher final training accuracy than the Plain Transformer (0.7363 vs. 0.7338). Taken together, these results support two relatively robust conclusions: first, Transformer-family models substantially outperform the public CNN baseline on this task; second, the proposed BM-Transformer performs essentially on par with the standard Transformer in classification accuracy, and its primary value is better described as introducing explicit structural modeling while maintaining competitive accuracy, rather than as achieving a dramatically higher classification metric. Table 1: Comparison of the main results. For the self-trained models in this paper, “Best Val Acc / Test Acc” denotes the best validation accuracy; for the Provider CNN, this column reports the test accuracy from the public notebook. Model Final Train Acc Final Val Acc Best Val Acc / Test Acc Best Val Loss Provider CNN (PyTorch) 0.7160 – 0.6950 0.6267 Plain Transformer 0.7338 0.7258 0.7260 0.5371 Full BM-Transformer 0.7363 0.7248 0.7248 0.5397 
+
+6.2 Comparison with the Public CNN Baseline 
+
+The Provider CNN baseline represents the reproducible result of a local convolutional model from the public repository associated with this benchmark dataset. Relative to this baseline, both the Plain Transformer and the Full BM-Transformer improve the main metric by approximately three absolute percentage points. This result indicates that, on the human_enhancers_cohn task, sequence modeling based only on local convolutional receptive fields can already achieve reasonable performance, but the addition of self-attention still yields a stable benefit by enabling the model to exploit longer-range context and cross-site dependencies. Accordingly, the subsequent discussion focuses primarily on the comparison between the Plain Transformer and the Full BM-Transformer, rather than reiterating the general superiority of Transformers over a simple CNN. 
+
+6.3 Comparison Between BM-Transformer and Plain Transformer 
+
+As shown in the main results table, the Full BM-Transformer and the Plain Transformer perform very similarly: the best validation accuracy of the Plain Transformer is 0.7260, whereas that of the Full BM-Transformer is 0.7248, a difference of only 0.0012. At the same time, the Full BM-Transformer attains a slightly higher final training accuracy, but this does not translate into a correspondingly larger improvement on the validation set. This suggests that, under the current data scale and number of training epochs, the Boltzmann-style structural prior has not yet been converted into a clear advantage in classification accuracy. A more appropriate interpretation is that the structural prior alters the intermediate representation of attention, biasing the model toward learning sparse, interpretable, and coupled connectivity graphs, and that on the present task the principal benefit of this inductive bias lies more in structural representation than in a marked increase in final accuracy. 12 Figure 2: Comparison of training accuracy curves. The left panel shows the Full BM-Transformer and the right panel shows the Plain Transformer. Both models converge stably and achieve similar validation accuracies near epoch 10. 
+
+6.4 Qualitative Observations of the Structured Model 
+
+Although the BM-Transformer does not clearly surpass the Plain Transformer in accuracy, visualizations of its internal variables show that it indeed learns relatively clear structural patterns. Figure 3 shows substantial differences in the average activation strengths of different latent hidden units, indicating that the model does not use all latent modules uniformly but instead tends to rely on a smaller set of more active structural components. This phenomenon is consistent with the modeling hypothesis that higher-order combinatorial dependencies are dominated by a limited number of modules. Furthermore, the pairwise interaction heatmap and network visualization in Figure 4 show that the learned effective interactions include both positive and negative couplings and exhibit both local block structure and long-range cross-position edges. Finally, Figures 5 and 6 illustrate the correspondence between latent modules and sequence positions, suggesting that the BM-Transformer can indeed organize several important sites into shared latent modules. It should be emphasized that these figures provide qualitative evidence about structured intermediate representations rather than direct evidence of improved classification performance; the appropriate conclusion is that the proposed model learns richer structural objects, not that it outperforms the standard Transformer on every metric. 
+
+# 7 Discussion 
+
+7.1 When Structured Attention Is Valuable 
+
+The proposed method is particularly valuable in the following situations: (1) when the goal is not only prediction but also structural discovery; (2) when one aims to recover latent interaction graphs among sites; (3) when data are limited and stronger inductive bias is needed; (4) when the task exhibits pronounced higher-order combinatorial dependence. 13 Figure 3: Average activation strengths of the 16 latent hidden units. The clear differences across units indicate that the model does not rely uniformly on all latent modules, but instead emphasizes a smaller subset of more active structural components. 
+
+Figure 4: Visualization of pairwise interactions. The left panel is a clustered heatmap of the effective interaction-strength matrix, showing block-like coupling structures among positions; the right panel is a network formed by the strongest 0.5% positive and negative interaction edges, with red and blue denoting couplings of different signs. 14 Figure 5: Latent module–position map. The upper panel shows the signed module–position interaction strengths, and the lower panel shows their absolute values, which can be used to examine the hotspot distributions of different latent hidden units across the sequence. 
+
+7.2 Limitations 
+
+(1) mean-field inference is only an approximation and may deviate from the true posterior; (2) Gumbel-Softmax uses gradients that are biased, although low variance; (3) the design of the energy function can substantially affect structural quality; (4) compared with a plain Transformer, training and hyperparameter tuning are more costly; (5) structural interpretability does not automatically imply biological causality and still requires downstream experimental validation. 
+
+# 8 Conclusion 
+
+This paper proposes a Boltzmann-machine-enhanced Transformer for DNA sequence classification, whose central idea is to replace standard softmax attention with a Boltzmann-style structural distribution. By introducing local bias terms, pairwise interactions, and latent hidden units, the model extends attention from a mechanism of continuous weight allocation to a process of structured gated-graph inference. Furthermore, we use mean-field variational inference to obtain a continuous approximation to the gating posterior and combine it with Gumbel-Softmax to gradually compress the soft structure into a near-discrete gating pattern, thereby improving structural sharpness while preserving trainability. By jointly optimizing classification loss and energy loss, the model aims not only for predictive accuracy but also for more plausible, lower-energy, and more interpretable structures. Experimental results show that the proposed method remains close to the standard Transformer baseline in classification performance, while its more distinctive advantage lies in providing explicit site-interaction graphs, latent-module responses, and visualizations of higher-order combinatorial structure. From a theoretical perspective, this paper provides a complete derivation from the energy function to mean-field fixed-point updates, and further to Gumbel-Softmax and the joint loss, showing that the method is grounded in a unified framework of probabilistic graphical modeling and differentiable discrete optimization. Future work may explore stronger inference algorithms, incorporate external biological priors, and extend the method to larger-scale genomic pretraining and causal analysis settings. 15 Figure 6: Hypergraph visualization of latent higher-order interaction modules. The nodes on the left represent latent modules, and the nodes on the right represent important sequence positions connected with high weights; the fact that one module can connect multiple positions indicates that the model can capture multi-site combinatorial regulatory patterns beyond pairwise projection. 
+
+# A Complete Summary of Formulas 
+
+A.1 Standard Softmax Attention 
+
+Ahts = exp  q⊤
+
+> ht
+
+khs /√dh
+
+P 
+
+> s′
+
+exp  q⊤
+
+> ht
+
+khs ′ /√dh
+
+ , (43) 
+
+oht = X
+
+> s
+
+Ahts vhs . (44) 
+
+A.2 Boltzmann-Style Structural Distribution 
+
+p(z | x) = 1
+
+Z(x) exp  −E(z; x), (45) 
+
+Z(x) = X
+
+> z
+
+exp  −E(z; x). (46) 16 A.3 Overall Energy Function 
+
+E(z, u ; x) = Ebias (z; x) + Epair (z; x) + Elatent (z, u ; x), (47) 
+
+Ebias (z; x) = − X
+
+> h
+
+X
+
+> t
+
+X
+
+> s
+
+hhts zhts , (48) 
+
+Epair (z; x) = − 12
+
+X
+
+> h
+
+X
+
+> t
+
+X
+
+> s̸=s′
+
+J(h,t ) 
+
+> ss ′
+
+zhts zhts ′ , (49) 
+
+Elatent (z, u ; x) = − X
+
+> h
+
+X
+
+> t
+
+X
+
+> m
+
+b(u)
+
+> htm
+
+uhtm − X
+
+> h
+
+X
+
+> t
+
+X
+
+> s
+
+X
+
+> m
+
+W (h,t ) 
+
+> sm
+
+zhts uhtm . (50) 
+
+A.4 Mean-Field Approximation 
+
+q(z, u ) = Y
+
+> h
+
+Y
+
+> t
+
+Y
+
+> s
+
+qhts (zhts ) · Y
+
+> h
+
+Y
+
+> t
+
+Y
+
+> m
+
+rhtm (uhtm ), (51) 
+
+qhts (zhts = 1) = shts , (52) 
+
+rhtm (uhtm = 1) = rhtm . (53) 
+
+A.5 Variational Free Energy 
+
+F(q) = Eq
+
+E(z, u ; x) − H(q). (54) 
+
+A.6 Fixed-Point Updates 
+
+shts = σ
+
+hhts + X 
+
+> s′̸=s
+
+J(h,t ) 
+
+> ss ′
+
+shts ′ + X
+
+> m
+
+W (h,t ) 
+
+> sm
+
+rhtm 
+
+ , (55) 
+
+rhtm = σ b(u) 
+
+> htm
+
++ X
+
+> s
+
+W (h,t ) 
+
+> sm
+
+shts 
+
+!
+
+. (56) 
+
+A.7 Boltzmann-Machine-Gated Attention Output 
+
+oht =
+
+P 
+
+> s
+
+shts vhs 
+
+P 
+
+> s
+
+shts + ε . (57) 
+
+A.8 Gumbel-Softmax 
+
+α(0)  
+
+> hts
+
+= log(1 − shts ), (58) 
+
+α(1)  
+
+> hts
+
+= log( shts ), (59) 
+
+˜z(c) 
+
+> hts
+
+=exp 
+
+
+
+(α(c) 
+
+> hts
+
++ g(c)
+
+> hts
+
+)/τ 
+
+P 
+
+> c′∈{ 0,1}
+
+exp 
+
+
+
+(α(c′) 
+
+> hts
+
++ g(c′) 
+
+> hts
+
+)/τ 
+
+ . (60) 
+
+A.9 Task Loss 
+
+Ltask = −
+
+h
+
+y log σ(ˆ y) + (1 − y) log  1 − σ(ˆ y)i
+
+. (61) 
+
+A.10 Energy Loss 
+
+Lenergy = max  0, E (spos ) − E(sneg ) + m. (62) 17 A.11 Overall Loss 
+
+L = Ltask + λ Lenergy . (63) 
+
+# References 
+
+[1] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. Attention Is All You Need. In Advances in Neural Information Processing Systems (NeurIPS) ,2017. [2] David H. Ackley, Geoffrey E. Hinton, and Terrence J. Sejnowski. A Learning Algorithm for Boltzmann Machines. 
+
+Cognitive Science , 9(1):147–169, 1985. [3] Geoffrey Hinton. A Practical Guide to Training Restricted Boltzmann Machines. In Neural Networks: Tricks of the Trade , pages 599–619. Springer, 2012. [4] Carsten Peterson and James R. Anderson. A Mean Field Theory Learning Algorithm for Neural Networks. 
+
+Complex Systems , 1:995–1019, 1987. [5] Toshiyuki Tanaka. Mean-field theory of Boltzmann machine learning. Physical Review E , 58(2):2302–2310, 1998. [6] Eric Jang, Shixiang Gu, and Ben Poole. Categorical Reparameterization with Gumbel-Softmax. In International Conference on Learning Representations (ICLR) , 2017. [7] Chris J. Maddison, Andriy Mnih, and Yee Whye Teh. The Concrete Distribution: A Continuous Relaxation of Discrete Random Variables. In International Conference on Learning Representations (ICLR) , 2017. [8] Feng-ao Wang, Shaobo Chen, Yao Xuan, Junwei Liu, Qi Gao, Hongdong Zhu, Junjie Hou, Lixin Yuan, Jinyu Cheng, Chenxin Yi, Hai Wei, Yin Ma, Tao Xu, Kai Wen, and Yixue Li. Quantum-Boosted High-Fidelity Deep Learning. arXiv preprint arXiv:2508.11190 , 2025. https://api.semanticscholar.org/CorpusID: 280671181 .[9] Yanrong Ji, Zhihan Zhou, Han Liu, and Ramana V. Davuluri. DNABERT: pre-trained Bidirectional Encoder Representations from Transformers model for DNA-language in genome. Bioinformatics , 37(15):2112–2120, 2021. [10] Žiga Avsec, Vikram Agarwal, Daniel Visentin, Joseph R. Ledsam, Agnieszka Grabska-Barwi´ nska, Kyle R. Taylor, Yannis Assael, John M. Jumper, Pushmeet Kohli, and David R. Kelley. Effective gene expression prediction from sequence by integrating long-range interactions. Nature Methods , 18:1196–1203, 2021. https: //api.semanticscholar.org/CorpusID:233245955 .[11] Zhihan Zhou, Yanrong Ji, Weijian Li, Pratik Dutta, Ramana V. Davuluri, and Han Liu. DNABERT-2: Efficient Foundation Model and Benchmark For Multi-Species Genome. arXiv preprint arXiv:2306.15006 , 2023. [12] Hugo Dalla-Torre, Liam Gonzalez, Javier Mendoza-Revilla, Nicolas Lopez Carranza, Adam Henryk Grzywaczewski, Francesco Oteri, Christian Dallago, Evan Trop, Bernardo P. de Almeida, Hassan Sirelkhatim, Guillaume Richard, Marcin Skwark, Karim Beguir, Marie Lopez, and Thomas Pierrot. Nucleotide Transformer: building and evaluating robust foundation models for human genomics. Nature Methods , 22:287–297, 2025. [13] Tokio Kajitsuka and Issei Sato. Are Transformers with One Layer Self-Attention Using Low-Rank Weight Matrices Universal Approximators? In International Conference on Learning Representations (ICLR) , 2024. [14] Toshihiro Ota and Ryo Karakida. Attention in a Family of Boltzmann Machines Emerging From Modern Hopfield Networks. Neural Computation , 35(8):1463–1480, 2023. [15] Zhen Qin, Xiaotong Ma, Yiping Wang, and others. cosFormer: Rethinking Softmax in Attention. In International Conference on Learning Representations (ICLR) , 2022. [16] Mitchell Wortsman, Jaehoon Lee, Justin Gilmer, and Simon Kornblith. Replacing Softmax with ReLU in Vi-sion Transformers. arXiv preprint arXiv:2309.08586 , 2023. https://api.semanticscholar.org/CorpusID: 262012713 .[17] Theodore Zhao, Sid Kiblawi, Naoto Usuyama, Ho Hin Lee, Sam Preston, Hoifung Poon, and Mu-Hsin Wei. Boltzmann Attention Sampling for Image Analysis with Small Objects. 2025 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 25950–25959, 2025. https://api.semanticscholar.org/ CorpusID:276775199 .[18] Katarína Grešová, Vlastimil Martinek, David ˇ Cechák, Petr Šimeˇ cek, and Panagiotis Alexiou. Genomic Bench-marks: a collection of datasets for genomic sequence classification. BMC Genomic Data , 24(1):25, 2023. 18 [19] ML-Bioinfo-CEITEC. human_enhancers_cohn.ipynb : PyTorch CNN baseline in the Genomic Benchmarks repos-itory. GitHub notebook, https://github.com/ML-Bioinfo-CEITEC/genomic_benchmarks/blob/main/ experiments/torch_cnn_experiments/human_enhancers_cohn.ipynb . Accessed 2026-03-27. 19
