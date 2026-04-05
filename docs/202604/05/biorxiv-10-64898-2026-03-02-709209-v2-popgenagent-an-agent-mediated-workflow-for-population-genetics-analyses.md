@@ -1,0 +1,24 @@
+---
+title: "PopGenAgent: An Agent-Mediated Workflow for Population Genetics Analyses"
+title_zh: PopGenAgent：一种用于群体遗传学分析的智能体介导工作流
+authors: "su, h., Long, W., Feng, J., Hou, Y., Zhang, Y."
+date: 2026-04-01
+pdf: "https://www.biorxiv.org/content/10.64898/2026.03.02.709209v2.full.pdf"
+tags: ["query:med-ai"]
+score: 8.0
+evidence: 用于群体遗传学和基因组分析的智能体工作流
+tldr: PopGenAgent是一个针对群体遗传学分析的智能体工作流，旨在解决多工具协作中的一致性和可重复性难题。它通过将分析过程形式化为具有明确依赖关系的步骤化计划，集成了工具模板、可视化和中间产物管理。该系统支持交互式计划构建与修订，并能辅助结果解读和报告撰写。在1000基因组计划的案例研究中，它成功协调了PCA、ADMIXTURE等多种复杂分析，为群体遗传学研究提供了一个透明且可扩展的自动化环境。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-02-709209-v2/fig-001.webp\", \"caption\": \"Figure 1 Overview of PopGenAgent. PopGenAgent uses an agent-mediated interface to translate an analysis goal and genotype dataset into an explicit multi-step plan assembled from curated templates. Steps are executed via external analysis tools and plotting scripts, while intermediate and final artefacts are organized for inspection and revision within the same analysis context. The agent can also provide workflow-oriented assistance, including, when configured, literature-backed Q&A and Markdown report drafting grounded in the saved outputs.\", \"page\": 2, \"index\": 1, \"width\": 1056, \"height\": 597}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-02-709209-v2/fig-002.webp\", \"caption\": \"Figure 2 Summary statistics from the 1000 Genomes example analysis. (a) Observed heterozygosity distribution across populations. (b) Observed versus expected heterozygosity across populations. (c) Inbreeding coefficient (F ) distribution across populations. (d) Distribution of total ROH length and ROH segment count across populations. (e) Genome-wide LD decay curves across populations. (f) Representative f3 statistics for selected population triplets.\", \"page\": 4, \"index\": 2, \"width\": 1056, \"height\": 884}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-02-709209-v2/fig-003.webp\", \"caption\": \"Figure 3 Population-structure and graph-based outputs from the 1000 Genomes example analysis. (a) Principal component analysis (PCA) shown as pairwise projections of the first three principal components with variance explained on each axis. (b) TreeMix log-likelihood as a function of the number of migration edges (m) with YRI used as the outgroup for rooting. (c) ADMIXTURE cross-validation error across candidate numbers of clusters (K). (d) Population-level clustering dendrogram derived from the mean coordinates of the first five PCs (see Methods). (e) TreeMix residual covariance matrix for the fitted model shown in panel (f). (f) Example fitted TreeMix graph with migration edges. (g) ADMIXTURE ancestry proportions for K = 5.\", \"page\": 5, \"index\": 3, \"width\": 1057, \"height\": 1207}]"
+motivation: 针对群体遗传学分析中多工具协作复杂、中间决策与结果一致性难以维护以及可重复性差的挑战。
+method: 开发了PopGenAgent智能体工作流，将分析任务形式化为可迭代修订的多步计划，并利用模板化工具和统一上下文管理中间产物。
+result: 在涉及26个种群的1000基因组项目案例中，成功自动化执行了从ROH、LD衰减到TreeMix和f3统计等一系列复杂的遗传学分析。
+conclusion: PopGenAgent通过结构化的计划管理和中间状态保存，为群体遗传学研究提供了一个透明、高效且易于扩展的分析平台。
+---
+
+## 摘要
+群体遗传学分析通常需要协调跨越异构任务的多种工具，涵盖从数据整理到推断和可视化的全过程。在实践中，核心瓶颈不仅在于可重复性，还在于随着分析的演进，如何保持中间诊断、分析决策与下游结果之间的一致性。在此，我们介绍了 PopGenAgent，这是一种智能体工作流，它将群体遗传学分析形式化为具有明确输入、输出和依赖关系的显式多步计划。每个步骤都由精选的工具和可视化模板实例化，同时所有中间产物都保留在一个统一且可检查的上下文中。交互式智能体界面支持迭代式的计划构建与修订，并利用累积的输出结果辅助结果解释和报告撰写。在 1000 Genomes Project 的 26 个群体的案例研究中，PopGenAgent 从过滤后的 PLINK 数据集出发，协调了包括 ROH、LD 衰减、PCA、ADMIXTURE、TreeMix 和 f3 在内的多项分析。通过将分析结构化为具有保留中间状态的显式、可修订计划，PopGenAgent 为进行群体遗传学分析提供了一个透明且可扩展的环境。
+
+## Abstract
+Population genetics analyses typically require orchestrating multiple tools across heterogeneous tasks, from data curation to inference and visualization. In practice, a central bottleneck lies not only in reproducibility, but in maintaining consistency between intermediate diagnostics, analytical decisions, and downstream results as analyses evolve. Here we present PopGenAgent, an agentic workflow that formalizes population-genetic analyses as explicit, multi-step plans with declared inputs, outputs, and dependencies. Each step is instantiated from curated tool and visualization templates, while all intermediate artefacts are preserved within a unified, inspectable context. An interactive agent interface supports iterative plan construction and revision, and leverages accumulated outputs to assist interpretation and report drafting. In a case study of 26 populations from the 1000 Genomes Project, starting from a filtered PLINK dataset, PopGenAgent coordinated analyses including ROH, LD decay, PCA, ADMIXTURE, TreeMix, and f3. By structuring analyses as explicit, revisable plans with preserved intermediate states, PopGenAgent provides a transparent and extensible environment for conducting population-genetic analyses.
