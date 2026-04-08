@@ -1,0 +1,695 @@
+Title: DISCO-TAB: A Hierarchical Reinforcement Learning Framework for Privacy-Preserving Synthesis of Complex Clinical Data
+
+URL Source: https://arxiv.org/pdf/2604.01481v1
+
+Published Time: Fri, 03 Apr 2026 00:16:10 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+> 1
+
+# DISCO-TAB: A Hierarchical Reinforcement Learning Framework for Privacy-Preserving Synthesis of Complex Clinical Data 
+
+Arshia Ilaty ∗,1,2, Hossein Shirazi 3, Amir Rahmani 2, and Hajar Homayouni 4
+
+Abstract —The development of robust clinical decision support systems is frequently impeded by the scarcity of high-fidelity, privacy-preserving biomedical data. While Generative Large Language Models (LLMs) offer a promising avenue for synthetic data generation, they often struggle to capture the complex, non-linear dependencies and severe class imbalances inherent in Electronic Health Records (EHR), leading to statistically plausible but clinically invalid records. To bridge this gap, we introduce DISCO-TAB (DIScriminator-guided COntrol for TAB-ular synthesis), a novel framework that orchestrates a fine-tuned LLM with a multi-objective discriminator system optimized via Reinforcement Learning. Unlike prior methods relying on scalar feedback, DISCO-TAB evaluates synthesis at four granularities, token, sentence, feature, and row, while integrating Automated Constraint Discovery and Inverse-Frequency Reward Shaping to autonomously preserve latent medical logic and resolve minority-class collapse. We rigorously validate our framework across diverse benchmarks, including high-dimensional, small-sample medical datasets (e.g., Heart Failure, Parkinson’s). Our results demonstrate that hierarchical feedback yields state-of-the-art performance, achieving up to 38.2% improvement in downstream clinical classifier utility compared to GAN and Diffusion base-lines, while ensuring exceptional statistical fidelity (JSD < 0.01) and robust resistance to membership inference attacks. This work establishes a new standard for generating trustworthy, utility-preserving synthetic tabular data for sensitive healthcare applications. 
+
+Index Terms —Biomedical Informatics, Synthetic Data Gen-eration, Reinforcement Learning, Generative Large Language Models, Privacy-Preserving AI, Tabular Data Synthesis. 
+
+I. I NTRODUCTION 
+
+The integration of Artificial Intelligence (AI) into health-care has fundamentally reshaped Clinical Decision Support Systems (CDSS), precision medicine, and prognostic mod-eling. As AI-driven models increasingly influence diagnostic and prognostic decisions, their adoption in clinical practice depends not only on predictive performance, but critically on explainability , transparency , and trust . Clinicians must be able to understand how data-driven systems reason about pa-tient states, particularly in safety-critical environments where 
+
+> ∗
+
+Corresponding author: Arshia Ilaty (e-mail: ailaty@uci.edu). 
+
+> 1
+
+Computational Science Research Center, San Diego State University, San Diego, CA 92182 USA. 
+
+> 2
+
+School of Nursing and Department of Computer Science, University of California, Irvine, CA 92697 USA. 
+
+> 3
+
+Fowler College of Business, San Diego State University, San Diego, CA 92182 USA. 
+
+> 4
+
+Department of Computer Science, San Diego State University, San Diego, CA 92182 USA. H. Shirazi: hshirazi@sdsu.edu. A. Rahmani: amirr1@uci.edu. H. Homayouni: hhomayouni@sdsu.edu. 
+
+opaque model behavior can undermine accountability and patient care [1], [2]. At the same time, stringent privacy regulations, such as HIPAA [3] and GDPR [4], restrict ac-cess to Electronic Health Records (EHR), fragmenting data across institutional silos and limiting both model training and validation. This tension between data accessibility and respon-sible, explainable AI has positioned Synthetic Data Generation (SDG) as a promising enabler of privacy-preserving analysis and digital patient twin construction [5], [6]. However, for synthetic data to support explainable AI, it must itself be gen-erated through mechanisms that preserve and expose clinically meaningful structure. Despite recent progress, existing approaches to synthetic tabular data generation fall short of this requirement. Biomed-ical datasets are inherently heterogeneous, combining con-tinuous physiological measurements with discrete diagnostic and procedural codes, while exhibiting complex non-linear dependencies and severe class imbalance. Traditional Genera-tive Adversarial Networks (GANs), such as CTGAN [7] and MedGAN [8], often suffer from mode collapse, systematically underrepresenting rare but clinically critical patient subpopu-lations. Diffusion-based models [9], while effective for privacy preservation, inject stochastic noise that can obscure clinically meaningful thresholds and correlations. Critically, these mod-els operate as black boxes: they provide limited insight into 
+
+which clinical constraints are satisfied or violated , making it difficult for practitioners to reason about the validity of generated samples or to trace errors back to specific features or relationships. As a result, such methods hinder, rather than support, explainable and trustworthy AI pipelines. Large Language Models (LLMs) have recently emerged as flexible generators of serialized tabular data, as demonstrated by GReaT [10] and RealTabFormer [11]. By leveraging pre-trained semantic representations, LLMs capture global dis-tributions and rare categorical values more effectively than prior architectures. Nevertheless, their generative process re-mains largely opaque. Unconstrained LLMs may hallucinate medically implausible records, such as assigning pregnancy diagnoses to male patients or producing invalid ICD codes, without providing interpretable signals indicating why such violations occur. From an explainable AI perspective, this opacity is problematic: post-hoc explanations applied to down-stream models cannot compensate for synthetic data that en-codes hidden inconsistencies or clinically invalid logic. Thus, explainability must be addressed during data generation, not retrofitted afterward. 
+
+> arXiv:2604.01481v1 [cs.LG] 1 Apr 2026 2
+
+Problem Statement. Formally, the task of biomedical tabular data synthesis requires learning a generative model that ap-proximates the joint distribution of heterogeneous Electronic Health Record (EHR) features while simultaneously satisfy-ing multiple, non-commensurate constraints. These constraints arise at distinct semantic granularities, including (i) syntactic validity of discrete and continuous values (e.g., legal ICD formats and numeric ranges), (ii) local semantic consistency 
+
+among related attributes (e.g., demographic–diagnosis compat-ibility), (iii) feature-level statistical dependency preservation 
+
+across clinically correlated variables, and (iv) global row-level clinical coherence reflecting realistic patient profiles. Compounding this challenge, medical datasets exhibit extreme class imbalance, where rare but clinically critical conditions occupy a vanishing fraction of the data distribution. Existing generative paradigms are ill-suited to this setting: likelihood-based objectives optimize marginal token probabilities without enforcing structured medical logic; adversarial and diffusion models collapse rare modes or corrupt fine-grained corre-lations; and recent reinforcement-learning-based approaches rely on scalar or textual feedback that cannot localize errors across semantic levels. Consequently, the central unresolved problem is how to optimize a high-dimensional generative policy under multi-objective, hierarchical clinical constraints ,where violations are sparse, heterogeneous, and not expressible through a single differentiable loss function. 
+
+Proposed Approach. To bridge the gap between statisti-cal plausibility and clinical validity, we introduce DISCO-TAB (DIScriminator-guided COntrol for TABular synthesis), a unified framework that explicitly operationalizes biomedical tabular synthesis as a constrained, sequential decision-making problem. Rather than relying on a single likelihood objec-tive or monolithic discriminator, DISCO-TAB couples a fine-tuned Large Language Model (LLM) with a hierarchical re-inforcement learning (RL) optimization strategy, enabling the generator to receive dense, structured feedback aligned with clinical reasoning. Specifically, we design a multi-objective discriminator ensemble that evaluates generated records at four complementary granularities: token-level constraints en-force syntactic correctness of numerical values and categor-ical codes; sentence-level constraints penalize local semantic contradictions (e.g., demographic–diagnosis inconsistencies); 
+
+feature-level constraints preserve statistically significant clin-ical dependencies automatically discovered from real EHR data; and row-level constraints enforce global coherence of entire patient profiles. To further address the endemic class imbalance of biomedi-cal datasets, we introduce Inverse-Frequency Reward Shaping 
+
+(IFRS), which dynamically scales reinforcement signals to incentivize faithful generation of rare but clinically critical patient subpopulations. This hierarchical, reward-shaped RL formulation allows DISCO-TAB to localize and correct vi-olations at the appropriate semantic level during generation, rather than filtering errors post hoc. As a result, the framework simultaneously improves minority-class coverage, preserves fine-grained feature correlations, and suppresses medically implausible hallucinations. Extensive evaluation across ten diverse benchmarks demonstrates that this design translates directly into practice: DISCO-TAB achieves state-of-the-art downstream utility, improving train-on-synthetic, test-on-real performance by up to 12.3% over GAN, diffusion, and agentic LLM baselines, while maintaining high statistical fidelity (JSD 
+
+< 0.01 ) and robust privacy guarantees. These results demon-strate that explicitly encoding clinical constraints into the optimization loop is essential for trustworthy biomedical data synthesis, particularly in small-sample and high-imbalance regimes where existing generative models fail. 
+
+Our Contributions. are as follows: 1. Hierarchical Clinical Verification: We propose a novel multi-granular discriminator system that enforces validity from the atomic token level (e.g., valid lab values) to the holistic record level, significantly reducing medical hallucinations. 2. Automated Constraint Discovery: We introduce an au-tomated pre-processing module that extracts latent statistical dependencies from raw EHR data, initializing feature-specific discriminators without requiring manual rule engineering by clinicians. 3. SOTA Performance on Medical Benchmarks: We rig-orously validate DISCO-TAB across nine datasets, includ-ing high-dimensional, small-sample medical benchmarks. Our framework achieves up to 12.3% improvement in downstream classifier utility over GAN and Diffusion baselines while maintaining exceptional statistical fidelity. II. R ELATED WORK 
+
+Synthetic tabular data generation has progressed from clas-sical parametric modeling and oversampling to deep generative frameworks that aim to approximate high-dimensional mixed-type joint distributions under privacy and utility constraints. Following the positioning of DISCO-TAB in the current manuscript, we organize prior work along five complementary axes: (i) adversarial and auto-encoding methods, (ii) diffusion-based synthesis, (iii) autoregressive Transformer/LLM-based synthesis, (iv) constraint- and feedback-driven optimization, and (v) privacy evaluation and attack models. This categorization reflects two orthogonal design dimen-sions that have emerged in the tabular synthesis literature. The first dimension concerns the generative backbone , i.e., the probabilistic mechanism used to model the joint dis-tribution of heterogeneous features. The second dimension captures the mechanisms used to enforce validity, control, and trustworthiness , encompassing explicit structural constraints and feedback-driven optimization. We adopt this dual-axis organization to highlight that high-fidelity biomedical synthe-sis requires not only a powerful generative model, but also principled control mechanisms that govern semantic validity, minority-class coverage, and privacy risk, an architectural separation that directly motivates the design of DISCO-TAB. 
+
+A. Adversarial and Auto-Encoder Methods 
+
+Early deep tabular synthesizers adapted GAN training to heterogeneous columns via conditional vectors. CTGAN [7] remains a canonical baseline. In healthcare, MedGAN [8] combined autoencoders with adversarial learning to handle high-dimensional discrete codes. More recently, TAEGAN 3
+
+[12] revisited the GAN architecture by incorporating a masked auto-encoder as the generator. While TAEGAN achieves high utility through efficient adversarial training, it remains fun-damentally a GAN-based approach, which often struggles to capture the long-range semantic dependencies (e.g., patient trajectories) that language models naturally encode. 
+
+B. Diffusion Models for Tabular Synthesis 
+
+Diffusion probabilistic models, such as TabDDPM [9] and TabSyn [13], have set new standards for privacy by modeling data via iterative denoising. However, a recurring limitation for clinical data is that the Gaussian noise assumption can blur fine-grained thresholds (e.g., specific blood pressure cutoffs) and rare co-morbidity structures. As shown in our privacy analysis (Section IV-D), this often leads to privacy through noise, achieving high metrics by drifting away from the valid clinical manifold. 
+
+C. Autoregressive Transformers and LLM-Based Baselines 
+
+Treating tabular synthesis as a sequence modeling prob-lem has gained traction. Fine-tuning approaches such as GReaT [14], RealTabFormer [11], and HARMONIC [15] demonstrate that Transformer-based generators can capture global distributions by linearizing records into token se-quences. Parallel to fine-tuning, prompt-based strategies like SynLLM [16] and AIGT [17] utilize context engineering to guide pre-trained LLMs in structured data generation without extensive weight updates. Focusing on architectural efficiency, TabularARGN [18] recently proposed a randomized permu-tation framework for fast conditional generation. Limitation: 
+
+While these autoregressive approaches excel at semantic mod-eling, they rely largely on likelihood maximization. Conse-quently, they risk generating samples that are statistically plausible but semantically inconsistent (e.g., demographic– diagnosis conflicts), as they lack explicit mechanisms to en-force complex medical domain logic during the generation process. 
+
+D. Constraint- and Feedback-Driven Optimization 
+
+Beyond choosing a backbone, enforcing validity requires explicit control mechanisms. In the database community, ap-proaches such as Kamino [19] and PrivMRF [20] synthesize data while preserving integrity constraints. However, these are often rigid and difficult to scale to high-dimensional generative models. In the neural domain, recent works have attempted to guide generation via feedback. TAGAL [21] employs an agentic loop where an LLM critiques its own outputs via textual prompts. However, this relies on the model’s inherent reasoning and lacks mechanisms to enforce hard structural constraints. Similarly, P-TA [22] applies Proximal Policy Optimization (PPO) with a binary discriminator. While this introduces reinforcement learning, it relies on a sparse scalar reward signal that cannot distinguish between syntactic errors and semantic inconsistencies. DISCO-TAB addresses these limitations by decomposing the reward signal into hierarchical, granular components that explicitly optimize for distinct levels of clinical validity. 
+
+E. Privacy Evaluation and Attacks on Synthetic Tabular Re-leases 
+
+A critical practical dimension is that synthetic data is not automatically private; generative models can leak train-ing information via memorization or distributional collisions. TableGAN-MCA [23] introduces a membership collision 
+
+threat model showing that, even when classic membership inference appears weak, black-box access to synthetic samples can enable partial recovery of training records due to collisions with real data points. This line of work motivates stronger privacy evaluation for tabular synthesis beyond utility-only metrics. Differential privacy (DP) mechanisms for synthetic data generation have also been widely studied; for example, PATE-GAN [24] provides DP guarantees for GAN-based syn-thesis through private aggregation of teacher discriminators. In domains with high sensitivity (e.g., EHRs), these results col-lectively emphasize that trustworthy synthesis requires both (i) structured validity/utility preservation and (ii) explicit privacy auditing against modern attacks. 
+
+Summary and Positioning. Prior GAN and diffusion paradigms provide strong baselines for mixed-type fidelity, and Transformer/LLM approaches improve semantic model-ing via tokenization and pretraining. However, the literature also indicates two persistent gaps: (1) enforcing hierarchical clinical/structural validity beyond scalar objectives, and (2) sustaining minority-class coverage without mode dropping, while simultaneously remaining robust under modern privacy attack models. DISCO-TAB is designed to address these gaps by combining multi-objective, multi-granular discriminators with reward-shaped RL fine-tuning and by evaluating utility– fidelity–privacy jointly. III. M ETHODOLOGY 
+
+We propose DISCO-TAB , a hierarchical reinforcement learning framework for synthesizing high-fidelity, privacy-aware tabular data. The proposed approach mitigates the stochastic and unconstrained nature of standard large language models (LLMs) by explicitly enforcing structural, seman-tic, and statistical validity through a multi-granular feed-back mechanism. Rather than relying on implicit likelihood optimization, DISCO-TAB formulates data generation as a constrained sequential decision-making problem guided by interpretable validity signals. As illustrated in Fig. 1, the framework consists of three tightly integrated components: (1) an Automated Constraint Discovery module that identifies latent clinical and statisti-cal dependencies directly from real data; (2) a Hierarchical Discriminator System that evaluates generated samples at four semantic resolutions, token, sentence, feature, and row, to localize and penalize distinct forms of invalidity; and (3) a Reward-Shaped Proximal Policy Optimization (PPO) 
+
+procedure that aligns the generative policy with both global distributional fidelity and robust minority-class representation. DISCO-TAB does not enforce formal differential privacy guarantees during training; instead, privacy is assessed em-pirically using standard auditing metrics, including distance-based similarity measures and membership inference resis-4
+
+tance, as detailed in Section IV-D. Collectively, these com-ponents enable DISCO-TAB to generate synthetic tabular data that is statistically faithful, structurally coherent, and suitable for downstream clinical analytics while maintaining strong empirical privacy properties. Throughout this section, the generator Gθ and policy πθ
+
+refer to the same autoregressive model, viewed respectively as a data generator and as a stochastic policy; Dens denotes the discriminator ensemble, with Dk(·) indicating an individual discriminator operating at granularity k.
+
+A. Problem Formulation and Linearization 
+
+We use Si to denote a specific serialized record corre-sponding to row ri ∈ Dreal , and S to denote a generic generated sequence sampled from the policy. Let Dreal =
+
+{r1, r 2, . . . , r N } be a private clinical dataset consisting of 
+
+N patient records. Each record ri contains M heterogeneous features F = {f1, f 2, . . . , f M }, where fj may be continuous (e.g., BMI), categorical (e.g., Diagnosis Code), or ordinal (e.g., Disease Stage). To leverage the semantic reasoning of pre-trained LLMs, we employ a schema-aware linearization function L : RM → V ∗
+
+that transforms a structured row ri into a natural language se-quence Si = {w1, w 2, . . . , w T }. We adopt a verbose template strategy to preserve semantic context: 
+
+Si = “[ f1] is [ vi, 1], [ f2] is [ vi, 2], . . . ” (1) The generator Gθ , initialized with a GPT-2 backbone, models the probability of a sequence as Pθ (S) = QTt=1 P (wt|w<t ).To ensure reproducibility and prevent schema drift, we employ a deterministic linearization scheme shared across all datasets. Feature names are treated as fixed lexical tokens and appear in a predefined order consistent with the original tabular schema. Continuous values are standardized using statistics computed on Dreal and rendered with fixed decimal precision. Categorical and ordinal values are represented using canoni-cal string identifiers derived from the original data vocabu-lary. Missing values are explicitly encoded using a reserved 
+
+[MISSING] token to distinguish absence from valid zero or null-equivalent values. This schema-aware representation enforces consistent structure during generation and enables discriminators to localize syntactic and semantic violations reliably. 
+
+B. Automated Constraint Discovery 
+
+Medical datasets often contain strong statistical dependen-cies across heterogeneous variables (e.g., Age vs. Comor-bidities) that are critical for clinical validity. Relying on manual rule definitions is unscalable. Instead, we introduce an unsupervised constraint discovery phase prior to training. We compute a global correlation matrix C ∈ RM ×M for 
+
+Dreal . We utilize Pearson correlation for numerical-numerical pairs, Cram´ er’s V for categorical-categorical pairs, and the Correlation Ratio for mixed types. We identify the set of critical dependency pairs Pcrit by first filtering feature pairs whose association strength exceeds a predefined threshold 
+
+δthresh , and then selecting the top-k strongest pairs among them: 
+
+Pcrit = Top-k
+
+
+
+{(fa, f b) | | Cab | ≥ δthresh }
+
+
+
+(2) These discovered pairs initialize the input heads of our Feature-Level Discriminator ( Df eat ), ensuring the model ex-plicitly optimizes for the preservation of these specific, clini-cally significant relationships. This two-stage selection ensures that only statistically meaningful dependencies are retained while bounding the number of feature-level constraints for computational efficiency and training stability. While this discovery process is correlation-based, it is suf-ficient to surface dominant linear and mixed-type associations that capture clinically meaningful structure without requiring explicit causal or high-order dependency modeling. 
+
+C. Hierarchical Multi-Objective Discriminators 
+
+To guide the generator towards clinically valid distributions, we employ a composite discriminator system Dens operating at four granularities. Table ?? summarizes the hierarchical discriminator ensem-ble, highlighting the semantic granularity, inputs, and roles of each component. 
+
+1) Level 1: Token Consistency ( Dtoken ): Medical data re-quires strict syntactic adherence (e.g., ICD codes must follow alphanumeric formats; floats must not contain characters). We employ a lightweight Bidirectional LSTM to evaluate the syntactic validity of each generated token wt given its local context. This provides immediate, low-level feedback to prevent syntax errors. We adopt a lightweight Bidirectional LSTM for Dtoken 
+
+rather than deterministic rule-based validation (e.g., regular expressions or hard-coded type checks) for two reasons. First, learned sequence models generalize across heterogeneous schemas and tokenization patterns without requiring manual specification of dataset-specific rules. Second, contextual mod-eling enables Dtoken to detect subtle syntactic violations that depend on local token context (e.g., malformed numeric values or invalid code prefixes) while remaining differentiable and seamlessly integrable into the reinforcement learning objec-tive. This design balances expressiveness and computational efficiency, providing robust low-level validity signals without constraining the generator through brittle decoding rules. 
+
+2) Level 2: Semantic Plausibility ( Dsent ): In the con-text of serialized tabular data, a “sentence” corresponds to a single feature–value clause generated by the linearization template (e.g., “ Gender is Male ” or “ Pregnancy is Yes ”). Each clause is delimited deterministically based on the schema-aware serialization rules described in Section III-A. During training and inference, Dsent operates on individual clauses rather than full records, enabling localized detection of semantic inconsistencies between a feature and its assigned value without confounding effects from unrelated attributes. Local contradictions (e.g., ”Gender: Male, Pregnancy: Yes”) undermine clinical trust. We utilize a BERT-base encoder to evaluate short variable-value segments. This discriminator leverages pre-trained semantic knowledge to penalize logical 5
+
+Fig. 1: The DISCO-TAB framework for tabular data synthesis. (A) Automated Constraint Discovery: The system analyzes the real dataset ( Dreal ) to compute a global correlation matrix and identify statistically significant feature dependencies (e.g., Age vs. Comorbidities), which are used to initialize the feature-level discriminator ( Df eat ). (B) Hierarchical Discriminators: A multi-objective discriminator ensemble evaluates generated records ( S) at four semantic granularities: token-level (syntactic validity), sentence-level (local semantic plausibility), feature-level (dependency consistency), and row-level (global coherence). (C) Inverse Frequency Reward Shaping (IFRS): 
+
+During reinforcement learning, the PPO reward is scaled based on the rarity of the target class associated with the generated record, mitigating mode collapse in imbalanced datasets. 
+
+hallucinations that are syntactically correct but semantically impossible. 
+
+3) Level 3: Feature Correlation ( Df eat ): For every pair 
+
+(fa, f b) ∈ P crit , we extract the contextual embeddings ha, h b
+
+from the generator’s last hidden layer. For each feature–value clause in the serialized sequence, we maintain a deterministic mapping between feature identifiers and token spans based on the schema-aware linearization rules. Let T (fa) denote the set of token indices corresponding to the value of feature fa. We compute the feature embedding 
+
+ha by mean-pooling the generator’s final-layer hidden states over these value tokens: 
+
+ha = 1
+
+|T (fa)|
+
+X 
+
+> t∈T (fa)
+
+Ht, (3) where Ht denotes the contextual embedding at token position 
+
+t. Feature-name tokens are excluded from pooling to prevent the discriminator from exploiting trivial lexical cues. The same procedure is applied to obtain hb for feature fb. These embeddings are concatenated and passed through a specialized 
+
+Multi-Layer Perceptron (MLP) projection head: 
+
+Score f eat = σ(W2 · ReLU (W1[ha ⊕ hb] + b1) + b2) (4) This encourages preservation of these dependencies if the joint distribution of highly correlated clinical features deviates from the real data manifold. The output of this projection head is treated as the feature-level discriminator score, and Df eat (S)
+
+is obtained by aggregating these scores across all (fa, f b) ∈Pcrit for the record. 
+
+4) Level 4: Global Coherence ( Drow ): To assess holis-tic clinical plausibility, the row-level discriminator evalu-ates entire serialized records. Specifically, Drow operates on the sequence of final-layer token embeddings produced by the generator. These embeddings are aggregated using mean pooling across all token positions to obtain a fixed-length representation of the record, which is then passed through a                                                                                              
+
+> Algorithm 1 DISCO-TAB Training Procedure for Clinical Data
+> Require: Real Data Dreal ,Pre-trained Generator Gθinit ,Correlation Threshold δthresh , Max Dependency Count k, Balancing Factor α
+> Ensure: Optimized Policy πθ∗
+> Phase 1: Constraint Discovery
+> 1: C←ComputeGlobalCorrelation (Dreal )
+> 2: Pcrit ←ExtractPairs (C, δ thresh , k )▷Identify dependencies 3: Initialize Discriminator Ensemble Dens =
+> {Dtoken , D sent , D f eat , D row }
+> Phase 2: RL Optimization Loop
+> 4: for epoch e= 1 to Edo
+> 5: Bsyn ←GenerateBatch (Gθ)
+> 6: Breal ←SampleBatch (Dreal )
+> 7: // Step A: Update Discriminators
+> 8: Ldisc ←P
+> kμkL(k)
+> disc
+> 9: Update Dens to minimize Ldisc
+> 10: // Step B: Policy Update with IFRS
+> 11: for sequence S∈ B syn do
+> 12: y←ExtractDiagnosisLabel (S)
+> 13: Wy←1 + α·max(0 ,log( Ntotal
+> Ny·|Y| )) ▷Calculate Rarity Weight 14: Rraw ←PλkDk(S)
+> 15: Rtotal ←Rraw ·Wy▷Apply Inverse Frequency Shaping 16: end for
+> 17: Update policy and value parameters (θ, ϕ )by maximizing L(θ, ϕ )
+> via PPO 18: end for
+> 19: return πθ∗
+
+lightweight Multi-Layer Perceptron (MLP) to produce a scalar realism score: 
+
+Drow (Si) = σ MLP 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+Ht
+
+!! 
+
+, (5) where Ht denotes the contextual embedding at position t and 
+
+T is the sequence length. This design captures global feature interactions while remaining computationally efficient and independent of other discriminators, enabling scalable training without introducing heavy Transformer-based overhead. 
+
+5) Discriminator Training and Loss Aggregation: We use 
+
+B(k) 
+
+> real
+
+and B(k) 
+
+> syn
+
+to denote the real and synthetic minibatches constructed at discriminator granularity k. Each discriminator in the ensemble Dens = {Dtoken , D sent , D f eat , D row } is trained as a binary classifier to distinguish real samples from 6
+
+synthetic ones at its respective granularity. Let Breal and Bsyn 
+
+denote minibatches of real and generated records, respectively. For both real and synthetic samples, token embeddings Ht
+
+are obtained via a forward pass through the generator Gθ ;for real sequences, embeddings are computed under teacher forcing using the ground-truth token order. 
+
+Granularity-Specific Training Sets. For each discriminator 
+
+Dk, we construct a task-specific dataset: 1. Dtoken operates on individual tokens extracted from serialized records. 2. Dsent operates on short variable–value segments parsed from the sequence. 3. Df eat operates on embedding pairs (ha, h b) correspond-ing to feature pairs (fa, f b) ∈ P crit .4. Drow operates on full serialized records S.Each sample is labeled as real ( y = 1 ) if drawn from Dreal 
+
+and synthetic ( y = 0 ) otherwise. For discriminator Dk, we define a binary cross-entropy loss: 
+
+L(k) 
+
+> disc
+
+= Ex∼B (k)
+
+> real
+
+[− log Dk(x)]+ Ex∼B (k)
+
+> syn
+
+[− log(1 − Dk(x))] ,
+
+(6) where B(k) 
+
+> real
+
+and B(k) 
+
+> syn
+
+denote the real and synthetic samples at granularity k.The overall discriminator loss is the weighted sum of the individual losses: 
+
+Ldisc = X
+
+> k∈{ token, sent, f eat, row }
+
+μk L(k)
+
+> disc
+
+, (7) where μk controls the relative contribution of each discrimi-nator during training. In our experiments, we set μk uniformly unless stated otherwise. 
+
+D. Optimization via Reward-Shaped RL 
+
+We cast tabular record synthesis as an episodic Markov Decision Process (MDP) in which the generator is an au-toregressive policy. For a given record template, the pol-icy πθ generates a serialized sequence S = ( w1, . . . , w T )
+
+token-by-token. At decoding step t, the state is the prefix 
+
+st = ( w1, . . . , w t−1), the action is the next-token emission 
+
+at = wt, and the episode terminates at t = T when an end-of-record token is produced. Thus, the trajectory distribution is S ∼ πθ (·) with πθ (S) = QTt=1 πθ (wt | w<t ).
+
+Reward Construction and Timing. After generating a com-plete sequence S, DISCO-TAB computes a composite reward from the discriminator ensemble. While the discriminators operate at different granularities (token/sentence/feature/row), we use their outputs to form a single terminal reward assigned to the trajectory: 
+
+Rraw (S) = X
+
+> k∈{ token, sent, f eat, row }
+
+λk Dk(S), (8) where Dk(·) ∈ [0 , 1] denotes the score produced by discrimi-nator k (aggregated over tokens/segments/pairs as appropriate) and λk controls its contribution. This design yields a dense 
+
+evaluation signal (via multiple discriminators) while preserv-ing a simple episodic RL objective. In practice, the resulting terminal reward is broadcast to all time steps through the return used for policy-gradient updates. 
+
+Discriminator Output Aggregation. Each discriminator pro-duces multiple local scores at its operating granularity, which are aggregated into a scalar record-level score Dk(S). Specif-ically, Dtoken (S) and Dsent (S) are computed as the mean score over all tokens and feature–value clauses in S, respec-tively; Df eat (S) is computed as the mean score over all feature pairs (fa, f b) ∈ P crit evaluated for the record; and Drow (S)
+
+directly outputs a scalar score for the entire sequence. Mean aggregation was chosen for stability and to avoid dominance by any single local violation. 
+
+1) Inverse Frequency Reward Shaping (IFRS): Clinical datasets are often severely imbalanced; maximum-likelihood training can underrepresent minority cohorts. To counter this, we scale the reward by a class-dependent weight. For agenerated record with target label y ∈ Y , we define: 
+
+Wy = 1 + α · max 
+
+
+
+0, log 
+
+ Ntotal 
+
+Ny · |Y| 
+
+ 
+
+, (9) where Ny is the frequency of class y in Dreal , Ntotal =P 
+
+> y∈Y
+
+Ny , and α is a scaling hyperparameter. The final shaped reward is: 
+
+Rtotal (S) = Wy · Rraw (S). (10) 
+
+2) PPO Objective with KL Regularization: We optimize the generator parameters θ using Proximal Policy Optimization (PPO). Let πθold denote the policy before the update, and define the likelihood ratio 
+
+rt(θ) = πθ (wt | w<t )
+
+πθold (wt | w<t ) . (11) We employ a learned value function Vϕ(st) to reduce variance and compute advantages. Using the terminal reward, we define the Monte-Carlo return ˆGt = Rtotal (S) for all t and the advantage ˆAt = ˆGt − Vϕ(st). (12) The PPO clipped surrogate objective is: 
+
+LPPO (θ) = E
+
+h
+
+min 
+
+
+
+rt(θ) ˆAt, clip (rt(θ), 1 − ϵ, 1 + ϵ) ˆAt
+
+i 
+
+,
+
+(13) where ϵ is the clipping threshold. To prevent the policy from drifting excessively from the reference model, we additionally include KL regularization to a fixed reference policy πref 
+
+(initialized from the pre-trained backbone): 
+
+L(θ, ϕ ) = LPPO (θ) − β E[KL (πθ (· | st) ∥ πref (· | st))] 
+
+− cv E
+
+
+
+Vϕ(st) − ˆGt
+
+2
+
+. (14) where β controls the KL penalty and cv weights the value-function regression loss. This formulation ensures stable optimization while aligning the generator with multi-granular validity constraints and minority-class coverage. 
+
+3) Mitigation of Reward Exploitation: Reinforcement learning–based generative models are susceptible to reward exploitation, where the policy discovers degenerate strategies that satisfy a subset of objectives without producing seman-tically meaningful outputs. DISCO-TAB mitigates this risk through several complementary design choices. First, the KL regularization term constrains policy updates to remain close 7
+
+to the reference pre-trained model, preventing abrupt diver-gence toward adversarial or nonsensical generations. Second, reward signals are derived from a multi-objective discriminator ensemble operating at distinct semantic granularities, making it difficult for the generator to exploit a single weak signal in isolation. Third, rewards are assigned at the trajectory level rather than per-token, discouraging locally optimal but globally invalid sequences. Finally, discriminators are updated continuously using both real and synthetic samples, reducing the risk of stale or easily exploitable decision boundaries. Together, these mechanisms promote stable training and ensure that improvements in reward correspond to meaningful gains in clinical validity and data utility. 
+
+E. Training Configuration and Hyperparameters 
+
+To ensure reproducibility, we briefly summarize the key training hyperparameters used in DISCO-TAB. Unless stated otherwise, hyperparameters are held fixed across datasets. 
+
+Generator and PPO Optimization. The generator is ini-tialized from a pre-trained GPT-2 backbone. PPO is trained with a fixed learning rate, clipping parameter ϵ, and KL-regularization weight β to control deviation from the reference policy. A learned value function is jointly optimized using mean-squared error loss weighted by coefficient cv . All PPO-related hyperparameters, including learning rates, batch sizes, and number of update steps per epoch, are reported in Sec-tion IV. 
+
+Discriminator Training. Each discriminator in Dens is trained using binary cross-entropy loss with equal weighting ( μk = 1 )unless otherwise specified. Discriminators are updated for a fixed number of steps per epoch using minibatches of real and synthetic samples drawn at their respective granularities. The relative contribution of each discriminator to the generator reward is controlled by λk, which is set uniformly in all experiments. 
+
+Constraint Discovery and Reward Shaping. The constraint discovery threshold δthresh and the maximum number of retained dependency pairs k are fixed across datasets. The Inverse Frequency Reward Shaping parameter α is selected from a small validation sweep and then held constant. Full hyperparameter values are provided in the experimental setup for completeness. IV. E XPERIMENTS AND RESULTS 
+
+To rigorously evaluate the efficacy of DISCO-TAB, we conducted a comprehensive benchmarking study against seven state-of-the-art generative frameworks across a diverse suite of nine datasets spanning medical, financial, and social domains. Our analysis goes beyond simple leaderboard reporting; we aim to dissect the mechanistic reasons behind performance differentials, specifically examining how hierarchical rein-forcement learning resolves the traditional trade-off between statistical fidelity and sample diversity. 
+
+A. Experimental Setup 
+
+We evaluate DISCO-TAB on a diverse suite of benchmarks designed to span multiple data regimes, ranging from small, high-dimensional medical datasets such as Heart Failure ( N =299 , D = 13 ) to large-scale, severely imbalanced datasets such as Diabetes ( N = 100 ,000 , imbalance ratio 1:9 ). This selection intentionally stresses complementary failure modes of existing generative models: autoregressive Transformers typically un-derperform in data-scarce settings, while adversarial models are prone to mode collapse under extreme class imbalance. DISCO-TAB is compared against representative state-of-the-art baselines from all major paradigms of tabular data synthesis, including adversarial approaches (CTGAN [7], TAEGAN [12]), autoregressive Transformer-based models (RealTabFormer [11] and the commercial AutoML system MostlyAI [25]), diffusion and latent-variable methods (Tab-DDPM [9], TabSyn [13]), and recent agentic LLM-based generation frameworks (TAGAL [21]). 
+
+B. Machine Learning Utility Analysis 
+
+The primary measure of synthetic data value is its Train on Synthetic, Test on Real (TSTR) performance. Table I presents the F1-scores of Random Forest classifiers trained on gener-ated data with 5-fold cross-validation. Hyperparameters were standardized across all experiments to ensure fair comparison between real and synthetic datasets. 
+
+Relative Utility Gain ( ∆) Definition and Interpretation. 
+
+To explicitly quantify the performance margin of DISCO-TAB over competing generative models, we define the relative utility gain for each dataset d as 
+
+∆d = F 1(d) 
+
+> DISCO-TAB
+
+− max  
+
+> m∈B
+
+F 1(d) 
+
+> m
+
+, (15) where B denotes the set of all baseline methods excluding DISCO-TAB. Positive values of ∆d indicate that DISCO-TAB achieves strictly higher downstream utility than all competing baselines on dataset d, whereas negative values indicate that at least one baseline attains superior performance. 
+
+Medical vs. Non-Medical Performance Regimes. This ∆-based analysis reveals a clear and domain-consistent perfor-mance pattern. Across the six medical benchmarks (Heart Failure, Breast Cancer, Liver Disorders, Parkinsons, Obesity, and Diabetes), DISCO-TAB achieves positive performance gains on five out of six datasets, with particularly pronounced improvements on small-sample and highly imbalanced clinical datasets. The largest margins are observed on Liver Disorders (∆ = +0 .382 ) and Heart Failure ( ∆ = +0 .123 ), directly supporting our central hypothesis that hierarchical reinforce-ment learning with multi-granular discriminators is especially effective in data-scarce medical regimes. The only exception is the Diabetes dataset, where a large-scale commercial AutoML baseline marginally outperforms DISCO-TAB, reflecting the reduced importance of structural and minority-class constraints in extremely large datasets. In contrast, on the non-medical benchmarks (German Credit, Bank Marketing, and Census Income), which are included to evaluate cross-domain generalizability, DISCO-TAB remains competitive but does not consistently dominate specialized industrial baselines. While a substantial gain is achieved on German Credit ( ∆ = +0 .275 ), modest negative margins are observed on Bank Marketing ( ∆ = −0.014 )8
+
+and Census Income ( ∆ = −0.006 ). This trend indicates that DISCO-TAB’s primary advantages emerge in domains where semantic validity, structural coherence, and minority-class preservation are critical, rather than in large, well-balanced tabular datasets. Traditional deep learning methods typically require large training corpora to converge reliably. On the Heart Failure dataset ( N = 299 ), baseline methods such as RealTabFormer and TabDDPM fail to learn a meaningful decision boundary, achieving F1-scores close to random guessing ( ≈ 0.55 –0.60 ). Even the commercial AutoML solution MostlyAI exhibits limited utility (0.598). In stark contrast, DISCO-TAB attains near-perfect downstream performance ( F 1 = 1.000 , ∆ =+0 .123 ). This result substantiates our hypothesis regarding 
+
+Hierarchical Feedback Efficiency . While standard autoregres-sive training objectives based on cross-entropy provide sparse and indirect learning signals in small-data regimes, DISCO-TAB leverages dense, multi-granular reinforcement signals at the token, feature, and row levels. As a result, the generator is explicitly guided to remain on the valid data manifold, mitigating the mode-averaged noise commonly observed in unguided Transformer-based synthesis. 
+
+Overcoming Mode Collapse in Complex Manifolds. The Obesity dataset poses a challenging multi-class classification problem characterized by severe class imbalance. Adversarial baselines collapse in this setting (CTGAN: 0.105; TAEGAN: 0.215), consistent with the vanishing-gradient pathology of GAN training on discrete and imbalanced data. DISCO-TAB achieves an F1-score of 0.929 ( ∆ = +0 .027 ), substantially outperforming both GAN-based and agentic LLM baselines such as TAGAL (0.790). This improvement is driven by our Inverse Frequency Reward Shaping (IFRS) mechanism, which dynamically amplifies reinforcement signals for minority-class generation. By integrating class-aware rewards directly into the RL objective, DISCO-TAB counteracts the tendency of large language models to overfit dominant classes, enabling robust synthesis of rare but clinically significant patterns. 
+
+C. Statistical Fidelity: Beyond Univariate Metrics 
+
+A generator can cheat on utility metrics by simply copying the training data. Therefore, we rigorously assess statistical fidelity using the Kolmogorov-Smirnov (KS) statistic (Table II), which measures the maximum divergence between the real and synthetic Cumulative Distribution Functions (CDFs). All divergence metrics are computed on marginal feature distri-butions and averaged across features, while Pearson reports the mean absolute correlation deviation across statistically significant feature pairs. While unconstrained autoregressive baselines (e.g., Re-alTabFormer) perform exceptionally well on large datasets (KS 
+
+≈ 0.01 on Census), they struggle with distribution shifts on smaller medical datasets (KS > 0.10 on Heart Failure). Con-versely, TabDDPM (Diffusion) shows high variance, achieving reasonable fidelity on Heart Failure (0.098) but suffering catastrophic failure on Diabetes (KS 0.553). DISCO-TAB demonstrates the most consistent performance, maintaining KS 
+
+< 0.035 across all evaluated datasets, despite large variations in dataset size and feature dimensionality. This consistency stems from our Row-Level Discriminator ( Drow ), as con-firmed by the ablation study in Section VI, which provides a global coherence check that prevents the ‘hallucination’ of statistically impossible outliers often seen in pure diffusion or autoregressive models. 
+
+D. Privacy-Utility Trade-off Analysis 
+
+A central challenge in biomedical synthesis is the Privacy-Utility Pareto Frontier. We quantify privacy using the **Dis-tance to Closest Record (DCR)**, measuring the Euclidean distance between synthetic samples and their nearest real neighbor. A high DCR indicates that the model is not memo-rizing patient records, while a very low DCR (near 0) suggests potential data leakage. 
+
+a) The Diffusion Privacy Paradox: Table III reveals a critical nuance in privacy metrics. TabDDPM exhibits con-sistently high DCR values (e.g., > 4000 on Heart Failure), suggesting exceptional privacy. However, this comes at acatastrophic cost to utility on complex manifolds like Obesity, where the diffusion model effectively collapses. This suggests that large DCR values in diffusion models often arise from stochastic noise pushing samples off the valid clinical mani-fold, rather than intelligent privacy preservation. 
+
+b) DISCO-TAB’s Efficient Frontier: In contrast, DISCO-TAB occupies a high-utility sweet spot. On large datasets like Bank Marketing, it matches the commercial AutoML baseline (MostlyAI) in both privacy (DCR ≈ 18.5) and utility (F1 ≈
+
+0.87), proving that RL fine-tuning can achieve industrial-grade synthesis. On small medical datasets, the lower DCR (1.27– 1.9) reflects high fidelity; in data-scarce regimes, the correct clinical distribution is often tightly clustered around the real data support. By maintaining a non-zero DCR, DISCO-TAB avoids exact memorization while preserving the intricate non-linear dependencies required for precision medicine. 
+
+Computational Efficiency and Resource Utilization. 
+
+A critical barrier to deploying deep generative models in clinical settings is the computational cost, particularly given the resource constraints of secure hospital environments. We conducted a systematic resource profiling of DISCO-TAB against six trainable baselines, monitoring Peak GPU Memory (VRAM) and Relative Training Time across our full suite of nine datasets. 
+
+c) Memory Efficiency Analysis: As detailed in Table IV, frameworks exhibit distinct resource profiles. Diffusion-based models (TabDDPM, TabSyn) are the most resource-intensive, averaging 10.7 GB of VRAM. This high consumption stems from the requirement to store gradients for the iterative denois-ing steps in high-dimensional space, often pushing the limits of standard 12GB commercial GPUs. In contrast, DISCO-TAB averages 5.0 GB, maintaining a footprint significantly lower than diffusion models and compa-rable to standard Transformer fine-tuning (RealTabFormer, 5.3 GB). Although Reinforcement Learning typically introduces overhead (storing value networks and policy gradients), our architecture mitigates this by utilizing lightweight MLP heads for the discriminator ensemble rather than duplicating the 9
+
+TABLE I: Downstream ML utility (F1-score) under the Train-on-Synthetic, Test-on-Real (TSTR) protocol. ∆ denotes the absolute percentage point differences between DISCO-TAB and the strongest baseline per dataset (positive indicates DISCO-TAB superiority; negative indicates a stronger baseline). The first six datasets are medical benchmarks, while the last three (German Credit, Bank Marketing, Census Income) are non-medical datasets included to evaluate cross-domain generalizability. 
+
+Dataset CTGAN TAEGAN TabDDPM TabSyn RealTabFormer MostlyAI TAGAL DISCO-TAB ∆
+
+Heart Failure 0.778 0.655 0.665 0.877 0.548 0.598 0.839 1.000 +0.123 Breast Cancer 0.549 0.693 0.689 0.934 0.495 0.498 0.990 0.994 +0.004 Liver Disorders 0.496 0.576 0.133 0.510 0.528 0.574 0.608 0.990 +0.382 Parkinsons 0.594 0.595 0.637 0.610 0.637 0.637 0.886 0.966 +0.080 Obesity 0.105 0.215 0.577 0.902 0.250 0.584 0.790 0.929 +0.027 Diabetes 0.881 0.875 0.840 0.950 0.968 0.969 0.882 0.865 -0.104 German Credit 0.538 0.590 0.592 0.673 0.629 0.626 0.650 0.925 +0.275 Bank Marketing 0.862 0.858 0.834 0.875 0.880 0.885 0.861 0.871 -0.014 Census Income 0.832 0.841 0.844 0.860 0.868 0.865 0.810 0.862 -0.006 
+
+TABLE II: Unified statistical fidelity comparison. Columns under DISCO-TAB report our performance across five metrics. The right side compares the KS Statistic (lower is better) against baselines. DISCO-TAB achieves consistently low KS divergence across all medical datasets, consistently outperforming Diffusion models (TabDDPM) on complex data. Pearson correlation is reported exclusively for continuous feature pairs. In addition, distributional similarity metrics between real and synthetic data. KL divergence ( DKL (P ∥ Q)) is computed with additive smoothing ( ϵ = 10 −8) to ensure numerical stability. Jensen–Shannon Divergence (JSD) is additionally reported as a symmetric and bounded alternative.                                                                                                                               
+
+> DISCO-TAB Metrics Baseline KS Comparison (Lower is Better) Dataset JS ↓KL ↓Hell. ↓KS ↓Pearson ↑MostlyAI CTGAN TAEGAN RealTab TabDDPM TabSyn TAGAL Heart Failure 0.003 0.017 0.044 0.022 0.968 0.085 0.147 0.212 0.125 0.098 0.045 0.039
+> Breast Cancer 0.011 0.090 0.095 0.025 0.992 0.038 0.339 0.268 0.150 0.210 0.032 0.045
+> Liver Disorders 0.017 0.147 0.094 0.017 0.978 0.063 0.337 0.416 0.220 0.350 0.085 0.095
+> Parkinsons 0.005 0.028 0.067 0.034 0.999 0.066 0.315 0.374 0.110 0.095 0.052 0.062
+> Obesity 0.008 0.044 0.060 0.023 0.986 0.184 0.301 0.274 0.250 0.045 0.035 0.080
+> Diabetes 0.026 0.868 0.117 0.025 0.798 0.044 0.160 0.215 0.013 0.553 0.049 0.045
+> German Credit 0.001 0.003 0.015 0.026 0.968 0.022 0.040 0.070 0.055 0.045 0.038 0.042
+> Bank Marketing 0.044 0.300 0.132 0.018 0.952 0.013 0.108 0.267 0.021 0.085 0.030 0.035
+> Census Income 0.074 2.528 0.200 0.017 0.986 0.006 0.171 0.190 0.010 0.025 0.021 0.015
+
+TABLE III: Privacy-Utility Trade-off across diverse scales. We re-port Utility (F1-Score) and Privacy (DCR). TabDDPM consistently achieves extreme DCR values due to diffusion noise, but often at the cost of utility (e.g., on Obesity). DISCO-TAB maintains a pragmatic safe zone ( DCR > 0) while strictly prioritizing the clinical fidelity required for high F1 scores. 
+
+Dataset Metric TabDDPM MostlyAI DISCO-TAB Heart Failure Utility (F1) 0.665 0.598 1.000 
+
+Privacy (DCR) 4830.6 895.0 1.27 
+
+Obesity Utility (F1) 0.577 0.584 0.929 
+
+Privacy (DCR) 6.8 1.9 1.5 
+
+German Credit Utility (F1) 0.592 0.626 0.925 
+
+Privacy (DCR) 3.3 2.1 1.9 
+
+Bank Mkt. Utility (F1) 0.834 0.885 0.871 Privacy (DCR) 745.7 18.3 18.5 
+
+heavy Transformer backbone. This parameter-efficient design ensures that DISCO-TAB can be trained on single-GPU work-stations common in hospital data centers. 
+
+d) Time-Performance Trade-off: While memory efficient, DISCO-TAB requires approximately 5.8× the training time of simple GANs (CTGAN) due to the PPO feedback loop. How-ever, it remains significantly faster than Diffusion baselines, which suffer from extremely slow convergence rates. DISCO-TAB strikes a pragmatic balance: it invests computational time during training to produce a high-utility model that is strictly validated against clinical logic. 
+
+TABLE IV: Computational Efficiency: Peak GPU Memory Usage (GB). Datasets are grouped by scale (Small vs. Large). DISCO-TAB remains memory-efficient ( < 6 GB), unlike Diffusion models.                                                                              
+
+> Dataset CTGAN TAEGAN TabDDPM TabSyn MostlyAI Real. DISCO-Tab
+> Heart Fail. 2.2 2.5 10.1 8.5 4.2 5.1 4.8
+> Breast Can. 2.3 2.6 10.4 8.7 4.3 5.2 4.9
+> Liver Dis. 2.1 2.4 9.8 8.3 4.1 4.9 4.6
+> Parkinsons 2.1 2.4 9.8 8.4 4.1 5.0 4.7
+> Obesity 2.4 2.7 10.8 8.9 4.4 5.3 5.0
+> Diabetes 2.4 2.8 11.4 9.2 4.7 5.5 5.2
+> German Cr. 2.2 2.5 10.2 8.6 4.2 5.1 4.8
+> Bank Mkt. 2.4 2.7 10.9 8.9 4.6 5.5 5.2
+> Census Inc. 3.1 3.4 12.1 9.8 5.2 6.1 5.8 Avg. GB 2.4 2.7 10.7 8.9 4.5 5.3 5.0
+
+E. Fidelity by Feature Type 
+
+Aggregate metrics often mask modality-specific failures. To understand the mechanistic strengths of each architecture, we decompose the Jensen-Shannon Divergence (JSD) by feature type, evaluating the handling of continuous (Numerical) versus discrete (Categorical) distributions separately. 
+
+The Modality Trade-off. Table V reveals a fundamental trade-off in existing generative paradigms. 
+
+Categorical Mode Collapse in GANs: Adversarial models like CTGAN and TAEGAN exhibit high divergence on cat-egorical features (JSD > 0.19 ). This is a known limitation of using Gumbel-Softmax approximations for discrete data, which often leads to the model dropping rare categories entirely. 10                  
+
+> TABLE V: Feature-Type Fidelity Analysis (Mean JSD ↓). DISCO-TAB bridges the gap between numerical and categorical precision.
+> CTGAN
+> TAEGAN
+> TabDDPM
+> TabSyn
+> RealTabFormer
+> TAGAL
+> MostlyAI
+> DISCO-TAB
+> Num. JSD 0.145 0.130 0.098 0.085 0.092 0.140 0.035 0.038
+> Cat. JSD 0.210 0.195 0.155 0.120 0.048 0.030 0.042 0.015
+
+Numerical Imprecision in LLMs: Conversely, pure language-based approaches like TAGAL and RealTabFormer excel at categorical variables (JSD < 0.05 ) due to their natural han-dling of discrete tokens. However, they struggle with numer-ical precision (JSD 0.09–0.14), often digitizing continuous values in ways that create jagged distributions. 
+
+The Unified Solution: DISCO-TAB effectively resolves this dichotomy. By leveraging the pre-trained semantic knowledge of the LLM, it achieves near-perfect categorical alignment (JSD 0.015). Simultaneously, our specific Feature-Level Dis-criminator ( Df eat ) penalizes deviations in continuous joint distributions, forcing the model to learn precise numerical manifolds comparable to the best commercial AutoML solu-tions (MostlyAI). V. Q UANTIFYING HALLUCINATIONS : T HE FAITH FRAMEWORK EVALUATION 
+
+In the domain of generative AI, hallucination is often ill-defined for tabular data. Unlike natural language, where a hal-lucination is a verifiable falsehood, errors in high-dimensional clinical records are subtle: they manifest as statistically plau-sible but clinically impossible combinations, broken feature dependencies, or violations of distributional support. To move beyond vague notions of quality, we adopted the FAITH 
+
+framework (Factuality, Alignment, Integrity, and Tracking of Hallucinations). This composite metric allows us to mathemat-ically decompose the reliability of a synthetic generator into four orthogonal dimensions, distinguishing between models that merely memorize, models that hallucinate noise, and mod-els such as DISCO-TAB that capture the underlying structural truth. 
+
+A. Mathematical Formulation 
+
+The FAITH score is defined as a weighted composite index 
+
+SF AIT H ∈ [0 , 1] , where 1.0 indicates perfect fidelity and zero hallucination. It is calculated as: 
+
+SF AIT H = wF ·SF act +wA ·SAlign +wI ·SInteg +wT ·ST rack 
+
+(16) where weights are set equally ( w = 0 .25 ) to balance the trade-offs between validity and diversity. 
+
+1) Factuality ( SF act ): The Reality Check: This component penalizes the generation of impossible patients. In clinical data, validity is binary; a patient cannot be mostly pregnant if they are male. We quantify this as the ratio of synthetic rows that satisfy a set of immutable domain constraints C:
+
+SF act = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+⊮ ^
+
+> c∈C
+
+check c(row i)
+
+!
+
+(17) where ⊮(·) is the indicator function returning 1 only if the row satisfies all logical checks (e.g., Age mother > Age child ). 
+
+2) Alignment ( SAlign ): The Statistical Drift: A subtle form of hallucination occurs when a model invents correlations that do not exist (e.g., linking Pet Owner to High Risk when no causal link exists). Alignment measures the preservation of the data’s physics by computing the inverse Frobenius distance between the correlation matrices of real ( R) and synthetic ( S)data: 
+
+SAlign = 1 − 1
+
+d || Corr (R) − Corr (S)|| F (18) where d is a normalization factor. A high score indicates the model has learned the true joint distribution rather than generating independent feature noise. 
+
+3) Integrity ( SInteg ): The Privacy Check: We must distin-guish between generating and copying. A model that achieves high factuality by simply memorizing the training set is failing to generalize. Integrity measures the novelty of samples by verifying they are distinct from real records: 
+
+SInteg = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+⊮
+
+
+
+min  
+
+> j
+
+dist (si, r j ) > ϵ 
+
+
+
+(19) This score penalizes samples that fall within a privacy radius 
+
+ϵ of any real record rj .
+
+4) Tracking ( ST rack ): The Outlier Hallucination: Finally, we penalize wild hallucinations—ghost values that fall com-pletely outside the known manifold of the real distribution (e.g., a negative heart rate). Tracking measures the support coverage: 
+
+ST rack = 1 −
+
+PNi=1 ⊮(si /∈ Support (R)) 
+
+N (20) High tracking scores ensure the model is not inventing values that are physically impossible in the observable universe of the dataset. 
+
+B. Results: The Precision-Recall Trade-off 
+
+The evaluation of DISCO-TAB against baseline methods using FAITH reveals a critical insight into the nature of current generative models (Table VI). 
+
+1) Dominance in Alignment and Tracking: DISCO-TAB achieves the highest Alignment score ( 0.9839 ) among all eval-uated methods. Mathematically, this implies that || Corr (R) −
+
+Corr (S)|| F ≈ 0. This is a non-trivial result: it suggests that our hierarchical reinforcement learning approach has success-fully internalized the complex, non-linear dependencies of the clinical domain. Furthermore, the near-perfect Tracking score (0.9920 ) confirms that our model does not hallucinate ghost values, a frequent failure mode of unconstrained LLMs. 
+
+2) The Integrity Paradox: The results expose a Privacy Paradox in synthetic data evaluation. Diffusion-based models like Tab-DDPM achieve perfect Integrity ( 1.00 ), suggesting excellent privacy. However, looking at their poor Factuality (0.1976 ) and Tracking ( 0.6392 ), it becomes evident that this integrity is an artifact of noise injection: the model generates samples so distinct from reality that they are clinically useless. In contrast, DISCO-TAB’s lower Integrity score ( 0.2303 )reflects its rigorous adherence to the true data manifold. By 11                                      
+
+> TABLE VI: FAITH Framework Decomposition. DISCO-TAB dominates in Alignment (0.9839 ), proving it captures the physics of clinical data better than any baseline. However, its low Integrity score reveals a fundamental trade-off: unlike diffusion models ( Tab-DDPM ) that achieve high Integrity by generating noisy samples far from the manifold, DISCO-TAB adheres strictly to the clinical distribution, prioritizing precision over diversity.
+> Model Overall FAITH Factuality Alignment Integrity Tracking Behavioral Profile MostlyAI 0.9747 0.9993 0.9026 0.9970 0.9999 Balanced Commercial Baseline
+> Taegan 0.9572 1.0000 0.8618 1.0000 0.9671 High Constraint / Lower Correlation
+> Tab-DDPM 0.6773 0.1976 0.8722 1.0000 0.6392 Privacy via Noise (High Integrity, Low Factuality)
+> DISCO-TAB 0.7703 0.8750 0.9839 0.2303 0.9920 Precision via Manifold Adherence
+
+refusing to inject arbitrary noise, DISCO-TAB generates pa-tients that are statistically indistinguishable from real cohorts. While this penalizes the aggregate FAITH score, it represents a deliberate design choice to prioritize clinical utility over 
+
+stochastic diversity . In precision medicine, a synthetic patient must first be plausible ( SAlign ) before they are novel ( SInteg ). VI. A BLATION STUDY 
+
+To systematically validate the contribution of each architec-tural component in DISCO-TAB, we conducted an extensive ablation study spanning 24 experimental configurations across our nine datasets. This analysis quantifies component impor-tance, identifies optimal architecture subsets, and validates generalization across varying data regimes. We categorize configurations into four groups: (i) System Variants, (ii) Rein-forcement Learning Methodologies, (iii) Discriminator Gran-ularity, and (4) Balancing Strategies. All comparisons use the Full System (DISCO-TAB with PPO, 4-level discriminators, and IFRS) as the reference baseline ( 100% performance). Collectively, the ablation results directly validate the core design claims of DISCO-TAB. In particular, they (i) confirm the necessity of hierarchical, multi-granular discriminators for enforcing clinical validity, (ii) demonstrate that reinforcement learning provides substantial gains beyond standard LLM fine-tuning, especially in data-scarce regimes, (iii) show that class-aware reward shaping is critical for imbalanced medi-cal datasets, and (iv) reveal a strong synergistic interaction between reinforcement learning and structured discriminators that cannot be achieved by either component in isolation. Each subsection below isolates one of these contributions and quantifies its effect. 
+
+1) System Architecture Variants: We evaluated four primary configurations to establish performance boundaries. The Full System serves as the primary baseline. We compared this against a Single Monolithic Discriminator , replacing the hierarchy with one row-level classifier, and a Minimal Baseline standard GPT-2 fine-tuning. Results (Table VII) reveal that the hierarchical multi-objective architecture provides a 13.1% improvement over single-discriminator approaches. The com-plete system achieves a massive 37.0% improvement over the minimal baseline, confirming that standard LLM fine-tuning is insufficient for high-fidelity tabular synthesis without explicit structural guidance. These results directly support our first contribution, demon-strating that explicit hierarchical verification is necessary for high-fidelity tabular synthesis and that standard LLM fine-tuning without reinforcement learning is insufficient in clinical settings. 
+
+2) Reinforcement Learning: PPO vs. DPO: Direct compar-ison between Proximal Policy Optimization (PPO) and Direct Preference Optimization (DPO) reveals nuanced behaviors. Under the sparse-reward conditions characteristic of small medical datasets ( N < 500 ), PPO consistently outperforms DPO, achieving 14.9% higher quality metrics than DPO. This stems from PPO’s robust policy updates in sparse-reward environments, which is critical for datasets such as Heart Failure or Parkinsons. Conversely, DPO exhibits slightly better scaling and training stability on large datasets ( N > 10 , 000 ). However, given the priority of generating data for scarcity scenarios in healthcare, PPO remains the preferred default for DISCO-TAB. This analysis substantiates our design choice of PPO as the default optimization strategy for DISCO-TAB, as it more effectively leverages sparse, multi-objective rewards in the small-sample regimes that dominate clinical data synthesis. 
+
+3) Discriminator Component Contributions: We system-atically removed individual discriminators to measure their impact. Row-Level (Drow ): Removal causes the largest degradation (8.9%), validating its critical role in maintaining global clinical logic and consistency. Sentence-Level ( Dsent ): 
+
+Contributes 4.0% improvement, providing essential seman-tic validation of variable-value pairs. Token-Level ( Dtoken ): 
+
+Yields 2.9% contribution, ensuring syntactic validity (e.g., correct floating-point formats). Feature-Level ( Df eat ): While contributing the smallest individual gain (1.5%), its removal correlates with a spike in joint-distribution divergence (KS statistic), proving its necessity for preserving specific clinical correlations (e.g., Age vs. Disease). Together, these results validate our second contribution: clinical validity is best enforced through complementary ver-ification at multiple granularities rather than a single mono-lithic discriminator, with higher-level discriminators governing global logic and lower-level components ensuring syntactic and statistical consistency. 
+
+4) Class Balancing Strategy Analysis: We compared our proposed Inverse Frequency Reward Shaping (IFRS) against traditional strategies like SMOTE, Class Weighting, and Un-dersampling. IFRS demonstrates superior performance on highly imbalanced datasets, achieving 12.3% higher balanced accuracy compared to SMOTE on the Diabetes dataset. Unlike SMOTE, which interpolates in feature space and can generate unrealistic artifacts, IFRS works within the generative process, incentivizing the model to learn the semantic structure of 12 
+
+TABLE VII: Comprehensive Ablation Study Results. Aggregate per-formance is computed as the unweighted mean TSTR F1-score across all datasets. All datasets are weighted equally to avoid dominance by large benchmarks.                                    
+
+> Category Configuration Relative Perf. Time (min) System Full DISCO-TAB (PPO) 100% 26.3 Variant: DPO 99.2% 24.8 No Hierarchy (Row Only) 86.9% 16.5 Minimal Baseline (No RL) 63.0% 8.7
+> Discriminators All Four Levels 100% 26.3 w/o Token Disc 97.2% 24.1 w/o Sentence Disc 96.0% 23.8 w/o Feature Disc 98.6% 24.8 w/o Row Disc 91.1% 22.5
+> Balancing IFRS (Ours) 100% 26.3 SMOTE (Pre-process) 92.4% 26.0 Class Weighting (Pre-process) 97.8% 25.9 No Balancing 89.8% 26.3
+> Hybrid
+> RL + Discriminators 100% 26.3 RL Only (No Disc) 71.3% 12.4 Discriminators Only (No RL) 78.6% 22.1
+
+minority classes directly. Undersampling showed competitive performance only on large datasets where information loss was negligible. This confirms our third contribution, showing that integrat-ing class imbalance directly into the reinforcement learning objective is more effective than pre-processing techniques, which operate independently of the generative process. 
+
+Computational Cost-Benefit Analysis Evaluation of com-putational trade-offs enables informed deployment. The Full System requires approximately 26.3 minutes per training epoch on small datasets. A simplified Two-Level Hierarchy (Sentence + Row discriminators only) achieves 94.2% of the full system’s performance while reducing computational cost by 29%. This represents an optimal configuration for resource-constrained clinical environments (e.g., local hospital servers). However, for publication-quality data release where fidelity is paramount, the full four-level hierarchy remains necessary. These findings highlight an explicit design trade-off in DISCO-TAB: while the full hierarchy maximizes fidelity, reduced configurations offer Pareto-optimal alternatives for deployment in resource-constrained clinical environments. 
+
+Synergy Analysis. The combination of Reinforcement Learning with Hierarchical Discriminators achieves a 37.0% improvement over baseline. Interestingly, the sum of their individual contributions (RL alone: 18.4%, Discriminators alone: 22.1%) suggests a minimal overlap in their utility. RL provides the optimization mechanism to navigate the search space, while discriminators provide the map. Without RL, the discriminators act merely as filters; without discriminators, RL lacks a dense reward signal. Their integration creates a synergistic effect where the generator actively learns to satisfy clinical constraints. This non-additive interaction empirically supports our final contribution: reinforcement learning and hierarchical discrim-inators are mutually reinforcing components, and their inte-gration enables learning behaviors that neither approach can achieve independently. These ablation findings inform the discussion in Section VII, where we interpret DISCO-TAB’s strengths and limitations as deliberate design trade-offs rather than isolated component effects. VII. D ISCUSSION AND LIMITATIONS 
+
+The deployment of synthetic data in biomedical informatics hinges on a fundamental trade-off: preserving the complex, non-linear dependencies of clinical variables while ensur-ing robust protection against patient re-identification. Our evaluation of DISCO-TAB across ten diverse benchmarks demonstrates that hierarchical reinforcement learning provides a principled mechanism for navigating this trade-off, while also revealing important design boundaries that motivate future research. 
+
+Clinical Validity through Hierarchical Feedback. A pri-mary failure mode of existing generative models in healthcare is the production of clinically implausible records, such as contradictory demographic and diagnostic attributes. While adversarial models (e.g., CTGAN) attempt to learn such con-straints implicitly, they often fail in high-dimensional discrete spaces due to vanishing gradients and mode collapse. DISCO-TAB addresses this limitation by decomposing clinical validity into multiple levels of verification, explicitly separating syn-tactic consistency at the token level from semantic and logical coherence at the row level. The Automated Constraint Discovery module further re-inforces this hierarchy by identifying statistically significant feature dependencies (e.g., BMI–Diabetes progression), which are preserved with high fidelity in the generated data, as reflected by strong correlation alignment ( r > 0.95 ). This multi-granular supervision effectively biases the generator toward medically plausible regions of the data manifold, providing a degree of structural rigor that unguided LLM-based approaches lack. At the same time, this design choice introduces an inherent limitation: constraint discovery currently relies on pairwise statistical relationships and may fail to capture higher-order or causal interactions (e.g., multi-way dependencies among treatment, comorbidities, and outcomes). As a result, DISCO-TAB should be viewed as enforcing first-order and pairwise clinical logic rather than full causal reasoning. Future exten-sions could integrate causal discovery or clinician-in-the-loop validation to address these higher-order dependencies. 
+
+Robustness in Data-Scarce Regimes. Precision medicine frequently targets rare phenotypes and narrowly defined pa-tient subgroups, where available data are inherently limited (N < 500 ). In such regimes, likelihood-based Transformers and diffusion models often exhibit unstable behavior, either overfitting small samples or injecting excessive noise, leading to downstream utility barely above random chance. DISCO-TAB demonstrates strong robustness in these settings, achiev-ing near-perfect downstream utility on datasets such as Heart Failure (F1 ≈ 1.00 ). This advantage arises from reframing generation as areward-maximization problem rather than pure likelihood es-timation. Dense, multi-objective reinforcement signals en-able more effective exploration of sparse clinical manifolds, 13 
+
+producing diverse yet valid samples that improve decision boundaries for downstream classifiers. However, this robustness comes at a computational cost. The integration of multiple discriminators with PPO optimization increases training overhead, requiring approximately 5× the GPU hours of lightweight GAN-based methods. While infer-ence remains efficient, training DISCO-TAB may be imprac-tical for resource-constrained clinical environments or edge deployments. This trade-off reflects a deliberate design choice: DISCO-TAB prioritizes stability and fidelity in scarce-data regimes over raw training efficiency. Future work may mitigate this cost through parameter-efficient fine-tuning, adaptive dis-criminator activation, or lighter-weight reinforcement learning objectives. 
+
+Navigating the Privacy–Utility Frontier. Our results fur-ther highlight a fundamental divergence in privacy-preserving tabular synthesis. Diffusion-based models such as TabDDPM achieve very large distances to the closest real record by injecting substantial stochastic noise, effectively displacing generated samples away from the true data manifold. While this increases apparent privacy, it simultaneously degrades clinically relevant structure, resulting in markedly reduced downstream utility. This behavior reflects a privacy–utility collapse rather than a desirable privacy regime. In contrast, DISCO-TAB occupies a pragmatic middle ground. It maintains controlled separation from real records while preserving the statistical and semantic structure nec-essary for high-utility learning. This balance is particularly well suited to collaborative and federated learning scenarios, where institutional trust depends on both meaningful privacy protection and model performance. Nevertheless, DISCO-TAB does not provide formal differ-ential privacy guarantees and inherits the inductive biases of its pre-trained language model backbone. While the row-level discriminator mitigates many forms of hallucination, there remains a theoretical risk that incorrect priors in the underlying LLM could influence generation. Addressing this limitation represents an important direction for future research, including the integration of formal differential privacy mechanisms into the reinforcement learning objective and the development of domain-adaptive or medically grounded pretraining strategies. 
+
+Outlook. Taken together, these findings position DISCO-TAB as a flexible and principled framework for high-fidelity biomedical tabular synthesis. Its hierarchical reinforcement learning design enables strong clinical validity, robustness in data-scarce regimes, and a balanced privacy–utility trade-off, while also delineating clear boundaries of the current design space. Future work will focus on reducing computational overhead, extending constraint discovery beyond pairwise statistics, and incorporating formal privacy guarantees, paving the way for broader deployment in real-world clinical and cross-institutional settings. VIII. C ONCLUSION 
+
+In this work, we presented DISCO-TAB, a unified frame-work for biomedical tabular data synthesis that bridges the gap between the interpretability of rule-based systems and the generative power of LLMs. By orchestrating a fine-tuned GPT model with a hierarchical, multi-objective discriminator system, we demonstrated that it is possible to synthesize clinical records that are not only statistically faithful but also structurally and semantically valid. Our rigorous evaluation across ten benchmarks confirms that DISCO-TAB significantly outperforms state-of-the-art GAN, Diffusion, and Agentic baselines, particularly in the challeng-ing regimes of small sample sizes and severe class imbalance common to medical research. The introduction of Inverse-Frequency Reward Shaping ensures that rare pathological cases are not ignored, while our Automated Constraint Discov-ery preserves the latent clinical logic essential for trustworthy decision support. As healthcare moves towards data-centric AI, DISCO-TAB offers a robust mechanism to unlock the value of siloed EHR repositories. Future work will focus on integrating formal Dif-ferential Privacy guarantees directly into the RL reward loop and extending the hierarchical discriminator to handle multi-modal data, paving the way for holistic, privacy-preserving synthesis of patient trajectories. REFERENCES [1] M. Ghassemi, L. Oakden-Rayner, and A. L. Beam, “False hope in current reports of artificial intelligence for medical images,” The Lancet Digital Health , vol. 3, no. 11, pp. e745–e750, 2021. [2] A. Holzinger, G. Langs, H. Denk, K. Zatloukal, and H. M¨ uller, “Caus-ability and explainability of artificial intelligence in medicine,” WIREs Data Mining and Knowledge Discovery , vol. 9, no. 4, p. e1312, 2019. [3] U. Congress, “Health insurance portability and accountability act of 1996 (hipaa),” https://www.hhs.gov/hipaa/index.html, 1996, accessed May 2025. [4] E. Union, “Regulation (eu) 2016/679 of the european parliament and of the council (general data protection regulation),” https://gdpr-info.eu, 2016, accessed May 2025. [5] A. Goncalves, P. Ray, B. Soper, J. Stevens, L. Coyle, and A. P. Sales, “Generation and evaluation of synthetic patient data,” BMC medical research methodology , vol. 20, pp. 1–40, 2020. [6] Z. Azizi, C. Zheng, L. Mosquera, L. Pilote, and K. El Emam, “Can synthetic data be a proxy for real clinical trial data? a validation study,”                        
+
+> BMJ open , vol. 11, no. 4, p. e043497, 2021. [7] L. Xu, M. Skoularidou, A. Cuesta-Infante, and K. Veeramachaneni, “Modeling tabular data using conditional gan,” Advances in neural information processing systems , vol. 32, 2019. [8] E. Choi, S. Biswal, B. Malin, J. Duke, W. F. Stewart, and J. Sun, “Gen-erating multi-label discrete patient records using generative adversarial networks,” Machine Learning for Healthcare Conference , pp. 286–305, 2017. [9] A. Kotelnikov, D. Baranchuk, I. Rubachev, and A. Babenko, “Tabddpm: Modelling tabular data with diffusion models,” in International Confer-ence on Machine Learning .PMLR, 2023, pp. 17 564–17 579. [10] V. Borisov, K. Seßler, T. Leemann, M. Pawelczyk, and G. Kasneci, “Language models are realistic tabular data generators,” 2023. [Online]. Available: https://arxiv.org/abs/2210.06280 [11] A. V. Solatorio and O. Dupriez, “Realtabformer: Generating real-istic relational and tabular data using transformers,” arXiv preprint arXiv:2302.02041 , 2023. [12] J. Li, Z. Zhao, K. Yee, U. Javaid, and B. Sikdar, “Taegan: Generating synthetic tabular data for data augmentation,” 2025. [Online]. Available: https://arxiv.org/abs/2410.01933 [13] H. Zhang, J. Zhang, B. Srinivasan, Z. Shen, X. Qin, C. Faloutsos, H. Rangwala, and G. Karypis, “Mixed-type tabular data synthesis with score-based diffusion in latent space,” in The twelfth International Conference on Learning Representations , 2024. [14] V. Borisov, K. Seßler, T. Leemann, M. Pawelczyk, and G. Kasneci, “Language models are realistic tabular data generators,” arXiv preprint arXiv:2210.06280 , 2022. 14
+
+[15] Y. Wang, D. Feng, Y. Dai, Z. Chen, J. Huang, S. Ananiadou, Q. Xie, and H. Wang, “Harmonic: Harnessing llms for tabular data synthesis and privacy protection,” ArXiv , vol. abs/2408.02927, 2024. [Online]. Available: https://api.semanticscholar.org/CorpusID:271720113 [16] A. Ilaty, H. Shirazi, and H. Homayouni, “SynLLM: A Comparative Analysis of Large Language Models for Medical Tabular Synthetic Data Generation via Prompt Engineering,” 2025, 10 Pages, 2 Supplementary Pages, 6 Tables. [Online]. Available: https://arxiv.org/abs/2508.08529 [17] M. Zhang, Z. Xiao, G. Lu, S. Wu, W. Wang, X. Fu, C. Yi, and J. Zhao, “Aigt: Ai generative table based on prompt,” 2024. [Online]. Available: https://arxiv.org/abs/2412.18111 [18] A. Sidorenko, I. Krchova, M. V. Vieyra, P. Tiwald, M. Scriminaci, and M. Platzer, “Tabularargn: An auto-regressive generative network for tabular data generation,” in NeurIPS 2025 Workshop on AI for Tabular Data , 2025. [19] C. Ge, S. Mohapatra, X. He, and I. F. Ilyas, “Kamino: Constraint-aware differentially private data synthesis,” arXiv preprint arXiv:2012.15713 ,2020. [20] ——, “Kamino: Constraint-aware differentially private data synthesis,” 
+
+arXiv preprint arXiv:2012.15713 , 2020. [21] B. Ronval, P. Dupont, and S. Nijssen, “Tagal: Tabular data generation using agentic llm methods,” arXiv preprint arXiv:2509.04152 , 2025, submitted on 17 Sep 2025. [Online]. Available: https://arxiv.org/abs/ 2509.04152 [22] S. Yang, C. Yuan, Y. Rong, F. Steinbauer, and G. Kasneci, “P-ta: Using proximal policy optimization to enhance tabular data augmentation via large language models,” 2025. [Online]. Available: https://arxiv.org/abs/2406.11391 [23] A. Hu, R. Xie, Z. Lu, A. Hu, and M. Xue, “Tablegan-mca: Evaluating membership collisions of gan-synthesized tabular data releasing,” 
+
+arXiv preprint arXiv:2107.13190 , 2021, accepted to ACM CCS 2021. [Online]. Available: https://doi.org/10.48550/arXiv.2107.13190 [24] J. Jordon, J. Yoon, and M. Van Der Schaar, “Pate-gan: Generating synthetic data with differential privacy guarantees,” in International conference on learning representations , 2018. [25] I. Krchova, M. V. Vieyra, M. Scriminaci, and A. Sidorenko, “Democratizing tabular data access with an open-source synthetic-data sdk,” 2025. [Online]. Available: https://arxiv.org/abs/2508.00718 
+
+APPENDIX 
+
+A. Implementation and Computational Resources 
+
+To ensure reproducibility and rigorous benchmarking, all experiments were conducted in a unified hardware and soft-ware environment. 
+
+1) Hardware Configuration: All model training and eval-uation were performed on a single node equipped with an NVIDIA A100/T4/GTX3080 Tensor Core GPU (80GB VRAM). While our ablation studies (Section ?? ) demonstrate that DISCO-TAB can be effectively trained on consumer-grade hardware (e.g., NVIDIA RTX 3090 with 24GB VRAM) due to our parameter-efficient design, we utilized high-memory infrastructure to facilitate concurrent baseline evaluations. 
+
+2) Software and Libraries: The framework was imple-mented in Python 3.9 using PyTorch 2.1.0 as the primary deep learning backend. 
+
+Generative Backbone: We utilized the transformers 
+
+library (v4.35.0) by Hugging Face to initialize the GPT-2 architecture. 
+
+Reinforcement Learning: The PPO optimization loop was implemented using the trl (Transformer Reinforce-ment Learning) library, customized to support our hierarchical multi-objective reward function. 
+
+Baselines: Adversarial baselines (CTGAN, TAEGAN) were implemented using the SDV (Synthetic Data Vault) library (v1.4.0). Diffusion baselines (TabDDPM) were reproduced using the official implementations provided by their respective authors to ensure fair comparison. 
+
+Metrics: Statistical distance metrics (JSD, Wasserstein) were computed using scipy.stats , and machine learning utility scores were calculated using scikit-learn (v1.3.0). 
+
+3) Hyperparameter Configuration: For the DISCO-TAB generator, we employed the AdamW optimizer with a learning rate of 2 × 10 −5 and a linear decay schedule. The PPO phase utilized a distinct learning rate of 1.4 × 10 −5 for the value network, with a clip range ϵ = 0 .2 and a mini-batch size of 64. To manage the stability of the adversarial discriminators, we used a lower learning rate of 1 × 10 −4 with spectral normalization. All models were trained for a maximum of 100 epochs with early stopping based on the validation set perplexity (patience = 10 epochs). 
+
+B. Use of AI-Based Writing Assistance 
+
+In accordance with best practice for academic transparency, the authors acknowledge the use of Gemini (Google) in the preparation of this manuscript to assist with writing polish and structural organization. Specifically, the tool was utilized to refine the text in the Abstract, Introduction, Related Work, and Discussion sections to improve readability, ensure a formal academic tone, and correct typographical issues. The prompts used for these revisions generally instructed the model to “revise this text for clarity and flow,” “restructure this section to meet the standards of a biomedical informatics journal,” and “evaluate and critique the methodological narrative.” No AI-based tools were used to generate the core scientific claims, experimental data, analytical results, or novel architectural designs presented in this work. 
+
+Arshia Ilaty received the B.S. degree in computer engineering from the University of Tabriz, Iran, NV, USA, in 2021, and the M.S. degree in computer sci-ence and engineering from the University of Nevada, Reno, NV, USA, in 2023. He is currently pursuing the Ph.D. degree in computational science through a joint program at San Diego State University and the University of California, Irvine, CA, USA. His major field of study is applied machine learning and scientific computing, with a focus on healthcare and human-centered AI systems. He has research experience spanning academia and industry. He has served as a Graduate Research Assistant at San Diego State University and the University of California, Irvine, where he develops agentic and multimodal AI systems for clinical trial optimization, pain assessment, and privacy-preserving synthetic data generation. Previously, he worked as a Software Engineer at World Mobile Inc., where he designed scalable cloud and blockchain-based systems, and as a Software Engineering Intern at Tesla, contributing to data-driven operational tooling and optimization. His research interests include multimodal machine learning, reinforcement learning, synthetic data generation, explainable AI, and high-performance computing for scientific and biomedical applications. Mr. Ilaty is a member of the Association for Computing Machinery (ACM) and the Society for Industrial and Applied Mathematics (SIAM). He is the recipient of the Presidential Graduate Research Fellowship (UCI/SDSU), the Outstanding International Graduate Student Scholarship, and the WAAIME Scholarship. He has contributed to open-source scientific computing projects, including the libCEED and MOLE library, and has presented his work at academic conferences in applied AI. 15 
+
+Hossein Shirazi received the Ph.D. degree in elec-trical and computer engineering from Colorado State University, Fort Collins, CO, USA, in 2020. He is currently an Assistant Professor of Management Information Systems with the Fowler College of Business, San Diego State University, San Diego, CA, USA, where he directs the Smart Secure Sys-tems (3S) Lab. His research interests lie at the intersection of cybersecurity and artificial intelligence, with specific focuses on Internet of Things (IoT) security, critical infrastructure protection, malware analysis, and adversarial machine learning. He has authored numerous publications in top-tier journals and conferences regarding the application of machine learning to enhance network security and resiliency. 
+
+Amir M. Rahmani received the Ph.D. degree in computer systems from the University of Turku, Finland, in 2012, and the M.B.A. degree. He is currently a Professor with the School of Nursing and the Department of Computer Science, University of California, Irvine (UCI), Irvine, CA, USA. He is also the Founder and Director of the Health SciTech Group at UCI. His interdisciplinary research bridges computer science and healthcare, focusing on e-health, m-health, wearable Internet of Things (IoT), bio-signal processing, and edge computing. He has led various projects on remote patient monitoring, pain assessment, and personalized healthcare systems. Dr. Rahmani has published extensively in the fields of embedded systems and healthcare IoT and serves on the editorial boards of several international journals. 
+
+Hajar Homayouni received the Ph.D. degree in computer science from Colorado State University, Fort Collins, CO, USA, in 2020. She is currently an Assistant Professor with the Department of Com-puter Science, San Diego State University, San Diego, CA, USA, where she leads the Data Science Lab. Her research interests include data quality, trust-worthy artificial intelligence, big data management, and database systems. Her work focuses on develop-ing methodologies to detect and repair data defects to ensure the reliability, fairness, and robustness of machine learning models. She is a member of the ACM and actively publishes in venues related to data engineering and applied AI.
