@@ -6,85 +6,91 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-08
-- 运行时间：2026-04-08 20:28:06 UTC
+- 最新运行日期：2026-04-09
+- 运行时间：2026-04-09 20:02:11 UTC
 - 运行状态：成功
-- 本次总论文数：21
-- 精读区：10
+- 本次总论文数：23
+- 精读区：12
 - 速读区：11
 
 ### 今日简报（AI）
-今日聚焦 21 篇 AI 医疗前沿进展，深度拆解临床数据隐私合成与基因变异挖掘的突破性方案。
-重点推荐 DISCO-TAB 框架下的隐私数据合成技术，以及大语言模型在基因功能证据自动化提取中的高效应用。
-建议关注 AI 如何在严守隐私底线的同时，通过多模态预训练提升癌症预后与基因组学的分析精度。
-- 详情：[/202604/08/README](/202604/08/README)
+今日精选 23 篇前沿论文，深度聚焦电子健康档案（EHR）风险预测与群体遗传学建模的重大突破。
+重点推荐检索对齐的表格大模型以提升临床预测鲁棒性，以及通过整合社会文化因素优化少数族裔的 GWAS 分析。
+建议关注多模态 EHR 点云模型与 Agent 驱动的遗传分析工作流，探索 AI 如何解决医疗数据不完整与复杂分析难题。
+- 详情：[/202604/09/README](/202604/09/README)
 
 ### 精读区论文标签
-1. [DISCO-TAB: A Hierarchical Reinforcement Learning Framework for Privacy-Preserving Synthesis of Complex Clinical Data](/202604/08/2604.01481v1-disco-tab-a-hierarchical-reinforcement-learning-framework-for-privacy-preserving-synthesis-of-complex-clinical-data)  
+1. [Retrieval-aligned Tabular Foundation Models Enable Robust Clinical Risk Prediction in Electronic Health Records Under Real-world Constraints](/202604/09/2604.01841v1-retrieval-aligned-tabular-foundation-models-enable-robust-clinical-risk-prediction-in-electronic-health-records-under-real-world-constraints)  
    标签：评分：10.0/10、query:med-ai
-   evidence：用于合成电子健康记录(EHR)的强化学习和大语言模型
-2. [Large Language Models for Variant-Centric Functional Evidence Mining](/202604/08/2604.00075v1-large-language-models-for-variant-centric-functional-evidence-mining)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：大语言模型用于以变异为中心的功能证据挖掘
-3. [Retrieval-aligned Tabular Foundation Models Enable Robust Clinical Risk Prediction in Electronic Health Records Under Real-world Constraints](/202604/08/2604.01841v1-retrieval-aligned-tabular-foundation-models-enable-robust-clinical-risk-prediction-in-electronic-health-records-under-real-world-constraints)  
-   标签：评分：9.0/10、query:med-ai
    evidence：用于电子健康记录临床风险预测的表格基础模型
-4. [A Clinical Point Cloud Paradigm for In-Hospital Mortality Prediction from Multi-Level Incomplete Multimodal EHRs](/202604/08/2604.04614v1-a-clinical-point-cloud-paradigm-for-in-hospital-mortality-prediction-from-multi-level-incomplete-multimodal-ehrs)  
+2. [Improving GWAS performance in underrepresented groups by appropriate modeling of genetics, environment, and sociocultural factors](/202604/09/biorxiv-10-1101-2024-10-28-620716-v2-improving-gwas-performance-in-underrepresented-groups-by-appropriate-modeling-of-genetics-environment-and-sociocultural-factors)  
+   标签：评分：10.0/10、query:gwas
+   evidence：通过遗传和环境建模提高 GWAS 和 PGS 的性能
+3. [BioWorldModel: a single architecture predicts phenotype from genotype across four kingdoms of life](/202604/09/biorxiv-10-64898-2026-03-27-714912-v2-bioworldmodel-a-single-architecture-predicts-phenotype-from-genotype-across-four-kingdoms-of-life)  
+   标签：评分：10.0/10、query:med-ai
+   evidence：基于世界模型架构从基因型和环境预测表型
+4. [Dissecting oligogenic and polygenic indirect genetic effects through the lens of neighbor genotypic identity](/202604/09/biorxiv-10-64898-2026-03-31-715746-v1-dissecting-oligogenic-and-polygenic-indirect-genetic-effects-through-the-lens-of-neighbor-genotypic-identity)  
+   标签：评分：10.0/10、query:gwas
+   evidence：间接遗传效应的GWAS和基因组预测统一方法
+5. [Multi-Stage Graph Attention Networks for Interpretable Alzheimer's Disease Classification from Genome-Wide Association Data](/202604/09/biorxiv-10-64898-2026-04-06-716790-v1-multi-stage-graph-attention-networks-for-interpretable-alzheimers-disease-classification-from-genome-wide-association-data)  
+   标签：评分：10.0/10、query:gwas
+   evidence：利用GWAS数据进行阿尔茨海默病分类的图注意力网络
+6. [GMIP-PLSR: A Nextflow Pipeline for GWAS and Multi-Omics Integration in Gene Prioritization Using PLSR](/202604/09/biorxiv-10-64898-2026-04-06-716845-v1-gmip-plsr-a-nextflow-pipeline-for-gwas-and-multi-omics-integration-in-gene-prioritization-using-plsr)  
+   标签：评分：10.0/10、query:gwas
+   evidence：用于GWAS和多组学整合基因优先排序的流程
+7. [MATA-Former & SIICU: Semantic Aware Temporal Alignment for High-Fidelity ICU Risk Prediction](/202604/09/2604.01727v1-mata-former--siicu-semantic-aware-temporal-alignment-for-high-fidelity-icu-risk-prediction)  
    标签：评分：9.0/10、query:med-ai
-   evidence：基于不完整多模态电子健康记录的深度学习死亡率预测
-5. [GenomeQA: Benchmarking General Large Language Models for Genome Sequence Understanding](/202604/08/2604.05774v1-genomeqa-benchmarking-general-large-language-models-for-genome-sequence-understanding)  
+   evidence：电子健康记录中ICU风险预测的深度学习与人工智能研究
+8. [Significance and Stability Analysis of Gene-Environment Interaction using RGxEStat](/202604/09/2604.03337v1-significance-and-stability-analysis-of-gene-environment-interaction-using-rgxestat)  
    标签：评分：9.0/10、query:med-ai
-   evidence：评估通用大语言模型对基因组序列的理解能力
-6. [BioWorldModel: a single architecture predictsphenotype from genotype across four kingdoms of life](/202604/08/biorxiv-10-64898-2026-03-27-714912-v1-bioworldmodel-a-single-architecture-predictsphenotype-from-genotype-across-four-kingdoms-of-life)  
+   evidence：基因与环境交互作用(GxE)的显著性和稳定性分析
+9. [A Clinical Point Cloud Paradigm for In-Hospital Mortality Prediction from Multi-Level Incomplete Multimodal EHRs](/202604/09/2604.04614v1-a-clinical-point-cloud-paradigm-for-in-hospital-mortality-prediction-from-multi-level-incomplete-multimodal-ehrs)  
    标签：评分：9.0/10、query:med-ai
-   evidence：跨物种从基因型预测表型的世界模型架构
-7. [BioWorldModel: a single architecture predicts phenotype from genotype across four kingdoms of life](/202604/08/biorxiv-10-64898-2026-03-27-714912-v2-bioworldmodel-a-single-architecture-predicts-phenotype-from-genotype-across-four-kingdoms-of-life)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：跨物种从基因型预测表型的世界模型架构
-8. [Dissecting oligogenic and polygenic indirect genetic effects through the lens of neighbor genotypic identity](/202604/08/biorxiv-10-64898-2026-03-31-715746-v1-dissecting-oligogenic-and-polygenic-indirect-genetic-effects-through-the-lens-of-neighbor-genotypic-identity)  
+   evidence：基于深度学习的多模态不完整电子健康档案(EHR)住院死亡率预测
+10. [Optimisation of Weighted Ensembles of Genomic Prediction Models in Maize](/202604/09/biorxiv-10-64898-2026-02-03-703660-v2-optimisation-of-weighted-ensembles-of-genomic-prediction-models-in-maize)  
    标签：评分：9.0/10、query:gwas
-   evidence：用于间接遗传效应GWAS和基因组预测的多核混合模型
-9. [Developmental Correlates of Epigenetic and Polygenic Indices of Cognition and Educational Attainment from Birth to Young Adulthood](/202604/08/biorxiv-10-64898-2026-04-01-715866-v1-developmental-correlates-of-epigenetic-and-polygenic-indices-of-cognition-and-educational-attainment-from-birth-to-young-adulthood)  
+   evidence：基因组预测模型加权集成优化
+11. [Population-scale immunoglobulin genetics resolves the human B-cell system](/202604/09/biorxiv-10-64898-2026-03-30-715216-v1-population-scale-immunoglobulin-genetics-resolves-the-human-b-cell-system)  
    标签：评分：9.0/10、query:gwas
-   evidence：多基因指数和大规模基因组研究生物标志的应用
-10. [FunctionaL Assigning Sequence Homing (FLASH) maps phenotype to sequence with deep and machine learning](/202604/08/biorxiv-10-64898-2026-04-04-715981-v1-functional-assigning-sequence-homing-flash-maps-phenotype-to-sequence-with-deep-and-machine-learning)  
+   evidence：识别数百个遗传关联的人群规模遗传关联研究
+12. [Cell-specific variant-to-gene mapping identifies conserved neural and glial regulators of sleep](/202604/09/biorxiv-10-64898-2026-04-07-715910-v1-cell-specific-variant-to-gene-mapping-identifies-conserved-neural-and-glial-regulators-of-sleep)  
    标签：评分：9.0/10、query:gwas
-   evidence：作为 GWAS 替代方案的表型到序列映射深度学习框架
+   evidence：变异到基因映射以识别GWAS位点的致病基因
 
 ### 速读区论文标签
-1. [Entropy, Disagreement, and the Limits of Foundation Models in Genomics](/202604/08/2604.04287v1-entropy-disagreement-and-the-limits-of-foundation-models-in-genomics)  
+1. [A Clinical Point Cloud Paradigm for In-Hospital Mortality Prediction from Multi-Level Incomplete Multimodal EHRs](/202604/09/2604.04614v2-a-clinical-point-cloud-paradigm-for-in-hospital-mortality-prediction-from-multi-level-incomplete-multimodal-ehrs)  
    标签：评分：8.0/10、query:med-ai
-   evidence：基因组学基础模型和DNA序列预测的局限性
-2. [Bayesian Global-Local Shrinkage with Univariate Guidance for Ultra-High-Dimensional Regression](/202604/08/2604.04964v1-bayesian-global-local-shrinkage-with-univariate-guidance-for-ultra-high-dimensional-regression)  
-   标签：评分：8.0/10、query:gwas
-   evidence：利用边际关联引导的超高维数据贝叶斯稀疏回归
-3. [PRIME: Prototype-Driven Multimodal Pretraining for Cancer Prognosis with Missing Modalities](/202604/08/2604.04999v1-prime-prototype-driven-multimodal-pretraining-for-cancer-prognosis-with-missing-modalities)  
+   evidence：深度学习用于不完整电子健康档案的死亡率预测
+2. [MO-RiskVAE: A Multi-Omics Variational Autoencoder for Survival Risk Modeling in Multiple MyelomaMO-RiskVAE](/202604/09/2604.06267v1-mo-riskvae-a-multi-omics-variational-autoencoder-for-survival-risk-modeling-in-multiple-myelomamo-riskvae)  
    标签：评分：8.0/10、query:med-ai
-   evidence：整合基因表达和病理报告的多模态预训练用于癌症预后
-4. [TPCAV: Interpreting deep learning genomics models via concept attribution](/202604/08/biorxiv-10-64898-2026-01-20-700723-v3-tpcav-interpreting-deep-learning-genomics-models-via-concept-attribution)  
-   标签：评分：8.0/10、query:gwas
-   evidence：通过概念归因解释基因组学深度学习模型
-5. [Significance and Stability Analysis of Gene-Environment Interaction using RGxEStat](/202604/08/2604.03337v1-significance-and-stability-analysis-of-gene-environment-interaction-using-rgxestat)  
+   evidence：用于生存风险建模的多组学变分自编码器
+3. [PopGenAgent: An Agent-Mediated Workflow for Population Genetics Analyses](/202604/09/biorxiv-10-64898-2026-03-02-709209-v2-popgenagent-an-agent-mediated-workflow-for-population-genetics-analyses)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：用于群体遗传学和基因组分析的智能体工作流
+4. [Genetic Impacts on Variability of Body Fat Distribution Uncover Gene-Environment and Gene-Gene Interactions](/202604/09/biorxiv-10-64898-2026-03-31-715615-v1-genetic-impacts-on-variability-of-body-fat-distribution-uncover-gene-environment-and-gene-gene-interactions)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：UK Biobank中的基因-环境与基因-基因相互作用
+5. [Entropy, Disagreement, and the Limits of Foundation Models in Genomics](/202604/09/2604.04287v1-entropy-disagreement-and-the-limits-of-foundation-models-in-genomics)  
    标签：评分：7.0/10、query:med-ai
-   evidence：基因-环境相互作用显著性和稳定性的混合效应模型
-6. [DeepTrio: Variant Calling in Families Using Deep Learning](/202604/08/biorxiv-10-1101-2021-04-05-438434-v2-deeptrio-variant-calling-in-families-using-deep-learning)  
-   标签：评分：7.0/10、query:gwas
-   evidence：深度学习用于基因组序列变异检测
-7. [scGRIP: a graph-based explainable AI framework for single-cell multi-omics Gene Regulatory Inference with Prior Knowledge](/202604/08/biorxiv-10-1101-2025-01-24-634773-v2-scgrip-a-graph-based-explainable-ai-framework-for-single-cell-multi-omics-gene-regulatory-inference-with-prior-knowledge)  
-   标签：评分：7.0/10、query:gwas
-   evidence：基于图的AI用于单细胞多组学基因调控推断
-8. [A longitudinal data framework for context-specific genotype-to-phenotype mapping](/202604/08/biorxiv-10-1101-2025-05-07-652202-v3-a-longitudinal-data-framework-for-context-specific-genotype-to-phenotype-mapping)  
+   evidence：基因组学和DNA序列基础模型分析
+6. [PRIME: Prototype-Driven Multimodal Pretraining for Cancer Prognosis with Missing Modalities](/202604/09/2604.04999v1-prime-prototype-driven-multimodal-pretraining-for-cancer-prognosis-with-missing-modalities)  
    标签：评分：7.0/10、query:med-ai
-   evidence：纵向数据的基因型到表型映射框架
-9. [Quantifying Cross-Modal Interactions in Multimodal Glioma Survival Prediction via InterSHAP: Evidence for Additive Signal Integration](/202604/08/2603.29977v1-quantifying-cross-modal-interactions-in-multimodal-glioma-survival-prediction-via-intershap-evidence-for-additive-signal-integration)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：结合RNA-seq和医学影像的多模态深度学习癌症预后预测
-10. [Perturb-and-Restore: Simulation-driven Structural Augmentation Framework for Imbalance Chromosomal Anomaly Detection](/202604/08/2604.00854v1-perturb-and-restore-simulation-driven-structural-augmentation-framework-for-imbalance-chromosomal-anomaly-detection)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：用于临床实践中检测染色体异常的深度学习方法
-11. [High-dimensional Many-to-many-to-many Mediation Analysis](/202604/08/2604.02886v1-high-dimensional-many-to-many-to-many-mediation-analysis)  
+   evidence：结合基因表达的多模态预训练用于癌症预后
+7. [GenomeQA: Benchmarking General Large Language Models for Genome Sequence Understanding](/202604/09/2604.05774v1-genomeqa-benchmarking-general-large-language-models-for-genome-sequence-understanding)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：评估大语言模型对基因组序列的理解能力
+8. [MorphDistill: Distilling Unified Morphological Knowledge from Pathology Foundation Models for Colorectal Cancer Survival Prediction](/202604/09/2604.06390v1-morphdistill-distilling-unified-morphological-knowledge-from-pathology-foundation-models-for-colorectal-cancer-survival-prediction)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：利用病理基础模型进行癌症生存预测的深度学习
+9. [Fused Multinomial Logistic Regression Utilizing Summary-Level External Machine-learning Information](/202604/09/2604.03939v1-fused-multinomial-logistic-regression-utilizing-summary-level-external-machine-learning-information)  
    标签：评分：6.0/10、query:gwas
-   evidence：针对多变量暴露和结果的高维中介分析
+   evidence：利用外部非参数机器学习预测来改进统计推断
+10. [Covariance Correction for Permutation Statistics in Multiple Testing Problems](/202604/09/2604.06915v1-covariance-correction-for-permutation-statistics-in-multiple-testing-problems)  
+   标签：评分：6.0/10、query:gwas
+   evidence：多重假设检验中置换统计量的协方差修正
+11. [A longitudinal data framework for context-specific genotype-to-phenotype mapping](/202604/09/biorxiv-10-1101-2025-05-07-652202-v3-a-longitudinal-data-framework-for-context-specific-genotype-to-phenotype-mapping)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：跨纵向分子和临床记录的基因型到表型映射框架
 
 
 <div class="dpr-home-promo-card">

@@ -1,0 +1,24 @@
+---
+title: Genetic Impacts on Variability of Body Fat Distribution Uncover Gene-Environment and Gene-Gene Interactions
+title_zh: 遗传对体脂分布变异性的影响揭示了基因-环境和基因-基因相互作用
+authors: "Zhang, X., Joehanes, R., Ma, J., Pain, O., Levy, D., Westerman, K., Bell, J. T."
+date: 2026-04-02
+pdf: "https://www.biorxiv.org/content/10.64898/2026.03.31.715615v1.full.pdf"
+tags: ["query:med-ai"]
+score: 8.0
+evidence: UK Biobank中的基因-环境与基因-基因相互作用
+tldr: 本研究利用英国生物样本库（UK Biobank）的MRI和遗传数据，通过方差定量性状位点（vQTL）分析，探讨了基因与环境及基因间相互作用对体脂分布的影响。研究识别出与肝脏脂肪和腹部皮下脂肪相关的关键vQTL（如PNPLA3、APOE等），并揭示了多种环境交互作用和上位性效应。这些发现通过多个外部队列验证，为体脂分布的遗传机制提供了新见解，有助于精准医疗的发展。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-31-715615-v1/fig-001.webp\", \"caption\": \"Table 2. vQTL regions for liver PDFF and ASAT. RA refers to the reference allele and AA refers to the alternative allele (effect allele).\", \"page\": 42, \"index\": 1, \"width\": 936, \"height\": 264}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-31-715615-v1/fig-002.webp\", \"caption\": \"Figure 2. vQTL-environment interaction analysis. A) Summary of three strategies for vQTL-environment interaction analyses. B-J) Results of interactions between vQTLs and individual factor variables. Plots show the direction and size of genetic effects on the phenotype with a change in environmental factor. Genotype 0 represents the homozygous group for the reference allele, while genotype 2 represents the homozygous category for the alternative allele. The reference/alternative alleles are as follows: rs738408 (C/T), rs429358 (T/C), rs58542926 (C/T), and rs1285330517 (CAAA/C). Y-axis shows the residuals of each phenotype after adjusting the covariates.\", \"page\": 45, \"index\": 2, \"width\": 866, \"height\": 1208}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-31-715615-v1/fig-003.webp\", \"caption\": \"Figure 1. Study workflow. vQTLs were discovered using UK Biobank MRI datasets. After identifying four vQTL regions, validation analyses were performed within the UK Biobank using additional datasets. Replication was conducted in external cohorts. vQTLs interaction analyses were conducted including vQTL-environment and epistasis interactions. *rs429358 was not nominally significant for longitudinal stability in a data subset.\", \"page\": 44, \"index\": 3, \"width\": 960, \"height\": 499}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-31-715615-v1/fig-004.webp\", \"caption\": \"Table 1. UK Biobank samples phenotype information. The information is summarized on the retained samples after data processing. The Field ID is derived from the UK Biobank dataset.\", \"page\": 41, \"index\": 4, \"width\": 1018, \"height\": 735}]"
+motivation: 旨在通过识别方差定量性状位点（vQTLs）来揭示影响体脂分布及其心血管代谢风险的基因-环境和基因-基因相互作用。
+method: 利用英国生物样本库的MRI影像与遗传数据进行vQTL分析，并在Framingham心脏研究等多个外部队列中进行验证。
+result: 发现了PNPLA3、APOE和TM6SF2等与肝脏脂肪相关的vQTL，以及FTO区域的腹部脂肪vQTL，并识别出显著的基因交互效应。
+conclusion: 研究揭示了影响体脂分布（尤其是肝脏脂肪）的遗传变异及其交互作用，为开发针对代谢性疾病的精准医疗方案提供了依据。
+---
+
+## 摘要
+体脂分布是心血管代谢疾病风险的强力预测指标。基因-环境和基因-基因相互作用会影响体脂分布，导致不同基因型组间表型方差的差异，这可以通过方差定量性状位点（vQTLs）进行检测。利用英国生物样本库（UK Biobank）的 MRI 数据结合遗传数据，我们探索了体脂分布表型的 vQTL 证据，旨在揭示潜在的遗传相互作用。我们鉴定了三个与肝脏脂肪分布相关的 vQTL，包括 rs738408 (PNPLA3)、rs4293458 (APOE) 和 rs58542926 (TM6SF2)，以及一个与腹部皮下脂肪组织相关的 vQTL 区域 (FTO)。为了剖析这些信号背后的推测性基因-环境和基因-基因相互作用，我们鉴定了多个 vQTL-环境相互作用以及一个针对肝脏脂肪的上位性效应 (rs58542926*rs429358)。vQTL 和相互作用结果在多个 UK Biobank 及外部验证队列数据集（Framingham Heart Study、All of Us 和 TwinsUK）中得到了验证，结果显示三个肝脏 vQTL 均得到重复，其中 vQTL rs738408 的可重复性最高。我们的研究揭示了影响体脂分布（尤其是肝脏脂肪）的 vQTL 及其潜在的相互作用效应，这可能有助于精准医学方法的发展。
+
+## Abstract
+Body fat distribution is a strong predictor of cardiometabolic disease risk. Gene-environment and gene-gene interactions can affect body fat distribution, resulting in differential phenotypic variance across genotype groups that can be detected through variance quantitative trait loci (vQTLs). Using UK Biobank MRI data in conjunction with genetic data, we explored evidence for vQTLs for body fat distribution phenotypes aiming to uncover potential genetic interactions. We identified three vQTLs for liver fat distribution, including rs738408 (PNPLA3), rs4293458 (APOE), and rs58542926 (TM6SF2), and one vQTL region (FTO) for abdominal subcutaneous adipose tissue. To dissect putative gene-environment and gene-gene interactions underlying these signals, we identified multiple vQTL-environment interactions and one epistatic effect (rs58542926*rs429358) for liver fat. The vQTLs and interaction results were validated in multiple UK Biobank and external replication cohort datasets (Framingham Heart Study, All of Us, and TwinsUK), showing replication of the three liver vQTLs with the greatest reproducibility for vQTL rs738408. Our findings uncover vQTLs and underlying interaction effects on body fat distribution, especially liver fat, that may be useful for the development of precision medicine approaches.
