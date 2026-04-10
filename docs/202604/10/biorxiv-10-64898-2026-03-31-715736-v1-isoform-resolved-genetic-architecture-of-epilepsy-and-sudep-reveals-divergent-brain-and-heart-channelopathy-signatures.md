@@ -1,0 +1,24 @@
+---
+title: Isoform-Resolved Genetic Architecture of Epilepsy and SUDEP Reveals Divergent Brain and Heart Channelopathy Signatures
+title_zh: 癫痫与癫痫猝死（SUDEP）的异构体解析遗传架构揭示了脑部与心脏离子通道病的差异化特征
+authors: "Zehra, B., BinEshaq, S., Faizan, M., Eldesouky, M., Vinod, N., Mohamed, N., Vijayakumar, A., Aleksandrova, I., Tambi, R., Sabeel, S., Advani, D., Hashmi, A., Al-Shaibani, S., Almarri, M., Nassir, N., Almansoori, S., Du Plessis, S., Uddin, M., Berdiev, B."
+date: 2026-04-03
+pdf: "https://www.biorxiv.org/content/10.64898/2026.03.31.715736v1.full.pdf"
+tags: ["query:gwas"]
+score: 7.0
+evidence: 使用贝叶斯泊松-伽马速率模型量化基因水平负荷
+tldr: 本研究探讨了癫痫猝死（SUDEP）的分子机制，通过整合419项研究中逾3.5万人的遗传数据，利用贝叶斯框架评估基因负担，并结合长读长单细胞转录组学分析心脑组织的异构体表达。研究发现，虽然癫痫与SUDEP共享遗传背景，但组织特异性的异构体调节导致了功能分化：SUDEP风险主要涉及心脏电生理基因，而癫痫则侧重神经信号基因。这一发现揭示了SUDEP作为神经-心脏界面疾病的本质。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-31-715736-v1/fig-001.webp\", \"caption\": \"Table 1. Shared pathogenic variants reported in SUDEP and epilepsy. 1247\", \"page\": 34, \"index\": 1, \"width\": 1531, \"height\": 981}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-03-31-715736-v1/fig-002.webp\", \"caption\": \"Table 2. Tissue-specific isoform (protein-coding) architecture of epilepsy–SUDEP genes 1249 across human heart and brain. 1250\", \"page\": 36, \"index\": 2, \"width\": 1079, \"height\": 1342}]"
+motivation: 旨在阐明癫痫与SUDEP共享的遗传风险基因如何在不同组织中产生差异化影响，从而识别导致猝死的特异性分子特征。
+method: 整合大规模测序数据并利用贝叶斯泊松-伽马框架量化基因负担，同时结合长读长单细胞转录组学分析心脏与大脑的异构体表达模式。
+result: 发现SUDEP显著富集心脏电生理相关基因，而癫痫富集神经兴奋性基因，且多个共享基因在心脑组织中表现出显著的异构体表达分区。
+conclusion: 组织特异性的异构体调节是连接癫痫遗传学与SUDEP易感性的关键机制，表明SUDEP是一种受异构体水平调控差异驱动的神经-心脏界面疾病。
+---
+
+## 摘要
+癫痫猝死（SUDEP）是癫痫最严重的并发症，但区分高风险个体的分子特征仍不明确。尽管癫痫和 SUDEP 具有显著的遗传重叠，但当共享的风险基因在神经和心脏系统中差异化部署时，可能会导致致命后果。在本研究中，我们将组织和异构体水平的调节确定为癫痫与 SUDEP 风险差异的关键决定因素。我们对 419 项基于测序的研究（涵盖 35,659 名个体）中报告的癫痫和 SUDEP 遗传变异进行了大规模整合分析，并利用贝叶斯泊松-伽马率比框架量化了基因水平的负荷。分析显示，SUDEP 中与心脏电生理和收缩功能相关的基因显著富集，而癫痫则主要由涉及神经元兴奋性和突触信号传导的基因主导。为了确定共享遗传位点如何在不同组织中部署，我们将基于 GTEx 的组织表达谱与来自人类心脏和脑部的长读长单细胞转录组数据集相结合，以解析异构体水平的表达模式。这些分析揭示了显著的组织特异性转录本架构。心脏相关基因（包括 HCN4、KCNH2、KCNE1、MYH6、MYO18B 和 ATP1A2）表现出心脏限制性的异构体表达，而神经元基因（如 ADGRV1、CACNA1A、GRIN2B、HCN1、HCN2、KCNA1、SCN1A、SCN2A 和 SCN8A）则表现出脑部限制性表达。重要的是，多个共享基因表现出组织分区的异构体表达，在心脏和脑部具有不同的转录本库，特别是在与离子转运、信号传导、代谢和结构组织相关的通路中。在 iPSC 衍生的心肌细胞和神经元中也观察到了模式的一致性，表明共享基因的谱系依赖性部署在受控系统中得以保留。综上所述，这些发现表明，组织特异性异构体调节提供了将共享的癫痫遗传学与 SUDEP 易感性联系起来的机制基础，即相同的遗传位点共同导致了癫痫中的神经元功能障碍和 SUDEP 中的心脏脆弱性。这使 SUDEP 被定义为一种由异构体水平调节差异塑造的神经-心脏界面疾病。
+
+## Abstract
+Sudden unexpected death in epilepsy (SUDEP) is the most devastating complication of epilepsy, yet the molecular features distinguishing individuals at risk remain poorly defined. Although epilepsy and SUDEP share substantial genetic overlap, fatal outcomes may arise when shared risk genes are differentially deployed across neuronal and cardiac systems. Here, we identify tissue- and isoform-level regulation as a key determinant of divergence between epilepsy and SUDEP risk. We performed a large-scale integrated analysis of genetic variants reported in epilepsy and SUDEP across 419 sequencing-based studies encompassing 35,659 individuals, and quantified gene-level burden using a Bayesian Poisson-Gamma rate ratio framework. This analysis revealed preferential enrichment of genes related to cardiac electrophysiology and contractile function in SUDEP, whereas epilepsy was dominated by genes involved in neuronal excitability and synaptic signaling. To determine how shared genetic loci are deployed across tissues, we integrated GTEx-based tissue expression profiles with long-read single-cell transcriptomic datasets from human heart and brain to resolve isoform-level expression patterns. These analyses revealed pronounced tissue-specific transcript architectures. Cardiac-associated genes, including HCN4, KCNH2, KCNE1, MYH6, MYO18B, and ATP1A2, showed heart-restricted isoform expression, whereas neuronal genes such as ADGRV1, CACNA1A, GRIN2B, HCN1, HCN2, KCNA1, SCN1A, SCN2A, and SCN8A. Importantly, several shared genes exhibited tissue-partitioned isoform expression, with distinct transcript repertoires in heart and brain, particularly across pathways related to ion transport, signaling, metabolism, and structural organization. Consistent patterns were observed in iPSC-derived cardiomyocytes and neurons, indicating that lineage-dependent deployment of shared genes is preserved in controlled systems. Together, these findings suggest that tissue-specific isoform regulation provides a mechanistic basis linking shared epilepsy genetics to SUDEP susceptibility, whereby the same genetic loci contribute to neuronal dysfunction in epilepsy and to cardiac vulnerability in SUDEP. This positions SUDEP as a neuro-cardiac interface disorder shaped by isoform-level regulatory divergence.
