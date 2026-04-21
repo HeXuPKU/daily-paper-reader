@@ -6,85 +6,76 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-20
-- 运行时间：2026-04-20 19:54:53 UTC
+- 最新运行日期：2026-04-21
+- 运行时间：2026-04-21 20:41:11 UTC
 - 运行状态：成功
-- 本次总论文数：21
-- 精读区：10
+- 本次总论文数：18
+- 精读区：7
 - 速读区：11
 
 ### 今日简报（AI）
-聚焦 21 篇前沿进展，深度解析多智能体癌症早筛框架及大模型驱动的生物标志物发现。
-重点关注 TrajOnco 框架在长程病历推理中的突破，以及 Mamba-SSM 结合思维链（CoT）在基因特征精炼中的因果推断潜力。
-建议优先研读 TrajOnco 的多智能体架构，探索 AI 如何通过时序推理与因果评估重塑精准医疗。
-- 详情：[/202604/20/README](/202604/20/README)
+今日精选18篇前沿论文，重点聚焦大模型推理与Mamba架构在免疫分析及生物标志物发现中的深度应用。
+满分论文ORION展示了智能体推理在复杂免疫图谱分析中的潜力，而结合思维链（CoT）的Mamba-SSM模型显著提升了生物标志物筛选的因果性与忠实度。
+建议关注如何利用LLM的逻辑推理能力优化传统生物信息学流程，特别是因果特征提取与知识图谱的自动化构建。
+- 详情：[/202604/21/README](/202604/21/README)
 
 ### 精读区论文标签
-1. [TrajOnco: a multi-agent framework for temporal reasoning over longitudinal EHR for multi-cancer early detection](/202604/20/2604.10386v1-trajonco-a-multi-agent-framework-for-temporal-reasoning-over-longitudinal-ehr-for-multi-cancer-early-detection)  
+1. [ORION: An agentic reasoning construct for the analysis of complex human immune profiling](/202604/21/biorxiv-10-64898-2026-04-13-718286-v1-orion-an-agentic-reasoning-construct-for-the-analysis-of-complex-human-immune-profiling)  
    标签：评分：10.0/10、query:med-ai
-   evidence：用于纵向电子健康档案时间推理的多智能体大语言模型框架
-2. [Mamba-SSM with LLM Reasoning for Biomarker Discovery: Causal Feature Refinement via Chain-of-Thought Gene Evaluation](/202604/20/2604.14334v1-mamba-ssm-with-llm-reasoning-for-biomarker-discovery-causal-feature-refinement-via-chain-of-thought-gene-evaluation)  
+   evidence：用于复杂免疫分析的智能体推理和大语言模型
+2. [Mamba-SSM with LLM Reasoning for Biomarker Discovery: Causal Feature Refinement via Chain-of-Thought Gene Evaluation](/202604/21/2604.14334v1-mamba-ssm-with-llm-reasoning-for-biomarker-discovery-causal-feature-refinement-via-chain-of-thought-gene-evaluation)  
    标签：评分：9.0/10、query:med-ai
-   evidence：利用大语言模型推理进行生物标志物发现和因果特征精炼
-3. [CURA: Clinical Uncertainty Risk Alignment for Language Model-Based Risk Prediction](/202604/20/2604.14651v1-cura-clinical-uncertainty-risk-alignment-for-language-model-based-risk-prediction)  
+   evidence：用于生物标志物发现的大语言模型推理和深度序列模型
+3. [CURA: Clinical Uncertainty Risk Alignment for Language Model-Based Risk Prediction](/202604/21/2604.14651v1-cura-clinical-uncertainty-risk-alignment-for-language-model-based-risk-prediction)  
    标签：评分：9.0/10、query:med-ai
-   evidence：基于临床语言模型的风险预测与不确定性对齐
-4. [GRASP: Gene-relation adaptive soft prompt for scalable and generalizable gene network inference with large language models](/202604/20/biorxiv-10-1101-2025-10-20-683485-v2-grasp-gene-relation-adaptive-soft-prompt-for-scalable-and-generalizable-gene-network-inference-with-large-language-models)  
+   evidence：用于从电子健康档案笔记中进行风险预测的临床语言模型
+4. [Multimodal Fusion of Histopathology Images and Electronic Health Records for Early Breast Cancer Diagnosis](/202604/21/2604.17122v1-multimodal-fusion-of-histopathology-images-and-electronic-health-records-for-early-breast-cancer-diagnosis)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于基因网络推理和生物知识整合的大语言模型
-5. [EVEE: Interpretable variant effect prediction from genomic foundation model embeddings](/202604/20/biorxiv-10-64898-2026-04-10-717844-v2-evee-interpretable-variant-effect-prediction-from-genomic-foundation-model-embeddings)  
+   evidence：组织病理学与EHR数据的多模态融合
+5. [EVEE: Interpretable variant effect prediction from genomic foundation model embeddings](/202604/21/biorxiv-10-64898-2026-04-10-717844-v2-evee-interpretable-variant-effect-prediction-from-genomic-foundation-model-embeddings)  
    标签：评分：9.0/10、query:med-ai
    evidence：用于变异致病性预测的基因组基础模型
-6. [EVEE: Interpretable variant effect prediction from genomic foundation model embeddings](/202604/20/biorxiv-10-64898-2026-04-10-717844-v3-evee-interpretable-variant-effect-prediction-from-genomic-foundation-model-embeddings)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：用于变异效应预测的基因组基础模型
-7. [CROssBARv2: A Unified Computational Framework for Heterogeneous Biomedical Data Representation and LLM-Driven Exploration](/202604/20/biorxiv-10-64898-2026-04-12-718028-v1-crossbarv2-a-unified-computational-framework-for-heterogeneous-biomedical-data-representation-and-llm-driven-exploration)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：大语言模型驱动的集成生物医学知识图谱探索
-8. [Canonical self-supervised pretraining paradigm constrains the capacity of genomic language models on regulatory decoding](/202604/20/biorxiv-10-64898-2026-04-13-715198-v1-canonical-self-supervised-pretraining-paradigm-constrains-the-capacity-of-genomic-language-models-on-regulatory-decoding)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：基因组语言模型在调控解码上的评估
-9. [ORION: An agentic reasoning construct for the analysis of complex human immune profiling](/202604/20/biorxiv-10-64898-2026-04-13-718286-v1-orion-an-agentic-reasoning-construct-for-the-analysis-of-complex-human-immune-profiling)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：用于复杂人类免疫分析的智能体推理框架
-10. [Single-Plant Genome-Wide Association Study Identifies Loci Controlling Multiple Vegetative Architecture Traits in Cultivated Northern Wild Rice (Zizania palustris L.)](/202604/20/biorxiv-10-64898-2026-04-15-718548-v1-single-plant-genome-wide-association-study-identifies-loci-controlling-multiple-vegetative-architecture-traits-in-cultivated-northern-wild-rice-zizania-palustris-l)  
+6. [GraphPop: graph-native computation decouples population genomics complexity from sample count](/202604/21/biorxiv-10-64898-2026-04-11-717929-v1-graphpop-graph-native-computation-decouples-population-genomics-complexity-from-sample-count)  
    标签：评分：9.0/10、query:gwas
-   evidence：应用单株GWAS框架识别控制营养生长性状的位点
+   evidence：用于群体基因组学和汇总统计的图原生计算
+7. [Ancient DNA reveals that natural selection has upregulated the immune system over the last 10,000 years](/202604/21/biorxiv-10-64898-2026-04-14-718409-v1-ancient-dna-reveals-that-natural-selection-has-upregulated-the-immune-system-over-the-last-10000-years)  
+   标签：评分：9.0/10、query:gwas
+   evidence：将选择统计量与GWAS及分子数据整合
 
 ### 速读区论文标签
-1. [Beyond Fixed False Discovery Rates: Post-Hoc Conformal Selection with E-Variables](/202604/20/2604.11305v2-beyond-fixed-false-discovery-rates-post-hoc-conformal-selection-with-e-variables)  
-   标签：评分：8.0/10、query:gwas
-   evidence：基因组学中具有FDR控制的候选者选择统计方法
-2. [Mamba-SSM with LLM Reasoning for Feature Selection: Faithfulness-Aware Biomarker Discovery](/202604/20/2604.14334v2-mamba-ssm-with-llm-reasoning-for-feature-selection-faithfulness-aware-biomarker-discovery)  
+1. [Mamba-SSM with LLM Reasoning for Feature Selection: Faithfulness-Aware Biomarker Discovery](/202604/21/2604.14334v2-mamba-ssm-with-llm-reasoning-for-feature-selection-faithfulness-aware-biomarker-discovery)  
    标签：评分：8.0/10、query:med-ai
-   evidence：大语言模型推理用于生物标志物发现和特征选择
-3. [GPC: An expressive and tractable deep generative model for genetic variation data](/202604/20/biorxiv-10-1101-2023-05-16-541036-v2-gpc-an-expressive-and-tractable-deep-generative-model-for-genetic-variation-data)  
-   标签：评分：8.0/10、query:gwas
-   evidence：用于遗传变异数据和填充的深度生成模型
-4. [AlphaGenome Enhances Personal Gene Expression Prediction but Retains Key Limitations](/202604/20/biorxiv-10-1101-2025-08-05-668750-v2-alphagenome-enhances-personal-gene-expression-prediction-but-retains-key-limitations)  
+   evidence：用于生物标志物发现和特征选择的大语言模型推理
+2. [A phenotype-driven and evidence-governed framework for knowledge graph enrichment and hypotheses discovery in population data](/202604/21/2604.16982v1-a-phenotype-driven-and-evidence-governed-framework-for-knowledge-graph-enrichment-and-hypotheses-discovery-in-population-data)  
    标签：评分：8.0/10、query:med-ai
-   evidence：用于个人基因表达预测的大规模基因组AI模型
-5. [Evaluating Differential Privacy Against Membership Inference in Federated Learning: Insights from the NIST Genomics Red Team Challenge](/202604/20/2604.12737v1-evaluating-differential-privacy-against-membership-inference-in-federated-learning-insights-from-the-nist-genomics-red-team-challenge)  
+   evidence：结合大语言模型与图神经网络进行人群数据假设发现
+3. [Federated Rule Ensemble Method in Medical Data](/202604/21/2604.17956v1-federated-rule-ensemble-method-in-medical-data)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：医疗数据和临床环境中的联邦学习和机器学习
+4. [AlphaGenome Enhances Personal Gene Expression Prediction but Retains Key Limitations](/202604/21/biorxiv-10-1101-2025-08-05-668750-v2-alphagenome-enhances-personal-gene-expression-prediction-but-retains-key-limitations)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：利用GTEx数据进行个人基因表达预测的基因组AI模型
+5. [Evaluating Differential Privacy Against Membership Inference in Federated Learning: Insights from the NIST Genomics Red Team Challenge](/202604/21/2604.12737v1-evaluating-differential-privacy-against-membership-inference-in-federated-learning-insights-from-the-nist-genomics-red-team-challenge)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：基因组学数据挑战中的联邦学习与隐私保护
+6. [Evaluating Differential Privacy Against Membership Inference in Federated Learning: Insights from the NIST Genomics Red Team Challenge](/202604/21/2604.12737v2-evaluating-differential-privacy-against-membership-inference-in-federated-learning-insights-from-the-nist-genomics-red-team-challenge)  
    标签：评分：7.0/10、query:med-ai
    evidence：基因组数据的隐私保护联邦学习
-6. [Evaluating quality in synthetic data generation for large tabular health datasets](/202604/20/2604.15961v1-evaluating-quality-in-synthetic-data-generation-for-large-tabular-health-datasets)  
+7. [Prior-Fitted Functional Flow: In-Context Generative Models for Pharmacokinetics](/202604/21/2604.17670v1-prior-fitted-functional-flow-in-context-generative-models-for-pharmacokinetics)  
    标签：评分：7.0/10、query:med-ai
-   evidence：针对大型表格健康数据集和流行病学数据的机器学习研究
-7. [Beyond Single Algorithms: A Framework for Validating and Aggregating Active Modules in Genetic Interaction Networks](/202604/20/biorxiv-10-1101-2025-10-06-680790-v2-beyond-single-algorithms-a-framework-for-validating-and-aggregating-active-modules-in-genetic-interaction-networks)  
+   evidence：用于药代动力学和群体合成的生成式基础模型
+8. [Beyond Single Algorithms: A Framework for Validating and Aggregating Active Modules in Genetic Interaction Networks](/202604/21/biorxiv-10-1101-2025-10-06-680790-v2-beyond-single-algorithms-a-framework-for-validating-and-aggregating-active-modules-in-genetic-interaction-networks)  
    标签：评分：7.0/10、query:gwas
-   evidence：聚合遗传相互作用网络以识别疾病基因的框架
-8. [Population-scale Characterization of the Oral Microbiome and Associations with Metabolic Health](/202604/20/biorxiv-10-1101-2025-10-28-685004-v2-population-scale-characterization-of-the-oral-microbiome-and-associations-with-metabolic-health)  
-   标签：评分：7.0/10、query:gwas
-   evidence：全微生物组关联分析 (MWAS) 框架
-9. [Evaluating Differential Privacy Against Membership Inference in Federated Learning: Insights from the NIST Genomics Red Team Challenge](/202604/20/2604.12737v2-evaluating-differential-privacy-against-membership-inference-in-federated-learning-insights-from-the-nist-genomics-red-team-challenge)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：基因组学的隐私保护联邦学习
-10. [Bayesian Nonparametric Modeling for Multivariate Conditional Copula Regression with Varying Coefficients](/202604/20/2604.12859v1-bayesian-nonparametric-modeling-for-multivariate-conditional-copula-regression-with-varying-coefficients)  
+   evidence：遗传相互作用网络中验证和聚合活跃模块的框架
+9. [Selecting Feature Interactions for Generalized Additive Models by Distilling Foundation Models](/202604/21/2604.13332v1-selecting-feature-interactions-for-generalized-additive-models-by-distilling-foundation-models)  
    标签：评分：6.0/10、query:gwas
-   evidence：多变量回归的贝叶斯非参数建模
-11. [Counterfactual Peptide Editing for Causal TCR--pMHC Binding Inference](/202604/20/2604.13256v1-counterfactual-peptide-editing-for-causal-tcr--pmhc-binding-inference)  
+   evidence：蒸馏基础模型以识别表格数据中的特征交互
+10. [Perspective on Bias in Biomedical AI: Preventing Downstream Healthcare Disparities](/202604/21/2604.14514v1-perspective-on-bias-in-biomedical-ai-preventing-downstream-healthcare-disparities)  
    标签：评分：6.0/10、query:med-ai
-   evidence：利用神经模型在生物结合中进行因果推断
+   evidence：组学出版物和生物医学人工智能中的祖先偏差分析
+11. [GEN-Graph: Heterogeneous PIM Accelerator for General Computational Patterns in Graph-based Dynamic Programming](/202604/21/2604.15361v1-gen-graph-heterogeneous-pim-accelerator-for-general-computational-patterns-in-graph-based-dynamic-programming)  
+   标签：评分：6.0/10、query:gwas
+   evidence：基因组遍历和动态规划的硬件加速器
 
 
 <div class="dpr-home-promo-card">
