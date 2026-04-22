@@ -1,0 +1,939 @@
+Title: Combining Bayesian and Frequentist Inference for Laboratory-Specific Performance Guarantees in Copy Number Variation Detection
+
+URL Source: https://arxiv.org/pdf/2604.14305v1
+
+Published Time: Fri, 17 Apr 2026 00:06:18 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+> Preprint: Under Review 298:1–21, 2026
+
+## Combining Bayesian and Frequentist Inference for Laboratory-Specific Performance Guarantees in Copy Number Variation Detection 
+
+Austin Talbot talbota@pillarbiosci.com 
+
+Pillar Biosciences Inc Natick, MA, USA 
+
+Alex Kotlar kotlara@pillarbiosci.com 
+
+Pillar Biosciences Inc Natick, MA, USA 
+
+Yue Ke key@pillarbiosci.com 
+
+Pillar Biosciences Inc Natick, MA, USA 
+
+Abstract 
+
+Targeted amplicon panels are widely used in oncology diagnostics, but providing per-gene performance guarantees for copy number variant (CNV) detection remains challenging due to amplification artifacts, process-mismatch heterogeneity, and limited validation sample sizes. While Bayesian CNV callers naturally quantify per-sample uncertainty, translating this into the frequentist population-level guarantees required for clinical validation, coverage rates, false-positive bounds, and minimum detectable copy-number changes, is a fundamen-tally different inferential problem. We show empirically that even robust Bayesian credible intervals, including coarsened posteriors and sandwich-adjusted intervals, are severely mis-calibrated on panels with small amplicon counts per gene. To address this, we propose a hybrid framework that evaluates Bayesian posterior functionals on validation samples and models the resulting squared losses with a Gamma distribution, yielding tolerance inter-vals with valid frequentist coverage. Three components make the method practical under real-world constraints: (1) imputation that removes the influence of true CNV-positive samples without requiring known ground truth, (2) regularization to address small sample variability, and (3) evidence-based stratification on the log model evidence to accommodate non-exchangeable noise profiles arising from process mismatch. Evaluated on two targeted amplicon panels using leave-one-out cross-validation, the proposed method achieves single-digit mean absolute coverage error across all genes under both process-matched and un-matched conditions, whereas Bayesian comparators exhibit mean absolute errors exceeding 60% on clinically relevant genes such as ERBB2. 
+
+1. Introduction 
+
+A false-positive ERBB2 amplification call can route a breast cancer patient onto trastuzumab, a targeted therapy that carries a 4.0% rate of cardiac events at seven-year follow-up even in patients with confirmed HER2-positive disease (Romond et al., 2012), all for a molecu-lar subtype she does not carry (Fehrenbacher et al., 2020). In colorectal cancer, a missed KRAS mutation can lead to cetuximab treatment that offers no survival benefit whatsoever  
+
+> ©2026 A. Talbot, A. Kotlar & Y. Ke.
+> arXiv:2604.14305v1 [stat.ME] 15 Apr 2026 Laboratory-Specific Sequencing Performance Guarantees in CNV Detection
+
+(HR 0.98, P = .89) while exposing the patient to dermatologic and infusion-related toxic-ity (Karapetis et al., 2008). In both cases the analytical error is upstream: the sequencing-based diagnostic that informed the treatment decision was either insufficiently sensitive or insufficiently specific. The clinician had no way to know this, because the test report carried generic performance guarantees based on internal data, as opposed to “for this panel, in this run, the false-positive rate for ERBB2 copy-number calling is below x% with y% con-fidence.” Providing exactly that kind of individualized guarantee is the purpose of this work. 
+
+The targeted amplicon panels this method was developed for offer considerable ad-vantages compared to whole genome sequencing: quick turnaround times, compatibility with low DNA content (critical for later-stage patients who cannot donate much blood), tolerance of substantial sample degradation, and cost-effectiveness (Sie et al., 2014; Gao et al., 2019). The ability to produce results under these demanding conditions has proven invaluable to thousands of patients. However, this same setting creates a challenging en-vironment for analysis, particularly for CNV detection, where limited amplicons (Boeva et al., 2014), process-matching difficulties (Derouault et al., 2020), and amplification arti-facts (Peng et al., 2015) all degrade analytical performance. The CNV caller we use, BayesCNV (Talbot et al., 2026), is fundamentally Bayesian. Bayesian methods are a natural fit for diagnostics (Bours, 2021). They naturally incorporate prior information (Lee, 2024), quantify uncertainty (Gelman and Carpenter, 2020), and evaluate model evidence (Lotfi et al., 2022), the last of which serves as an indicator of questionable samples (Talbot and Ke, 2026). At the individual level, these qualities are irreplaceable. However, providing per-gene performance guarantees for a given laboratory is a funda-mentally frequentist question: it asks what sensitivity, false-positive rate, or estimation error a clinician can expect across future samples processed on that platform. Bayesian credible intervals can exhibit poor frequentist coverage under model misspecification — the posterior concentrates with a covariance differing from the frequentist sandwich variance (Kleijn and van der Vaart, 2012), yielding strictly higher risk (M¨ uller, 2013), and misspecification can even render the posterior inconsistent (Gr¨ unwald and van Ommen, 2017). In the amplicon setting, such misspecification is a practical certainty, as no parametric model fully captures the target-specific biases of PCR amplification. Fortunately, clinical validation protocols require running multiple samples in an initial run, providing genuine repeated observations from which we can evaluate any posterior functional of interest to obtain an empirical sampling distribution with valid frequentist coverage regardless of model correctness. Due to difficulties in procuring samples with known CNV status, we instead use the discrepancy between the posterior mean and the CNV-neutral value of 1 to evaluate variability. We develop a novel method to reduce the influence of true positives via conditional imputation of the largest CNVs in log space, then model the resulting losses with a gamma distribution, a technique adapted from actuar-ial practice. Given the limited number of samples typically available, we also implement a conjugate prior composed of pseudo-observations based on previous laboratory results. The resulting procedure is robust to a subset of samples containing true positives, compu-tationally tractable, reliable under small sample sizes, and naturally accommodates prior information from previous experiments. 
+
+> 2Laboratory-Specific Sequencing Performance Guarantees in CNV Detection
+
+To better characterize performance when samples are not process-matched, we augment our method to stratify samples based on how well they align with model assumptions, quantified via the Bayesian evidence. Prior work has shown that the Bayesian evidence serves as an indicator of process mismatch or low sample quality (Talbot et al., 2025; Talbot and Ke, 2026). When the sample size is sufficiently large, we can split the samples into two groups based on evidence score and compute tolerance intervals using the above method on each group. We evaluate our method across two targeted amplicon panels, using a leave-one-out scheme to assess calibration of our tolerance intervals. We show empirically (1) that Bayesian credible intervals (even with robust inference) have inadequate frequentist prop-erties, (2) that our method provides proper coverage, even in noisy data, and (3) that stratification and imputation are critical when samples are not process matched and con-tain positive samples respectively. The remainder of this work is organized as follows. Section 2 contains work that is either related to or inspired this work. Section 3 details our method, which is tested on synthetic data in Section 4 and observed data in Section 5. Finally, in Section 6 we provide brief remarks and directions for future work. 
+
+Generalizable Insights about Machine Learning in the Context of Healthcare 
+
+• Robust Bayesian methods are insufficient for frequentist guarantees. Even with robustified posteriors, hard-to-model noise sources can prevent reliable achieve-ment of the nominal coverage rates required for clinical use. 
+
+• Non-IID noise profiles can make error bounds inaccurate. Methods that assume all samples have similar noise profiles can provide misleading guarantees when this assumption is violated. 
+
+• Bayesian and frequentist methods are complementary. Bayesian methods excel at the individual level, allowing the incorporation of prior information and eval-uation of model assumptions. Frequentist methods are a natural choice for population-level performance guarantees needed for product validation. 
+
+2. Related Work 
+
+Read-depth-based CNV detection from targeted sequencing spans several methodological families. Normalization-then-segmentation pipelines — ONCOCNV Boeva et al. (2014), CNVkit Talevich et al. (2016), CONTRA Li et al. (2012) — correct for GC content and library-size biases before applying CBS or threshold-based calling. PCA/SVD denoising methods such as XHMM Fromer et al. (2012) and CoNIFER Krumm et al. (2012) remove batch effects from the coverage matrix. Probabilistic count models jointly estimate artifacts and copy-number states: CODEX2 Jiang et al. (2018) via Poisson latent factors and GATK-gCNV Babadi et al. (2023) via a negative-binomial hierarchical HMM. Mixture-of-Poissons methods, cn.MOPS Klambauer et al. (2012) and panelcn.MOPS Povysil et al. (2017), model cross-sample variation as discrete copy-number components, while ExomeDepth Plagnol et al. (2012) and DECoN Fowler et al. (2016) use beta-binomial likelihoods with optimized 
+
+> 3Laboratory-Specific Sequencing Performance Guarantees in CNV Detection
+
+reference sets. Benchmarking studies consistently report dataset- and laboratory-dependent performance Moreno-Cabrera et al. (2020); Munt´ e et al. (2025), but none of these tools provide laboratory-customized frequentist performance guarantees. An alternative strategy is to build robustness directly into the modeling stage. Power posteriors raise the likelihood to an exponent τ < 1 to reduce sensitivity to misspecifi-cation Miller and Dunson (2019); Holmes and Walker (2017), and generalized Bayesian inference replaces the log-likelihood with an arbitrary loss, with learning rates calibrated via the SafeBayes framework Bissiri et al. (2016); Gr¨ unwald and van Ommen (2017). These approaches improve per-sample posterior inference but address a fundamentally different problem: they seek a better posterior for a single observation under a misspecified model, whereas we require frequentist guarantees — coverage, sensitivity, mean squared error — that hold across a population of future samples. 
+
+3. Methods 
+
+3.1. Background and Statistical CNV Model 
+
+We consider N samples assayed on a targeted amplicon panel spanning J genes, where gene j is tiled by nj amplicons ( j = 1 , . . . , J ). For a given sample let sj,k and rj,k denote the read counts at amplicon k of gene j for the test and diploid reference samples, respec-tively. Because the model is fit independently to each sample, we suppress the sample index throughout this subsection. 
+
+3.1.1. Features 
+
+For each amplicon we form a log copy-number ratio (lCNR) relative to the normal baseline. Amplicon-specific capture biases cancel in the ratio, isolating the copy-number signal. The raw lCNR is ˜Xj,k = log  sj,k + c − log  rj,k + c, (1) where c > 0 is a small pseudo-count guarding against zero counts. We remove global depth differences by median-normalizing across all amplicons: 
+
+Xj,k = ˜Xj,k − median j′,k ′
+
+  ˜Xj′,k ′
+
+. (2) After normalization, Xj,k = 0 indicates a copy-neutral amplicon, negative values indicate deletions, and positive values indicate amplifications. The median is robust to the sparse copy-number alterations expected in any single sample. 
+
+3.1.2. Statistical Model 
+
+We model the normalized lCNRs with the hierarchical Bayesian framework BayesCNV (Tal-bot et al., 2026). Gene-level means μj are partially pooled toward a global mean μ0 through a between-gene variance σ2. Amplicon-level noise is factored into a global scale τ 20 and gene-
+
+> 4Laboratory-Specific Sequencing Performance Guarantees in CNV Detection
+
+specific multipliers z2 
+
+> j
+
+, giving per-gene scales τ 2 
+
+> j
+
+= τ 20 z2 
+
+> j
+
+. The generative model is: 
+
+μ0 ∼ N  0, 10 2, σ2 ∼ Inv-Gamma( ασ, β σ),μj | μ0, σ 2 ∼ N  μ0, σ 2, j = 1 , . . . , J, τ 20 ∼ Inv-Gamma( ατ0 , β τ0 ), z2 
+
+> j
+
+∼ Inv-Gamma( ατ , β τ ),τ 2 
+
+> j
+
+= τ 20 z2 
+
+> j
+
+,Xj,k | μj , τ j ∼ SoftLaplace  μj , τ j
+
+, k = 1 , . . . , n j ,
+
+(3) where SoftLaplace (Bingham et al., 2019) is a heavy-tailed location–scale family providing robustness to outlier amplicons. Throughout, N (μ, σ 2) denotes a Normal distribution with mean μ and variance σ2. The inverse-gamma hyperparameters are set to mildly regularizing values that keep the posterior proper while exerting minimal influence in data-rich genes. 
+
+3.1.3. Inference 
+
+The inferential target is the gene-level mean μj : values near zero indicate diploid copy num-ber; substantial deviations signal deletions or amplifications. Posterior samples are drawn via Hamiltonian Monte Carlo (Betancourt, 2017) from p(θ | X), with θ = μ0, σ 2, {μj , z 2 
+
+> j
+
+}Jj=1 , τ 20 .From each marginal posterior of μj we form (1 − γ) highest-posterior-density credible in-tervals and flag gene j as altered whenever the interval excludes zero. We also estimate the log model evidence Z = log R p(X | θ) p(θ) d θ via thermodynamic integration (Gelman and Meng, 1998), which serves both as a model-comparison criterion and, in Section 3.5, as a process-matching diagnostic. Further details appear in Talbot et al. (2026). 
+
+3.2. Removing Positives with Conditional Order Imputation 
+
+In a clinical deployment the caller is validated on K samples processed by the client lab-oratory. Ideally one would evaluate sensitivity and specificity against known positive and negative controls, but obtaining such controls at scale is rarely feasible. We therefore adopt a strategy that requires no prior knowledge of which samples carry copy-number alterations, exploiting the sparsity of CNV events: across the J genes of the panel, the vast majority of gene–sample pairs are diploid. For any gene j, the K posterior means ˆ μ(1)  
+
+> j
+
+, . . . , ˆμ(K) 
+
+> j
+
+are dominated by a diploid com-ponent near zero, with at most m samples harboring a genuine amplification. The top-m
+
+values—those most likely to reflect true gains—are the primary source of contamination in a tolerance limit estimated from the empirical distribution. We impute these suspect val-ues from the bulk (CNV-neutral) distribution, constructing a pseudo-diploid reference from which calibrated tolerance limits can be derived. This correction is deliberately one-sided: copy-number gains can be arbitrarily large, inflating the upper tail, whereas due to low tumor purity deletions, even homozygous losses, depress ˆ μ(s) 
+
+> j
+
+only modestly. Fix gene j and write the K ordered posterior means as ˆμj, (1) ≤ ˆμj, (2) ≤ · · · ≤ ˆμj, (K). (4) Fix a small integer m < K , set L = K − m, and define the threshold 
+
+tj = ˆμj, (L), (5) 
+
+> 5
+
+Laboratory-Specific Sequencing Performance Guarantees in CNV Detection GENE1 GENE2 GENE3 GENE4 GENE5 GENE6 
+
+Amplicon (grouped by gene) 
+
+> S01
+> S02
+> S03
+> S04
+> S05
+> S06
+> S07
+> S08
+> S09
+> S10
+> S11
+> S12
+> Sample
+
+A Observed lCNR     
+
+> 0.4 0.2 0.0 0.2 0.4
+
+Posterior mean j (lCNR scale) 
+
+> GENE1
+> GENE2
+> GENE3
+> GENE4
+> GENE5
+> GENE6
+> GENE7
+> GENE8
+> GENE9
+> GENE10
+> GENE11
+> GENE12
+> Gene
+
+B Gene-level lCNR Estimates      
+
+> 0.25 0.00 0.25 0.50 0.75 1.00
+> j
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> Density
+> tj (threshold)
+
+C     
+
+> Pre Imputation
+> 0.25 0.00 0.25 0.50 0.75 1.00
+> j
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> tj (threshold)
+> Post Imputation
+
+Removing CNV Outliers      
+
+> 0.0 0.2 0.4 0.6 0.8 1.0
+
+Yj, s = ( j)2 
+
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> Density
+> Tj (q = 0.95 quantile)
+> Tj= detection limit on lCNR scale
+
+D Detection Level 
+
+> Data
+> Prior
+> MSE
+> Density
+
+E Stratefied Parameter Estimation          
+
+> Lower stratum
+> Upper stratum
+> GENE1 GENE2 GENE3 GENE4 GENE5 GENE6 GENE7 GENE8 GENE9 GENE10
+
+Gene 
+
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Tolerance Limit  Tj
+
+F Stratefied Tolerance Intervals 
+
+> Upper stratum
+> Lower stratum
+
+Figure 1: (A) Heatmap of normalized lCNRs Xj,k for representative samples (rows) across amplicons grouped by gene (columns). (B) Forest plot of BayesCNV posterior means ˆ μj with (1 −γ) HPD credible intervals for one representative sample. (C) 
+
+Conditional order-statistic imputation for one representative gene. Left: distri-bution of K posterior means with top-m suspect values (filled red markers) and threshold tj (dashed line). Right: distribution after replacing suspect values with order-statistic draws. (D) Gamma model fit (solid colored curve) to the empirical distribution of squared imputed posterior means Yj,s (grey) and pseudo observa-tions (pink); the vertical dashed line marks the tolerance quantile Tj , and pTj
+
+is the minimum detectable lCNR deviation. (E) Stratefied parameter estimates each sample group divided by model evidence. (F) Per-gene tolerance limits pTj
+
+in upper and lower evidence strata. the largest value among the L retained observations. The top-m values ˆ μj, (L+1) , . . . , ˆμj, (K)
+
+are replaced by the following procedure, applied independently per gene. 1. Bulk model fit. Fit a Normal distribution ˆFj = N  ˆξj , ˆω2
+
+j
+
+ to the L retained values using robust estimators: ˆξj = median  ˆμj, (1) , . . . , ˆμj, (L)
+
+, ˆωj = 1 .4826 MAD  ˆμj, (1) , . . . , ˆμj, (L)
+
+, (6) where MAD is the median absolute deviation and 1 .4826 = 1 /Φ−1(3 /4) is the Fisher consistency factor for Gaussian scale estimation (see Appendix A; Huber and Ronchetti, 2009). 
+
+6Laboratory-Specific Sequencing Performance Guarantees in CNV Detection 
+
+2. Truncated sampling. Let Sj = 1 − ˆFj (tj ). Draw U1, . . . , U m i.i.d.
+
+∼ Uniform(0 , 1) and set 
+
+Zi = ˆF −1
+
+> j
+
+ ˆFj (tj ) + Ui Sj
+
+
+
+, i = 1 , . . . , m. (7) Each Zi is a draw from ˆFj truncated to [ tj , ∞). 3. Order-statistic replacement. Sort the draws to obtain Z(1) ≤ · · · ≤ Z(m) and set ˜μj, (L+i) = Z(i), i = 1 , . . . , m ; ˜μj, (r) = ˆ μj, (r), r = 1 , . . . , L. (8) This procedure reproduces the classical conditional distribution of upper order statistics given X(L) = t for an i.i.d. continuous sample (David and Nagaraja, 2004), with the true F
+
+replaced by the robust estimate ˆFj .
+
+3.3. Tolerance Intervals Via a Gamma Quantile 
+
+Having removed the influence of up to L positive samples using the method in Section 3.2, we now work to obtain tolerance intervals on the posterior means by gene. Note, to maintain uncertainty in the imputations, this procedure will be repeated multiple times with different imputed values and use the empirical mean estimate. However, for clarity, we will suppress this in the following sections. We characterize the CNV performance via the MSEs of the posterior means (assuming the sample is CNV neutral). That is 
+
+Yj,s =  ˜μ(s)
+
+> j
+
+2. (9) A natural model for Y is a Gamma distribution. If ˜ μ(s) 
+
+> j
+
+∼ N (0 , τ 2 
+
+> j
+
+) then Yj,s ∼ τ 2 
+
+> j
+
+χ21 =Gamma   12 , 2τ 2
+
+> j
+
+. More generally, a residual process-mismatch bias δj gives ˜μ(s) 
+
+> j
+
+∼ N  δj , τ 2
+
+> j
+
+ =⇒ Yj,s = τ 2 
+
+> j
+
+χ21(λj ), λj = δ2 
+
+> j
+
+/τ 2 
+
+> j
+
+, (10) a scaled noncentral chi-squared variate (Urkowitz, 1967). Moment-matching to Gamma( αj , s j )yields (see Appendix A for the derivation) 
+
+αj = (1 + λj )2
+
+2(1 + 2 λj ) , sj = 2τ 2 
+
+> j
+
+(1 + 2 λj )1 + λj
+
+. (11) When δj = 0 we recover aj = 12 ; a nonzero bias inflates aj in proportion to λj , so a flexible Gamma MLE accommodates both regimes. Additional motivation for the Gamma family is given in Appendix A. Once we estimate the parameters of the gamma distribution, we can construct a 1 − p
+
+tolerance interval as the quantile Tj = F −1(ˆ αj , ˆsj ). This can be converted to a tolerance interval on the original CNV estimate as the square root (loss is just deviation squared). Given that this transformation is monotonic it inherits coverage properties. As such, our guarantee is that a CNV-neutral sample with probability 1 − p will have a CNV estimate in the range 
+
+P r (ˆ μnew j /∈ [−pTj , pTj ]) < p. (12) 
+
+> 7Laboratory-Specific Sequencing Performance Guarantees in CNV Detection
+
+Note that while the interval is valid, if δj̸ = 0 the coverage will be lopsided. While this is framed as a bound on the expected variability of CNV estimates, we also can use this as a proxy for expected performance for positive samples as well. Provided that the amplicon-level biases and variability is independent of CNV status, this is roughly the certainty we would see in lCNR estimates of positive samples as well. In particular, exp( pTj ) is the lowest detectable CNV for gene j.
+
+3.4. Incorporating a Conjugate Prior with Pseudo-Observations 
+
+Quantile estimation can be inherently noisy, particularly when in the upper quantiles like those used in this work. This is a particularly acute issue in our applications as customers often repeatedly use different combinations of samples, both to evaluate robustness and also search for combinations that yield the “best” results. This can result in a particularly difficult combination when this is run at low sample sizes ( N = 10). Our applications require low variance, even at the expense of a higher MSE due to increased bias. We achieve this by placing a prior on both αj and sj . We can create a conjugate prior for any regular model where A = {x : p(θ|x) > 0} does not depend on θ, that is support does not depend on the parameters, by the incorporation of pseudo observations ( ξ1, . . . , ξ N ′ ) (Bickel and Doksum, 2015). That is, our prior is p(αj , s j ) = QK′ 
+
+> i=1
+
+p(ξk|αj , s j )
+
+.R Q N ′ 
+
+> k=1
+
+p(ξk|αj , s j )resulting in a posterior of 
+
+p(αj , s j |Yj,s , {ξ}) = 
+
+> K′+K
+
+Y
+
+> k=1
+
+p(ξ′
+
+> i
+
+|αj , s j )
+
+.Z K′+KY
+
+> k=1
+
+p(ξ′
+
+> k
+
+|αj , s j ), (13) where {ξ′
+
+> k
+
+}k=1: K+K′ = {Yj, 1 . . . , Y j,s , ξ 1, . . . , ξ K′ }. The advantage of this posterior is that computation is straightforward with MAP estimation, simply augment the observed data with pseudo-observations and perform maximum likelihood. While the easiest method for the above prior is to simply tack on a small number of samples, a less noisy method is to incorporate a large number of samples and weight their contribution in the likelihood to achieve a fixed sample size. We propose two methods for choosing these prior samples. The first is to use samples from a previous related experi-ment. This method has the downside that it either (i) requires the customer to run a first experiment without a prior or (ii) involves using one customer’s data for a separate group. The second is to use an internal run to estimate αj and sj under standard conditions, then generate a large number of pseudo observations with those parameters. This is the method we have chosen commercially. 
+
+3.5. Evidence-Stratified Tolerance Limits 
+
+The tolerance limits in Section 3.3 assume that the K samples are exchangeable draws from a single production population. We frequently find that not all samples are process matched (i.e. sequenced with the same instrument, library preparation, and analysis pipeline used clinically), introducing bias and excess variance (Appendix B). When samples are pooled, the squared posterior means Yj,s follow a mixture of Gamma-like distributions whose components may differ in both location and scale due to different noise profiles. 
+
+> 8Laboratory-Specific Sequencing Performance Guarantees in CNV Detection
+
+Fitting a single Gamma( αj , s j ) to such a mixture can yield tolerance quantiles that differ dramatically from the true value of each group individually. We eliminate this artifact by stratifying the validation samples on the log model evidence 
+
+Zs = log p(Xs | M ), which serves as a process-matching diagnostic (Talbot and Ke, 2026): well-matched samples yield high evidence while mismatched samples yield low evidence. There are a variety of techniques for approximating this value, such as thermodynamic integration (Gelman and Meng, 1998) or annealed importance sampling (Neal, 2001), or in this work a Laplace approximation (Gelman et al., 1995). Partitioning on Zs produces strata within which the single-Gamma model is approximately correctly specified. Concretely, let Zmed denote the sample median of {Z1, . . . , Z K }. We define two strata: 
+
+S+ = s : Zs ≥ Zmed , S− = s : Zs < Z med , (14) with |S +| = ⌈K/ 2⌉ and |S −| = ⌊K/ 2⌋. Within each stratum g ∈ { +, −} and for each gene j,we fit a separate Gamma model to the squared imputed posterior means {Yj,s : s ∈ S g},augmented with the pseudo-observations described in Section 3.4, yielding per-stratum tolerance quantiles 
+
+T (g) 
+
+> j
+
+= F −1Gamma( ˆ α(g)   
+
+> j,ˆs(g)
+> j)
+
+ 1 − p, g ∈ { +, −} . (15) The reported tolerance limit for gene j in each sample would then be Tj,s = T g(s) 
+
+> j
+
+.This procedure requires K > 20 so that each stratum retains at least ten observations, which in our experience is the number required to accurately estimate the parameters of the gamma distribution. This stratification is also optional, one potential method is to detect whether there is evidence for non-exchangability in the samples via a test like the one developed in Talbot and Ke (2026), allowing for formal assessment of whether such stratification is even necessary. 
+
+4. Synthetic Results 
+
+The purpose of this synthetic section is to evaluate the impact that the imputation scheme and prior have on the quantile estimates. We evaluate the bias, variance, and mean squared error method as a function of sample size, with a particular focus on the contributions of the prior distribution and the outlier-imputation scheme. Distribution parameters δ = 0 .2 and 
+
+τ 2 = 0 .17 were estimated from a held-out panel analyzed in Section 5.2; importantly, these values are drawn from a different panel than the one used to construct the informative prior, ensuring that the prior is not fit to the evaluation data. Synthetic datasets were repeatedly drawn at sample sizes ranging from N = 5 to N = 50 from N (δ, τ 2), and for each draw we computed the true quantile bounding |X|, comparing four estimators. First the standard maximum-likelihood estimate (Empirical), used as a baseline. Second, our novel estimator with no prior information and m = 1. Third, the same method but with the informative prior and an effective sample size of 5. And Finally, our estimator with the same informative prior and an imputation weight that scales linearly with N , representing the regime in which the number of outliers grows proportionally with the number of samples processed. The true value was 0 .665. 
+
+> 9
+
+Laboratory-Specific Sequencing Performance Guarantees in CNV Detection 
+
+Results are displayed in Figure 2. Relative to the empirical baseline, the proposed es-timator without a prior reduces bias and MSE at the cost of increased variance; at small sample sizes the standard error reaches approximately 25% of the true parameter value, a level that is prohibitively high for reliable clinical decision-making. Incorporating the infor-mative prior yields a substantial reduction in variance, roughly 2 .5×, bringing the relative standard error to approximately 10%, a range consistent with stable performance guar-antees under the variability introduced by routine sample-selection interventions. Finally, the m = 0 .2N condition demonstrates that the imputation scheme remains well-calibrated even when the outlier proportion grows with sample size: neither bias nor MSE increases materially relative to the fixed-m setting, confirming that the approach is robust to elevated rates of true-positive contamination. 10 20 30 40 50            
+
+> Sample Size
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Tolerance Interval
+> Parameter Estimate
+> 10 20 30 40 50
+> Sample Size
+> 0.050
+> 0.075
+> 0.100
+> 0.125
+> 0.150
+> 0.175
+> 0.200
+> 0.225
+> 0.250
+> Standard Error
+> Estimate Variance
+> 10 20 30 40 50
+> Sample Size
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> Mean Squared Error
+> Estimate Error
+> Ours: No Prior Empirical Ours: Prior Ours: Prior + m=N/5
+
+Figure 2: Interval estimation performance as a function of sample size for the four estima-tors. Left: posterior mean parameter estimate with 95% confidence intervals. 
+
+Center: standard error of each estimator. Right: mean squared error. Data were generated from N (δ, τ 2) with δ = 0 .2 and τ 2 = 0 .17 over N ∈ [5 , 50]. 
+
+5. Results 
+
+We evaluate the empirical coverage of the proposed tolerance intervals against two alter-natives drawn from the Bayesian robustness literature, along with traditional MSE-based coverage estimate corresponding to a Gamma(1 /2, s ) distribution. All methods are assessed on a common criterion: for each gene j and each diploid validation sample s, we record whether the interval excludes zero, and report the resulting false-positive rate over ( j, s )pairs relative to the nominal level γ. The first comparator is the standard (1 − γ) highest-posterior-density (HPD) credible interval for μnew  
+
+> j
+
+obtained directly from BayesCNV . The Bernstein–von Mises theorem guarantees that this interval has asymptotically correct fre-quentist coverage as the number of amplicons per gene nj → ∞ ; however, for the targeted amplicon panels considered here, nj is small (typically 4–20), placing the data squarely outside this asymptotic regime. The remaining three comparators apply misspecification-robust modifications to the BayesCNV posterior for each new sample and are the coarsened posterior of Miller and Dunson (2019), and the sandwich posterior of M¨ uller (2013). 
+
+10 Laboratory-Specific Sequencing Performance Guarantees in CNV Detection 
+
+We evaluate coverage using leave-one-out cross-validation: for each validation sample s,the tolerance interval is estimated from the remaining K − 1 individuals and we record whether |ˆμ(s) 
+
+> j
+
+| ≤ pTj . Empirical coverage is then reported alongside interval width for each method, with width serving as the secondary criterion, narrower intervals that maintain nominal coverage correspond directly to a lower minimum detectable CNV exp( pTj ) and hence greater clinical sensitivity. 
+
+5.1. Small Panel LBX 
+
+We first analyze a dataset comprising of 32 FFPE samples sequenced with a 172-amplicon panel designed for low-cost cancer screening (targeting five CNV-associated genes). Of these samples, 10 libraries were prepared from substantially fragmented FFPE DNA, and 22 from higher-quality clinical FFPE material. We generated data as follows. We chose 5 of the 32 samples to create an averaged normal reference, ranging from 0 samples being fragmented DNA to all 5. We then evaluated the caller on the remaining 22 samples. This was repeated 30 times with different normal selection, yielding a total of 6 · 30 · 22 different runs. As such, we carefully control the level of known process-mismatch in the samples. For each sample, we also evaluated the marginal likelihood using a Laplace approximation. 
+
+5.1.1. Process Matched Coverage 
+
+We quantify calibration via the mean absolute coverage error (MACE), MACE = 1
+
+|Γ|
+
+X
+
+> γ∈Γ
+
+ˆC(γ) − γ , (16) where Γ is a uniform grid of nominal coverage levels on [0 .7, 1] and ˆC(γ) is the empirical coverage at level γ evaluated per gene over leave-one-out folds; values are reported multi-plied by 100 (Table 1). Under matched conditions all three BayesCNV -based comparators are severely miscalibrated. The standard HPD and sandwich (M¨ uller, 2013) intervals are drastically overconfident—their MACE values, reaching up to 66 and 69 respectively, reflect intervals so narrow that they fail to contain the true signal across most of the [0 .7, 1] coverage range; this is the expected consequence of applying a large-sample posterior approximation at the small amplicon counts ( nj ≈ 4–20) of this panel. The coarsened posterior (Miller and Dunson, 2019) is erratic: near-zero MACE on some genes indicates the opposite failure mode—intervals so wide that empirical coverage is 100% throughout—while MACE as high as 42 on other genes indicates severe overconfidence, with both failure modes present si-multaneously depending on the gene. The proposed tolerance intervals and the MSE-based estimator together form a clearly distinct tier, each achieving single-digit MACE across all five genes and representing a substantial improvement over all three Bayesian comparators. Within this tier, the proposed intervals are the best or tied-best on every gene, with the largest margin on ERBB2 (3 .0±0.2 vs. 5 .6±0.5 for MSE), a gene of direct clinical relevance for copy-number calling. 
+
+5.1.2. Unmatched Coverage 
+
+Under maximum process mismatch the failure modes of the Bayesian comparators become more varied and in some respects more severe, as shown in Table 1 and Figure 1. Process 
+
+> 11
+
+Laboratory-Specific Sequencing Performance Guarantees in CNV Detection 
+
+mismatch inflates the posterior variance on several genes, causing the standard, coarsened, and sandwich intervals to swing from overconfidence to near-total underconfidence (empir-ical coverage approaching 100%, MACE near zero) on genes such as KIT and PIK3CA—a change in failure direction, not a genuine improvement in calibration. On ERBB2, where mismatch does not rescue the posterior variance, all three Bayesian variants remain severely overconfident (MACE × 100 up to 74). This instability, intervals that are either far too wide or far too narrow depending on the gene and the degree of process mismatch, renders the Bayesian comparators unreliable for clinical use. The proposed tolerance intervals remain uniformly well-calibrated across all five genes, as does the MSE-based estimator, which degrades modestly but remains in the single-digit MACE regime. The proposed method is again the best or near-best on every gene, demonstrating that robustness to process mismatch is achieved by construction rather than by fortuitous cancellation of errors. 0 50 100 150 
+
+> 2.0
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> lCNR
+
+Matched Sample       
+
+> Other
+> PIK3CA
+> KIT
+> MET
+> FGFR1
+> ERBB2
+> 0.70 0.75 0.80 0.85 0.90 0.95 1.00
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Observed coverage
+
+PIK3CA       
+
+> Ours
+> Bayes
+> Coarsened
+> Sandwich
+> MSE
+> Ideal
+> 0.70 0.75 0.80 0.85 0.90 0.95 1.00
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Observed coverage
+
+KIT       
+
+> Ours
+> Bayes
+> Coarsened
+> Sandwich
+> MSE
+> Ideal
+> 0.70 0.75 0.80 0.85 0.90 0.95 1.00
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Observed coverage
+
+ERBB2    
+
+> Ours
+> Bayes
+> Coarsened
+> Sandwich
+> MSE
+> Ideal
+> 050 100 150
+
+Amplicon index 
+
+> 2.0
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> lCNR
+
+Unmatched Sample       
+
+> Other
+> PIK3CA
+> KIT
+> MET
+> FGFR1
+> ERBB2
+> 0.70 0.75 0.80 0.85 0.90 0.95 1.00
+
+Nominal coverage 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Observed coverage
+
+PIK3CA       
+
+> Ours
+> Bayes
+> Coarsened
+> Sandwich
+> MSE
+> Ideal
+> 0.70 0.75 0.80 0.85 0.90 0.95 1.00
+
+Nominal coverage 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Observed coverage
+
+KIT       
+
+> Ours
+> Bayes
+> Coarsened
+> Sandwich
+> MSE
+> Ideal
+> 0.70 0.75 0.80 0.85 0.90 0.95 1.00
+
+Nominal coverage 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Observed coverage
+
+ERBB2 
+
+> Ours
+> Bayes
+> Coarsened
+> Sandwich
+> MSE
+> Ideal
+
+Figure 3: Calibration curves of the various methods. Top: Coverages in the process-matched experiments. The far left plots the lCNR of a representative process-matched sample, with amplicons targeting the five CNV-relevant genes shown with different colors. The remaining plots show the true coverages on three of the five genes as a function of target coverages. The ideal is shown via a dotted line, while the average coverage and 95% confidence interval for each of the five considered methods is shown in a different color Bottom: These plots have iden-tical interpretation, except when the data come from unmatched (highly noisy) samples. 
+
+5.1.3. Heterogeneous Mixture 
+
+We then evaluate a situation that we frequently encounter, when both matched and un-matched samples are included in the same run. We evaluate this by combining the data from both the highest and lowest values of process matching in the experiment above, re-
+
+12 Laboratory-Specific Sequencing Performance Guarantees in CNV Detection 
+
+Table 1: Mean absolute error ×100 with 95% confidence intervals for coverage evaluation on the essential panel using matched and unmatched normals. Results are shown for five methods: Ours, MSE, Bayesian, Sandwich, and Coarsened                                                                                                                                                                  
+
+> Matched Unmatched
+> Method PIK3CA KIT MET FGFR1 ERBB2 PIK3CA KIT MET FGFR1 ERBB2 Bayes 33 ±637 ±540 ±754 ±266 ±311 ±412 ±145 ±725 ±674 ±4Coarsened 6.6±.98.0±118 ±514 ±342 ±315 ±29.5±245 ±13 10 ±257 ±7Sandwich 38 ±652 ±647 ±760 ±369 ±310 ±27.6±1.443 ±13 20 ±449 ±8MSE 4.2±.54.2±.66.4±.64.2±.75.6±.55.7±.54.4±.58.1±27.4±.54.2±.7Gamma 4.9±.24.4±.36.1±.65.3±.43.0±.24.4±.65.4±.15.5±.77.0±.83.2±.2
+
+sulting in 30 trials of 39 samples, of which 17 are process matched and 22 are not process matched. This situation is evident when we examine the distribution of likelihoods, shown in panel (A) of Figure 4. Unsurprisingly, the unmatched samples appear noisier and have correspondingly lower likelihoods. We compared the results of our method with and without stratification. Note that since 22 samples are from one group and 17 in the other, this analysis does not “cheat” by having the median perfectly align with group membership. We first show the performance guarantees for MET in panel (B) of Figure 4. Note that the estimate does not lie between the estimates of the two groups over the entire interval; at the highest quantiles the estimate is excessively loose and larger than each group individually. This is the price we pay for modeling a mixture using a single parametric model. While we know that the quantile for the mixture is less than the maximum of the individual quantiles, with misspecified parametric models this is no longer true. We can see in panel (C) of Figure 4 that the in the stratified model is better over the entire range, and importantly is similar to the aggregate guarantee, while having narrower intervals. Ironically, by modeling heterogeneity in the noise distribution, we are able to accurately state that our performance is better than our estimate when such heterogeneity is ignored. 
+
+5.2. FFPE Validation Data 
+
+Our final evaluation is performed on data for a panel designed for FFPE solid tumor diag-nostics. The panel has 341 amplicons, of which 240 target 14 genes for CNV detection. This particular experiment was run internally with 14 samples, with 5 NIST standard samples CNV positive for ERBB2 and 5 positive for EGFR and MET. The effect of these outliers on the distribution of the MET losses is shown in panel (A) of Figure 5. Running this high of fraction of samples with CNVs in the same gene is inadvisable, as it can affect the baseline and obscures true signal. However, this is a common occurrence because samples with known CNVs are hard to procure, and validation runs naturally use multiple positive samples to ensure our methods work. As a result we can use this dataset to show the importance of the imputation step in 3.2, and evaluate the sensitivity to the imputation fraction. 
+
+> 13
+
+Laboratory-Specific Sequencing Performance Guarantees in CNV Detection 200 100 0 100 200             
+
+> Log-likelihood
+> 0.000
+> 0.002
+> 0.004
+> 0.006
+> 0.008
+> 0.010
+> 0.012
+> Density
+> Log Evidence Distribution
+> Unmatched
+> Matched
+> 0.70 0.75 0.80 0.85 0.90 0.95 1.00
+> Coverage
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> T
+> Tolerance Interval: MET
+> Stratified: Matched
+> Stratified: Unmatched
+> All Samples
+> 0.70 0.75 0.80 0.85 0.90 0.95 1.00
+> Ideal Coverage
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> 0.90
+> 0.95
+> 1.00
+> Observed Coverage
+> Coverage: MET
+> Unstratified
+> Stratified
+> Ideal
+
+Figure 4: The effect of stratefication in heterogeneous mixtures. (A) The distributions of log-likelihoods in the process matched and unmatched populations. (B) The tolerance intervals for MET on each of the subgroups for a stratefied fit, and all samples when group differences are ignored. (C) The associated coverages for each method. To do so, we first evaluated the 95% quantile on the samples, excluding the samples with known positives on a per-gene basis, which we treat as the ground-truth value. We then fit our method on the full dataset with the positives, increasing the fraction of imputed values up to 50% of the samples. The difference between the estimated and true value is plotted in panel (B) of Figure 5. We found that our method was relatively robust to imputation fraction, with the non-CNV genes having an average relative difference of 8% when 30% of the values are imputed, with a maximum of 22%. Even when 50% of the values are imputed the average relative difference was 15% with a maximum of 38%. While this is naturally suboptimal compared to no imputation, it is dramatically preferable to ignoring the outlier effect of true positives. If this imputation step were not performed, it would erroneously suggest that the limit of detection for MET was 8.6, as opposed to the true and far more reasonable value of 1.5 as shown in panel (C) of Figure 5. 
+
+6. Discussion 
+
+This work demonstrates that providing laboratory-specific frequentist performance guaran-tees for a Bayesian diagnostic pipeline requires a fundamentally different inferential strategy than improving the posterior itself. Our experiments demonstrate that state-of-the-art ro-bust Bayesian modifications, the coarsened posterior (Miller and Dunson, 2019) and the sandwich adjustment (M¨ uller, 2013) fail to achieve reliable frequentist coverage on the small-amplicon panels typical of clinical NGS, because calibration is a property of the repeated-sampling procedure, not of any individual posterior. The proposed framework addresses this gap by recasting the problem as tolerance-interval estimation on empirical loss distributions, incorporating regularization from previous laboratories to improve per-formance and reduced variance. That the simpler MSE-based estimator also enters the single-digit MACE regime reinforces the broader lesson: the critical design choice is the 
+
+14 Laboratory-Specific Sequencing Performance Guarantees in CNV Detection 0.5 0.0 0.5 1.0 1.5 2.0 2.5            
+
+> MET Squared Error
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> 1.4
+> Density
+> (A) MET Error Distribution
+> Observed
+> Imputed
+> True
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> Imputation Fraction
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> TEst  TTrue
+> (B) Imputation Effect
+> Gene w/o Positives
+> Gene w/ Positives
+> True Positive Fraction
+> CCNE EGFR FGFR2 MET
+> Gene
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> Tj
+> (C) 0.95 Quantile by Gene
+> True
+> Observed
+> Imputed
+
+Figure 5: The effect of imputation on MET tolerance interval estimates. (A) plots the KDEs for true, observed, and imputed MET error values. (B) plots between estimated and true 0.95 quantiles across imputation fractions, with the dashed line indicating the true positive fraction. (C) plots the true, observed, and imputed 0.95 quantiles for CCNE, EGFR, FGFR2, and MET. frequentist reframing itself, with the Gamma model providing a further edge through its theoretical grounding in the noncentral chi-squared structure of the losses and its accom-modation of process-mismatch bias via the shape parameter (Appendix A). Beyond CNV detection, this hybrid strategy, Bayesian inference for individual-level uncertainty paired with frequentist calibration for population-level guarantees, is applicable to any ML-based clinical assay that requires quantifiable performance bounds. The evidence-stratification component further highlights a principle with wider relevance in healthcare ML: subgroup-specific performance reporting, much like disaggregated evaluation in algorithmic fairness, can expose heterogeneity that aggregate metrics conceal. Several limitations point to natural avenues for future work. The evidence-based strat-ification relies on a binary median split of the log model evidence Zs, a deliberately simple scheme that treats process mismatch as a dichotomy and requires K > 20 to provide adequate per-stratum sample sizes. This is perhaps the most accessible opportunity for improvement: replacing the hard partition with continuous sample weights or data-driven clustering (Talbot and Ke, 2026) would allow finer-grained accommodation of heterogene-ity without halving the effective sample size per stratum. Similarly, the conditional order-statistic imputation assumes a fixed number of suspect positives m, targeting amplifica-tions whose effect on the upper tail is unbounded; extending the scheme to symmetric imputation for deletions and developing adaptive procedures for selecting m, for instance via goodness-of-fit testing on the bulk distribution, would broaden applicability to panels targeting homozygous losses. 
+
+References 
+
+Mehrtash Babadi, Jack M Fu, Samuel K Lee, Andrey N Smirnov, Laura D Gauthier, Mark Walker, David I Benjamin, Xuefang Zhao, Konrad J Karczewski, Isaac Wong, et al. 
+
+15 Laboratory-Specific Sequencing Performance Guarantees in CNV Detection 
+
+Gatk-gcnv enables the discovery of rare copy number variants from exome sequencing data. Nature genetics , 55(9):1589–1597, 2023. Michael Betancourt. A conceptual introduction to hamiltonian monte carlo. arXiv preprint arXiv:1701.02434 , 2017. Peter J Bickel and Kjell A Doksum. Mathematical statistics: basic ideas and selected topics, volumes I-II package . Chapman and Hall/CRC, 2015. Eli Bingham, Jonathan P Chen, Martin Jankowiak, Fritz Obermeyer, Neeraj Pradhan, Theofanis Karaletsos, Rohit Singh, Paul Szerlip, Paul Horsfall, and Noah D Goodman. Pyro: Deep universal probabilistic programming. Journal of machine learning research ,20(28):1–6, 2019. Pier Giovanni Bissiri, Chris C Holmes, and Stephen G Walker. A general framework for updating belief distributions. Journal of the Royal Statistical Society Series B: Statistical Methodology , 78(5):1103–1130, 2016. Valentina Boeva, Tatiana Popova, Maxime Lienard, Sebastien Toffoli, Maud Kamal, Christophe Le Tourneau, David Gentien, Nicolas Servant, Pierre Gestraud, Thomas Rio Frio, et al. Multi-factor data normalization enables the detection of copy number aberrations in amplicon sequencing data. Bioinformatics , 30(24):3443–3450, 2014. Martijn JL Bours. Bayes’ rule in diagnosis. Journal of Clinical Epidemiology , 131:158–160, 2021. Herbert A David and Haikady N Nagaraja. Order statistics . John Wiley & Sons, 2004. Paco Derouault, Jasmine Chauzeix, David Rizzo, Federica Miressi, Corinne Magdelaine, Sylvie Bourthoumieu, Karine Durand, Helene Dzugan, Jean Feuillard, Franck Sturtz, et al. Covcopcan: An efficient tool to detect copy number variation from amplicon sequencing data in inherited diseases and cancer. PLoS Computational Biology , 16(2): e1007503, 2020. Louis Fehrenbacher, Reena S Cecchini, Charles E Geyer Jr, Priya Rastogi, Joseph P Costantino, James N Atkins, John P Crown, Jonathan Polikoff, Jean-Francois Boileau, Louise Provencher, et al. Nsabp b-47/nrg oncology phase iii randomized trial comparing adjuvant chemotherapy with or without trastuzumab in high-risk invasive breast cancer negative for her2 by fish and with ihc 1+ or 2+. Journal of clinical oncology , 38(5): 444–453, 2020. Anna Fowler, Shazia Mahamdallie, Elise Ruark, Sheila Seal, Emma Ramsay, Matthew Clarke, Imran Uddin, Harriet Wylie, Ann Strydom, Gerton Lunter, et al. Accurate clinical detection of exon copy number variants in a targeted ngs panel using decon. 
+
+Wellcome open research , 1:20, 2016. Menachem Fromer, Jennifer L Moran, Kimberly Chambert, Eric Banks, Sarah E Bergen, Douglas M Ruderfer, Robert E Handsaker, Steven A McCarroll, Michael C O’Donovan, Michael J Owen, et al. Discovery and statistical genotyping of copy-number variation 
+
+> 16 Laboratory-Specific Sequencing Performance Guarantees in CNV Detection
+
+from whole-exome sequencing depth. The American Journal of Human Genetics , 91(4): 597–607, 2012. Meiling Gao, Maurizio Callari, Emma Beddowes, Stephen-John Sammut, Marta Grze-lak, Heather Biggs, Linda Jones, Abdelhamid Boumertit, Sabine C Linn, Javier Cortes, et al. Next generation-targeted amplicon sequencing (ng-tas): an optimised protocol and computational pipeline for cost-effective profiling of circulating tumour dna. Genome medicine , 11(1):1, 2019. Andrew Gelman and Bob Carpenter. Bayesian analysis of tests with unknown specificity and sensitivity. Journal of the Royal Statistical Society Series C: Applied Statistics , 69 (5):1269–1283, 2020. Andrew Gelman and Xiao-Li Meng. Simulating normalizing constants: From importance sampling to bridge sampling to path sampling. Statistical science , pages 163–185, 1998. Andrew Gelman, John B Carlin, Hal S Stern, and Donald B Rubin. Bayesian Data Analysis .Chapman and Hall/CRC, 1995. Peter Gr¨ unwald and Thijs van Ommen. Inconsistency of bayesian inference for misspecified linear models, and a proposal for repairing it. Bayesian Analysis , 12(4):1069–1103, 2017. Chris C Holmes and Stephen G Walker. Assigning a value to a power likelihood in a general bayesian model. Biometrika , 104(2):497–503, 2017. Peter J. Huber and Elvezio M. Ronchetti. Robust Statistics . Wiley, Hoboken, NJ, 2nd edition, 2009. ISBN 9780470129906. Yuchao Jiang, Rujin Wang, Eugene Urrutia, Ioannis N Anastopoulos, Katherine LNathanson, and Nancy R Zhang. Codex2: full-spectrum copy number variation detection by high-throughput dna sequencing. Genome biology , 19(1):202, 2018. Christos S Karapetis, Shirin Khambata-Ford, Derek J Jonker, Chris J O’Callaghan, Dong-sheng Tu, Niall C Tebbutt, R John Simes, Haji Chalchal, Jeremy D Shapiro, Sonia Robitaille, et al. K-ras mutations and benefit from cetuximab in advanced colorectal cancer. New England Journal of Medicine , 359(17):1757–1765, 2008. G¨ unter Klambauer, Karin Schwarzbauer, Andreas Mayr, Djork-Arne Clevert, Andreas Mit-terecker, Ulrich Bodenhofer, and Sepp Hochreiter. cn. mops: mixture of poissons for discovering copy number variations in next-generation sequencing data with a low false discovery rate. Nucleic acids research , 40(9):e69–e69, 2012. BJK Kleijn and AW van der Vaart. The bernstein-von-mises theorem under misspecification. 
+
+Electronic Journal of Statistics , 6:354–381, 2012. Niklas Krumm, Peter H Sudmant, Arthur Ko, Brian J O’Roak, Maika Malig, Bradley P Coe, NHLBI Exome Sequencing Project, Aaron R Quinlan, Deborah A Nickerson, and Evan E Eichler. Copy number variation detection and genotyping from exome sequence data. Genome research , 22(8):1525–1532, 2012. 
+
+> 17 Laboratory-Specific Sequencing Performance Guarantees in CNV Detection
+
+Se Yoon Lee. Using bayesian statistics in confirmatory clinical trials in the regulatory setting: a tutorial review. BMC Medical Research Methodology , 24(1):110, 2024. Jason Li, Richard Lupat, Kaushalya C Amarasinghe, Ella R Thompson, Maria A Doyle, Georgina L Ryland, Richard W Tothill, Saman K Halgamuge, Ian G Campbell, and Kylie L Gorringe. Contra: copy number analysis for targeted resequencing. Bioinformat-ics , 28(10):1307–1313, 2012. Sanae Lotfi, Pavel Izmailov, Gregory Benton, Micah Goldblum, and Andrew Gordon Wil-son. Bayesian model selection, the marginal likelihood, and generalization. In Interna-tional Conference on Machine Learning , pages 14223–14247. PMLR, 2022. Jeffrey W Miller and David B Dunson. Robust bayesian inference via coarsening. Journal of the American Statistical Association , 2019. Jos´ e Marcos Moreno-Cabrera, Jes´ us Del Valle, Elisabeth Castellanos, Lidia Feliubadal´ o, Marta Pineda, Joan Brunet, Eduard Serra, Gabriel Capell` a, Conxi L´ azaro, and Bernat Gel. Evaluation of cnv detection tools for ngs panel data in genetic diagnostics. European Journal of Human Genetics , 28(12):1645–1655, 2020. Ulrich K M¨ uller. Risk of bayesian inference in misspecified models, and the sandwich covariance matrix. Econometrica , 81(5):1805–1849, 2013. Elisabet Munt´ e, Carla Roca, Jes´ us Del Valle, Lidia Feliubadal´ o, Marta Pineda, Bernat Gel, Elisabeth Castellanos, Barbara Rivera, David Cordero, V´ ıctor Moreno, et al. Detection of germline cnvs from gene panel data: benchmarking the state of the art. Briefings in Bioinformatics , 26(1):bbae645, 2025. Radford M Neal. Annealed importance sampling. Statistics and Computing , 11(2):125–139, 2001. Quan Peng, Ravi Vijaya Satya, Marcus Lewis, Pranay Randad, and Yexun Wang. Re-ducing amplification artifacts in high multiplex amplicon sequencing by using molecular barcodes. BMC genomics , 16(1):589, 2015. Vincent Plagnol, James Curtis, Michael Epstein, Kin Y Mok, Emma Stebbings, Sofia Grigo-riadou, Nicholas W Wood, Sophie Hambleton, Siobhan O Burns, Adrian J Thrasher, et al. A robust model for read count data in exome sequencing experiments and implications for copy number variant calling. Bioinformatics , 28(21):2747–2754, 2012. Gundula Povysil, Antigoni Tzika, Julia Vogt, Verena Haunschmid, Ludwine Messiaen, Jo-hannes Zschocke, G¨ unter Klambauer, Sepp Hochreiter, and Katharina Wimmer. panelcn. mops: Copy-number detection in targeted ngs panel data for clinical diagnostics. Human mutation , 38(7):889–897, 2017. Edward H Romond, Jong-Hyeon Jeong, Priya Rastogi, Sandra M Swain, Charles E Geyer Jr, Michael S Ewer, Vikas Rathi, Louis Fehrenbacher, Adam Brufsky, Catherine A Azar, et al. Seven-year follow-up assessment of cardiac function in nsabp b-31, a randomized trial comparing doxorubicin and cyclophosphamide followed by paclitaxel (acp) with acp 
+
+> 18 Laboratory-Specific Sequencing Performance Guarantees in CNV Detection
+
+plus trastuzumab as adjuvant therapy for patients with node-positive, human epidermal growth factor receptor 2–positive breast cancer. Journal of Clinical Oncology , 30(31): 3792–3799, 2012. Daoud Sie, Peter JF Snijders, Gerrit A Meijer, Marije W Doeleman, Marinda IH van Moorsel, Hendrik F van Essen, Paul P Eijk, Katrien Gr¨ unberg, Nicole CT van Grieken, Erik Thunnissen, et al. Performance of amplicon-based next generation dna sequencing for diagnostic gene mutation profiling in oncopathology. Cellular Oncology , 37(5):353– 361, 2014. Austin Talbot and Yue Ke. Detecting batch heterogeneity via likelihood clustering. arXiv preprint arXiv:2601.09758 , 2026. Austin Talbot, Alex Kotlar, Lavanya Rishishiwar, and Yue Ke. Classifying copy num-ber variations using state space modeling of targeted sequencing data: A case study in thalassemia. arXiv preprint arXiv:2504.10338 , 2025. Austin Talbot, Alex Kotlar, Lavanya Rishishwar, Andrew Conley, Mengyao Zhao, Nachen Yang, Michael Liu, Zhaohui Wang, Sean Polvino, and Yue Ke. Bayescnv: A bayesian hierarchical model for sensitive and specific copy number estimation in cell free dna. 
+
+Diagnostics , 16(2):280, 2026. Eric Talevich, A Hunter Shain, Thomas Botton, and Boris C Bastian. Cnvkit: genome-wide copy number detection and visualization from targeted dna sequencing. PLoS computa-tional biology , 12(4):e1004873, 2016. Harry Urkowitz. Energy detection of unknown deterministic signals. Proceedings of the IEEE , 55(4):523–531, 1967. 
+
+> 19 Laboratory-Specific Sequencing Performance Guarantees in CNV Detection
+
+Appendix A. Derivational Details 
+
+A.1. Moment-Matching for the Gamma Approximation 
+
+Let Y = τ 2 
+
+> j
+
+χ21(λj ) where χ21(λj ) is the noncentral chi-squared distribution with one degree of freedom and non-centrality λj . Its first two moments are 
+
+Eχ21(λj ) = 1 + λj , Var χ21(λj ) = 2(1 + 2 λj ).
+
+Scaling by τ 2 
+
+> j
+
+gives 
+
+E[Y ] = τ 2 
+
+> j
+
+(1 + λj ), Var[ Y ] = 2 τ 4 
+
+> j
+
+(1 + 2 λj ).
+
+For the Gamma( a, b ) distribution (shape a, scale b) we have E[Y ] = ab and Var[ Y ] = ab 2.Equating: 
+
+ab = τ 2 
+
+> j
+
+(1 + λj ), (17) 
+
+ab 2 = 2 τ 4 
+
+> j
+
+(1 + 2 λj ). (18) Dividing (18) by (17): 
+
+bj = 2τ 2 
+
+> j
+
+(1 + 2 λj )1 + λj
+
+,
+
+and substituting back: 
+
+aj = (1 + λj )2
+
+2(1 + 2 λj ) .
+
+Because (1 + λj )2 − (1 + 2 λj ) = λ2 
+
+> j
+
+≥ 0, it follows that aj ≥ 12 , with equality if and only if λj = 0 (no process-mismatch bias). Fitting a Gamma by maximum likelihood therefore anchors at aj = 12 in the unbiased regime and absorbs the non-centrality into an inflated shape when bias is present. 
+
+A.2. Fisher Consistency Constant for the MAD 
+
+For X ∼ N (μ, σ 2), the median absolute deviation is MAD( X) = σ Φ−1(3 /4), where Φ is the standard Normal CDF. To make the MAD a consistent estimator of the standard deviation σ, one multiplies by 
+
+cn = 1Φ−1(3 /4) ≈ 1.4826 ,
+
+so that ˆ σ = cn · MAD satisfies E[ˆ σ] = σ under normality (Huber and Ronchetti, 2009). The resulting estimator retains the 50% breakdown point of the median while providing an asymptotically unbiased scale estimate. 
+
+Appendix B. Effect of Poor Process Matching 
+
+In this section we show the impact that a lack process matching can have on the CNV estimates. All of these 32 samples are normal in a 172 amplicon panel targeting 5 genes for CNV prediction. Of these 32 samples, 10 are substantially degraded. We estimate the 
+
+> 20
+
+Laboratory-Specific Sequencing Performance Guarantees in CNV Detection 
+
+CNVs in the genes using 5 samples as normal, ranging from all 5 coming from the good samples, to all 5 coming from the bad samples. We then bootstrap these estimates over different choices of normal and evaluate the posterior means in the remaining 17-22 good samples. The results are plotted in figure 6. We can see that two genes are strongly affected by a lack of process matching, MET and ERBB2. However, they are affected differently, with ERBB2 suffering from dramatic biases while MET has high variance estimates. As a result, the assumption that a lCNR of 0 is not valid when samples are not process matched, and our confidence intervals must reflect this. 0.0 0.2 0.4 0.6 0.8 1.0 
+
+Fraction of Bad Normals 
+
+> 0.4
+> 0.3
+> 0.2
+> 0.1
+> 0.0
+> 0.1
+> Bias
+
+Gene-level Bias      
+
+> 0.0 0.2 0.4 0.6 0.8 1.0
+
+Fraction of Bad Normals 
+
+> 0.000
+> 0.025
+> 0.050
+> 0.075
+> 0.100
+> 0.125
+> 0.150
+> Variance
+
+Gene-level Variance      
+
+> 0.0 0.2 0.4 0.6 0.8 1.0
+
+Fraction of Bad Normals 
+
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> sqrt(MSE)
+
+Gene-level RMSE     
+
+> PIK3CA KIT MET FGFR1 ERBB2
+
+Figure 6: The bias/variance decomposition of CNV estimates as a function of noraml matching 
+
+21
