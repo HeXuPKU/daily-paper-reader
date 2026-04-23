@@ -6,73 +6,76 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-22
-- 运行时间：2026-04-22 20:35:44 UTC
+- 最新运行日期：2026-04-23
+- 运行时间：2026-04-23 20:18:22 UTC
 - 运行状态：成功
-- 本次总论文数：17
-- 精读区：6
+- 本次总论文数：18
+- 精读区：7
 - 速读区：11
 
 ### 今日简报（AI）
-今日精选17篇前沿论文，重点聚焦Mamba架构与大模型推理在生物标志物发现及临床风险预测中的深度融合。
-核心突破在于利用Mamba-SSM结合思维链（CoT）进行基因因果优化，以及通过CURA框架实现临床预测的不确定性风险对齐。
-建议深入探索大模型在医疗垂直领域的因果推理能力，并关注其在药物动力学及知识图谱构建中的落地潜力。
-- 详情：[/202604/22/README](/202604/22/README)
+今日深度研读 18 篇 AI 医疗前沿论文，重点攻克多模态融合诊断与大模型临床推理精度提升。
+核心突破在于病理图像与病历的跨模态结合，以及强化学习在放射报告自动分类中的卓越表现。
+推荐关注 AI 协同数据科学与临床风险对齐技术，了解可穿戴设备与基因评估的最新智能化趋势。
+- 详情：[/202604/23/README](/202604/23/README)
 
 ### 精读区论文标签
-1. [Mamba-SSM with LLM Reasoning for Biomarker Discovery: Causal Feature Refinement via Chain-of-Thought Gene Evaluation](/202604/22/2604.14334v1-mamba-ssm-with-llm-reasoning-for-biomarker-discovery-causal-feature-refinement-via-chain-of-thought-gene-evaluation)  
+1. [Multimodal Fusion of Histopathology Images and Electronic Health Records for Early Breast Cancer Diagnosis](/202604/23/2604.17122v1-multimodal-fusion-of-histopathology-images-and-electronic-health-records-for-early-breast-cancer-diagnosis)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于生物标志物发现和因果特征优化的 Mamba-SSM 和大模型推理
-2. [CURA: Clinical Uncertainty Risk Alignment for Language Model-Based Risk Prediction](/202604/22/2604.14651v1-cura-clinical-uncertainty-risk-alignment-for-language-model-based-risk-prediction)  
+   evidence：组织病理学图像与电子健康记录（EHR）的多模态融合
+2. [Reinforcement Learning Improves LLM Accuracy and Reasoning in Disease Classification from Radiology Reports](/202604/23/2604.19060v1-reinforcement-learning-improves-llm-accuracy-and-reasoning-in-disease-classification-from-radiology-reports)  
    标签：评分：9.0/10、query:med-ai
-   evidence：基于临床语言模型的自由文本笔记和电子健康档案风险预测
-3. [EVEE: Interpretable variant effect prediction from genomic foundation model embeddings](/202604/22/biorxiv-10-64898-2026-04-10-717844-v2-evee-interpretable-variant-effect-prediction-from-genomic-foundation-model-embeddings)  
+   evidence：强化学习和LLM在放射报告疾病分类中的应用
+3. [Large Language Models Meet Biomedical Knowledge Graphs for Mechanistically Grounded Therapeutic Prioritization](/202604/23/2604.19815v1-large-language-models-meet-biomedical-knowledge-graphs-for-mechanistically-grounded-therapeutic-prioritization)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于变异致病性预测的基因组基础模型
-4. [EVEE: Interpretable variant effect prediction from genomic foundation model embeddings](/202604/22/biorxiv-10-64898-2026-04-10-717844-v3-evee-interpretable-variant-effect-prediction-from-genomic-foundation-model-embeddings)  
+   evidence：大语言模型与知识图谱结合用于生物医学治疗优先级排序
+4. [EVEE: Interpretable variant effect prediction from genomic foundation model embeddings](/202604/23/biorxiv-10-64898-2026-04-10-717844-v2-evee-interpretable-variant-effect-prediction-from-genomic-foundation-model-embeddings)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于可解释变异效应预测的基因组基础模型嵌入
-5. [CROssBARv2: A Unified Computational Framework for Heterogeneous Biomedical Data Representation and LLM-Driven Exploration](/202604/22/biorxiv-10-64898-2026-04-12-718028-v1-crossbarv2-a-unified-computational-framework-for-heterogeneous-biomedical-data-representation-and-llm-driven-exploration)  
+   evidence：基因组基础模型用于变异致病性预测
+5. [EVEE: Interpretable variant effect prediction from genomic foundation model embeddings](/202604/23/biorxiv-10-64898-2026-04-10-717844-v3-evee-interpretable-variant-effect-prediction-from-genomic-foundation-model-embeddings)  
    标签：评分：9.0/10、query:med-ai
-   evidence：大语言模型驱动的异构生物医学数据和知识图谱探索
-6. [vcfilt: A Zero-Allocation Streaming Filter for High-Throughput VCF Processing](/202604/22/biorxiv-10-64898-2026-04-14-718370-v1-vcfilt-a-zero-allocation-streaming-filter-for-high-throughput-vcf-processing)  
-   标签：评分：8.0/10、query:gwas
-   evidence：用于高通量基因组变异处理的计算算法
+   evidence：基因组基础模型用于变异致病性预测
+6. [CROssBARv2: A Unified Computational Framework for Heterogeneous Biomedical Data Representation and LLM-Driven Exploration](/202604/23/biorxiv-10-64898-2026-04-12-718028-v1-crossbarv2-a-unified-computational-framework-for-heterogeneous-biomedical-data-representation-and-llm-driven-exploration)  
+   标签：评分：9.0/10、query:med-ai
+   evidence：大语言模型驱动的集成生物医学知识图谱探索
+7. [ORION: An agentic reasoning construct for the analysis of complex human immune profiling](/202604/23/biorxiv-10-64898-2026-04-13-718286-v1-orion-an-agentic-reasoning-construct-for-the-analysis-of-complex-human-immune-profiling)  
+   标签：评分：9.0/10、query:med-ai
+   evidence：使用大语言模型的生物数据解释多智能体框架
 
 ### 速读区论文标签
-1. [Mamba-SSM with LLM Reasoning for Feature Selection: Faithfulness-Aware Biomarker Discovery](/202604/22/2604.14334v2-mamba-ssm-with-llm-reasoning-for-feature-selection-faithfulness-aware-biomarker-discovery)  
+1. [Mamba-SSM with LLM Reasoning for Biomarker Discovery: Causal Feature Refinement via Chain-of-Thought Gene Evaluation](/202604/23/2604.14334v1-mamba-ssm-with-llm-reasoning-for-biomarker-discovery-causal-feature-refinement-via-chain-of-thought-gene-evaluation)  
    标签：评分：8.0/10、query:med-ai
-   evidence：大语言模型推理用于RNA-seq数据中的生物标志物发现
-2. [A phenotype-driven and evidence-governed framework for knowledge graph enrichment and hypotheses discovery in population data](/202604/22/2604.16982v1-a-phenotype-driven-and-evidence-governed-framework-for-knowledge-graph-enrichment-and-hypotheses-discovery-in-population-data)  
+   evidence：利用大语言模型推理进行生物标志物发现和基因评估
+2. [CoDaS: AI Co-Data-Scientist for Biomarker Discovery via Wearable Sensors](/202604/23/2604.14615v1-codas-ai-co-data-scientist-for-biomarker-discovery-via-wearable-sensors)  
    标签：评分：8.0/10、query:med-ai
-   evidence：大语言模型和图神经网络用于人群数据和知识图谱的假设发现
-3. [Prior-Fitted Functional Flow: In-Context Generative Models for Pharmacokinetics](/202604/22/2604.17670v1-prior-fitted-functional-flow-in-context-generative-models-for-pharmacokinetics)  
+   evidence：数字健康中用于生物标志物发现的多智能体系统
+3. [CURA: Clinical Uncertainty Risk Alignment for Language Model-Based Risk Prediction](/202604/23/2604.14651v1-cura-clinical-uncertainty-risk-alignment-for-language-model-based-risk-prediction)  
    标签：评分：8.0/10、query:med-ai
-   evidence：用于药代动力学和群体合成的生成式基础模型
-4. [Federated Rule Ensemble Method in Medical Data](/202604/22/2604.17956v1-federated-rule-ensemble-method-in-medical-data)  
+   evidence：用于电子健康记录文本风险预测的临床语言模型
+4. [Evaluating quality in synthetic data generation for large tabular health datasets](/202604/23/2604.15961v1-evaluating-quality-in-synthetic-data-generation-for-large-tabular-health-datasets)  
    标签：评分：8.0/10、query:med-ai
-   evidence：用于医疗数据和临床决策的联邦学习
-5. [Perspective on Bias in Biomedical AI: Preventing Downstream Healthcare Disparities](/202604/22/2604.14514v1-perspective-on-bias-in-biomedical-ai-preventing-downstream-healthcare-disparities)  
+   evidence：针对大型表格健康数据和电子健康记录的机器学习
+5. [Mamba-SSM with LLM Reasoning for Feature Selection: Faithfulness-Aware Biomarker Discovery](/202604/23/2604.14334v2-mamba-ssm-with-llm-reasoning-for-feature-selection-faithfulness-aware-biomarker-discovery)  
    标签：评分：7.0/10、query:med-ai
-   evidence：生物医学人工智能和组学数据祖先报告中的偏差
-6. [GRASP: Gene-relation adaptive soft prompt for scalable and generalizable gene network inference with large language models](/202604/22/biorxiv-10-1101-2025-10-20-683485-v2-grasp-gene-relation-adaptive-soft-prompt-for-scalable-and-generalizable-gene-network-inference-with-large-language-models)  
+   evidence：大语言模型推理用于基因组数据生物标志物发现
+6. [Graph Transformer-Based Pathway Embedding for Cancer Prognosis](/202604/23/2604.16685v1-graph-transformer-based-pathway-embedding-for-cancer-prognosis)  
    标签：评分：7.0/10、query:med-ai
-   evidence：用于基因网络推断的大语言模型
-7. [Harnessing Interpretable Deep Learning to Predict Resistance in Klebsiella pneumoniae](/202604/22/biorxiv-10-1101-2025-11-04-686393-v2-harnessing-interpretable-deep-learning-to-predict-resistance-in-klebsiella-pneumoniae)  
+   evidence：用于组学数据癌症预后通路嵌入的图变换器
+7. [scpFormer: A Foundation Model for Unified Representation and Integration of the Single-Cell Proteomics](/202604/23/2604.20003v1-scpformer-a-foundation-model-for-unified-representation-and-integration-of-the-single-cell-proteomics)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：单细胞蛋白质组学整合的基础模型
+8. [Conditional Monte Carlo Tree Diffusion for Designing Cell-Type-Specific and Biologically Faithful Regulatory DNA](/202604/23/2604.20488v1-conditional-monte-carlo-tree-diffusion-for-designing-cell-type-specific-and-biologically-faithful-regulatory-dna)  
    标签：评分：7.0/10、query:gwas
-   evidence：利用全基因组数据进行细菌分析的深度学习
-8. [SNooPy: a statistical framework for long-read metagenomic variant calling](/202604/22/biorxiv-10-64898-2025-12-01-691549-v2-snoopy-a-statistical-framework-for-long-read-metagenomic-variant-calling)  
-   标签：评分：7.0/10、query:gwas
-   evidence：宏基因组变异检测的统计框架
-9. [Combining Bayesian and Frequentist Inference for Laboratory-Specific Performance Guarantees in Copy Number Variation Detection](/202604/22/2604.14305v1-combining-bayesian-and-frequentist-inference-for-laboratory-specific-performance-guarantees-in-copy-number-variation-detection)  
+   evidence：细胞类型特异性调节DNA的生成框架
+9. [PRiMeFlow: Capturing Complex Expression Heterogeneity in Perturbation Response Modelling](/202604/23/2604.13986v1-primeflow-capturing-complex-expression-heterogeneity-in-perturbation-response-modelling)  
    标签：评分：6.0/10、query:gwas
-   evidence：临床诊断中拷贝数变异（CNV）检测的统计推断
-10. [Shrinkage through multiple identifiability](/202604/22/2604.18430v1-shrinkage-through-multiple-identifiability)  
+   evidence：模拟遗传扰动和基因表达异质性
+10. [Unsupervised feature selection using Bayesian Tucker decomposition](/202604/23/2604.14949v2-unsupervised-feature-selection-using-bayesian-tucker-decomposition)  
    标签：评分：6.0/10、query:gwas
-   evidence：用于因果参数估计的经验贝叶斯框架
-11. [Multiscale Cochran-Mantel-Haenszel Scanning for Conditional Dependency](/202604/22/2604.19177v1-multiscale-cochran-mantel-haenszel-scanning-for-conditional-dependency)  
+   evidence：应用于基因表达谱的无监督特征选择方法
+11. [Overcoming Selection Bias in Statistical Studies With Amortized Bayesian Inference](/202604/23/2604.18319v1-overcoming-selection-bias-in-statistical-studies-with-amortized-bayesian-inference)  
    标签：评分：6.0/10、query:gwas
-   evidence：测试条件关联的非参数方法
+   evidence：高维统计研究中的摊销贝叶斯推断
 
 
 <div class="dpr-home-promo-card">
