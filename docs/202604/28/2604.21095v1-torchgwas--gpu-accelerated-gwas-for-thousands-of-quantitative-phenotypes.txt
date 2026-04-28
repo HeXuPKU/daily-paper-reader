@@ -1,0 +1,369 @@
+Title: 2604.21095v1.pdf
+
+URL Source: https://arxiv.org/pdf/2604.21095v1
+
+Published Time: Fri, 24 Apr 2026 00:12:44 GMT
+
+Number of Pages: 4
+
+Markdown Content:
+## TorchGWAS : GPU -accelerated GWAS for thousands of quantitative phenotypes       
+
+> Xingzhong Zhao 1,Ziqian Xie 1,Islam, Sheikh Muhammad Saiful 1,Tian Xia 1,Chen, Cheng 1,Degui Zhi 1
+
+1. Department of Bioinformatics and Systems Medicine, McWilliams School of Biomedical Informatics, The 
+
+University of Texas Health Science Center at Houston, Houston, Texas, United States of America 
+
+Abstract 
+
+Motivation: Modern bioinformatics workflows, particularly in imaging and representation learning, can generate 
+
+thousands to tens of thousands of quantitative phenotypes from a single cohort. In such settings, running genome -
+
+wide association analyses trait by trait rap idly becomes a computational bottleneck. While established GWAS tools 
+
+are highly effective for individual traits, they are not optimized for phenotype -rich screening workflows in which 
+
+the same genotype matrix is reused across a large phenotype panel. 
+
+Results: We present TorchGWAS , a framework for high -throughput association testing of large phenotype panels 
+
+through hardware acceleration . The current public release provides stable Python and command -line workflows for 
+
+linear GWAS and multivariate phenotype screening, supports NumPy, PLINK, and BGEN genotype inputs, aligns 
+
+phenotype and covariate tables by sample identifier, and performs co variate adjustment internally. In a benchmark 
+
+with 8.9 million markers and 23,000 samples, fastGWA required approxima tely 100 second per phenotype on an 
+
+AMD EPYC 7763 64 -core CPU, whereas TorchGWAS completed 2,048 phenotypes in 10 min ute and 20,480 
+
+phenotypes in 20 minutes on a single NVIDIA A100 GPU, corresponding to an approximately 300 - to 1700 -fold 
+
+increase in phenotype throughput. TorchGWAS therefore makes large -scale GWAS screening practical in 
+
+phenotype -rich settings where thousands of quantitative traits must be eva luated efficiently. 
+
+Availability and implementation: TorchGWAS is implemented in Python and distributed as a documented source 
+
+repository at https://github.com/ZhiGroup/TorchGWA S. The current release provides a command -line interface, 
+
+packaged source code, tutorials, benchmark scripts , and example workflows. 
+
+Keywords: GWAS, GPU computing, imaging genetics, deep phenotyping 
+
+1 Introduction 
+
+Genome -wide association studies have become a standard approach for identifying genetic influences on complex 
+
+traits (Visscher, Wray et al. 2017) . With cohorts grow larger and phenotyping becomes increasingly high 
+
+dimensional, the computational burden of GWAS is shaped not only by the number of variants and samples, but 
+
+also by the number of phenotypes under study. This is especially apparent in resource s such as UK Biobank and in 
+
+modern machine -learning pipelines, where large numbers of candidate traits can be derived from the same 
+
+individuals (Bycroft, Freeman et al. 2018) . In these settings, the same genotype matrix may be scanned repeatedly 
+
+across an expanding phenotype panel, creating a substantial computational burden for downstream analyses. 
+
+Here, we present TorchGWAS, a high -throughput framework for association analysis of large quantitative 
+
+phenotype panels. The software was motivated by brain MRI representation -learning workflows in which large 
+
+numbers of candidate phenotypes are repeatedly screened for genetic association. TorchGWAS is intended to 
+
+complement, rather than replace, established mixed -model tools by serving as an efficient first -pass screening engine 
+
+in phenotype -rich studies. 
+
+Existing GPU -accelerated association tools address related, but distinct, analytical settings from TorchGWAS. 
+
+tensorQTL (Taylor -Weiner, Aguet et al. 2019) is the closest methodological comparator, but it was developed 
+
+primarily for QTL mapping and expects genomically anchored phenotype input, making it less suitable for imaging -
+
+derived traits and learned representations that are typically analyzed in a genome -wide manner. fastGWA (Jiang, 
+
+Zheng et al. 2019) and SAIGE -GPU (Rodriguez, Kim et al. 2026) focus instead on efficient mixed -model analysis 
+
+of individual traits or binary trait families, whereas permGWAS (John, Ankenbrand et al. 2022) and rMVP (Yin, 
+
+Zhang et al. 2021) improve permutation -based inference and CPU -level parallelization, respectively. Together, these tools address important computational bottlenecks in GWAS, but they do not specifically target the phenotype -
+
+rich setting now common in imaging and representation -learning studies. 
+
+TorchGWAS was developed for phenotype -rich studies involving large panels of quantitative traits measured in the 
+
+same cohort. Rather than optimizing one phenotype at a time, it is designed to reuse phenotype preprocessing across 
+
+the full panel, thereby imp roving efficiency as the number of traits increases. It also accepts PLINK, BGEN and 
+
+NumPy genotype inputs directly, which facilitates large -scale application. TorchGWAS should therefore be viewed 
+
+as complementary to existing mixed -model methods, serving a s an efficient first -pass framework for dense genome -
+
+wide screening across large quantitative phenotype panels. 
+
+Fig.1 Overview of the TorchGWAS 
+
+2 Methods 
+
+2.1 Software design 
+
+TorchGWAS is implemented in Python and organized as a packaged command -line workflow. The software is 
+
+based on a simple observation: for quantitative phenotypes measured on the same subjects, the core workload of 
+
+association testing can be reorganized as r epeated matrix operations between batches of genotypes and a phenotype 
+
+matrix. Rather than loading one phenotype at a time and rerunning an association pipeline independently, 
+
+TorchGWAS loads a phenotype panel, residualizes and standardizes it once, and th en reuses this matrix across the 
+
+genome scan. 
+
+2.2 Association kernel 
+
+For an input phenotype matrix 𝑌 ∈ ℝ!×# with P phenotypes over N samples TorchGWAS first mean -centers each 
+
+phenotype and removes covariate effects using an orthonormal basis 𝑄 spanning the covariate space . In the current 
+
+implementation, phenotype residualization is performed as 
+
+𝑌 $%& = (𝐼 −𝑄 𝑄 ' )(𝑌 −𝑌 ¯ ) (1) 
+
+where 𝑌 ¯ denotes the column -wise phenotype means and 𝑄 is assumed to have orthonormal columns . The phenotype 
+
+matrix is then standardized column -wise to unit variance, yielding 𝑌 ,.
+
+Genotypes are processed in batches of 𝑀 markers. For each batch, each marker vector is standardized across samples ，
+
+and giving a genotype matrix 𝐺 , ∈ ℝ(×!. TorchGWAS then computes the genotype -phenotype correlation matrix 
+
+as 
+
+𝑅 = 𝐺 ,𝑌 ,/𝑁 (2) 
+
+where 𝑅 ∈ ℝ(×#. These correlation coefficients are converted to t -statistics using 
+
+𝑇 = 𝑅 3 !)*
+
++),! (3)             
+
+> 1. Inputs
+> GENOTYPE
+> NumPy matrix
+> PLINK bed/bim/fam
+> BGEN + sample
+> PHENOTYPES
+> Matrix or tabular file
+> Quantitative traits
+> COVARIATES
+> Matrix or tabular file
+> Aligned by IID
+> 2. Preprocessing
+> •Infer genotype sample order
+> •Align phenotype/covariate tables by
+> IID
+> •Drop zero -variance columns
+> •Compute covariate QR basis
+> internally
+> •Residualize and standardize
+> phenotypes
+> •Record QC and run metadata
+> PREP OUTPUTS
+> phenotype_processed.npy
+> covariate_q.npy, qc.json, prep.json
+> 3. Linear GWAS
+> LINEAR OUTPUTS
+> results.tsv.gz
+> run.json
+> qc.json
+> beta, se, t, -log10 P
+> •Chunked genotype scan
+> •Marker -wise correlation / t -statistic
+> •Trait -specific P values
+> •Compressed results table
+
+Thus, each genotype batch produces an 𝑀 × 𝑃 matrix of association statistics across all phenotypes simultaneously. 
+
+This matrix formulation allows phenotype preprocessing and genotype traversal to be shared across large phenotype 
+
+panels, substantially improving throughput in phenotype -rich settings. 
+
+This formulation is equivalent to a correlation -based linear association test for standardized quantitative traits and 
+
+standardized genotypes. The resulting statistics can therefore be converted directly to P values, used to rank 
+
+associated loci, or incorp orated into downstream phenotype -level prioritization. 
+
+2.4 Scope of the current version 
+
+The present version of TorchGWAS is intended for high -throughput quantitative -trait association under a linear 
+
+model formulation. Its principal strength is throughput and workflow stability when many phenotypes share the 
+
+same cohort and genotype matrix. Two caveats are important. First, the current release focuses on linear and 
+
+multivariate quantitative -trait scree ning and does not yet provide the broader modelling options available in mature 
+
+mixed -model toolkits. Second, although PLINK and BGEN entry point s are supported, large -scale end -to -end 
+
+performance still depends on backend reader efficiency, storage bandwidth , and the execution environment. In 
+
+phenotype -rich settings, however, the standardized workflow remains attractive because preprocessing and genome 
+
+scans are amortized across many traits. 
+
+3 Results 
+
+3. 1 Benchmark results 
+
+We evaluated TorchGWAS using complementary lines of evidence. First, we compared its performance against 
+
+archived fastGWAS results generated from a dataset comprising 8.9 million markers and approximately 23,000 
+
+samples. In those prototype benchmarks, fastGWA required approximately 100 s per phenotype on an AMD EPYC 
+
+7763 64 -core processor, whereas TorchGWAS processed 2,048 phenotypes in about 940 s and 20,480 phenotypes 
+
+in about 1108 s on a single NVIDIA A100 GPU Second, results from TorchGWAS were in near -perfect agreement 
+
+with archived PLINK outputs for representative traits (Pearson correlation = 0.999). The slight departure from exact 
+
+concordance likely reflects small implementation -level differences between software pipelines, including floating -
+
+point p recision and preprocessing order, rather than substantive differences in association estimates. 
+
+Figure 2. Validation and benchmarking of TorchGWAS. Left: Comparison of SNP association significance estimated 
+
+by TorchGWAS and PLINK, showing near -perfect agreement for representative archived traits. Right: Runtime 
+
+comparison of TorchGWAS and fastGWA for 2,048 and 20,480 phenotypes. Runtimes are shown on a log scale. 
+
+3. 2 Scaling behavior and practical implications 
+
+Runtime increased much more slowly than linearly with the number of phenotypes, because phenotype 
+
+preprocessing and genotype traversal were shared across the phenotype matrix. As a result, TorchGWAS is well 
+
+suited to phenotype -rich settings, where the main scaling challenge is the number of traits rather than the number of 
+
+variants alone. Overall, the benchmark supports TorchGWAS as a reproducible high -throughput GWAS workflow 
+
+for large collections of quantitative phenotypes.                   
+
+> 2048 20480
+> Number of phenotypes
+> 103
+> 104
+> 105
+> 106
+> Seconds
+> fastG WA
+> to rchG WAS
+> 0510 15 20 25 30
+> −log10(P)fromtorchGWAS
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> − log10(P) from PLINK
+
+4 Discussion 
+
+TorchGWAS addresses an important gap in GWAS workflows for ultra -high dimensional phenotypes. Many widely 
+
+used tools were developed for association testing on a single phenotype, or at most a limited set of traits, which is 
+
+increasingly restrictive in settings such as imaging -derived phenotypes, representation learning, iterative feature 
+
+construct ion, and voxel -level summaries . In these contexts, repeatedly scanning the same genotype resource across 
+
+large phenotype panels is computationally inefficient. TorchGWAS therefore offers a reusable, well -documented 
+
+workflow for high -throughput screening of quantitative traits, with sta ble inputs and reproducible outputs. 
+
+Importantly, the current implementation already includes relatedness -aware sample exclusion during preprocessing, 
+
+although full mixed -model correction is not yet implemented within the association engine itself. 
+
+The current release should therefore be regarded as a screening -oriented framework rather than a complete 
+
+replacement for established GWAS software. At present, it supports linear association testing only and does not yet 
+
+provide generalized linear models, mixed -model inferenc e. Performance also depends on the genotype backend, 
+
+storage throughput, and hardware configuration; accordingly, the reported speedups should be interpreted in light 
+
+of the benchmark environment used in this study. In addition, althou gh the concordance analyses support numerical 
+
+correctness, broader validation across additional datasets and analytical settings will be important in future releases. 
+
+Despite these limitations, TorchGWAS provides a practical and reproducible solution to an increasingly important 
+
+computational bottleneck in high -dimensional phenotype analysis. 
+
+Availability and implementation 
+
+TorchGWAS is implemented in Python and is distributed as a documented source repository at 
+
+https://github.com/ ZhiGroup/TorchGWAS . The repository contains packaged source code, installation instructions, 
+
+tutorials, benchmark scripts, toy examples , and local real -data workflow templates. 
+
+Funding 
+
+This work was supported by U01AG070112. 
+
+Conflict of interest 
+
+None declared. 
+
+References 
+
+1. Bycroft, C., C. Freeman, D. Petkova, G. Band, L. T. Elliott, K. Sharp, A. Motyer, D. Vukcevic, O. Delaneau, J. 
+
+O'Connell, A. Cortes, S. Welsh, A. Young, M. Effingham, G. McVean, S. Leslie, N. Allen, P. Donnelly and J. 
+
+Marchini (2018). "The UK Biobank resou rce with deep phenotyping and genomic data." Nature 562 (7726): 203 -
+
+209. 
+
+2. Jiang, L., Z. Zheng, T. Qi, K. E. Kemper, N. R. Wray, P. M. Visscher and J. Yang (2019). "A resource -efficient 
+
+tool for mixed model association analysis of large -scale data." Nat Genet 51 (12): 1749 -1755. 
+
+3. John, M., M. J. Ankenbrand, C. Artmann, J. A. Freudenthal, A. Korte and D. G. Grimm (2022). "Efficient 
+
+permutation -based genome -wide association studies for normal and skewed phenotypic distributions." 
+
+Bioinformatics 38 (Suppl_2): ii5 -ii12. 
+
+4. Rodriguez, A., Y. Kim, T. N. Nandi, K. Keat, R. Kumar, M. Conery, R. Bhukar, M. Liu, J. Hessington, K. 
+
+Maheshwari, V. A. M. V. Program, E. Begoli, G. Tourassi, S. Muralidhar, P. Natarajan, B. F. Voight, K. Cho, J. 
+
+M. Gaziano, S. M. Damrauer, K. P. Liao, W. Zhou, J. E. Huffman, A. Verma and R. K. Madduri (2026). "SAIGE -
+
+GPU: accelerating genome - and phenome -wide association studies using GPUs." Bioinformatics 42 (3). 
+
+5. Taylor -Weiner, A., F. Aguet, N. J. Haradhvala, S. Gosai, S. Anand, J. Kim, K. Ardlie, E. M. Van Allen and G. 
+
+Getz (2019). "Scaling computational genomics to millions of individuals with GPUs." Genome Biol 20 (1): 228. 
+
+6. Visscher, P. M., N. R. Wray, Q. Zhang, P. Sklar, M. I. McCarthy, M. A. Brown and J. Yang (2017). "10 Years 
+
+of GWAS Discovery: Biology, Function, and Translation." Am J Hum Genet 101 (1): 5 -22. 
+
+7. Yin, L., H. Zhang, Z. Tang, J. Xu, D. Yin, Z. Zhang, X. Yuan, M. Zhu, S. Zhao, X. Li and X. Liu (2021). "rMVP: 
+
+A Memory -efficient, Visualization -enhanced, and Parallel -accelerated Tool for Genome -wide Association 
+
+Study." Genomics Proteomics Bioinformatics 19 (4): 619 -628 .
