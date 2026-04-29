@@ -6,88 +6,79 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-28
-- 运行时间：2026-04-28 20:46:08 UTC
+- 最新运行日期：2026-04-29
+- 运行时间：2026-04-29 21:02:08 UTC
 - 运行状态：成功
-- 本次总论文数：22
-- 精读区：11
+- 本次总论文数：19
+- 精读区：8
 - 速读区：11
 
 ### 今日简报（AI）
-今日深挖 22 篇前沿文献，重点聚焦 GPU 加速的基因组分析与多模态医疗预测。
-TorchGWAS 与 IDEAL-GENOM 凭借卓越的计算效率，为大规模表型分析及集成化基因组研究提供了顶级方案。
-建议关注高性能计算工具对精准医疗的效率提升，以及联邦学习在阿尔茨海默症预测中的新进展。
-- 详情：[/202604/28/README](/202604/28/README)
+今日深度解析 19 篇前沿论文，聚焦 SNP 主题建模与多血统多基因风险评分（PRS）的公平性突破。
+重点推荐 SNPic 解释性聚类模型，以及揭示“信息瓶颈”而非梯度反转才是控制 PRS 公平性与准确性权衡的关键结论。
+建议关注精准医疗的读者优先研读 PRS
+- 详情：[/202604/29/README](/202604/29/README)
 
 ### 精读区论文标签
-1. [TorchGWAS : GPU-accelerated GWAS for thousands of quantitative phenotypes](/202604/28/2604.21095v1-torchgwas--gpu-accelerated-gwas-for-thousands-of-quantitative-phenotypes)  
+1. [SNPic: SNP Topic Modeling for Interpretable Clustering of Complex phenotypes](/202604/29/biorxiv-10-64898-2026-04-22-720106-v1-snpic-snp-topic-modeling-for-interpretable-clustering-of-complex-phenotypes)  
    标签：评分：10.0/10、query:gwas
-   evidence：用于高通量关联测试的GPU加速GWAS框架
-2. [IDEAL-GENOM: Integrated Downstream Analytical Toolkit for Genomic Analysis](/202604/28/biorxiv-10-1101-2025-08-27-672528-v2-ideal-genom-integrated-downstream-analytical-toolkit-for-genomic-analysis)  
+   evidence：利用NLP原理处理GWAS摘要统计数据的生成概率框架
+2. [Information Bottleneck Dominates Adversarial Training for Ancestry-Invariant Polygenic Risk Prediction: Dimensionality, Not Gradient Reversal, Controls the Fairness-Accuracy Tradeoff](/202604/29/biorxiv-10-64898-2026-04-24-720752-v1-information-bottleneck-dominates-adversarial-training-for-ancestry-invariant-polygenic-risk-prediction-dimensionality-not-gradient-reversal-controls-the-fairness-accuracy-tradeoff)  
    标签：评分：10.0/10、query:gwas
-   evidence：用于下游GWAS分析工作流的集成工具包
-3. [EA-PheWAS: Integrating Phenotype Embeddings with PheWAS for Enhanced Gene-Phenotype Discovery](/202604/28/biorxiv-10-64898-2026-04-21-720031-v1-ea-phewas-integrating-phenotype-embeddings-with-phewas-for-enhanced-gene-phenotype-discovery)  
-   标签：评分：10.0/10、query:med-ai
-   evidence：利用EHR数据将表型嵌入与PheWAS集成
-4. [Connecting polygenic disease risk to cell states and regulatory programs through single-cell chromatin accessibility](/202604/28/biorxiv-10-64898-2026-04-27-721080-v1-connecting-polygenic-disease-risk-to-cell-states-and-regulatory-programs-through-single-cell-chromatin-accessibility)  
-   标签：评分：10.0/10、query:gwas
-   evidence：将GWAS摘要统计数据与单细胞染色质可及性数据整合
-5. [A Nationwide Japanese Medical Claims Foundation Model: Balancing Model Scaling and Task-Specific Computational Efficiency](/202604/28/2604.22348v1-a-nationwide-japanese-medical-claims-foundation-model-balancing-model-scaling-and-task-specific-computational-efficiency)  
+   evidence：跨族裔多基因风险评分（PRS）预测
+3. [A Nationwide Japanese Medical Claims Foundation Model: Balancing Model Scaling and Task-Specific Computational Efficiency](/202604/29/2604.22348v1-a-nationwide-japanese-medical-claims-foundation-model-balancing-model-scaling-and-task-specific-computational-efficiency)  
    标签：评分：9.0/10、query:med-ai
-   evidence：医疗索赔和电子健康记录数据的基座模型
-6. [StackFeat RL: Reinforcement Learning over Iterative Dual Criterion Feature Selection for Stable Biomarker Discovery](/202604/28/2604.22892v1-stackfeat-rl-reinforcement-learning-over-iterative-dual-criterion-feature-selection-for-stable-biomarker-discovery)  
+   evidence：用于临床风险预测的医疗索赔基础模型
+4. [StackFeat RL: Reinforcement Learning over Iterative Dual Criterion Feature Selection for Stable Biomarker Discovery](/202604/29/2604.22892v1-stackfeat-rl-reinforcement-learning-over-iterative-dual-criterion-feature-selection-for-stable-biomarker-discovery)  
    标签：评分：9.0/10、query:med-ai
-   evidence：强化学习用于高维基因组数据的特征选择
-7. [Using Importance Sampling to Estimate $p$-values in All-Subset Meta-Analysis, with Applications to Single-Cell eQTL Mapping](/202604/28/2604.23085v1-using-importance-sampling-to-estimate-p-values-in-all-subset-meta-analysis-with-applications-to-single-cell-eqtl-mapping)  
+   evidence：强化学习用于基因组数据的特征选择和生物标志物发现
+5. [IDEAL-GENOM: Integrated Downstream Analytical Toolkit for Genomic Analysis](/202604/29/biorxiv-10-1101-2025-08-27-672528-v2-ideal-genom-integrated-downstream-analytical-toolkit-for-genomic-analysis)  
    标签：评分：9.0/10、query:gwas
-   evidence：多性状GWAS元分析中p值估计的统计方法
-8. [SNPic: SNP Topic Modeling for Interpretable Clustering of Complex phenotypes](/202604/28/biorxiv-10-64898-2026-04-22-720106-v1-snpic-snp-topic-modeling-for-interpretable-clustering-of-complex-phenotypes)  
-   标签：评分：9.0/10、query:gwas
-   evidence：针对GWAS汇总统计数据和遗传架构的主题模型
-9. [GeneBench: Assessing AI Agents for Multi-Stage Inference Problems in Genomics and Quantitative Biology](/202604/28/biorxiv-10-64898-2026-04-22-720113-v1-genebench-assessing-ai-agents-for-multi-stage-inference-problems-in-genomics-and-quantitative-biology)  
+   evidence：GWAS下游分析工作流的集成工具包
+6. [EA-PheWAS: Integrating Phenotype Embeddings with PheWAS for Enhanced Gene-Phenotype Discovery](/202604/29/biorxiv-10-64898-2026-04-21-720031-v1-ea-phewas-integrating-phenotype-embeddings-with-phewas-for-enhanced-gene-phenotype-discovery)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于遗传学多阶段科学数据分析的AI智能体
-10. [X chromosome association analyses using multiple models identifies 18 genetic loci influencing dietary intake in UK Biobank](/202604/28/biorxiv-10-64898-2026-04-24-720538-v1-x-chromosome-association-analyses-using-multiple-models-identifies-18-genetic-loci-influencing-dietary-intake-in-uk-biobank)  
-   标签：评分：9.0/10、query:gwas
-   evidence：应用多种X染色体全基因组关联分析模型
-11. [Genome-wide association study of morphometric and metabolic characteristics in the European populations of the sugar kelp Saccharina latissima](/202604/28/biorxiv-10-64898-2026-04-27-720995-v1-genome-wide-association-study-of-morphometric-and-metabolic-characteristics-in-the-european-populations-of-the-sugar-kelp-saccharina-latissima)  
-   标签：评分：9.0/10、query:gwas
-   evidence：形态和代谢特征的全基因组关联分析
+   evidence：将表型嵌入与PheWAS结合用于基于EHR的基因发现
+7. [GeneBench: Assessing AI Agents for Multi-Stage Inference Problems in Genomics and Quantitative Biology](/202604/29/biorxiv-10-64898-2026-04-22-720113-v1-genebench-assessing-ai-agents-for-multi-stage-inference-problems-in-genomics-and-quantitative-biology)  
+   标签：评分：9.0/10、query:med-ai
+   evidence：针对遗传学多阶段科学数据分析的AI智能体基准测试
+8. [DxFit: An ensemble method for identifying EHR diagnoses consistent with a molecular finding](/202604/29/biorxiv-10-64898-2026-04-24-720629-v1-dxfit-an-ensemble-method-for-identifying-ehr-diagnoses-consistent-with-a-molecular-finding)  
+   标签：评分：9.0/10、query:med-ai
+   evidence：电子健康档案数据与罕见病分子发现的整合
 
 ### 速读区论文标签
-1. [Federated Rule Ensemble Method in Medical Data](/202604/28/2604.17956v1-federated-rule-ensemble-method-in-medical-data)  
+1. [CognitiveTwin: Robust Multi-Modal Digital Twins for Predicting Cognitive Decline in Alzheimer's Disease](/202604/29/2604.22428v1-cognitivetwin-robust-multi-modal-digital-twins-for-predicting-cognitive-decline-in-alzheimers-disease)  
    标签：评分：8.0/10、query:med-ai
-   evidence：医疗数据中可解释模型的联邦学习
-2. [CognitiveTwin: Robust Multi-Modal Digital Twins for Predicting Cognitive Decline in Alzheimer's Disease](/202604/28/2604.22428v1-cognitivetwin-robust-multi-modal-digital-twins-for-predicting-cognitive-decline-in-alzheimers-disease)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：基于Transformer的架构，整合包括遗传学在内的多模态医疗数据
-3. [StackFeat: a convergent algorithm for optimal predictor selection in genomic data](/202604/28/2604.22887v1-stackfeat-a-convergent-algorithm-for-optimal-predictor-selection-in-genomic-data)  
+   evidence：整合遗传学和纵向临床数据进行疾病预测的深度学习模型
+2. [StackFeat: a convergent algorithm for optimal predictor selection in genomic data](/202604/29/2604.22887v1-stackfeat-a-convergent-algorithm-for-optimal-predictor-selection-in-genomic-data)  
    标签：评分：8.0/10、query:gwas
-   evidence：高维基因组数据中最佳预测因子选择的算法
-4. [MR-CCC: Bayesian Mendelian Randomization for Causal Cell--Cell Communication](/202604/28/2604.23917v1-mr-ccc-bayesian-mendelian-randomization-for-causal-cell--cell-communication)  
+   evidence：高维基因组数据中的最优预测因子选择
+3. [Sources of Inequality at Birth: The Interplay Between Genes and Parental Socioeconomic Status](/202604/29/2604.25522v1-sources-of-inequality-at-birth-the-interplay-between-genes-and-parental-socioeconomic-status)  
    标签：评分：8.0/10、query:gwas
-   evidence：使用eQTL作为工具的贝叶斯孟德尔随机化
-5. [Prior-Fitted Functional Flow: In-Context Generative Models for Pharmacokinetics](/202604/28/2604.17670v1-prior-fitted-functional-flow-in-context-generative-models-for-pharmacokinetics)  
+   evidence：利用多基因指数（PGI）分析健康和人力资本结果
+4. [MutaPhy: A clade-based framework to detect genotype-phenotype associations on phylogenetic trees](/202604/29/biorxiv-10-64898-2026-04-19-719535-v1-mutaphy-a-clade-based-framework-to-detect-genotype-phenotype-associations-on-phylogenetic-trees)  
+   标签：评分：8.0/10、query:gwas
+   evidence：基于系统发育的病原体基因型-表型关联检测方法
+5. [TabSHAP](/202604/29/2604.21120v1-tabshap)  
    标签：评分：7.0/10、query:med-ai
-   evidence：药代动力学的生成式基础模型与人群合成
-6. [Tail-Greedy Unbalanced Haar Wavelet Segmentation for Copy Number Alteration Data](/202604/28/2604.22364v1-tail-greedy-unbalanced-haar-wavelet-segmentation-for-copy-number-alteration-data)  
+   evidence：在表格数据上微调的大语言模型用于高风险领域
+6. [A Robust Framework for Two-Sample Mendelian Randomization under Population Heterogeneity](/202604/29/2604.21757v2-a-robust-framework-for-two-sample-mendelian-randomization-under-population-heterogeneity)  
    标签：评分：7.0/10、query:gwas
-   evidence：拷贝数变异数据的分割算法
-7. [CMGL: Confidence-guided Multi-omics Graph Learning for Cancer Subtype Classification](/202604/28/2604.24201v1-cmgl-confidence-guided-multi-omics-graph-learning-for-cancer-subtype-classification)  
+   evidence：大规模基因组研究中用于因果推断的孟德尔随机化
+7. [Bi-Gaussian Mirrors for False Discovery Rate Control](/202604/29/2604.24056v1-bi-gaussian-mirrors-for-false-discovery-rate-control)  
+   标签：评分：7.0/10、query:gwas
+   evidence：高维变量选择中的错误发现率控制
+8. [CMGL: Confidence-guided Multi-omics Graph Learning for Cancer Subtype Classification](/202604/29/2604.24201v1-cmgl-confidence-guided-multi-omics-graph-learning-for-cancer-subtype-classification)  
    标签：评分：7.0/10、query:med-ai
-   evidence：多组学整合与深度学习用于癌症亚型分类
-8. [PathMoG: A Pathway-Centric Modular Graph Neural Network for Multi-Omics Survival Prediction](/202604/28/2604.24371v1-pathmog-a-pathway-centric-modular-graph-neural-network-for-multi-omics-survival-prediction)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：用于多组学生存预测的图神经网络
-9. [A Bayesian framework with adaptive elastic nets for the inference of Gaussian graphical models](/202604/28/2604.18042v1-a-bayesian-framework-with-adaptive-elastic-nets-for-the-inference-of-gaussian-graphical-models)  
-   标签：评分：6.0/10、query:gwas
-   evidence：高维高斯图形模型和推理的贝叶斯框架
-10. [Zero-inflated modeling with smoothing on counting tensors](/202604/28/2604.22088v1-zero-inflated-modeling-with-smoothing-on-counting-tensors)  
-   标签：评分：6.0/10、query:gwas
-   evidence：基因组位点对和单细胞数据的概率框架
-11. [MOCA: A Transformer-based Modular Causal Inference Framework with One-way Cross-attention and Cutting Feedback](/202604/28/2604.23107v1-moca-a-transformer-based-modular-causal-inference-framework-with-one-way-cross-attention-and-cutting-feedback)  
+   evidence：用于癌症分类的多组学图学习
+9. [MOCA: A Transformer-based Modular Causal Inference Framework with One-way Cross-attention and Cutting Feedback](/202604/29/2604.23107v1-moca-a-transformer-based-modular-causal-inference-framework-with-one-way-cross-attention-and-cutting-feedback)  
    标签：评分：6.0/10、query:med-ai
-   evidence：基于Transformer的观测数据因果推断框架
+   evidence：基于Transformer的观察数据因果推断框架
+10. [Privacy-preserving Meta-analysis through Low-Rank Basis Hunting](/202604/29/2604.23847v1-privacy-preserving-meta-analysis-through-low-rank-basis-hunting)  
+   标签：评分：6.0/10、query:gwas
+   evidence：用于预测新群体功能的元分析方法学
+11. [PathMoG: A Pathway-Centric Modular Graph Neural Network for Multi-Omics Survival Prediction](/202604/29/2604.24371v1-pathmog-a-pathway-centric-modular-graph-neural-network-for-multi-omics-survival-prediction)  
+   标签：评分：6.0/10、query:gwas
+   evidence：用于多组学预测的图神经网络
 
 
 <div class="dpr-home-promo-card">
