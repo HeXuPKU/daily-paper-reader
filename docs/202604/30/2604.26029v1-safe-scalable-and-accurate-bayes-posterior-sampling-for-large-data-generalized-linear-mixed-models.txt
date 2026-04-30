@@ -1,0 +1,2521 @@
+Title: Safe, Scalable, and Accurate Bayes Posterior Sampling for Large-Data Generalized Linear Mixed Models
+
+URL Source: https://arxiv.org/pdf/2604.26029v1
+
+Published Time: Thu, 30 Apr 2026 00:06:22 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Safe, Scalable, and Accurate Bayes Posterior Sampling for Large-Data Generalized Linear Mixed Models 
+
+Youngsoo Baek 1 Samuel I. Berchuck 1
+
+## Abstract 
+
+We consider the problem of scalable sampling al-gorithms to fit Bayesian generalized linear mixed models on large datasets. Stochastic gradient Langevin dynamics, coupled with smooth re-parameterizations of variance parameters, pro-duces divergent Markov chains and cannot be reliably used for sampling covariance parameters of random effects. We advocate the use of a mir-ror Langevin dynamics algorithm, propose the novel stochastic mirror Langevin dynamics based on data subsampling, and provide concrete guide-lines for its use in a Bayesian inference frame-work. Based on an explicit Wasserstein distance error bound between the posterior and its algorith-mic approximation, we propose a post-processing step that yields an asymptotic, order-wise correct estimation of the posterior variance, eliminating the irreducible posterior variance estimation bias due to subsampling. Empirical performance of the method is evaluated through simulated experi-ments and a longitudinal study of pain trajectories in a study of breast cancer survivors. 
+
+## 1. Introduction 
+
+A fundamental computational problem in Bayesian infer-ence is to draw samples that approximate the posterior dis-tribution given data and the model. We focus on performing Bayesian inference for a class of models referred to as gen-eralized linear mixed models (GLMMs). In brief, GLMMs extend generalized linear models (GLM) to situations where the data are structured in groups and regression coefficients can vary by group (Gelman & Hill, 2007). Bayesian estima-tion is attractive because it provides both a direct quantifica-tion of uncertainty and a principled way to fit models with complicated, multilayered probability specifications (Gel-man et al., 2013). However, scaling Bayesian inference to 
+
+> 1
+
+Department of Biostatistics & Bioinformatics, Duke Univer-sity, Durham, NC, USA. Correspondence to: Samuel I. Berchuck 
+
+<sib2@duke.edu >.
+
+Preprint. April 30, 2026. 
+
+large datasets, especially for GLMMs, remains challenging. Unlike linear regression, hierarchical or not, the marginal likelihood of GLMMs for binary or count response is gen-erally intractable and requires numerical integration over multivariate latent variables. Modern probabilistic program-ming software avoids the problem by sampling both the parameters of interest and latent variables using conven-tional Markov chain Monte Carlo (MCMC) tools; however, this strategy is infeasible as the number of groups, n, grows to be large. While there exist feasible variational Bayes-based approximation methods (Ormerod & Wand, 2012), their approximation quality remains generally unclear for complex multilevel probabilistic models. A suite of recently proposed methods, called stochastic gra-dient MCMC (SGMCMC) (Nemeth & Fearnhead, 2021), appears to resolve the scalability problem. Most SGM-CMC algorithms are based on discretizing the underly-ing continuous-time stochastic differential equation (SDE) whose stationary distribution coincides with the targeted posterior. However, there are currently no concrete guide-lines on how to incorporate SGMCMC into the GLMM setting, which often includes parameters constrained to a subset of the Euclidean space, including posterior vari-ances of latent variables. In fact, we demonstrate that using previously proposed SGMCMC methods by smoothly re-parameterizing constrained parameters can produce wildly divergent Markov chains in finite sampling time and is thus unsafe. Furthermore, previous results have demonstrated how the invariant distribution of SGLD has a bias asymptot-ically non-vanishing in n for a fixed step size (Brosse et al., 2018). The problem of refining SGMCMC to deflate the stochastic gradient variance has been previously studied by (Baker et al., 2019). They have proposed the use of control variates, assuming that one can initialize the MCMC chains at a value O(1 /√n) distance from the global minimizer of 
+
+f . However, for more complex models such as GLMMs, designing effective control variates remains challenging and far from straightforward. For one, the authors have not considered the issue of algorithmic instability described in Section 2, which cannot be remedied using control variates. Even disregarding the problem, empirical results suggest that (Baker et al., 2019) is not as straightforward to adapt to GLMMs, where it is not easy to obtain exactly unbiased 1
+
+> arXiv:2604.26029v1 [stat.ME] 28 Apr 2026 Bayes Posterior Sampling for Large GLMMs
+
+stochastic gradients, and that the resulting samples for ran-dom effects variance tend to underestimate the true posterior variance. The authors have previously conducted simulated studies addressing the inaccuracy of posterior variance es-timate using control variates in GLMMs. These materials can be found in Section 4.2 (Berchuck et al., 2026). We address all mentioned challenges of fitting Bayesian GLMMs by developing a novel stochastic mirror Langevin dynamics (SMLD) algorithm for constrained sampling. Our contribution is threefold. First, we transfer the extant lit-erature on mirror Langevin dynamics (MLD) (Hsieh et al., 2018; Ahn & Chewi, 2021; Li et al., 2022) to inference in large-data hierarchical GLMs, including GLMMs. Most of the literature on constrained sampling, including MLD algorithm, has a “theoretical” flavor, discussing applications such as sampling Brownian motion paths on a polytope. Our work advocates the usage of MLD-based algorithms in sampling the covariance parameters of random effects, pro-viding practical guidelines for a scalable GLMM inference. Second, the use of SMLD reaps the benefit of algorithmic safety: unlike existing SGMCMC algorithms, which, when applied to a smooth re-parameterization of constrained pa-rameters, can produce divergent Markov chains, SMLD produces ergodic chains for common GLMM likelihoods. Third, we develop a rigorous error analysis of the algorithm and propose a post-processing step based on asymptotic jus-tifications. The method, unlike designing control variates, is entirely non-intrusive to the iterative sampling algorithm. This post-processing yields an order-wise correct estimate of the curvature around the mode of the posterior in the number of groups. For large datasets with many groups, to which SMLD algorithms are applicable, this in turn will yield an accurate estimation of the posterior variance. The rest of this work is structured as follows. Section 2 studies a simple toy example that motivates the need for a novel sampling method in GLMMs. Section 3 provides a detailed description of GLMMs and the associated Langevin dynamics-based sampling methods, including the hereby proposed SMLD. Section 4 describes the implementation details, an error analysis, and an additional post-processing step that yields an order-wise correct estimate of the curva-ture around the maximum likelihood estimator (MLE). Sec-tions 5 and 6 study empirical performance of the algorithm on simulated and real-world datasets. Section 7 concludes the paper. Appendix includes proofs of our main theorems, supplementary theoretical results, and further tables and visualizations for our data experiments. 
+
+Notation. We write [n] = {1, 2, . . . , n } for every natural number n. For two sequences an, b n, an = O(bn) im-plies that there exists some C > 0 such that an ≤ Cb n
+
+for all sufficiently large n; an ≪ bn means the sequence 
+
+an/b n → 0, and an ≍ bn means an/b n → c ∈ (0 , ∞).Unless otherwise noted, all norms ∥ · ∥ are Euclidean norms for Rd-vectors. For each v ∈ Rd, we write v⊗2 := vv ⊤,for a succinct notation. For a Rd×d-matrix A, ∥A∥HS is the Hilbert-Schmidt norm Tr( A⊤A). Given two continu-ous probability distributions p, q on Rd, we abuse the no-tation and also denote their Lebesgue densities by p, q . If 
+
+X ∼ p is a Rd-valued random variable with distribution 
+
+p, then for any F : Rd → Rd′
+
+, Ep[F (X)] ∈ Rd′
+
+and 
+
+Vp[F (X)] ∈ Rd′×d′
+
+are the mean vector and covariance matrix of F (X), respectively; equivalently, e.g., EF#p[ ˜X]
+
+for F#p the pushforward measure of p under F . The space 
+
+Pk(Rd) is the space of all probability distributions on Rd
+
+with finite k-th moments. Given two probability distribu-tions p, q ∈ P k, their k-Wasserstein distance Wk(p, q ) is defined as inf Π
+
+pEΠ[∥X − Y ∥k] for every natural number 
+
+k, where the infimum is taken over all couplings between 
+
+p and q, i.e., probability distributions of a Rd × Rd-valued random variable (X, Y ) such that the marginals of X and 
+
+Y are p and q, respectively. 
+
+## 2. Motivation: Sampling the Log-variance 
+
+To motivate the need of a new algorithm for scalable GLMMs, we will consider a toy problem that demonstrates the perils of re-parameterizing positively constrained pa-rameters, which routinely appear in GLMMs as modeling group-level variations. Suppose y1, . . . , y n ∈ R are ob-servations known to be drawn from a mean-zero normal distribution with unknown standard deviation σ > 0. We place a standard normal prior on σ truncated at the origin, though this choice of prior is not essentially relevant. Since there are many algorithms to sample generic Rd-valued posterior distributions, we only need to smoothly re-parameterize the positively constrained σ. A natural choice is to set θ = log σ. The posterior density of θ is pro-portional to e−f (θ) = exp( −nθ − e−2θ
+
+> 2
+
+Pni=1 y2 
+
+> i
+
++ θ − e2θ 
+
+> 2
+
+).We write by each contribution to f from the i-th negative data likelihood as fi, with f0 the negative log-prior density. The derivative f ′(θ) is then given by 
+
+> n
+
+X
+
+> i=0
+
+f ′ 
+
+> i
+
+(θ) = ( n − 1) − e−2θnX
+
+> i=1
+
+y2 
+
+> i
+
++ e2θ . (1) We focus our attention to sampling methods based on an associated SDE for a Brownian motion Bt:
+
+dθ t = −f ′(θt)dt + √2dB t. (2) This SDE is known to have a strong solution whose station-ary distribution has a density ∝ e−f (θ) under fairly general regularity conditions (Theorem 2.1 (Roberts & Tweedie, 1996)). A natural discrete approximation is given by the unadjusted Langevin algorithm (ULA) (Roberts & Tweedie, 1996), whose iterates follow the equation for a constant step 2Bayes Posterior Sampling for Large GLMMs          
+
+> Figure 1. The first 5,000 (left) and the last 50 (right) iterates before numerical divergence of the SGLD iterates run with f′(θ)given by (1) . Red line indicates θ0= log(2) that was used to simulate the dataset.
+
+size ϵ = ϵ(n) > 0:
+
+θk+1 = θk − ϵf ′(θk) + √2ϵZ k, k = 0 , 1, 2 · · · . (3) For datasets of moderate size, one can correct each ULA iter-ate to have the targeted posterior as an invariant distribution by adding an accept/reject scheme based on Metropolis-Hastings algorithm. For large n, both ULA and the Metropolis-Hastings step add computational burden. One of the first SGMCMC algorithms proposed to address this difficulty was the stochastic gradient Langevin dynamics (SGLD) (Welling & Teh, 2011). In our context, the iterates follow the following equation: 
+
+θk+1 = θk − ϵ nS
+
+X
+
+> i∈S k
+
+f ′ 
+
+> i
+
+(θk) + √2ϵZ k, k = 0 , 1, 2 · · · ;
+
+(4) where Sk is a minibatch, of a fixed cardinality S > 0,and of indices randomly drawn from [n] with replacement. While we have introduced the SDE and the corresponding discretizations in the context of a toy model, their definitions are generic and can be naturally extended to the case when 
+
+θ ∈ Rd, d > 1.The re-parameterization θ = log σ appears innocent, as it is used by many probabilistic programming languages (e.g., Stan (Team, 2025)). Yet it turns out that, based on the arguments of Section 3.2 (Roberts & Tweedie, 1996), the Markov chain of ULA or SGLD iterates is transient. In other words, algorithms (3) –(4) do not sample from any distribution asymptotically, because they do not have a sta-tionary distribution. Furthermore, using the calculations of Lemma 6.3 (Mattingly et al., 2002), one can derive an exact expression for the probability that |θk+1 | ≥ ϵ−1/22k
+
+for every k ≥ 1, which is never zero for any θ0 and any ϵ,to arrive at the conclusion: when run long enough, Markov chains blow up with positive probability. As empirical ev-idence, we show the iterates of the SGLD algorithm (4)               
+
+> Figure 2. Schematic demonstration of numerical instabilities in Langevin sampling with f′(θ)(1) . Due to the super-linear growth of |f′(θ)|, iterates begin oscillating between increasingly farther two ends of the density. Red (dashed) plots a quadratic function centered around the mode of e−f(θ), for which ULA is provably ergodic for a small enough ϵand exact as ϵ→0.
+
+with n = 1 , 000 , S = 5 and ϵ = S/n 1.4 in Figure 1. The dataset {y1, . . . , y n} is simulated from a mean-zero normal distribution with true, unknown σ = 2 . The Markov chain is initialized within a 1/√n-neighborhood of log(2) ; for a very long time, the iterates appear to be a good approxima-tion of the posterior concentrated around log(2) . However, at k = 1 , 021 , 459 ≈ n2, the iterates reaches an unrealis-tically large value of θ, after which the derivative and the updates become numerically unstable. Although this insta-bility is theoretically observable for ULA, our empirical experiments suggest that the additional noise of data sub-sampling in SGLD exacerbates the issue, by accelerating the time at which the chain becomes numerically unstable. While the theoretical reasoning of the previous citations are perfectly sound and not difficult to follow, the instability is surprising from a practical standpoint. The key is that without a Metropolis-Hastings step, there is no automatic guarantee that the iterates of ULA or SGLD will converge. The stability of the Markov chain then critically depends on whether f ′ is globally Lipschitz, which is often stated as a “smoothness” regularity condition in the theoretical analyses of ULA (Durmus & Moulines, 2017; 2019; Vempala & Wibisono, 2019). However, as Figure 2 demonstrates, (1) is very far from being globally Lipschitz in θ.
+
+## 3. Langevin Sampling and GLMMs 
+
+The simulated experiment from the previous Section demon-strates that SGMCMC methods for unconstrained parame-ters are inadequate for use in constrained sampling that nat-urally arises in Bayesian inference. In this Section, we will describe a scalable stochastic sampling algorithm based on a mirror Langevin dynamics. While the method is a generic constrained sampling algorithm, we will then specify the method to the problem of variance sampling in GLMMs. 3Bayes Posterior Sampling for Large GLMMs 
+
+3.1. Mirror Langevin Dynamics 
+
+Suppose θ ∈ Rd has a distribution ∝ e−f (θ) supported on a convex subset Θ with boundary ∂Θ. One first chooses a barrier function , ϕ : Θ → R, such that ϕ(θ) → ∞ 
+
+whenever θ → θb ∈ ∂Θ. We refer to the gradient ∇ϕ
+
+as the mirror map , and the image Θ∗ = ∇ϕ(Θ) as the 
+
+dual space . Before proceeding, let us quickly describe the minimal requirements on ϕ.
+
+Assumption 3.1. ϕ : Θ → R is twice continuously differ-entiable, strictly convex, and ∥∇ kϕ(θ)∥ → ∞ , k = 1 , 2 as 
+
+θ → θb for every θb ∈ ∂Θ.Denote by ϕ∗(ϑ) := sup θ∈Θ⟨θ, ϑ ⟩Rd − ϕ(θ) the convex conjugate of ϕ. Under Assumption 3.1, this makes perfect sense and, furthermore, we have identities ∇ϕ∗ = ( ∇ϕ)−1
+
+and {∇ 2ϕ(θ)}−1 = ( ∇2ϕ∗ ◦ ∇ ϕ)( θ) for every θ ∈ Θ. For brevity, we will write from hereon V := ∇f ◦ ∇ ϕ∗ and 
+
+A := ∇2ϕ ◦ ∇ ϕ∗.Simulating mirror Langevin dynamics on the dual space Θ∗
+
+aims at discretizing the following SDE for a d-dimensional Brownian motion Bt:
+
+dϑ t = −V (ϑt) + p2A(ϑt)dB t. (5) The following mirror Langevin algorithm (Li et al., 2022) discretizes the SDE with a constant step size ϵ > 0 and each 
+
+Zk an independent Normal d(0 , I d) random variable: 
+
+ϑk+1 = ϑk − ϵV (ϑk) + p2ϵA (ϑk)Zk. (6) The W2-distance between the chain above and the targeted posterior was shown to be O(√dϵ ) (Li et al., 2022). As we will mention later, this analysis is not immediately applica-ble to our work, since the dependence on n will be hidden in the constants of the estimate. An alternative discretization was also studied (Ahn & Chewi, 2021) using a different metric structure, results which we do not use in this work. Our model will describe the n terms corresponding to likeli-hoods of independent groups and an extra term correspond-ing to a log-prior density, so it is natural to assume the form 
+
+∇f (θ) = Pni=0 ∇fi(θ). When n is large, a natural data subsampling analogue to the algorithm (6) is to randomly draw S > 0 indices with replacement and computing a stochastic gradient estimator. Denoting by Sk a minibatch of random indices independently drawn at k-th iteration, we can study a new algorithm, writing Vi := fi ◦ ∇ ϕ∗:
+
+ϑk+1 = ϑk−ϵ
+
+(
+
+nS
+
+X
+
+> i∈S k
+
+Vi(ϑk) + V0(ϑk)
+
+)
+
++p2ϵA (ϑk)Zk.
+
+(7) We refer to this algorithm as the stochastic mirror Langevin dynamics (SMLD) algorithm. When Θ = Rd and ϕ(θ) = 
+
+∥θ∥2/2, the map ∇ϕ is identity, so the underlying SDE (5) and its discretizations (6) –(7) reduce to their unconstrained analogues in (2) – (4) . Hence, SMLD algorithm general-izes the usual SGLD algorithm. To our knowledge, unlike SGLD, the stochastic subsampling analogue of MLD has not been studied. The situation contrasts with the current literature in optimization, where mirror descent algorithm with stochastic gradient has been studied in the context of Markov decision processes (Jin & Sidford, 2020) and policy optimization (Yang et al., 2022). 
+
+3.2. Generalized Linear Mixed Models 
+
+In a GLMM, each group i ∈ [n] has ni ≥ 1 repeated measures, denoted by yij for j ∈ [ni]. Let xij ∈ Rp de-note covariates and zij ∈ Rq denote covariates assumed to have effects on outcomes varying in group assignment. The elements of the vector yi = ( yi1, . . . , y in i )⊤ are mod-eled as conditionally independent random variables from an exponential family distribution of density p(yij |ηij , ψ ) = exp a(ψ)−1 {yij h(ηij ) − b(ηij )} + c(yij , ψ ) , where ηij 
+
+is the model’s natural parameter, a function of the ij -th co-variate, ψ > 0 is a dispersion parameter, and a(·) > 0 and 
+
+b(·), c (·) are known, often smooth functions. In particular, 
+
+b(ηij ) relates to the mean model μij := E[yij |ηij ] by the relation μ = b′(η)/h ′(η). We choose a simple linear param-eterization for the natural parameter: ηij := x⊤ 
+
+> ij
+
+β + z⊤ 
+
+> ij
+
+γi.The parameter β ∈ Rp is a vector of population-level re-gression coefficients (“fixed effects”) and γi ∈ Rq , i ∈ [n]
+
+is each a vector of i-th group-specific deviations in the re-gression coefficients (“random effects”). Group-specific parameters are often assumed to have a Normal q (0 , Σ) dis-tribution with unknown covariance Σ. We will mostly focus on the Gaussian random effects model due to its widespread use and parameterize it using Ω = Σ −1, the precision ma-trix. See Table 1 in the Appendix for the most commonly used models, to some of which we refer in this work. We seek to approximate the marginal posterior distribution of population-level parameters θ := ( β, Ω, ψ ), given a prior distribution π0 for θ with a continuous density. We write 
+
+f0 := − log π0. For simplicity, let us exclude ψ by setting 
+
+a = 1 . Then θ = ( β, Ω) , where β is an unconstrained real vector and Ω is q × q positive definite matrix. The cone of positive definite matrices is identifiable to a convex sub-set of Rq(q+1) /2. A natural barrier function which satisfies Assumption 3.1 with α = 1 is ϕΩ(Ω) := − log det(Ω) .Defining ϕ(β, Ω) = ∥β∥2/2 − log det(Ω) , we can straight-forwardly apply the SMLD update (7) to this GLMM with 
+
+θ = ( β, Ω) ∈ Rp+q(q+1) /2 as follows: 
+
+ βk+1 
+
+−Ω−1
+
+> k+1
+
+
+
+=
+
+ βk
+
+−Ω−1
+
+> k
+
+
+
+− ϵ nS
+
+X
+
+> i∈S k
+
+ ∇β fi(βk)
+
+∇Ωfi(Ω k)
+
+
+
+− ϵ
+
+∇β f0(β)
+
+∇Ωf0(Ω) 
+
+
+
++ √2ϵ
+
+Zk
+
+q
+
+Ω−1 
+
+> k
+
+Wk
+
+q
+
+Ω−1
+
+> k
+> ⊤
+
+!
+
+.
+
+4Bayes Posterior Sampling for Large GLMMs 
+
+Here, each Zk is a p-dimensional standard normal random vector and each Wk is a q × q-dimensional symmetric ran-dom matrix whose diagonal and off-diagonal entries are standard normal. The summand fi corresponds to the (neg-ative) marginal log-likelihood of the i-th group: 
+
+fi(θ) = − log 
+
+Z
+
+> Rq
+
+
+
+> ni
+
+Y
+
+> j=1
+
+p(yij |γi, θ )
+
+ p(γi|θ)
+
+| {z }
+
+> =p(yi,γ i|θ)
+
+dγ i.
+
+In principle, we have completed the prescription of the use of SMLD for GLMM inference. However, many algorithmic details have been left out. One immediate issue is that the multivariate integral in the above display is generally intractable. In the next Section, we discuss the issue of computing the stochastic gradient estimator and correctly calibrating the posterior sample variance. 
+
+## 4. Application of SMLD to GLMM Inference 
+
+4.1. Stochastic Gradient Estimation 
+
+To implement the SMLD update (7) , it is not necessary to evaluate pointwise the intractable integral fi. We do need to evaluate pointwise the gradient of this integral, but this is a task much more amenable to a sampling-based approximation. Concretely, by Fisher’s identity (Fisher, 1925), exchanging the derivative and the integral yields 
+
+∇fi(θ) = −Ep(γi|yi,θ )[∇θ log p(yi, γ i|θ)] , where the con-ditional distribution p(γi|yi, θ ) is given by 
+
+p(γi|yi, θ ) = p(yi|γi, θ )p(γi|θ)
+
+R 
+
+> Rq
+
+p(yi|ξ, θ )p(ξ|θ) dξ . (8) For now, assume we can draw independent Monte Carlo samples from the conditional distribution p(γi|yi, θ ). Then, for each i, an unbiased Monte Carlo estimator of gi using 
+
+R > 0 samples is given by 
+
+c∇f (R) 
+
+> i
+
+(θ) := − 1
+
+R
+
+> R
+
+X
+
+> r=1
+
+∇ log p(yi, γ ir |θ), γ ir iid 
+
+∼ p(γi|yi, θ ).
+
+(9) This is a natural stochastic gradient estimator for ∇fi(θ),so we may modify the previous SMLD update into 
+
+ϑk+1 = ϑk−ϵ
+
+(
+
+nS
+
+X
+
+> i∈S k
+
+bV (R) 
+
+> i
+
+(ϑk) + V0(ϑk)
+
+)
+
++p2ϵA (ϑk)Zk,
+
+(10) where we wrote bV (R) 
+
+> i
+
+:= bf (R) 
+
+> i
+
+◦ ∇ ϕ∗.For a later development, we will also derive the covariance matrix of the stochastic gradient estimator. Simple compu-tations show that the covariance of stochastic gradient (9) is given by 
+
+Ψ(R) 
+
+> i
+
+(θ) := 1
+
+R Vp(γi|yi,θ )[∇θ log p(yi, γ i|θ)] . (11) Since c∇f (R) 
+
+> i
+
+(θ) is unbiased with respect to fi(θ) at each 
+
+θ, it is clear that for a random minibatch of indices 
+
+Sk drawn with replacement, S−1 P
+
+> i∈S k
+
+c∇f (R) 
+
+> i
+
+is unbi-ased with respect to n−1∇f . The total covariance of 
+
+S−1 P
+
+> i∈S k
+
+c∇f (R) 
+
+> i
+
+(θ) is given by Ψ(R)(θ)/S , for 
+
+Ψ(R)(θ) := 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+"
+
+∇fi(θ) − 1
+
+n ∇f (θ)
+
+⊗2
+
++ Ψ (R) 
+
+> i
+
+(θ)
+
+#
+
+.
+
+(12) Writing by bΨRi (θ) the Monte Carlo-based unbiased estima-tor of (11) and c∇f (R)
+
+:= Pni=1 c∇f (R) 
+
+> i
+
+, the following gives an unbiased estimator of Ψ(R)(θ):
+
+bΨ(R)(θ) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ c∇f (R) 
+
+> i
+
+(θ) − c∇f (R)
+
+(θ)
+
+n
+
+
+
+> ⊗2
+
++ bΨ(R) 
+
+> i
+
+(θ)
+
+n
+
+ .
+
+(13) Computations of (11) and (12) are elementary; see Section C.5 for the unbiasedness proof of (13). So far, we have assumed the ability to draw independent Monte Carlo samples from the random effects conditional distribution. We will maintain this assumption for the the-oretical analysis to follow in this Section. However, the normalizing constant in the distribution (8) is intractable for most GLMMs, so independent Monte Carlo samples are mostly unattainable. In such cases, we will use R depen-dent samples {γir }Rr=1 obtained from an MCMC, ergodic with respsect to (8) , in computing the stochastic gradient (9) . This poses a technical complication in the theory, as the stochastic gradient (9) is then no longer unbiased. The difficulties of a fully rigorous analysis, along with some special cases for which an unbiased Monte Carlo stochas-tic gradient is computable, are sketched out in Section 3.3 (Berchuck et al., 2026). Nevertheless, empirical results in Sections 5 and 6 suggest our method can approximate the posterior well for a modestly large R and the choice of MCMC algorithm with good mixing properties, and thus the gap between theory and practice need not be so great. 
+
+4.2. Error Analysis 
+
+We now turn to an error analysis of the SMLD algorithm. First, we state the regularity conditions on the mirror map and the targeted posterior density. 
+
+Assumption 4.1 (Modified Self-Concordance) . The map-ping A = ∇2ϕ ◦ ∇ ϕ∗ satisfies pA(ϑ) − pA(ϑ′) HS 
+
+≤√α∥ϑ − ϑ′∥ for every ϑ, ϑ ′ ∈ Θ∗ and some α > 0.
+
+Assumption 4.2 (Relative Smoothness) . For all i ∈ { 0} ∪ 
+
+[n], Vi = ∇fi ◦∇ ϕ∗ satisfies ∥Vi(ϑ)−Vi(ϑ′)∥ ≤ L∥ϑ−ϑ′∥
+
+for every ϑ, ϑ ′ ∈ Θ∗ and some L > 0.
+
+Assumption 4.3 (Relative Strong Convexity) . For all i ∈
+
+5Bayes Posterior Sampling for Large GLMMs 
+
+[n], Vi = ∇fi ◦ ∇ ϕ∗ satisfies ⟨Vi(ϑ) − Vi(ϑ′), ϑ − ϑ′⟩ ≥ 
+
+m∥ϑ − ϑ′∥2 for every ϑ, ϑ ′ ∈ Θ∗ and some m > 0. Fur-thermore, V0 is convex. A quick consequence of Assumption 4.2 is that V satisfies 
+
+∥V (ϑ) − V (ϑ′)∥ ≤ (n + 1) L∥ϑ − ϑ′∥ for every ϑ, ϑ ′ ∈
+
+Θ∗. Similarly, by Assumption 4.3, V satisfies ⟨V (ϑ1) −
+
+V (ϑ2), ϑ 1 − ϑ2⟩ ≥ nm ∥ϑ1 − ϑ2∥2. Finally, continuity of 
+
+∇f, ∇ϕ∗ and 4.3 guarantees the unique existence of a global minimizer of V . This is the MLE of the model, implicitly dependent on n, which we hereby denote by ϑ∗.The following result quantifies the approximation error of SMLD with respect to the target posterior. 
+
+Theorem 4.4. Let π ∝ e−f be the targeted posterior dis-tribution ∝ e−f on Θ, with f = Pn+1  
+
+> i=0
+
+fi and ϕ meeting Assumptions 4.1–4.3. Assume that ϑ∗, the unique minimizer of V , belongs to the interior of a bounded subset of Θ∗
+
+for all n ≥ 1, and that Eπ ∥ϑ∥2 = O(1) . Let ρk be the marginal distribution of ϑk in SMLD algorithm (7) , with 
+
+ρ0 ∈ P 2(Rd). For ϵ = O(n−(1+ δ)), δ ∈ (0 , 1) and for all sufficiently large n, we have 
+
+W2(ρk, ∇ϕ#π) ≤ O
+
+
+
+e−knmϵ/ 4W2(ρ0, ∇ϕ#π) + √ϵn 
+
+
+
+.
+
+See Section C.1 of the Appendix for a proof. 
+
+Remark. Theorem 1 (Li et al., 2022) states a Wasserstein-distance error bound of the above type for the algorithm (6) .However, this result in its literal form is not useful in our context, because its dependence on the O(n) smoothness and strong convexity constants of f is very poor. The proof techniques we used are not novel and should be familiar to readers of previous literature (Durmus & Moulines, 2017; 2019; Dalalyan & Karagulyan, 2019). Since we are inter-ested in regimes where n ≫ d, the proof does not attempt to optimize dependence on d.
+
+4.3. Sample Variance Post-Processing 
+
+Theorem 4.4 states that when ϵ ≍ n−(1+ δ), δ > 0 and the chain is run for length k ≫ n1+ δ , the squared distance between the SMLD Markov chain’s law and the underlying posterior decays like O(n−δ ). On the other hand, Laplace approximation suggests that the true posterior distribution variance must be like O(n−1), at least if all MLEs remain in the interior of Θ for large n. Inspection of the proof shows that the additional variance of the stochastic gradient (9) dominates the discretization error of the no-subsampling algorithm (6) and causes an order-wise larger error. We will propose here a non-intrusive post-processing algorithm of the SMLD samples. Assuming the Laplace approxima-tion estimates the true posterior variance with O(n−1) error, our method yields an asymptotically, order-wise correct estimate of the underlying posterior variance, while avoid-ing the practical difficulties of designing control variates and initialization for GLMMs, highlighted in Section 4.2 (Berchuck et al., 2026). Assuming again the stochastic gradient estimator (9) is un-biased, let us re-write the SMLD update as 
+
+ϑk+1 = ϑk−ϵV (ϑk)+ √2ϵ
+
+r ϵ
+
+2 ξ(ϑk, Sk) + pA(ϑk)Zk
+
+
+
+,
+
+(14) where the random vector ξ(ϑk, Sk) is defined so that the above display is equal to (10) . Based on the moment com-putations (11) – (12) , this random vector has a covariance matrix (ϵn 2)/(2 S)Ψ (R)(∇ϕ∗(ϑk)) . For each ϑ, we define a new covariance matrix 
+
+Γ(R)(ϑ) := ϵn 2
+
+2S Ψ(R)(∇ϕ∗(ϑ)) + A(ϑ); (15) which is the “total covariance” of the noise component at each SMLD iteration. Importantly, for any fixed value of 
+
+ϑ and thus θ = ∇ϕ∗(ϑ), the matrix above can be approxi-mated using a full scan of the n-sized dataset and R Monte Carlo/MCMC samples using the formula (13) . A naive second-order Taylor expansion around the transformation of MLE, ϑ∗ = ∇ϕ(θ∗), along with simplifying the distri-bution of the random vector ξ′(ϑk; Sk) to be also Gaussian, leads us to believe that the update (14) must approximate the following SDE on the dual space: 
+
+d(ϑt − ϑ∗) = −HJ −1(ϑt − ϑ∗)dt + p2Γ( ϑ∗)dB t,
+
+where H = ∇2f (θ∗) and J = ∇2ϕ(θ∗). The invariant dis-tribution of this SDE is Normal d(ϑ∗, V ) whose covariance solves the Lyapunov equation 
+
+XJ −1V + V J −1X = 2Γ (R)(θ∗) (16) with X = H. A more detailed, step-by-step reasoning of this heuristic in the context of unconstrained sampling is given in Section 3.2 (Berchuck et al., 2026). On the other hand, consider a Gaussian approximation to the true posterior in the large-n regime. By a Laplace approxi-mation argument, we expect the true posterior distribution of θ to look like Normal d(θ∗, H −1) when n is large. By the delta method, we expect the distribution of ∇ϕ(θ) to look like Normal d(∇ϕ(θ∗), JH −1J). The upshot is that given the quantities θ∗, Γ( θ∗) and V , we can solve the equa-tion in unknown X and obtain H−1, which will in turn approximate the posterior covariance for large n.The following result demonstrates that if we take the Laplace approximation to be accurate enough, then the heuristic reasoning behind (16) is sound in the large-n regime “up to a vanishing error relative to Γ(R)(θ∗),” providing us a way to estimate the curvature H. For this result, we assume a stronger smoothness condition than Assumption 4.2. 6Bayes Posterior Sampling for Large GLMMs 
+
+Assumption 4.5. For all i ∈ { 0} ∪ [n], Vi is twice contin-uously differentiable and ∥D2Vi∥ ≤ L, where the norm is the operator norm for 3-linear forms in Θ∗.
+
+Theorem 4.6. Suppose that ϑ∗, the unique minimizer of V ,belongs to the interior of a bounded subset of Θ∗ for all 
+
+n ≥ 1. Under Assumption 4.5, for ϵ = O(n−(1+ δ)), δ ∈
+
+(0 , 1) and for all sufficiently large n, the covariance V of the invariant distribution of SMLD (10) satisfies 
+
+HJ −1V + V J −1H = 2Γ (R)(θ∗){1 + O(n−δ/ 2)}
+
+in the sense of operator norms for d × d matrices. 
+
+See Section C.3 of the Appendix for a proof. 
+
+Remark. We do not address here the issue of whether the error between H−1, the inverse curvature around the MLE, and the true posterior variance of θ is indeed O(n−1). In the context of simpler i.i.d. likelihood models, finite sample bounds in terms of n and d were provided by (Kasprzak et al., 2025). Under Assumptions 4.2 and 4.3, we can use simpler results along the lines of Proposition 5 (Brosse et al., 2018). Despite the folklore status of GLMMs in statistics, it seems difficult to find a quantitative statement on the asymptotic normality of likelihood-based estimators, as mentioned by the unpublished talk (Johnstone, 2024). To summarize, solving the Lyapunov equation (16) in X
+
+permits us to approximate the posterior covariance of θ or 
+
+∇ϕ(θ). Since ϑ∗ and V are not exactly known, we ap-proximate them by the mean and covariance matrix of the SMLD samples, respectively; we denote these sample-based approximations by cϑ∗ and bV , respectively, while Γ(R)(θ∗)
+
+also permits a natural esitmator as mentioned (13) . Denot-ing the solution of the resulting equation by bH, we can re-scale the posterior samples ϑ1, ϑ 2, . . . obtained from the SMLD updates (10) to calibrate the uncertainty estimates: 
+
+ϑcorr  
+
+> k
+
+← cϑ∗ + bJ bH−1/2 bV −1/2(ϑk − cϑ∗). (17) All these steps, together with the implementation of the SMLD (7) in the context of GLMMs, are summarized in Algorithm 1 in the Appendix. 
+
+## 5. Simulated Experiments 
+
+We present simulated studies that validate the empirical performance of the corrected SMLD algorithm. 
+
+5.1. Toy Model Demonstration 
+
+We first validate the correctness of the mean and covari-ance of the corrected SMLD samples based on a toy model where an exact posterior is known. The distribution to be sampled from is a posterior given a multivariate normal like-lihood for data y1, . . . , y n ∈ R2, known to be mean zero and with unknown covariance matrix Σ, and an “uninformative” 
+
+Wishart(2 , I 2) prior on the precision matrix Σ−1. 50 dif-ferent datasets comprising random vectors y1, . . . , y n ∈ R2,each of size n = 5 , 000 , were generated from a multivari-ate normal distribution with Σ = 
+
+1.5 .25 
+
+.25 1.5
+
+
+
+. Setting the minibatch size S = 5 , we run the SMLD algorithm (7) with step size ϵ = S/n 1.3 for a total length of ⌈20 /ϵ ⌉ iterations, before correcting the vectorized covariance matrix samples as described in Algorithm 1. Table 2 in the Appendix sum-marizes for each entry of Σ the absolute error between true posterior moments and their SMLD sample-based approxi-mations. Our correction method by design does not change the SMLD sample mean, but it brings the sample covariance significantly closer to the true posterior covariance. The uncorrected SMLD sample-based variance estimates have a large bias mainly because the variance estimates themselves are too large compared with the true posterior variances. 
+
+5.2. Simulated Data GLMMs 
+
+In this second simulation study, we consider the task of fitting a binary response GLMM on large simulated data with a logit link function (cf. Table 1, Appendix). We simulated 30 datasets for group sizes n ∈ {10 4, 10 5},each group having 10 equal observations and priors β ∼
+
+Normal(0 , 10 2I2), Σ−1 ∼ Wishart(2 , I 2). We ran the SMLD algorithm, implemented in C++, with minibatch sizes S ∈ { 5, 10 } for 4 hours. To validate the accuracy of the method, we compared both uncorrected and corrected samples against the true parameters used to generate the data and samples obtained from a full-batch Gibbs sam-pler based on a Polya-Gamma data augmentation scheme (Polson et al., 2013), of which the true posterior is the in-variant distribution. The same data augmentation scheme was also used by the SMLD sampler in estimating the stochastic gradient (9) by drawing R = 1 , 000 samples of γis. For each configuration of n and S, we chose the step size to be ϵ = S/n 1+ δ with δ = ( δmin + 1) /2, where 
+
+δmin = min δ {S/n 1+ δ < 1/n }, heuristically balancing the requirements of stable variance estimation and compu-tational efficiency. Figures 4 and 3 present the resulting posterior mean and variance estimates against run time. Re-gardless of n and S, SMLD sample-based posterior mean approximation quickly converges to a value close to the true values, but the variance approximation has an upward bias, which our correction method eliminates. When n = 10 , 000 ,SMLD sample variance agrees with the variance of Gibbs sampler draws. However, the two samplers disagree when 
+
+n = 100 , 000 , due to the Gibbs sampler chain having pro-duced too few samples to have reached convergence even after 4 hours, evidently seen from the fact that they do not produce a close enough mean to the true values. Our study highlights that the corrected SMLD thus produces accurate 7Bayes Posterior Sampling for Large GLMMs   
+
+> Figure 3. Posterior mean estimates presented across runtime (hours) for the Bernoulli GLMM with simulated datasets (Section 5.2). Columns and rows indicate parameter and sample size (n), respectively; for each panel, posterior means were averaged over 30 different datasets. Thick dashed line indicates the true parameter values used to simulate the data.
+> Figure 4. Log posterior variance estimates presented across runtime (hours) for the Bernoulli GLMM with simulated datasets (Section 5.2). Columns and rows indicate parameter and sample size (n), respectively; for each panel, posterior variances were averaged over 30 different datasets.
+
+enough posterior mean and variance estimates with a sub-stantial computational gain over the conventional MCMC. 
+
+## 6. Real-World Data Analysis 
+
+We now present results from fitting a binomial response GLMM on real-world biomedical dataset. The data are collected from a study of breast cancer survivors in Duke Oncology clinic. The outcome yij ∈ { 0, 1, . . . , 10 } of the 
+
+i-th patient at j-th encounter is the reported pain score be-tween 0 and 10, at each oncology encounter up to 1 year from initial diagnosis of cancer. Patients who have only reported zero pain or have only one pain score available were excluded, leaving a dataset of n = 2 , 528 patients and a total of 33 , 327 integer-valued outcomes. We fit a GLMM with a M = 10 binomial link function (cf. Table 1, Appendix) that adjusts for covariates xij ∈ R13 includ-ing each patient’s race, age (years), BMI ( kg/m 2), stage at initial diagnosis (baseline 0), insurance status (baseline com-mercial), and Elixhauser comorbidity index, together with 8Bayes Posterior Sampling for Large GLMMs  
+
+> Figure 5. Posterior odds ratios of fixed effects and random effects covariance matrix parameters with 95% credible intervals for Sec-tion 6.
+
+active treatment categories at each encounter and years rela-tive to the initial diagnosis as a linear regressor. The model included a random intercept and a random linear slope of time for modeling patient-specific increase and decrease in pain ( zij ∈ R2). Figure 5 plots the credible intervals for posterior fixed effects odds ratios (positive probability defined by a pain score above 5) credible and random ef-fects covariance parameters. For interpretability, intervals for the latter group of parameters are shown on marginal standard deviation and correlation scale. The widths of the corrected credible intervals are significantly narrower for the fixed effects than for the random effects parameters and suggests all covariates have a significant cohort-level effect. The widths narrower than O(1 /√n) are caused by the fact that unlike in simulated studies, many patients have very dense trajectories (241 being the most data per patient and 57 patients with more than 50 pain scores). Credible in-tervals of random intercept and random linear time slope, on the other hand, suggest a much larger between-patient variability than the significant cohort-level decrease of pain in time. Interestingly, the credible interval for the correla-tion between random intercept and random linear slope in time becomes wider when corrected. Ultimately, the dra-matic changes in the credible intervals for the fixed effects support the importance of variance correction for correctly calibrating Bayesian p-values. 
+
+## 7. Discussion 
+
+In this paper, we introduced a stochastic gradient MCMC algorithm suitable for constrained sampling in large datasets. Specializing the general task to Bayesian inference, we have shown the importance of a tailored constrained sampling method for GLMMs and demonstrated how to implement the corrected SMLD algorithm for a calibrated posterior variance estimate. Simulations demonstrate the accuracy and the clear computational gains of our proposed method for a popularly used binary observation GLMM with logit link function. Our work has limitations and possible improvements. First, while our justification of the use of MCMC was mainly empirical, a finer theoretical study, possibly very model-specific, is required to understand the precise effect of using a biased stochastic estimator. In a similar vein, it will be also interesting to study the efficacy of alternatives to MCMC, such as quasi-Monte Carlo importance sampling (He et al., 2023) or expectation propagation (Hall et al., 2020). Second, we have not formally tackled the issue of a tightly optimized finite-sample bound, which can guide the choice of step size ϵ = O(n−(1+ δ)), which we have tuned mostly by trial and error. Since the SMLD iterates (7) do not strictly en-force the parameter constraints, a small enough choice of 
+
+ϵ is very important for algorithmic stability, while the user would also hope the targeted distribution also permits not too small an ϵ that will waste computational power. The proof techniques we have adopted in this work may be too crude for this purpose and need improvements. Finally, from a practical perspective, extensions of our algorithm towards incorporating momentum and fitting high-dimensional neu-ral net models will form practically valuable contributions to Bayesian deep machine learning. 
+
+## References 
+
+Ahn, K. and Chewi, S. Efficient constrained sampling via the mirror-langevin algorithm. Advances in Neural Infor-mation Processing Systems , 34:28405–28418, 2021. Ambrosio, L., Bru ´e, E., Semola, D., et al. Lectures on optimal transport , volume 130. Springer, 2021. Baker, J., Fearnhead, P., Fox, E. B., and Nemeth, C. Con-trol variates for stochastic gradient mcmc. Statistics and Computing , 29(3):599–615, 2019. Berchuck, S. I., Baek, Y., Medeiros, F. A., and Agazzi, A. Scalable bayesian inference for generalized linear mixed models via stochastic gradient mcmc, 2026. URL 
+
+https://arxiv.org/abs/2403.03007 .Brosse, N., Durmus, A., and Moulines, E. The promises and pitfalls of stochastic gradient langevin dynamics. Ad-vances in Neural Information Processing Systems , 31, 2018. Dalalyan, A. S. and Karagulyan, A. User-friendly guaran-tees for the langevin monte carlo with inaccurate gradi-ent. Stochastic Processes and their Applications , 129(12): 5278–5311, 2019. 9Bayes Posterior Sampling for Large GLMMs 
+
+Durmus, A. and Moulines, ´ E. Nonasymptotic convergence analysis for the unadjusted langevin algorithm. The An-nals of Applied Probability , 27(3):1551–1587, 2017. Durmus, A. and Moulines, ´E. High-dimensional bayesian in-ference via the unadjusted langevin algorithm. Bernoulli ,25(4A):2854–2882, 2019. Fisher, R. A. Theory of Statistical Estimation. In Mathemat-ical Proceedings of the Cambridge Philosophical Society ,volume 22, pp. 700–725. Cambridge University Press, 1925. Gelman, A. and Hill, J. Data analysis using regression and multilevel/hierarchical models . Cambridge university press, 2007. Gelman, A., Carlin, J. B., Stern, H. S., Dunson, D. B., Vehtari, A., and Rubin, D. B. Bayesian Data Analysis .CRC Press, 2013. Hall, P., Johnstone, I., Ormerod, J., Wand, M., and Yu, J. Fast and accurate binary response mixed model analysis via expectation propagation. Journal of the American Statistical Association , 115(532):1902–1916, 2020. He, Z., Zheng, Z., and Wang, X. On the error rate of importance sampling with randomized quasi-monte carlo. 
+
+SIAM Journal on Numerical Analysis , 61(2):515–538, 2023. Hsieh, Y.-P., Kavis, A., Rolland, P., and Cevher, V. Mirrored langevin dynamics. Advances in Neural Information Processing Systems , 31, 2018. Jin, Y. and Sidford, A. Efficiently solving mdps with stochas-tic mirror descent. In International Conference on Ma-chine Learning , pp. 4890–4900. PMLR, 2020. Johnstone, I. M. Complex variables and the central limit the-orem. https://www.youtube.com/watch?v= mTNm39bgThc , Jun 2024. Kasprzak, M. J., Giordano, R., and Broderick, T. How good is your laplace approximation of the bayesian posterior? finite-sample computable error bounds for a variety of useful divergences. Journal of Machine Learning Re-search , 26(87):1–81, 2025. Le Gall, J.-F. Brownian Motion, Martingales, and Stochastic Calculus , volume 274. Springer, 2016. Li, R., Tao, M., Vempala, S. S., and Wibisono, A. The mirror langevin algorithm converges with vanishing bias. In International Conference on Algorithmic Learning Theory , pp. 718–742. PMLR, 2022. Mattingly, J. C., Stuart, A. M., and Higham, D. J. Ergodic-ity for sdes and approximations: locally lipschitz vector fields and degenerate noise. Stochastic processes and their applications , 101(2):185–232, 2002. Nemeth, C. and Fearnhead, P. Stochastic gradient markov chain monte carlo. Journal of the American Statistical Association , 116(533):433–450, 2021. Ormerod, J. T. and Wand, M. P. Gaussian variational ap-proximate inference for generalized linear mixed models. 
+
+Journal of Computational and Graphical Statistics , 21 (1):2–17, 2012. Polson, N. G., Scott, J. G., and Windle, J. Bayesian in-ference for logistic models using p ´olya–gamma latent variables. Journal of the American statistical Association ,108(504):1339–1349, 2013. Roberts, G. O. and Tweedie, R. L. Exponential convergence of langevin distributions and their discrete approxima-tions. Bernoulli , 2(4):341–363, 1996. Team, S. D. Stan reference manual, version 2.38.0, 2025. https://mc-stan.org. Vempala, S. and Wibisono, A. Rapid convergence of the unadjusted langevin algorithm: Isoperimetry suffices. Ad-vances in neural information processing systems , 32, 2019. Welling, M. and Teh, Y. W. Bayesian learning via stochastic gradient langevin dynamics. In Proceedings of the 28th international conference on machine learning (ICML-11) ,pp. 681–688, 2011. Yang, L., Zhang, Y., Zheng, G., Zheng, Q., Li, P., Huang, J., and Pan, G. Policy optimization with stochastic mir-ror descent. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 36, pp. 8823–8831, 2022. Zhu, D. L. and Marcotte, P. Co-coercivity and its role in the convergence of iterative schemes for solving variational inequalities. SIAM Journal on Optimization , 6(3):714– 726, 1996. 10 Bayes Posterior Sampling for Large GLMMs 
+
+## A. Tables and Figures 
+
+Table 1. Some commonly used GLMM specifications. See Section 3.2 for notation ( Φ is the standard normal CDF). 
+
+Model Range of y E[y|η] Cumulant b(·) h(·) a(·)
+
+Gaussian (Linear) R η 12 η2 Identity Identity Logit: Binomial ( M ≥ 1 trials) [M ] M e η 
+
+> 1+ eη
+
+M log(1 + eη ) Identity a = 1 
+
+Probit: Bernoulli {0, 1} Φ( η) − log {1 − Φ( η)} h(η) = log Φ( η)1−Φ( η) a = 1 
+
+Poisson {0, 1, 2, . . . , } eη eη Identity a = 1 
+
+Table 2. Table of results for simulated study in Section 5.1. Each row displays the 1st and 3rd quantiles from 50 different datasets. 
+
+Σ11 Σ12 Σ22 
+
+True Values 1.5 0.25 1.5 Posterior Mean [1.47, 1.51] [0.23, 0.26] [1.49, 1.52] Absolute Error: Sample Mean [6e-4, 2.4e-3] [4e-4, 1.6e-3] [9e-4, 3e-3] Posterior Variance [9e-4, 9e-4] [5e-4, 5e-4] [9e-4, 9e-4] Absolute Error: Uncorrected Sample Var [0.09, 0.10] [0.05, 0.05] [0.10, 0.10] Absolute Error: Corrected Sample Var [1.4e-4, 1.6e-4] [0.2e-4, 0.3e-4] [1.4e-4, 1.6e-4] 
+
+## B. Algorithm Description 
+
+Algorithm 1 SMLD with Covariance Correction for GLMMs 
+
+Input: θ0, S, δ, K, R, κ 
+
+Define ϵ = S/n 1+ δ
+
+ϑ0 ← ∇ ϕ(θ0)
+
+for k ∈ 1, . . . , K do 
+
+Draw Sk−1 ∼ S 
+
+for i ∈ S k do 
+
+Initialize: γi0
+
+for r ∈ 1, . . . , R do 
+
+Sample γir from p(γi|yi, θ k)
+
+Compute ∇θ log p(yi, γir |Ωk)
+
+end for 
+
+Compute d∇fi
+
+> (R)
+
+(θk) = 1
+
+> R
+
+PRr=1 ∇θ log p(yi, γir |θk)
+
+end for 
+
+Draw Zk−1 ∼ N (0 , 2ϵI d)
+
+ϑk ← ϑk−1 − ϵ
+
+n
+
+∇f0(θk−1) + nS
+
+P 
+
+> i∈S k−1
+
+fi(θk−1)
+
+o
+
++ p∇2ϕ(θk)Zk−1
+
+θk ← ∇ ϕ∗(ϑk)
+
+end for 
+
+Compute MCMC sample mean cϑ∗ of (ϑk)Kk=0 and bθ∗ = ∇ϕ∗(cϑ∗)
+
+Compute MCMC sample variance bΣ of (ϑk)Kk=0 
+
+Compute an estimate of matrix Ψ(R)(θ∗) {Formula is given in (13) }
+
+Computae an estimate of matrix Γ(R)(ϑ∗) = ϵn 2Ψ(R)(θ∗)/(2 S) + A(ϑ∗)
+
+Solve Lyapunov equation (16) to find an estimate of H−1
+
+Obtain corrected (ϑcorr  
+
+> k
+
+)Kk=0 {Formula is given in (17) }
+
+for k ∈ 1, . . . , K do 
+
+θcorr  
+
+> k
+
+← ∇ ϕ∗(ϑcorr  
+
+> k
+
+)
+
+end for 
+
+11 Bayes Posterior Sampling for Large GLMMs 
+
+## C. Proofs 
+
+C.1. Proof of Theorem 4.4 
+
+We assume the readers are familiar with stochastic calculus results as expounded by Chapters 4–5 (Le Gall, 2016). A note on notation: let Bt = ( B1 
+
+> t
+
+, . . . , B dt )⊤ be a Rd-valued Brownian motion, and Xt adapted to the filtration generated by Bt.For A : Rd → Rd×d a positive definite matrix-valued continuous map (with a positive square root √A), we write 
+
+Z t
+
+> 0
+
+pA(Xs) · dB s := 
+
+
+
+> d
+
+X
+
+> j=1
+
+Z t
+
+> 0
+
+p A(Xs)
+
+
+
+> 1,j
+
+dB 1 
+
+> s
+
+, . . . , 
+
+> d
+
+X
+
+> j=1
+
+Z t
+
+> 0
+
+p A(Xs)
+
+
+
+> d,j
+
+dB ds
+
+
+
+> ⊤
+
+.
+
+By triangle inequality, 
+
+W2(ρk, ∇ϕ#π) ≤ W2(ρMLA  
+
+> k
+
+, ∇ϕ#π) + W2(ρk, ρ MLA  
+
+> k
+
+), (18) where ρMLA  
+
+> k
+
+is the marginal distribution of the k-th iterate initialized at the same ϑ0 and evolving according to the mirror Langevin algorithm (6) with no data subsampling. 
+
+Sampling error of discretizing MLD. We will first derive a sampling error bound assuming no data subsampling, which is quantified by the first term in (18) . Set ρ0 = ρMLA 0 and assume that k ≥ 1 and that ρMLA  
+
+> k−1
+
+and ∇ϕ#π are optimally coupled, which is always possible, because the infimum in the definition of a Wasserstein distance is always attained (Theorem 2.10 (Ambrosio et al., 2021)). Denote by (ϑMLA  
+
+> k−1
+
+, ϑ SDE 0 ) the coupled random variables, and consider the following dynamics, coupled through the same Brownian motion {Bt}0≤t≤ϵ:
+
+(
+
+ϑMLA  
+
+> k
+
+= ϑMLA  
+
+> k−1
+
+− R ϵ 
+
+> 0
+
+V (ϑMLA  
+
+> k−1
+
+) dt + √2 R ϵ
+
+> 0
+
+q
+
+A(ϑMLA  
+
+> k−1
+
+) · dB t;
+
+ϑSDE  
+
+> ϵ
+
+= ϑSDE 0 − R ϵ 
+
+> 0
+
+V (ϑSDE  
+
+> t
+
+) dt + √2 R ϵ
+
+> 0
+
+pA(ϑSDE  
+
+> t
+
+) · dB t.
+
+It is clear that the marginal distributions of ϑMLA  
+
+> k
+
+and ϑSDE  
+
+> ϵ
+
+are then ρMLA  
+
+> k
+
+and ∇ϕ#π, respectively. Let us consider an auxiliary process, { ¯ϑSDE  
+
+> t
+
+}0≤t≤ϵ, such that ¯ϑSDE 0 = ϑMLA  
+
+> k−1
+
+and also ¯ϑSDE  
+
+> ϵ
+
+= ¯ϑSDE 0 − R ϵ 
+
+> 0
+
+V ( ¯ϑSDE  
+
+> t
+
+) dt + √2 R ϵ
+
+> 0
+
+pA( ¯ϑSDE  
+
+> t
+
+) ·
+
+dB t, for the same instance of Brownian motion Bt. Denote by ¯ρk,t its marginal distribution. The goal is to bound 2-Wasserstein distances between each pair of the three processes and use the triangle inequality. Under Assumptions 4.1 and 4.3, by Lemma 4 (Li et al., 2022), we have 
+
+E[∥ϑSDE  
+
+> ϵ
+
+− ¯ϑSDE  
+
+> ϵ
+
+∥2|ϑMLA  
+
+> k−1
+
+, ϑ SDE 0 ] ≤ e−2( nm −α)ϵ∥ϑMLA  
+
+> k−1
+
+− ϑSDE 0 ∥2, (19) so that by the optimal coupling assumption, 
+
+W 22 (¯ ρk,ϵ , ∇ϕ#π) ≤ e−2( nm −α)ϵW 22 (ρMLA  
+
+> k−1
+
+, ∇ϕ#π), (20) and the exponent reduces to −nmϵ . Next, we compare the distributions of ϑMLA  
+
+> k
+
+and ¯ϑSDE  
+
+> ϵ
+
+. We have 
+
+W 22 (¯ ρk,ϵ , ρ MLA  
+
+> k
+
+) ≤ E∥ ¯ϑSDE  
+
+> t
+
+− ϑMLA  
+
+> k
+
+∥2
+
+≤ E
+
+" Z ϵ
+
+> 0
+
+{V ( ¯ϑSDE  
+
+> t
+
+) − V ( ¯ϑSDE 0 )} dt + √2
+
+Z ϵ
+
+> 0
+
+q 
+
+A( ¯ϑSDE  
+
+> t
+
+) −
+
+q
+
+A( ¯ϑSDE 0 )
+
+
+
+· dB t
+
+> 2
+
+#
+
+≤ ϵ
+
+Z ϵ
+
+> 0
+
+E∥V ( ¯ϑSDE  
+
+> t
+
+) − V ( ¯ϑSDE 0 )∥2 dt + 2 
+
+Z ϵ
+
+> 0
+
+q
+
+A( ¯ϑSDE  
+
+> t
+
+) −
+
+q
+
+A( ¯ϑSDE 0 )
+
+> 2
+> HS
+
+dt 
+
+≤ { (n + 1) 2L2ϵ + 2 α}
+
+Z ϵ
+
+> 0
+
+∥ ¯ϑSDE  
+
+> t
+
+− ¯ϑSDE 0 ∥2 dt. 
+
+In the third inequality, we first expanded the square and used the moment property of a stochastic integral and the fact that the quadratic covariation (or bracket, as referred to in Chapter 4 (Le Gall, 2016)) between processes t and Bt is zero. Since it is assumed ϵ ≫ 1/n 2, the “ +α” term in the coefficient can be absorbed into O(( n + 1) 2ϵ2). Setting thus (n + 1) 2L2ϵ ≥ 2α,and using Lemma C.1 below to bound the integral, we have 
+
+E∥ ¯ϑSDE  
+
+> t
+
+− ¯ϑMLA  
+
+> k
+
+∥2 ≤ 2( n + 1) 2L2ϵ 2ϵ3E∥V ( ¯ϑSDE 0 )∥2 + 6 ϵ2E
+
+q
+
+A( ¯ϑSDE 0 )
+
+> 2
+> HS
+
+!
+
+.
+
+12 Bayes Posterior Sampling for Large GLMMs 
+
+Denoting by ϑ ∼ ∇ ϕ#π the optimally coupled random variable with ¯ϑSDE 0 = ϑMLA  
+
+> k−1
+
+, and ϑ∗ the MLE in the interior of Θ∗.Repeatedly using triangle inequality and Assumptions 4.1, 4.3: 
+
+E∥ ¯ϑSDE  
+
+> t
+
+− ¯ϑMLA  
+
+> k
+
+∥2 ≤ 2( n + 1) 2L2ϵ×
+
+
+
+4( n + 1) 2L2ϵ3E∥ ¯ϑSDE 0 − ϑ∥2 + 8( n + 1) 2L2ϵ3Eπ ∥ϑ − ϑ∗∥2+12 ϵ2αE ¯ϑSDE 0 − ϑ 2 + 24 αϵ 2Eπ ∥ϑ − ϑ∗∥2 + 24 αϵ 2 pA(ϑ∗) 2
+
+> HS
+
+
+
+.
+
+To conclude, by sub-additivity of square roots: 
+
+W2(¯ ρk,ϵ , ρ MLA  
+
+> k
+
+) ≤ { 3( n + 1) 2L2ϵ2 + 5( n + 1) L√αϵ 3/2}W2(ρk−1, ∇ϕ#π) + Cnϵ2 + Dnϵ3/2, (21) with Cn := 4( n + 1) 2L2pEπ ∥ϑ − ϑ∗∥2 and Dn := 7 √α(n + 1) L
+
+pEπ ∥ϑ − ϑ∗∥2 +
+
+q
+
+∥pA(ϑ∗)∥2
+
+> HS
+
+
+
+.We now put together (20) and (21) . We set nm ≥ 2α, and since ϵ ≪ 1/n , we can also set n sufficiently large such that 
+
+3( n + 1) 2L2ϵ2 + 5( n + 1) L√αϵ 3/2 + exp( −nmϵ/ 2) ≤ exp( −nmϵ/ 4) . Simplifying by n + 1 ≤ 2n, we conclude, with recursion in k:
+
+W2(ρMLA  
+
+> k
+
+, ∇ϕ#π) ≤ e−knmϵ/ 4W2(ρ0, ∇ϕ#π) + 56 √αL m ϵ1/2
+
+pEπ ∥ϑ − ϑ∗∥2 +
+
+q
+
+∥pA(ϑ∗)∥2
+
+> HS
+
+
+
+. (22) Under the stated assumptions on ϑ∗ and π, the coefficient of the second summand is O(1) .
+
+Pure data subsampling error. We now control the second term in (18) . At k ≥ 1, consider two Markov chains corresponding to the MLA and SMLD, respectively, with the same initial laws ρ0 and coupled with the same Gaussian noise 
+
+Zk−1, as follows: 
+
+
+
+ϑ(1)  
+
+> k
+
+= ϑ(1)  
+
+> k−1
+
+− ϵV (ϑ(1) 
+
+> k−1
+
+) + 
+
+q
+
+2ϵA (ϑ(1) 
+
+> k−1
+
+)Zk−1;
+
+ϑ(2)  
+
+> k
+
+= ϑ(2)  
+
+> k−1
+
+− ϵ
+
+n nS
+
+P 
+
+> i∈S k−1
+
+Vi(ϑ(2) 
+
+> k−1
+
+) + V0(ϑ(2) 
+
+> k−1
+
+)
+
+o
+
++
+
+q
+
+2ϵA (ϑ(2) 
+
+> k−1
+
+)Zk−1.
+
+Consider a random vector (ϑ(1) 
+
+> k−1
+
+, ϑ (2) 
+
+> k−1
+
+, ϑ SM LD ) ∈ Rd ×Rd ×Rd. It is a known result that there exists a probability measure such that its pushforward under the projection onto the 1st and 2nd Euclidean coordinates optimally couples the marginal distributions of ϑ(1)  
+
+> k−1
+
+and ϑ(2) 
+
+> k−1
+
+, while similarly its pushforward under the projection onto the 2nd and 3rd coordinates optimally couples the marginal distribution of ϑ(2)  
+
+> k−1
+
+and the marginal distribution πS of ϑSM LD (Lemma 8.4, (Ambrosio et al., 2021)). Assume that (ϑ(1) 
+
+> k−1
+
+, ϑ (2) 
+
+> k−1
+
+, ϑ SM LD ) has this distribution. Denote by Ek the expectation conditioned on the filtration generated by (ϑ(l) 
+
+> j
+
+)1≤j≤k, 1≤l≤2. By mutual independence between Sk−1, Zk and (ϑ(1) 
+
+> k−1
+
+, ϑ (2) 
+
+> k−1
+
+), and by the unbiasedness property of the stochastic gradient in SMLD, we have 
+
+Ek−1∥ϑ(1)  
+
+> k
+
+− ϑ(2)  
+
+> k
+
+∥2 = Ek−1∥ϑ(1)  
+
+> k−1
+
+− ϑ(2) 
+
+> k−1
+
+∥2 − 2ϵEk−1⟨ϑ(1)  
+
+> k−1
+
+− ϑ(2) 
+
+> k−1
+
+, V (ϑ(1) 
+
+> k−1
+
+) − V (ϑ(2) 
+
+> k−1
+
+)⟩
+
++ ϵ2Ek−1∥V (ϑ(1) 
+
+> k−1
+
+) − V (ϑ(2) 
+
+> k−1
+
+)∥2 + ϵ2Ek−1 V (ϑ(2) 
+
+> k−1
+
+) − nS
+
+X
+
+> i∈S k−1
+
+Vi(ϑ(2) 
+
+> k−1
+
+) − V0(ϑ(2) 
+
+> k−1
+
+)
+
+> 2
+
++ 2 ϵEk−1
+
+q
+
+A(ϑ(1) 
+
+> k−1
+
+) −
+
+q
+
+A(ϑ(2) 
+
+> k−1
+
+)
+
+> 2
+> HS
+
+.
+
+The summand of the last line is bounded above by 2ϵα ∥ϑ(1)  
+
+> k−1
+
+− ϑ(2) 
+
+> k−1
+
+∥2 by Assumption 4.1. For the rest of the terms, the bounds follow from the proof of Lemma 8.(ii) (Brosse et al., 2018): namely, from Assumptions 4.2 and 4.3, one can use the fact that V is (n + 1) L-co-coercive (Zhu & Marcotte, 1996), and thus 
+
+ϵ2Ek−1∥V (ϑ(1) 
+
+> k−1
+
+) − V (ϑ(2) 
+
+> k−1
+
+)∥2 ≤ (n + 1) ϵ2L⟨ϑ(1)  
+
+> k−1
+
+− ϑ(2) 
+
+> k−1
+
+, V (ϑ(1) 
+
+> k−1
+
+) − V (ϑ(2) 
+
+> k−1
+
+)⟩; (23) 13 Bayes Posterior Sampling for Large GLMMs 
+
+then, using Assumption 4.3 once again and setting ϵ ≤ 1(n+1) L , we obtain 
+
+Ek−1∥ϑ(1)  
+
+> k
+
+− ϑ(2)  
+
+> k
+
+∥2 ≤ { 1 − (nm − 2α)ϵ}∥ ϑ(1)  
+
+> k−1
+
+− ϑ(2) 
+
+> k−1
+
+∥2 + ϵ2Ek−1 V (ϑ(2) 
+
+> k−1
+
+) − nS
+
+X
+
+> i∈S k−1
+
+Vi(ϑ(2) 
+
+> k−1
+
+) − V0(ϑ(2) 
+
+> k−1
+
+)
+
+> 2
+
+= {1 − (nm − 2α)ϵ}∥ ϑ(1)  
+
+> k−1
+
+− ϑ(2) 
+
+> k−1
+
+∥2 + ϵ2nS
+
+> n
+
+X
+
+> i=1
+
+Vi(ϑ(2) 
+
+> k−1
+
+) − 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Vi(ϑ(2) 
+
+> k−1
+
+)
+
+> 2
+
+.
+
+By Assumption 4.2 applied to the function ϑ 7 → Vi(ϑ) − 1
+
+> n
+
+Pni=1 Vi(ϑ) for each i ∈ [n], we obtain: 
+
+E∥ϑ(1)  
+
+> k
+
+− ϑ(2)  
+
+> k
+
+∥2 ≤ { 1 − (nm − 2α)ϵ}E∥ϑ(1)  
+
+> k−1
+
+− ϑ(2) 
+
+> k−1
+
+∥2
+
++ ϵ2nS
+
+> n
+
+X
+
+> i=1
+
+
+
+8L2E∥ϑ(2)  
+
+> k−1
+
+− ϑSMLD ∥2 + 16 L2E∥ϑSMLD − ϑ∗∥2
+
++ 16 L2 Vi(ϑ∗) − 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Vi(ϑ∗) 
+
+> 2
+
+
+
+;
+
+so that by the optimal coupling assumption, 
+
+W 22 (ρMLA  
+
+> k
+
+, ρ k) ≤ E∥ϑ(1)  
+
+> k
+
+− ϑ(2)  
+
+> k
+
+∥2 ≤ { 1 − (nm − 2α)ϵ}W 22 (ρMLA  
+
+> k−1
+
+, ρ k−1)+ 
+
+ϵ2nS
+
+(
+
+8nL 2W 22 (ρk−1, π S) + 16 nL 2EπS ∥ϑSMLD − ϑ∗∥2 + 16 L2
+
+> n
+
+X
+
+> i=1
+
+∥Vi(ϑ∗)∥2
+
+)
+
+.
+
+Lemmas C.2 and C.3 (specialized to ρ0 = πS and arbitrary k) can be used to control the terms W 22 (ρk−1, π S) and 
+
+EπS ∥ϑSMLD − ϑ∗∥2, respectively. Setting nm ≥ 4α and recursion in k yields 
+
+W 22 (ρMLA  
+
+> k
+
+, ρ k) ≤ 2ϵn mS 
+
+
+
+8L2W 22 (ρ0, π S) + 64 L2ϵn Sm In + 16 L2Jn + 128 
+
+nm 
+
+pA(ϑ∗) 2
+
+> HS
+
+
+
+, (24) where In := 1
+
+> n
+
+Pni=1 ∥Vi(ϑ∗) − 1
+
+> n
+
+Pnj=1 Vj (ϑ∗)∥2 and Jn = 1
+
+> n
+
+Pni=1 ∥Vi(ϑ∗)∥2. Both terms are O(1) under the stated assumption on ϑ∗.The conclusion of the theorem is now obtained by putting together (22) and (24) and returning to (18). 
+
+C.2. Supporting Results for Theorem 4.4 Lemma C.1 (Growth bound for a mirror diffusion) . Suppose {ϑs}0≤s≤t evolves from a fixed ϑ0 according to the mirror Langevin dynamics (5) . Whenever t ≤ 12( n+1) L and n ≥ (4 α + 1) /2L, we have 
+
+E∥ϑ0 − ϑt∥2 ≤ 6t2E∥V (ϑ0)∥2 + 12 tE pA(ϑ0) 2
+
+> HS
+
+.
+
+Proof. We have 
+
+E∥ϑ0 − ϑt∥2 ≤ t
+
+Z t
+
+> 0
+
+E∥V (ϑs)∥2 ds + 2 
+
+Z t
+
+> 0
+
+E ∥A(ϑs)∥2 
+
+> HS
+
+ds 
+
+≤ 2( n + 1) 2L2t
+
+Z t
+
+> 0
+
+E∥ϑs − ϑ0∥2 ds + 2 t2E∥V (ϑ0)∥2 + 4 α
+
+Z t
+
+> 0
+
+E∥ϑs − ϑ0∥2 ds + 4 tE pA(ϑ0) 2
+
+> HS
+
+;
+
+by Gr¨ onwall’s inequality, 
+
+E∥ϑ0 − ϑt∥2 ≤
+
+
+
+2t2E∥V (ϑ0)∥2 + 4 tE pA(ϑ0) 2
+
+> HS
+
+
+
+exp 2( n + 1) 2L2t2 + 4 αt ,
+
+and then the stated conclusion follows by the assumptions on t and n.14 Bayes Posterior Sampling for Large GLMMs 
+
+Lemma C.2 (Geometric Ergodicity of SMLD) . Let ρ0 ∈ P 2(Rd), ϵ ≤ 1(n+1) L and n ≥ 4α/m . The SMLD algorithm (7) 
+
+has a unique invariant distribution, denoted by πS, such that W 22 (ρk, π S) ≤ (1 − nmϵ/ 2) kW 22 (ρ0, π S) for ϑ0 ∼ ρ0.Proof. Consider two Markov chains ϑ(1)  
+
+> k
+
+, ϑ (2)  
+
+> k
+
+evolving according to (7) , with ϑ(1)  
+
+> k
+
+∼ ρk and ϑ(2)  
+
+> k
+
+∼ ˜ρk for each k. We couple with the same Gaussian noise Zk and same random minibatch of indices Sk at each iteration: 
+
+
+
+ϑ(1)  
+
+> k
+
+= ϑ(1)  
+
+> k−1
+
+− ϵ
+
+n nS
+
+P 
+
+> i∈S k−1
+
+Vi(ϑ(1) 
+
+> k−1
+
+) + V0(ϑ(1) 
+
+> k−1
+
+)
+
+o
+
++
+
+q
+
+2ϵA (ϑ(2) 
+
+> k−1
+
+)Zk−1,ϑ(1)  
+
+> k
+
+= ϑ(1)  
+
+> k−1
+
+− ϵ
+
+n nS
+
+P 
+
+> i∈S k−1
+
+Vi(ϑ(2) 
+
+> k−1
+
+) + V0(ϑ(2) 
+
+> k−1
+
+)
+
+o
+
++
+
+q
+
+2ϵA (ϑ(2) 
+
+> k−1
+
+)Zk−1.
+
+We can proceed similarly as in the proof of Lemma 1 (Brosse et al., 2018). Using the conditional expectation notation Ek
+
+from the proof of Theorem 4.4 above, we expand the square and use co-coercivity estimate (23) and Assumptions 4.1, 4.3 to conclude 
+
+Ek−1∥ϑ(1)  
+
+> k
+
+− ϑ(2)  
+
+> k
+
+∥2 ≤ { 1 − (nm − 2α)ϵ}∥ ϑ(1)  
+
+> k−1
+
+− ϑ(2) 
+
+> k−1
+
+∥2.
+
+Setting 2α ≤ (nm )/2 and using recursion in k, we obtain W 22 (ρk, ˜ρk) ≤ (1 − nmϵ/ 2) kW 22 (ρ0, ˜ρ0), where ˜ρk is the marginal distribution of ϑ(2)  
+
+> k
+
+. The conclusion about the unique existence of an invariant measure then follows exactly according to the arguments at the end of Lemma 1 (Brosse et al., 2018) after eqn. (15) therein. 
+
+Lemma C.3 (SMLD second-order moment centered around the MLE) . Let ρ0 ∈ P 2(Rd), ϵ ≤ 12( n+1) L and n ≥ 8α/m .The SMLD algorithm (7) satisfies 
+
+E∥ϑk − ϑ∗∥2 ≤ (1 − nmϵ/ 2) kW 22 (ρ0, π S) + 4ϵSm 
+
+> n
+
+X
+
+> i=1
+
+Vi(ϑ∗) − 1
+
+n
+
+> n
+
+X
+
+> j=1
+
+Vj (ϑ∗)
+
+> 2
+
++ 8
+
+nm 
+
+pA(ϑ∗) 2
+
+> HS
+
+.
+
+Proof. Again using similar arguments as in the preceding lemma and expanding the square, for ϑk initialized at ϑ0 ∼ ρ0
+
+and evolving according to (7), we eventually obtain: 
+
+Ek−1∥ϑk − ϑ∗∥2 ≤ ∥ ϑk−1 − ϑ∗∥2 + 2 ϵ pA(ϑk−1) 2
+
+> HS
+
+− 2ϵ⟨ϑk−1 − ϑ∗, V (ϑk−1) − V (ϑ∗)⟩
+
++ ϵ2Ek−1
+
+ V0(ϑk−1) + nS
+
+X
+
+> i∈S k−1
+
+Vi(ϑk−1)
+
+> 2
+
+ .
+
+Isolating the second summand on the right hand side and using triangle inequality and Assumption 4.1 yields 
+
+2ϵ pA(ϑk−1) 2
+
+> HS
+
+≤ 4αϵ ∥ϑk−1 − ϑ∗∥2 
+
+> HS
+
++ 4 ϵ pA(ϑ∗) 2
+
+> HS
+
+.
+
+The rest of the terms can be bounded exactly in the same way as in the proof of Lemma 8.(ii) (Brosse et al., 2018) with an upper bound, when ϵ ≤ 12( n+1) L :
+
+(1 − nmϵ )∥ϑk−1 − ϑ∗∥2 + 2ϵ2nS
+
+> n
+
+X
+
+> i=1
+
+Vi(ϑ∗) − 1
+
+n
+
+> n
+
+X
+
+> j=1
+
+Vj (ϑ∗)
+
+> 2
+
+.
+
+Combining the two displays yields 
+
+Ek−1∥ϑk − ϑ∗∥2 ≤ { 1 − (nm − 4α)ϵ}∥ ϑk−1 − ϑ∗∥2 + 2ϵ2nS
+
+> n
+
+X
+
+> i=1
+
+Vi(ϑ∗) − 1
+
+n
+
+> n
+
+X
+
+> j=1
+
+Vj (ϑ∗)
+
+> 2
+
++ 4 ϵ pA(ϑ∗) 2
+
+> HS
+
+.
+
+Recursion in k yields the stated result. 15 Bayes Posterior Sampling for Large GLMMs 
+
+C.3. Proof of Theorem 4.5 
+
+Consider ϑ0 ∼ πS, the invariant distribution of SMLD algorithm (10) (the dependence on a fixed R is implicit). Taking the equation (14) and based on a Taylor expansion in the interior of Θ∗, we have: 
+
+ϑ1 − ϑ∗ = ϑ0 − ϑ∗ − ϵHJ −1(ϑ0 − ϑ∗) + ϵR 1(ϑ0) + ϵξ (ϑ0, S0) + p2ϵA (ϑ∗)Z0 +
+
+np 2ϵA (ϑ0) − p2ϵA (ϑ∗)
+
+o
+
+Z0,
+
+where the Taylor expansion remainder term satisfies, by Assumption 4.5, 
+
+∥R1(ϑ)∥∥ϑ − ϑ∗∥2 ≤ (n + 1) L
+
+2 (25) for every ϑ ∈ Θ∗. We take the outer product of each Rd-valued random variable on both sides and simplify the terms, using the fact that ϑ0 ∼ πS and the mutual independence between ϑ0, S0 and Z0. Eventually, we obtain the following equation: 
+
+HJ −1V + V J −1H = 2 E[A(ϑ∗)] + ϵE[ξ(ϑ0, S0)⊗2] + ϵHJ −1V J −1H + ϵE[R1(ϑ0)⊗2] + 2 E
+
+np A(ϑ0) − pA(ϑ∗)
+
+o⊗2
+
++2 pA(ϑ∗)E
+
+np A(ϑ0) − pA(ϑ∗)
+
+o⊤
+
++ 2 E
+
+hnp A(ϑ0) − pA(ϑ∗)
+
+oi p A(ϑ∗)⊤
+
+−E[{R1(ϑ0) + ξ(ϑ0, S0)}(ϑ0 − ϑ∗)⊤] − E[( ϑ0 − ϑ∗){R1(ϑ0) + ξ(ϑ0, S0)}⊤]+ϵE[{R1(ϑ0) + ξ(ϑ0, S0)}(ϑ0 − ϑ∗)⊤J−1H] + ϵE[HJ −1(ϑ0 − ϑ∗){R1(ϑ0) + ξ(ϑ0, S0)}(ϑ0 − ϑ∗)⊤].
+
+(26) For every ϑ, ξ(ϑ, S0) in (14) is explicitly defined as ξ(ϑ, S0) := Pni=1 Vi(ϑ) − nS
+
+P 
+
+> i∈S 0
+
+Vi(ϑ); so E[ξ(ϑ, S0)|ϑ] = 0 and 
+
+E[ξ(ϑ, S0)⊗2|ϑ] = n2 
+
+> S
+
+Ψ(R)(ϑ) (cf. (12)). Conditional on ϑ0, applying another Taylor expansion to ξ(ϑ0, S0) yields 
+
+ξ(ϑ0, S0) = ξ(ϑ∗, S0) + ∇ξ(ϑ∗, S0)( ϑ0 − ϑ∗) + R2(ϑ0),
+
+with again E[∇ξ(ϑ∗, S0)] = 0 ∈ Rd×d and 
+
+∥R2(ϑ)∥∥ϑ − ϑ∗∥2 ≤ (n + 1) L
+
+2 (27) for every ϑ ∈ Θ∗ by Assumption 4.5. Then 
+
+ξ(ϑ0, S0)⊗2 = ξ(ϑ∗, S0)⊗2 + R3(ϑ0),
+
+Rd×d ∋ R3(ϑ0) = {∇ ξ(ϑ∗, S0)( ϑ0 − ϑ∗)}⊗2
+
++ ξ(ϑ∗, S0)( ϑ0 − ϑ∗)⊤∇ξ(ϑ∗, S0) + ∇ξ(ϑ∗, S0)( ϑ0 − ϑ∗)ξ(ϑ∗, S0)⊤
+
++ {ξ(ϑ∗, S0) + ∇ξ(ϑ∗, S0)( ϑ0 − ϑ∗)}R2(ϑ0)⊤
+
++ R2(ϑ0){ξ(ϑ∗, S0) + ∇ξ(ϑ∗, S0)( ϑ0 − ϑ∗)}⊤
+
++ R2(ϑ0)⊗2.
+
+Taking expectations on both sides and using mutual independence between S0 and ϑ0, therefore, 
+
+E[R3(ϑ0)] = n2
+
+S Ψ(R)(ϑ∗) + E[{∇ ξ(ϑ∗, S0)( ϑ0 − ϑ∗)}⊗2]+ E[ξ(ϑ∗, S0)( ϑ0 − ϑ∗)⊤∇ξ(ϑ∗, S0)] + E[∇ξ(ϑ∗, S0)( ϑ0 − ϑ∗)ξ(ϑ∗, S0)⊤]+ E[R2(ϑ0)⊗2].
+
+16 Bayes Posterior Sampling for Large GLMMs 
+
+Now returning to the equality (26), we can make the following alterations (cf. (15)): 
+
+HJ −1V + V J −1H = 2Γ (R)(ϑ∗) + ϵHJ −1V J −1H + ϵE[R1(ϑ0)⊗2]+2 E
+
+np A(ϑ0) − pA(ϑ∗)
+
+o⊗2
+
++ 2 pA(ϑ∗)E
+
+np A(ϑ0) − pA(ϑ∗)
+
+o⊤
+
++ 2 E
+
+hnp A(ϑ0) − pA(ϑ∗)
+
+oi p A(ϑ∗)⊤
+
+| {z }
+
+> (i)
+
+−E[R1(ϑ0)( ϑ0 − ϑ∗)⊤] − E[( ϑ0 − ϑ∗)R1(ϑ0)⊤] + ϵE[R1(ϑ0)( ϑ0 − ϑ∗)⊤J−1H] + ϵE[HJ −1(ϑ0 − ϑ∗)R1(ϑ0)( ϑ0 − ϑ∗)⊤]
+
+| {z }
+
+> (ii )
+
++ϵE[ξ(ϑ∗, S0)( ϑ0 − ϑ∗)⊤∇ξ(ϑ∗, S0)] + ϵE[∇ξ(ϑ∗, S0)( ϑ0 − ϑ∗)ξ(ϑ∗, S0)⊤]
+
+| {z }
+
+> (iii )
+
++ϵE[{∇ ξ(ϑ∗, S0)( ϑ0 − ϑ∗)}⊗2] + ϵE[R2(ϑ0)⊗2].
+
+Recall the assumption that ϑ∗ remains in the interior of Θ∗ for all n ≥ 1. In particular, this implies that 2Γ (R)(ϑ∗) = O(ϵn 2).We can now estimate all remainder terms in n, as follows. First, by (25) and (27), 
+
+ϵE[Rj (ϑ0)⊗2] = O(ϵn 2EπS ∥ϑ − ϑ∗∥4), j = 1 , 2,
+
+which under Lemma C.4 reduces to O(ϵ3n4). Next, by Assumption 4.1 and then by Theorem 4.4, 
+
+(i) = O(EπS ∥ϑ − ϑ∗∥2) = O(ϵn ).
+
+By (25), Theorem 4.4, and Assumption 4.5, 
+
+(ii ) = O
+
+
+
+(1 + nϵ )ϵ3/2n5/2
+
+.
+
+By Assumption 4.5, almost surely applicable to the (random) map ∇ξ(·, S0), and Theorem 4.4, 
+
+(iii ) = O(ϵ3/2n5/2).
+
+Finally, again by Assumption 4.1 and Theorem 4.4, 
+
+ϵHJ −1V J −1H + ϵE[{∇ ξ(ϑ∗, S0)( ϑ0 − ϑ∗)}⊗2] = O(ϵ2n3).
+
+Under the maintained assumption: ϵ = O(n−(1+ δ)), δ ∈ (0 , 1) , the dominant terms from the above are (ii ) and (iii ) with an upper bound O(n1−3δ/ 2) and thus dominated by 2Γ (R)(ϑ∗) = O(n1−δ ), which yields our stated result. 
+
+C.4. Supporting Results for Theorem 4.5 Lemma C.4 (SMLD fourth-order moment centered around the MLE) . The invariant distribution of SMLD πS satisfies 
+
+EπS ∥ϑ − ϑ∗∥4 ≤ Cϵ 2n2
+
+for some On(1) constant C = C(d, ϑ ∗, A, V ), if n is sufficiently large and ϵ ≤ 1 
+
+> Dn
+
+for D = D(L, α ).Proof. For this proof only, we denote by ζk−1 := −ξ(ϑk−1, Sk−1) for ξ(ϑk−1, Sk−1) from (14) , and ζ∗ := −ξ(ϑ∗, Sk−1),for a more succinct notation. Proceeding similarly as in the proof of Lemma C.3, we may expand the quartic power as follows. 
+
+∥ϑk − ϑ∗∥4 =
+
+
+
+∥ϑk−1 − ϑ∗∥2 + 2 ϵ pA(ϑk−1)Zk−1
+
+> 2
+
++ ϵ2∥V (ϑk−1) + ζk−1∥2
+
+− 2ϵ⟨V (ϑk−1) + ζk−1(ϑk−1), ϑ k−1 − ϑ∗⟩+
+
+√2ϵ
+
+D
+
+ϑk−1 − ϑ∗, pA(ϑk−1)Zk−1
+
+E
+
+− (2 ϵ)3/2 D
+
+V (ϑk−1) + ζk−1, pA(ϑk−1)Zk−1
+
+E 2
+
+.
+
+17 Bayes Posterior Sampling for Large GLMMs 
+
+Taking conditional expectations and by Cauchy-Schwarz inequality: 
+
+Ek−1∥ϑk − ϑ∗∥4 = Ek−1
+
+
+
+∥ϑk−1 − ϑ∗∥4 + 4 ϵ2 pA(ϑk−1)Zk−1
+
+> 4
+
++ ϵ4∥V (ϑk−1) + ζk−1∥4
+
++ 2 ϵ
+
+D
+
+ϑk−1 − ϑ∗, pA(ϑk−1)Zk−1
+
+E2
+
++ 4 ϵ pA(ϑk−1)Zk−1
+
+> 2
+
++ 6 ϵ2∥ϑk−1 − ϑ∗∥2∥V (ϑk−1) + ζk−1∥2 − 4ϵ∥ϑk−1 − ϑ∗∥2⟨V (ϑk−1), ϑ k−1 − ϑ∗⟩
+
++ 12 ϵ3 pA(ϑk−1)Zk−1
+
+> 2
+
+∥V (ϑk−1) + ζk−1∥2 − 8ϵ2 pA(ϑk−1)Zk−1
+
+> 2
+
+⟨V (ϑk−1), ϑ k−1 − ϑ∗⟩− 4ϵ3∥V (ϑk−1) + ζk−1∥2⟨V (ϑk−1) + ζk−1, ϑ k−1 − ϑ∗⟩− 8ϵ2 D
+
+ϑk−1 − ϑ∗, pA(ϑk−1)Zk−1
+
+E D 
+
+V (ϑk−1) + ζk−1, pA(ϑk−1)Zk−1
+
+E 
+
+.
+
+We isolate the terms involving the square root of A(ϑk−1); for the rest of the terms, an upper bound follows exactly by the proof of Lemma 9 (Brosse et al., 2018). In general, if Z ∼ Normal d(0 , C ) for a covariance matrix C, then 
+
+E∥Z∥4 = P 
+
+> i,j
+
+Cii Cjj + 4 P 
+
+> i<j
+
+C2 
+
+> ij
+
+≤ √C 4
+
+> HS
+
++ 2 ∥C∥2 
+
+> HS
+
+. The latter term is equal to the 2∥√C∥44 for ∥ · ∥ 4 the 4-Schatten norm, so by standard matrix norm inequalities, it is at most 2 √C 4
+
+> HS
+
+. Based on this fact, using triangle inequalities, we obtain the following bounds under Assumption 4.1: 
+
+Ek−1
+
+pA(ϑk−1)Zk−1
+
+> 4
+
+≤ 24 α2 ∥ϑk−1 − ϑ∗∥4 + 24 pA(ϑ∗) 4 
+
+> HS
+
+. (28) Also, as shown in the proof of Lemma 9 (Brosse et al., 2018), under Assumptions 4.2 and 4.3 we have 
+
+∥V (ϑk−1) + ζk−1 − ζ∗∥2 ≤ (n + 1) L⟨ϑk−1 − ϑ∗, V (ϑk−1) + ζk−1 − ζ∗⟩,
+
+∥V (ϑk−1) + ζk−1 − ζ∗∥4 ≤ (n + 1) 2L2∥ϑk−1 − ϑ∗∥2⟨ϑk−1 − ϑ∗, V (ϑk−1) + ζk−1 − ζ∗⟩;
+
+using Assumptions 4.1–4.3 to simplify, we eventually arrive at 
+
+Ek−1∥ϑk−1 − ϑ∗∥4 ≤ (1 + 96 ϵ2α + 4 ϵα )∥ϑk−1 − ϑ∗∥4 − Ek−1
+
+
+
+{4ϵ − 8ϵ4(n + 1) 2L2 − 12 ϵ2(n + 1) L − 48 ϵ3α(n + 1) L}× ∥ ϑk−1 − ϑ∗∥2⟨ϑk−1 − ϑ∗, V (ϑk−1) + ζk−1 − ζ∗⟩
+
+
+
++ {8ϵ3(n + 1) LEk−1[∥ζ∗∥] + 16 ϵ2(n + 1) Lα }∥ ϑk−1 − ϑ∗∥3
+
++ Ek−1[{4ϵ∥A1/2(ϑ∗)∥2 
+
+> HS
+
++ 16 ϵα + 12 ϵ2∥ζ∗∥2 + 48 ϵ3α∥ζ∗∥2 + 48 ϵ3∥A1/2(ϑ∗)∥2 
+
+> HS
+
+(n + 1) 2L2
+
++ 16 ϵ2(n + 1) L∥A1/2(ϑ∗)∥2 
+
+> HS
+
+}] × ∥ ϑk−1 − ϑ∗∥2 + 8 ϵ3∥ζ∗∥3Ek−1∥ϑk−1 − ϑ∗∥
+
++ 96 ϵ2∥A1/2(ϑ∗)∥4 
+
+> HS
+
++ Ek−1[8 ϵ4∥ζ∗∥4 + 16 ϵ∥A1/2(ϑ∗)∥2 
+
+> HS
+
++ 48 ϵ3∥A1/2(ϑ∗)∥2∥ζ∗∥2].
+
+Now using Assumption 4.3 and setting n ≥ (100 α)/m, ϵ ≤ 12(2 L2+3 L+12 α)( n+1) , the first two summands together are at most (1 − nmϵ )∥ϑk−1 − ϑ∗∥4, so we can again proceed by recursion in k. The term involving ∥ϑk−1 − ϑ∗∥ can be bounded using the estimate of W2(ρk−1, ϑ ∗) from Lemma C.3. The term involving ∥ϑk−1 − ϑ∗∥3 can be bounded above by tediously repeating the arguments just given for a cubic expansion. All this combined yields a conclusion for an arbitrary initial distribution ρ0, and then simplifies to ρ0 = πS for arbitrary k.
+
+C.5. Miscellaneous Proofs 
+
+Here we prove that the estimator given by (13) is unbiased with respect to the estimand (12). 
+
+Lemma C.5. Using the notation of Section 4, suppose γir iid 
+
+∼ p(γi|yi, θ ) for i ∈ [n] and r ∈ [R]. Define 
+
+bΨ(R) 
+
+> i
+
+(θ) := 1
+
+R(R − 1) 
+
+> R
+
+X
+
+> r=1
+
+{∇ log p(yi, γ ir |θ) − c∇f (R) 
+
+> i
+
+(θ)}⊗2.
+
+Then the expectation of bΨ(R)(θ) (13) is equal to Ψ(R)(θ) (12) for each θ ∈ Θ.
+
+18 Bayes Posterior Sampling for Large GLMMs 
+
+Proof. From (13) we have: 
+
+E[ bΨ(R)(θ)] = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+E[bΦ(R) 
+
+> i
+
+(θ)] + ¯Ψn(θ)
+
+n ,
+
+bΦ(R) 
+
+> i
+
+(θ) := 
+
+ bf (R) 
+
+> i
+
+(θ) − 1
+
+n
+
+> n
+
+X
+
+> j=1
+
+bf (R) 
+
+> j
+
+(θ)
+
+
+
+> ⊗2
+
+, ¯Ψn(θ) := 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Ψi(θ).
+
+For each i ∈ [n], we take the expectation of the former stochastic term over a collection of random variables {γir }i∈[n],r ∈[R]
+
+as follows, using the unbiasedness properties of c∇f (R) 
+
+> i
+
+and bΨ(R) 
+
+> i
+
+:
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+E[bΦ(R) 
+
+> i
+
+(θ)] = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+E
+
+c∇f (R) 
+
+> i
+
+(θ) c∇f (R) 
+
+> i
+
+(θ)⊤
+
+
+
+− E
+
+(
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+c∇f (R) 
+
+> i
+
+(θ)
+
+)⊗2
+
+= 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+∇fi(θ)⊗2 + ¯Ψn(θ) −
+
+ 1
+
+n ∇fi(θ)
+
+⊗2
+
++ V
+
+"
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+c∇f (R) 
+
+> i
+
+(θ)
+
+#
+
+= 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+(
+
+∇fi(θ) − 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+∇fi(θ)
+
+)⊗2
+
++ ¯Ψn(θ) + 1
+
+n2
+
+> n
+
+X
+
+> i=1
+
+V[ bf (R) 
+
+> i
+
+(θ)] = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+(
+
+∇fi(θ) − 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+∇fi(θ)
+
+)⊗2
+
++ n − 1
+
+n ¯Ψn(θ).
+
+In the third equality, we have used the fact that for every i̸ = j, (γi1, . . . , γ iR ) ∈ Rq×R and (γj1, . . . , γ jR ) ∈ Rq×R are mutually independent. Combining the fact with the expectation of bΨ(R)(θ) proves the stated claim. 19
