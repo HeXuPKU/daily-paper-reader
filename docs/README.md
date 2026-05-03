@@ -6,76 +6,73 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-02
-- 运行时间：2026-05-02 19:42:08 UTC
+- 最新运行日期：2026-05-03
+- 运行时间：2026-05-03 20:31:55 UTC
 - 运行状态：成功
-- 本次总论文数：18
-- 精读区：7
+- 本次总论文数：17
+- 精读区：6
 - 速读区：11
 
 ### 今日简报（AI）
-今日深度研读 18 篇论文，聚焦 SNP 主题建模与全国级医疗保险大模型等前沿突破。
-满分论文 SNPic 实现了复杂表型聚类的高度可解释性，日本医疗大模型则在模型规模与计算效率间达成平衡。
-建议关注多模态数字孪生与因果推理框架在认知障碍预测及基因数据压缩中的跨界应用。
-- 详情：[/202605/02/README](/202605/02/README)
+今日深度解析17篇前沿文献，重点攻克GWAS多效性图谱与GPU加速的基因组关联分析。
+核心突破在于揭示了基因多效性对药物研发的指导意义，并推出TorchLIMIX工具实现多变量GWAS的高效计算。
+建议优先研读两篇满分论文，并关注生成式模型在阿尔茨海默症预测及临床干预模拟中的应用潜力。
+- 详情：[/202605/03/README](/202605/03/README)
 
 ### 精读区论文标签
-1. [SNPic: SNP Topic Modeling for Interpretable Clustering of Complex phenotypes](/202605/02/biorxiv-10-64898-2026-04-22-720106-v1-snpic-snp-topic-modeling-for-interpretable-clustering-of-complex-phenotypes)  
+1. [The Human Pleiotropic Map of GWAS Associations and Therapeutic Implications](/202605/03/biorxiv-10-64898-2026-04-28-721048-v1-the-human-pleiotropic-map-of-gwas-associations-and-therapeutic-implications)  
    标签：评分：10.0/10、query:gwas
-   evidence：利用自然语言处理原理对GWAS摘要统计量进行SNP主题建模
-2. [A Nationwide Japanese Medical Claims Foundation Model: Balancing Model Scaling and Task-Specific Computational Efficiency](/202605/02/2604.22348v1-a-nationwide-japanese-medical-claims-foundation-model-balancing-model-scaling-and-task-specific-computational-efficiency)  
+   evidence：对GWAS进行系统分析以产生可信集和基因优先级排序
+2. [TorchLIMIX: GPU-accelerated multivariate genome-wideassociation studies](/202605/03/biorxiv-10-64898-2026-04-29-721342-v1-torchlimix-gpu-accelerated-multivariate-genome-wideassociation-studies)  
+   标签：评分：10.0/10、query:gwas
+   evidence：GPU 加速的多变量全基因组关联分析流程
+3. [EndoGov: A knowledge-governed multi-agent expert system for endometrial cancer risk stratification](/202605/03/2604.23802v1-endogov-a-knowledge-governed-multi-agent-expert-system-for-endometrial-cancer-risk-stratification)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于EHR临床风险预测的医疗索赔基础模型
-3. [StackFeat RL: Reinforcement Learning over Iterative Dual Criterion Feature Selection for Stable Biomarker Discovery](/202605/02/2604.22892v1-stackfeat-rl-reinforcement-learning-over-iterative-dual-criterion-feature-selection-for-stable-biomarker-discovery)  
+   evidence：用于医疗风险分层的多智能体专家系统
+4. [A Multi-modal LLM-Knowledge Fusion Framework for Predicting Single-cell Genetic Perturbation Effects](/202605/03/biorxiv-10-64898-2026-04-24-720560-v1-a-multi-modal-llm-knowledge-fusion-framework-for-predicting-single-cell-genetic-perturbation-effects)  
    标签：评分：9.0/10、query:med-ai
-   evidence：强化学习用于高维基因组数据中的稳定生物标志物发现
-4. [A Multi-modal LLM-Knowledge Fusion Framework for Predicting Single-cell Genetic Perturbation Effects](/202605/02/biorxiv-10-64898-2026-04-24-720560-v1-a-multi-modal-llm-knowledge-fusion-framework-for-predicting-single-cell-genetic-perturbation-effects)  
+   evidence：用于预测遗传扰动效应的多模态大语言模型-知识融合框架
+5. [DxFit: An ensemble method for identifying EHR diagnoses consistent with a molecular finding](/202605/03/biorxiv-10-64898-2026-04-24-720629-v1-dxfit-an-ensemble-method-for-identifying-ehr-diagnoses-consistent-with-a-molecular-finding)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于预测基因扰动效应的多模态大语言模型框架
-5. [DxFit: An ensemble method for identifying EHR diagnoses consistent with a molecular finding](/202605/02/biorxiv-10-64898-2026-04-24-720629-v1-dxfit-an-ensemble-method-for-identifying-ehr-diagnoses-consistent-with-a-molecular-finding)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：识别与分子发现一致的EHR诊断的集成方法
-6. [The Human Pleiotropic Map of GWAS Associations and Therapeutic Implications](/202605/02/biorxiv-10-64898-2026-04-28-721048-v1-the-human-pleiotropic-map-of-gwas-associations-and-therapeutic-implications)  
+   evidence：挖掘电子健康档案数据，寻找与分子发现和遗传疾病一致的诊断
+6. [Efficient genomic prediction at reduced training size and moderate marker density in an expanded aus-NAM population of rice](/202605/03/biorxiv-10-64898-2026-04-28-721500-v1-efficient-genomic-prediction-at-reduced-training-size-and-moderate-marker-density-in-an-expanded-aus-nam-population-of-rice)  
    标签：评分：9.0/10、query:gwas
-   evidence：系统分析GWAS以产生可信集和基因优先级排序
-7. [Efficient genomic prediction at reduced training size and moderate marker density in an expanded aus-NAM population of rice](/202605/02/biorxiv-10-64898-2026-04-28-721500-v1-efficient-genomic-prediction-at-reduced-training-size-and-moderate-marker-density-in-an-expanded-aus-nam-population-of-rice)  
-   标签：评分：9.0/10、query:gwas
-   evidence：评估NAM群体中的基因组预测和GWAS性能
+   evidence：评估了基因组预测(GP)和全基因组关联分析(GWAS)的性能
 
 ### 速读区论文标签
-1. [CognitiveTwin: Robust Multi-Modal Digital Twins for Predicting Cognitive Decline in Alzheimer's Disease](/202605/02/2604.22428v1-cognitivetwin-robust-multi-modal-digital-twins-for-predicting-cognitive-decline-in-alzheimers-disease)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：整合遗传学和纵向临床数据的多模态数字孪生疾病预测模型
-2. [Highly efficient genotype compression leveraging genealogical relatedness](/202605/02/biorxiv-10-64898-2026-04-29-721594-v1-highly-efficient-genotype-compression-leveraging-genealogical-relatedness)  
+1. [Combined shrinkage of fixed and random effects in linear mixed models using empirical Bayes](/202605/03/2604.24430v1-combined-shrinkage-of-fixed-and-random-effects-in-linear-mixed-models-using-empirical-bayes)  
    标签：评分：8.0/10、query:gwas
-   evidence：用于大规模统计分析的高效基因型压缩算法
-3. [MOCA: A Transformer-based Modular Causal Inference Framework with One-way Cross-attention and Cutting Feedback](/202605/02/2604.23107v1-moca-a-transformer-based-modular-causal-inference-framework-with-one-way-cross-attention-and-cutting-feedback)  
+   evidence：线性混合模型中固定效应和随机效应先验参数的联合选择
+2. [Evaluating TabPFN for Mild Cognitive Impairment to Alzheimer's Disease Conversion in Data Limited Settings](/202605/03/2604.27195v1-evaluating-tabpfn-for-mild-cognitive-impairment-to-alzheimers-disease-conversion-in-data-limited-settings)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：利用电子健康记录和生物标志物进行疾病转化预测的机器学习
+3. [Simulating clinical interventions with a generative multimodal model of human physiology](/202605/03/2604.27899v1-simulating-clinical-interventions-with-a-generative-multimodal-model-of-human-physiology)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：用于临床干预的人体生理学生成式多模态模型
+4. [Effects of Genetic Propensity for Education on Labor Market and Health Trajectories across the Working Life](/202605/03/2604.24336v1-effects-of-genetic-propensity-for-education-on-labor-market-and-health-trajectories-across-the-working-life)  
+   标签：评分：7.0/10、query:gwas
+   evidence：多基因指数（PGI）在受教育程度中的应用
+5. [Privacy-Preserving Federated Learning via Differential Privacy and Homomorphic Encryption for Cardiovascular Disease Risk Modeling](/202605/03/2604.27598v1-privacy-preserving-federated-learning-via-differential-privacy-and-homomorphic-encryption-for-cardiovascular-disease-risk-modeling)  
    标签：评分：7.0/10、query:med-ai
-   evidence：基于Transformer的因果推断用于高维数据中的治疗效果评估
-4. [CMGL: Confidence-guided Multi-omics Graph Learning for Cancer Subtype Classification](/202605/02/2604.24201v1-cmgl-confidence-guided-multi-omics-graph-learning-for-cancer-subtype-classification)  
+   evidence：用于心血管疾病风险建模的联邦学习
+6. [On the use of variational autoencoders for biomedical data integration](/202605/03/biorxiv-10-1101-2025-08-18-670835-v2-on-the-use-of-variational-autoencoders-for-biomedical-data-integration)  
    标签：评分：7.0/10、query:med-ai
-   evidence：用于癌症分类的多组学整合与深度学习
-5. [A multi-stage soft computing framework for complex disease modelling and decision support: A liver cirrhosis case study](/202605/02/2604.24796v1-a-multi-stage-soft-computing-framework-for-complex-disease-modelling-and-decision-support-a-liver-cirrhosis-case-study)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：利用转录组数据进行复杂疾病建模的机器学习驱动多阶段决策框架
-6. [Toward Personalized Digital Twins for Cognitive Decline Assessment: A Multimodal, Uncertainty-Aware Framework](/202605/02/2604.27217v1-toward-personalized-digital-twins-for-cognitive-decline-assessment-a-multimodal-uncertainty-aware-framework)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：临床和生物标志物数据的多模态融合与潜状态空间模型
-7. [OptimusKG: Unifying biomedical knowledge in a modern multimodal graph](/202605/02/2604.27269v1-optimuskg-unifying-biomedical-knowledge-in-a-modern-multimodal-graph)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：整合分子和临床领域的全方位生物医学知识图谱
-8. [On the use of variational autoencoders for biomedical data integration](/202605/02/biorxiv-10-1101-2025-08-18-670835-v2-on-the-use-of-variational-autoencoders-for-biomedical-data-integration)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：用于生物医学数据整合和计算机模拟扰动的变分自编码器
-9. [StackFeat: a convergent algorithm for optimal predictor selection in genomic data](/202605/02/2604.22887v1-stackfeat-a-convergent-algorithm-for-optimal-predictor-selection-in-genomic-data)  
-   标签：评分：6.0/10、query:gwas
-   evidence：高维基因组数据中最佳预测因子选择的算法
-10. [The Genetic and Environmental Architecture of the Human Functional Connectome](/202605/02/2604.24614v1-the-genetic-and-environmental-architecture-of-the-human-functional-connectome)  
+   evidence：基于VAE的框架，用于整合多种生物医学数据模态
+7. [Scalable machine learning improves resistance prediction and identifies novel determinants in Mycobacterium tuberculosis](/202605/03/biorxiv-10-64898-2026-04-25-720842-v1-scalable-machine-learning-improves-resistance-prediction-and-identifies-novel-determinants-in-mycobacterium-tuberculosis)  
+   标签：评分：7.0/10、query:gwas
+   evidence：用于全基因组规模耐药性预测的机器学习
+8. [Conservation of transcriptional regulatory networks in zebrafish and human periderm facilitates identification of GRHL1 as an orofacial cleft risk gene](/202605/03/biorxiv-10-64898-2026-04-27-720742-v1-conservation-of-transcriptional-regulatory-networks-in-zebrafish-and-human-periderm-facilitates-identification-of-grhl1-as-an-orofacial-cleft-risk-gene)  
+   标签：评分：7.0/10、query:gwas
+   evidence：整合功能基因组学（单细胞测序）以识别风险基因
+9. [MOCA: A Transformer-based Modular Causal Inference Framework with One-way Cross-attention and Cutting Feedback](/202605/03/2604.23107v1-moca-a-transformer-based-modular-causal-inference-framework-with-one-way-cross-attention-and-cutting-feedback)  
    标签：评分：6.0/10、query:med-ai
-   evidence：使用双生子模型研究人类特征的遗传和环境架构
-11. [Optimization-Free Topological Sort for Causal Discovery via the Schur Complement of Score Jacobians](/202605/02/2604.25295v1-optimization-free-topological-sort-for-causal-discovery-via-the-schur-complement-of-score-jacobians)  
-   标签：评分：6.0/10、query:gwas
-   evidence：通过高维环境下的统计得分估计进行因果发现
+   evidence：基于Transformer的观测数据因果推断框架
+10. [CMGL: Confidence-guided Multi-omics Graph Learning for Cancer Subtype Classification](/202605/03/2604.24201v1-cmgl-confidence-guided-multi-omics-graph-learning-for-cancer-subtype-classification)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：用于癌症亚型分类的多组学图学习
+11. [A multi-stage soft computing framework for complex disease modelling and decision support: A liver cirrhosis case study](/202605/03/2604.24796v1-a-multi-stage-soft-computing-framework-for-complex-disease-modelling-and-decision-support-a-liver-cirrhosis-case-study)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：基于生物医学数据的复杂疾病建模机器学习多阶段决策框架
 
 
 <div class="dpr-home-promo-card">
