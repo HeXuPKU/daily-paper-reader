@@ -1,0 +1,1806 @@
+Title: Calibrated Variant Effect Prediction at the Residue Level Using Conditional Score Distributions
+
+URL Source: https://www.biorxiv.org/content/10.1101/2025.11.24.690189v2.full.pdf
+
+Number of Pages: 45
+
+Markdown Content:
+Calibrated Variant Effect Prediction at the Residue Level Using Conditional Score Distributions 
+
+Gal Passi 1, Sapir Amittai 1, Dina Schneidman-Duhovny 1 
+
+> 1
+
+The Rachel and Selim Benin School of Computer Science and Engineering, The Hebrew University of Jerusalem, Jerusalem, Israel 
+
+Abstract 
+
+Effective clinical use of variant effect prediction (VEP) requires models that are both accurate and well-calibrated. Calibration refers to a model’s ability to produce meaningful and reliable probability estimates. Benchmarking 24 VEPs we show that while models may appear well calibrated on average, they remain markedly miscalibrated within specific variant subgroups. We propose a practical path toward robust VEP calibration by calibrating at the residue-level and introduce a calibration approach based on differential score mapping per variant subgroup. When calibration targets are chosen appropriately, our calibration approach can also improve model discrimination. Leveraging these insights, we develop RaCoon (Residue-aware Calibration via Conditional distributions), implemented on ESM1b, which provides multicalibrated and interpretable predictions. RaCoon maintains low calibration error across variant subgroups and datasets while also improving AUROC on multiple benchmarks. Specifically, RaCoon increases ProteinGym AUCROC from 0.909 ± 0.000 to 0.916 ± 0.001. Our calibration strategy, guided by model-specific score distributions, is readily transferable to other VEPs. 
+
+1
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+Introduction 
+
+Accurate variant effect prediction (VEP) is central to protein design, medical genomics, and variant forecasting. Recent advances in deep learning have enabled models that effectively 
+
+capture evolutionary patterns from protein sequences and structures 1–6 , achieving 
+
+groundbreaking accuracy in VEP. These models can be broadly categorized into supervised, unsupervised, and weakly supervised approaches. 
+
+VEPs are typically evaluated using datasets of clinically reported genetic variants, such as 
+
+ClinVar 7, or experimental benchmarks such as ProteinGym, which aggregates data from 
+
+multiple deep mutational scans (DMS) assays 8. Two broadly adopted metrics to assess VEP 
+
+performance are the global AUROC, which measures ranking performance across all proteins, and per-protein AUROC, which captures discriminative ability within individual proteins. State-of-the-art (SOTA) models achieve AUROCs as high as 0.89-0.93 (unsupervised) to 0.98 (supervised) on the ProteinGym Clinical Substitutions subset and on ClinVar-derived 
+
+benchmarks 9.
+
+While supervised approaches 10–13  achieve impressive accuracy in specific proteins or families, 
+
+they are sensitive to sparse and biased clinical annotations and generalize poorly to unseen 
+
+protein regions. Consistently, AUROC is strongly driven by protein features 14,15 , using the 
+
+per-protein label ratio alone on ClinVar was shown to achieve an AUROC of 0.914 6,16,17 . Notably, 
+
+in ClinVar, only ~4% of genes have more than five labeled pathogenic and benign variants. These biases also extend to experimental datasets, where VEP performance varies with assay 
+
+type, protein context, and DMS depth 18,19 .
+
+These limitations have motivated the growing use of unsupervised VEPs, trained without labeled data and therefore less affected by annotation bias. Unsupervised VEPs include 
+
+alignment-based approaches, trained on multiple sequence alignments (MSAs) 1,20 , protein 
+
+language models (PLMs) trained on unaligned protein sequences 4,21–24 , and hybrid 
+
+approaches 4,21–23,25 . While alignment-based approaches perform well, their inference is limited in 
+
+regions with shallow alignments, such as intrinsically disordered regions (IDRs) or proteins with few homologs. PLMs provide an alternative approach that does not rely directly on explicit alignments, and can offer more consistent inference in such regions, although their ability to 
+
+generalize beyond MSAs remains an open question 26 . Hybrid retrieval-augmented models can 
+
+further improve performance by selectively incorporating MSA information. 
+
+While not exposed to labeled data, unsupervised VEPs still embed assumptions that fail in 
+
+certain variant subgroups 18,27,28 . To address these biases, recent works employ forms of weak 
+
+supervision, calibrating scores to specific datasets 6,29,30 , proteins 1,31,32 , diseases 33  or organisms 34 
+
+at inference time using a subset of labeled data from the relevant domain. 
+
+Classifier calibration is defined as a model’s ability to provide meaningful probability estimates 35 .
+
+For example, an assigned score of 0.8 should correspond to ~80% of similar variants being 
+
+pathogenic. However, large-scale models often exhibit poor calibration 36 , and performance 
+
+frequently degrades on out-of-domain data 37 , such as VEPs evaluated on test sets not 
+
+overlapping with ClinVar 9. Calibration is not always correlated with accuracy 38  and oftentimes, 
+
+training objectives intended to boost accuracy can reduce calibration 39 .
+
+Several examples illustrate this discordant relationship between accuracy and calibration in 
+
+2
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+VEPs, notably variants in IDRs. IDRs lack stable structure, evolve rapidly, and are more tolerant 
+
+to mutations 40–43 . Although IDRs are estimated to comprise roughly 26-35% of the human 
+
+proteome 44,45 , only 12-15% of ClinVar pathogenic variants occur in these regions 42 , resulting in a 
+
+distribution highly skewed toward benign variants. Consequently, variants in IDRs can inflate AUROC through confident benign predictions, reducing sensitivity to pathogenic variants and 
+
+degrading calibration 14,28,42 . The opposite is observed in N-terminal methionine variants 42  where 
+
+~95% are pathogenic in ClinVar, similarly causing miscalibration. Other examples include 
+
+variants with distinct physico-chemical properties or few homologs 29,46 . Together, these 
+
+underscore the need for explicit residue subgroup calibration. 
+
+As VEPs reach unprecedented accuracy 15  and wider clinical use, identifying and calibrating for 
+
+distribution shifts has gained increasing attention 29,47–49  While models appear globally calibrated, 
+
+they may be systematically miscalibrated for specific subgroups, posing challenges for clinical 
+
+decision making 50 . A multicalibrated model, whose predicted probabilities remain accurate not 
+
+only overall but also within each relevant subgroup of variants 51 , would therefore be highly 
+
+desirable for VEPs. Recent studies suggest that multicalibration can often be achieved with 
+
+minimal post-hoc adjustment 52  and typically does not compromise, and may even improve, 
+
+discriminatory performance 51,53 .
+
+Here, we show that current calibration approaches lose reliability when examined at the residue level. We propose a weakly supervised framework to correct residue-level miscalibration and demonstrate that model-specific score distributions can identify optimal calibration targets. This approach not only closes existing reliability gaps but, for most models, also yields modest improvements in AUROC. Finally, we introduce RaCoon (Residue-aware Calibration of Conditional Distributions), a calibrated PLM based on ESM1b, capable of producing interpretable and well-calibrated pathogenicity predictions across residue subgroups while 
+
+improving the baseline model’s AUROC 4.
+
+Results 
+
+Benchmarking 24 VEPs reveals profound residue-level miscalibration 
+
+To benchmark calibration across 24 SOTA VEPs ( Table 1 ), we analyze model behavior in biologically relevant residue contexts, such as disordered regions and protein interfaces. We examine two calibration metrics: First, we assess whether classification thresholds and model performance vary across residue-defined subgroups. Second, we assess reliability directly by asking whether predicted probabilities match the observed fraction of pathogenic variants within each subgroup. 
+
+To analyze optimal classification thresholds, we use a rigorous ClinVar-derived dataset curated 
+
+by Radjasandirane et al. 9 (ClinVar_BM). ClinVar_BM is designed to minimize data circularity and 
+
+annotation biases, providing a robust test set ( Table 2, Methods). We compare performance across residue-level features, such as physicochemical and structural properties, as well as protein-level features, such as homology ( Table 3 , Methods), enabling systematic evaluation of subgroup-specific behavior. 
+
+3
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+4
+
+Model Name  Supervision Type  Features Used a Train Data (Supervised) 
+
+Bounded Scores (0-1) 
+
+Reference 
+
+PrimateAI  Unsupervised  MSA, structural features  - Yes  54 
+
+LIST-S2  Unsupervised  MSA  - Yes  55 
+
+PROVEAN  Unsupervised  MSA  - No  56 
+
+ESM1b  Unsupervised  Sequence only  - No  4
+
+SIFT  Unsupervised  MSA  - Yes  57 
+
+MutationAssessor  Unsupervised  MSA  - No  58 
+
+ESM1v  Unsupervised  Sequence only  - No  21 
+
+EVE  Unsupervised  MSA  - No d 1
+
+AlphaMissense  Semi-Supervised  MSA, structural features  ClinVar (Calibration)  Yes  6
+
+CPT-1  Semi-Supervised 
+
+Protein sequence, MSA, structural features, residue features 
+
+DMS data from five human proteins  Yes  59 
+
+FATHMM  Supervised  MSA  HGMD + UniProt/SwissProt  No  60 
+
+DANN  Supervised  MSA, genomic features  Allele frequency e
+
+(1000 Genomes Project)  Yes  61 
+
+MPC  Supervised  Metapredictor, residue features 
+
+Population frequency (ExAC)  No  62 
+
+DEOGEN2  Supervised 
+
+MSA, structural gene, residue and pathway features 
+
+Humsavar  Yes  63 
+
+PolyPhen-2 (HDIV)  Supervised  MSA, structural and residue features  HumDiv  Yes  64 
+
+PolyPhen-2 (HVAR)  Supervised  MSA, structural and residue features  HumVar  Yes 
+
+CADD  Supervised  MSA, genomic features  Population frequency e
+
+(1000 Genomes Project)  No b 65 
+
+gMVP  Supervised  MSA, structural and genomic features 
+
+ClinVar + Population frequency (gnomAD)  Yes  66 
+
+REVEL  Supervised  Metapredictor 
+
+HGMD and Population frequency (1000 Genomes/ESP cohorts) 
+
+Yes  67 
+
+BayesDel (noAF)  Supervised  Metapredictor  ClinVar, UniProt Population frequency f No c
+
+> 68
+
+BayesDel (addAF)  Supervised  Metapredictor  ClinVar, UniProt Population frequency f No c
+
+VEST4  Supervised  MSA, structural, residue and genomic features 
+
+HGMD, ClinVar, Population frequency (Exome Sequencing Project/1000 Genomes) 
+
+Yes  69 
+
+ClinPred  Supervised  Metapredictor  ClinVar  Yes  10 
+
+MetaRNN  Supervised  Metapredictor  ClinVar  Yes  11 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+Table 1. List of VEP benchmarked in the study. HDIV - trained on HumDiv, HVAR- trained on Humvar, noAF and addAF whether allele frequency is used, HG MD - Human Gene Mutation Database, ExAC -Exome Aggregation Consortium. Metapredictors employ multiple classifiers with various features. a MSA also includes models trained on various homology models, b also report the scaled PHRED score which we do not use, c scores scaled around 0, d also report the scaled EVE-score used in Figure 1c. e variants not observed in humans defined as pathogenic, common variants defined as benign. f UniProt polymorphisms, dbSNP, 1000 Genomes, ExAC, and UK10K cohorts 
+
+To enable comparison on a common scale, we map all scores to the [0,1] range using modified min-max normalization. Scores are flipped when necessary so that higher values indicate pathogenicity. This monotonic rescaling preserves discriminative performance (Methods). Optimal classification thresholds are derived globally and within each variant subgroup by maximizing the Youden J-statistic (Methods). 
+
+Classification thresholds vary substantially for variants in protein-protein interfaces (PPIs) and disordered regions across nearly all models, with many showing shifts in both subgroups (Figure 1a ). Variants in sulfur-containing residues (methionine, cysteine) and proteins with few homologs also display consistent shifts ( Figure S1, Table S1 ) likely reflecting the influence of homology-based features incorporated in many models (Table 1). Among tested VEPs, FATHMM and SIFT are the most stable, showing no significant changes. Furthermore, shifts tend to be model-specific, for example, polar and aromatic residues show pronounced shifts in AlphaMissense and gMVP, less evident in other models ( Figure S1 ), likely reflecting the effect of structural features. Importantly, these shifts do not necessarily indicate a change in subgroup specific performance (Figure S2, Table S1 ) but thresholds must be corrected to ensure consistent behavior across variant subgroups. 
+
+Despite these findings, the standard practice when using VEPs is to apply a single global 
+
+threshold, which has also been shown to mask heterogeneous performance at the gene level 70 .
+
+Some methods allow more stringent cutoffs to tune precision with recent works suggesting to 
+
+employ gene-level thresholds 71,72 , but to the best of our knowledge, no current framework 
+
+recommends thresholds specific to different variant subgroups. Consequently, global thresholds provide no guarantees of performance within individual subgroups, an issue recently addressed 
+
+by Fawzy et al. for variants in IDRs 73 . These observations underscore the advantage of 
+
+residue-level calibration, as it captures variation that may be missed when calibration is performed only at the global or protein level. 
+
+Globally and per-protein calibrated VEPs are not robust at the residue level 
+
+Multicalibrated models aim to provide reliable probabilities across diverse subpopulations. While some VEPs output probabilities inherently (SIFT, PolyPhen), others incorporate downstream calibration. EVE combines global and per-protein GMM calibration, whereas AlphaMissense applies a global logistic regression fitted on a subset of ClinVar variants. To assess the effect of global calibration, we calibrate raw scores of eight SOTA unsupervised VEPs using the ProteinGym Clinical Substitution benchmark. These models span sequence-based, alignment-based, and clinically derived predictors. 
+
+Simple global calibration was performed by training a logistic regression model on random subsets of 6,000 variants (~10% of the dataset; Methods). To assess calibration quality, we use 
+
+5
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+reliability histograms 74,75 , which plot model accuracy as a function of predicted confidence 
+
+(Methods). For a perfectly calibrated model, the curve follows the identity line. Deviations above or below this line indicate overconfidence and underconfidence in predictions, respectively. We 
+
+quantify miscalibration using the Expected Calibration Error (ECE) 76 , where ECE = 0 indicates 
+
+perfect calibration and larger values reflect increasing miscalibration (Methods). 
+
+Following global calibration, all models achieve near-perfect calibration, with an average ECE of 0.042 ( Figure 1b , top left). However, when analysis is restricted to specific residue subgroups, including disordered regions, PPIs, and sulfur-containing residues, calibration consistently breaks down across all models ( Figure 1b ). Models show underconfidence in disordered residues and overconfidence in PPIs and sulfur-containing residues. In these subgroups ECE increases by up to five folds relative to the globally calibrated baseline. Miscalibration worsens at lower prediction confidence, where accuracy deviates further from the identity line. 
+
+We next examine the pre-calibrated scores provided by EVE and AlphaMissense ( Figure 1c ), using a subset of ClinVar variants not included in the AlphaMissense calibration ( ClinVar_AFM; Table 2 , Methods). While similar patterns persist for variants in disordered regions and PPIs, AlphaMissense shows an opposite trend in sulfur-containing residues, exhibiting underconfidence. Notably, AlphaMissense provides relatively well-calibrated scores for variants in PPIs, potentially reflecting the incorporation of structural features. 
+
+These results motivate a calibration approach that explicitly corrects subgroup-specific reliability errors while preserving overall model calibration. 
+
+Residue-level calibration using differential score mapping 
+
+To correct residue-level miscalibration without sacrificing the benefits of global calibration, we propose differential score mapping , a simple extension of standard post-hoc calibration. Instead of fitting a single logistic rescaling function across all variants, we fit separate rescaling functions for predefined residue subgroups and apply the appropriate function according to each variant’s residue context, for example calibrating disordered and ordered residues independently. This strategy is designed to preserve calibration at the dataset level while correcting systematic reliability errors within subgroups. 
+
+Using the ProteinGym clinical substitution benchmark, we evaluate three calibration schemes based on residue subgroups that showed substantial miscalibration in our calibration analysis: (1) interface versus non-interface residues, (2) disordered versus ordered residues, and (3) a joint scheme further partitioning ordered residues into interface and non-interface groups (disordered residues were not subdivided further because of limited sample size). For each scheme, subgroup-specific logistic regression models were trained using as few as 250 samples per group and evaluated on held-out variants (Methods). 
+
+This approach preserves global calibration at approximately the same level achieved by standard global calibration (ECE ≈ 0.040), while substantially reducing subgroup-specific miscalibration (Figure 2a-b ). Subgroup-specific ECE closely matches the global ECE, decreasing from 0.210 to 0.050 in disordered residues and from 0.115 to 0.047 in PPI residues. 
+
+6
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+Figure 1. Residue-level miscalibration. a. Optimal classification thresholds shift substantially across residue subgroups (diamonds; maximal J-statistic) in ClinVar_BM dataset. Error bars indicate ±1 SD over 1,000 non-parametric bootstrap iterations. Black rectangle marks the naive threshold (mean ± SD) across ClinVar_BM, model scores normalized using modified min-max normalization. b. Globally calibrated models are well calibrated at the dataset level (top left) but miscalibrated within residue subgroups. Reliability histograms show predicted confidence (x-axis, 10 equal-width bins) versus observed pathogenic frequency (y-axis). Perfect calibration follows y=x; dotted lines show the mean trend across models. Circles mark per-model bin frequencies; error bars indicate ±1 SD across 100 global calibration iterations. Panels show the full ProteinGym dataset (top left), variants in sulfur-binding residues (top right), disordered variants (bottom left), and PPI variants (bottom right). ECE = Expected Calibration Error (mean across models). c. Miscalibration of EVE and AlphaMissense calibrated scores, with global ECE increasing at the residue level. Green and purple lines show calibration trends over the entire dataset for EVE and AlphaMissense, respectively; circle size denotes bin sample count. Other details as in (b). 
+
+7
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+Importantly, unlike global calibration, differential score mapping is not guaranteed to preserve global discriminative performance. Although each subgroup-specific mapping is monotonic within a subgroup, these mappings can alter the relative ordering of predictions across subgroups, thereby affecting AUROC. In practice, differential score mapping improves AUROC across nearly all unsupervised models, with modest gains observed even for supervised predictors, and without reducing per-protein AUROC (Figure 2c ). The only exception is Trancept_EVE_L, for which AUROC decreases. Improvements are most pronounced for the disordered vs. ordered scheme, likely in part because this partition contains more variants than the interface partition (n=15,780 disordered, n=6,035 interface). 
+
+However, fitting separate rescaling functions for every possible residue subgroup is neither practical nor statistically robust, especially for small or overlapping subgroups. To understand how calibration targets can be systematically selected, we turn to model score distributions and show that they can identify residue attributes most suitable for subgroup-specific calibration. 
+
+Figure 2. Differential Score mapping . a-b. Differential score mapping corrects calibration within residue subgroups (right panels) while preserving global calibration (left panels). Models calibrated by fitting separate logistic regression functions using 500 samples per subgroup on the ProteinGym clinical substitution benchmark, averaged over 100 calibration iterations. Reliability histograms are as described in Figure 1. a. Disorder vs. ordered residues b. interface vs. non-interface residues. c. Differential score 
+
+8
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+mapping improves global AUROC (top) while preserving per-protein AUROC (bottom) across unsupervised (left) and supervised (right) VEPs. ΔAUROC and Δper-protein AUROC are reported relative to the uncalibrated model on the ProteinGym clinical substitution benchmark; error bars indicate ±1 SD over 1,000 bootstrap iterations. 
+
+Miscalibration is associated with subgroup-specific differences in model score distributions 
+
+Calibration errors arise when predicted scores do not reflect true outcome frequencies, a discrepancy often observed under distributional shifts between subpopulations. Two key types 
+
+of distributional shift relevant to calibration are label shift 77–79 , and score distribution shift 78,80–82 .
+
+These correspond to changes in the proportion of pathogenic variants  and in the 𝑃(𝑌|𝑀 𝑖 )
+
+distribution of model scores  within a subgroup. Here,  denotes a residue-level 𝑃(𝑋|𝑀 𝑖 ) 𝑀 𝑖 
+
+subgroup defined by a specific attribute, typically represented as a binary partition (e.g., disordered vs. ordered residues). 
+
+Changes in the proportion of pathogenic variants at the residue level have been previously 
+
+observed across specific attributes such as disorder level 42,73,83 , physicochemical properties 84 ,
+
+and solvent accessibility 85 . We extend these observations using high-quality clinical annotations 
+
+from ClinVar (ClinVar_HQ; N=171,196; Methods) and experimental data from the ProteinGym clinical substitution benchmark ( Appendix 1 , Table S2 ). Across both clinical and experimental datasets the proportion of pathogenic variants is lower in IDRs and in sequences with few homologs, and higher in polar residues, sulfur-binding residues, and protein–protein interfaces (Figure 3a ). 
+
+However, differences in pathogenic fraction alone are insufficient to identify appropriate calibration targets. While they may arise from biological effects they can also represent experimental or annotation biases. Effective calibration requires that subgroup differences both 
+
+reflect genuine divergence from the overall training distribution 80,86  and are captured by the 
+
+model’s predictions 51,78 . These conditions are better assessed through class-conditional score 
+
+distributions  , which provide a model-specific view of subgroup variation. Differences in 𝑃(𝑋|𝑀 𝑖 )
+
+pathogenic fraction driven by biological differences are expected to be reflected in these 
+
+distributions 78,80–82 , particularly in PLMs trained without clinical labels and thus less affected by 
+
+such biases. 
+
+We evaluate score-distribution differences across residue-defined subgroups by analyzing ESM1b log-likelihood ratio (LLR) scores using ClinVar_HQ (Methods). We compare subgroup-specific score distributions to the distribution over the entire dataset. To control for differences in class proportions between subgroups, we resample variants within each subgroup to match the global class ratio (i.e., 31% pathogenic variants). 
+
+While differences in pathogenic fraction are observed across multiple residue subgroups, score distributions exhibit a more heterogeneous pattern. Variants in IDRs show the strongest score-distribution differences, consistent with their pronounced differences in pathogenic fraction. In contrast, sulfur-binding residues and residues in PPIs display more moderate changes ( Figure 3b ). Polar residues and residues in proteins with few homologs, despite exhibiting significant differences in pathogenic fraction, show minimal score-distribution 
+
+9
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+differences ( Figure S4 ). Similar patterns are observed in the ProteinGym clinical substitution benchmark ( Figure S4 ). 
+
+The lower pathogenic fraction in disordered regions likely reflects their increased mutational 
+
+tolerance 42,43  and is well captured by ESM1b. In contrast, PPI residues exhibit the strongest 
+
+difference in pathogenic fraction but only modest score-distribution differences, suggesting that sequence-based models capture these effects only partially. This is consistent with studies showing significantly improved PPI prediction when structural or contextual information is 
+
+incorporated 87–89 . Likewise, the minimal score-distribution differences observed in sequences 
+
+with few homologs may indicate reduced model generalization, potentially influenced by annotation biases. Together, these observations suggest that calibration based solely on model outputs may be less effective for these subgroups. 
+
+Figure 3: Distribution differences at the residue level. a. Prominent subgroup-specific differences in pathogenic fraction across ClinVar. Pathogenic variants are enriched in PPIs and sulfur-binding residues and scarce in disordered residues. The dotted line represents the pathogenic variants fraction across the 
+
+10 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+entire ClinVar_HQ dataset  b. Distribution of LLR scores per residue subgroup for disordered (0. 31) 
+
+residues (top right), sulfur-binding residues (bottom left) and PPIs (bottom right). While all three subgroups display pronounced differences in pathogenic fraction, only disordered residues show substantial difference in score distributions. Distributions are fitted using two-component GMMs for the full dataset (dotted curve) and for each subgroup (solid curve). P, B denote the number of pathogenic and benign variants per subgroup. Dotted line - optimal classification thresholds (J-statistic). c. Entropy distributions (1 = complete uncertainty, 0 = complete certainty) for wild-type (left) and masked (right) sequences, grouped by benign (top) and pathogenic (bottom) variants. Changes in entropy distribution for PPI residues are amplified under masked representation. 
+
+Entropy provides a broader view of subgroup-specific model behavior 
+
+While LLR scores capture subgroup-specific differences in model output, they are inherently local because they reflect only the wild-type to mutant substitution. To capture broader aspects of model behavior, we instead examine the entropy of the full predicted amino acid distribution at the mutated position using ESM1b. Entropy complements local predictions, such as LLR, by additionally encoding prediction confidence, and has been used as a proxy for identifying 
+
+distribution shifts 90–92 .
+
+Examining entropy distributions, we address an important aspect of PLM-based features: the effect of different input representations. Using three representation strategies: wild-type, mutant and masked sequence in which the mutated position is replaced by a mask token - we assess their ability to separate residue-level subgroups. For each representation, we extract the model’s predicted amino acid distribution at the mutated position, compute its entropy, and compare the resulting entropy distributions between complementary residue subgroups (e.g., polar vs. non-polar residues). 
+
+Input representation strongly influences the extent to which subgroup-specific differences are visible in the model output. Consistent with LLR-based analyses, variants in PPI residues show only marginal differences under the wild-type representation, whereas pronounced differences emerge under masked inputs (Figure 3c ). Similarly, differences between disordered and ordered residues, as well as between polar and non-polar residues, are substantially amplified under masked representations ( Figure S5 ). 
+
+Previous work reported limited benefit of masked representations for variant effect prediction, 
+
+often not justifying their additional computational cost 21,93 . However, these analyses focused on 
+
+predictive performance rather than calibration. Our results indicate that the choice of input representation plays a critical role in revealing subgroup-specific differences and should therefore be considered when identifying residue-level calibration targets. 
+
+Guiding calibration with subgroup-specific score distributions 
+
+Our results establish two key observations. First, miscalibration is associated with subgroup-specific differences in model score distributions. Second, differential score mapping can correct subgroup-specific miscalibration while preserving, and often improving, AUROC. We next ask whether score-distribution differences can guide the selection of optimal calibration targets. Using ESM1b, we compare several ways to quantify subgroup-specific differences in score distributions, including Jensen-Shannon divergence (JSD) and mean-score differences, 
+
+11 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+and compare them to a simpler approach based only on the proportion of pathogenic variants in each subgroup ( Appendix 2 ). Under the differential score mapping protocol described above, differences in score distributions are strongly associated with calibration-induced AUROC gains, whereas changes in pathogenic fraction alone are substantially less predictive ( Appendix 2, Figures S6-8 ). These results support the use of model score distributions to guide calibration target selection, which we formalize next in the RaCoon framework. 
+
+RaCoon - Residue-aware Calibration of conditional distributions 
+
+Leveraging our findings we sought to design a calibrated VEP that guarantees consistent performance across variant subgroups. In addition, we aim to develop a clinically interpretable model capable of producing meaningful pathogenicity probabilities. We chose ESM1b as the base model for RaCoon due to its strong performance, unsupervised nature, and lack of 
+
+reliance on MSAs 4,8,9 .
+
+Our calibration approach ( Figure 4 ) targets three binary residue attributes identified earlier as optimal calibration candidates: disorder level, interface status, and sulfur-binding (methionine or cysteine versus other residues). Because inference on long proteins in ESM1b (>1,022 residues) requires a sliding-window approach (Methods), which has been shown to affect 
+
+performance 4,59,94 , we treat protein length as a separate calibration subgroup. Accordingly, we 
+
+introduce an additional technical division between residues in long and short proteins. 
+
+The RaCoon pipeline consists of four main steps (Methods). First, attribute combinations are partitioned into a calibration tree ( Figure S9 ), where each node represents a unique set of binary residue attributes, nodes with insufficient data are subsequently pruned ( Figure 4a ). Second, per-node score distribution is estimated by fitting two GMMs, over a small subset of pathogenic and benign variants’ LLR scores. Third, LLR scores are binned into pathogenicity histograms by sampling from the GMMs according to the estimated node’s proportion of pathogenic variants. Each bin reflects the proportion of pathogenic samples for a given LLR range ( Figure 4b ). Finally, at inference time, variants are mapped to their corresponding node and histogram bin, mapping LLR scores to interpretable calibrated probability scores ( Figure 4c-d ). 
+
+Importantly, the calibration pipeline is never directly exposed to specific labeled examples. Both the base model and the downstream calibration hinge solely on modeled benign and pathogenic score distributions and their priors. By modeling these distributions with GMMs, the calibration requires minimal labeled data and, as we later show, avoids overfitting and data leakage. Although estimating pathogenic fraction remains susceptible to annotation biases, it holds important biological signals that we aim to model. As previously addressed, restricting calibration to attributes with strong divergence in score distribution and pruning nodes with insufficient data increases the likelihood that these reflect genuine biology rather than noise. RaCoon’s consistent performance across datasets indicates that it calibrates to global score distributions rather than dataset-specific biases. 
+
+12 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+Figure 4. The RaCoon pipeline. (a) a calibration set is partitioned across binary residue attributes, with attributes showing larger differences in conditional score distributions placed closer to the root . Leaves with insufficient data are pruned (scissors icon). (b) Nodes’ pathogenic and benign LLR score distributions are modeled using two GMMs and the proportion of pathogenic variants is estimated. Synthetic samples are subsequently drawn from the GMMs according to the estimated pathogenic-to-benign ratio to construct calibration histograms (x-axis LLR scores, y-axis pathogenic fraction). (c) Uncalibrated per-variant LLR scores (pink sticks, PDB 2pcx) are obtained from ESM1b. (d) 
+
+Each variant is mapped to its node and histogram bin to yield a residue-level calibrated pathogenicity probability. 
+
+RaCoon outperforms ESM1b on clinical and experimental datasets while improving calibration 
+
+To evaluate RaCoon against the baseline ESM1b, we report global and per-protein AUROC on both experimental and clinical datasets (Methods). To minimize gene-level annotation bias in 
+
+13 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+clinical benchmarking, we do not use the full ClinVar_HQ dataset for AUROC-based evaluation. Instead, for clinical data we use ClinVar_Balanced, which controls for gene-level imbalance (Methods, Table 2), and we additionally evaluate performance on a stringent subset of 46 well-annotated, balanced ClinVar proteins, each containing at least 100 annotations and a pathogenic to benign label ratio not exceeding 70:30. For experimental data, we use the ProteinGym Clinical Substitution benchmark. All reported values are based on 100 random calibration iterations, each evaluated using 100 independent non-parametric bootstrap test iterations. Classification thresholds are determined by maximizing the Youden J-statistic. 
+
+We first evaluate RaCoon across datasets by calibrating on ClinVar_Balanced and testing on ProteinGym ( Figure 5a-b ). This setting reduces the possibility that AUROC gains arise from adaptation to dataset-specific priors in the calibration set. Under this evaluation, RaCoon improves global AUROC from 0.909 ± 0.000 for raw ESM1b LLR scores to 0.916 ± 0.001, and modestly improves per-protein AUROC from 0.893 ± 0.001 to 0.897 ± 0.001, indicating that the calibration procedure generalizes beyond a single dataset. 
+
+We next evaluated RaCoon on a subset of 46 well-annotated, strictly balanced proteins whose variants were not seen during calibration. These proteins satisfied a stricter balance criterion than ClinVar_Balanced, with a label ratio not exceeding 70:30. Notably, 27 of the 46 proteins were close to perfectly balanced (label ratio ≤ 60:40). Although these variants were still derived from ClinVar, this setting substantially limited the transfer of gene-level priors from the calibration set. In this setting, RaCoon significantly improved AUROC in 12 proteins while degrading performance in only 4 ( Figure S10, Methods), increasing global AUROC from 0.917 ± 0.001 to 0.926 ± 0.002 and per-protein AUROC from 0.928 ± 0.002 to 0.932 ± 0.002. 
+
+Finally, we evaluate RaCoon within-dataset - where calibration and test sets are derived from the same benchmark ( Figure S11 ). While this setting risks inflating AUROC by exposing the model to dataset-specific priors during calibration, it remains an important practical benchmark, as calibration is often used to adapt a model to a specific dataset. On ClinVar_Balanced, RaCoon improves AUROC to 0.918 ± 0.001 from 0.911 ± 0.001. A similar improvement is observed on ProteinGym, where RaCoon reaches 0.924 ± 0.001 compared with 0.912 ± 0.000 for the uncalibrated model. Per-protein AUROC also improves modestly but significantly on both ClinVar_Balanced (0.915 ± 0.002 vs. 0.913 ± 0.001) and ProteinGym (0.909 ± 0.002 vs. 0.903 ± 0.001). Moreover, the ROC curve of RaCoon consistently lies above that of the uncalibrated model, indicating superior performance across classification thresholds (Figure S12 ). Importantly, these within-dataset gains are similar in magnitude to the cross-dataset results, suggesting that dataset-specific priors have limited contribution to the observed AUROC improvements. 
+
+A key property of RaCoon is its ability to provide multicalibrated predictions across residue-subgroups. To evaluate calibration quality directly, we report both ECE and the more stringent Maximal Calibration Error (MCE) for every calibrated node (Methods). RaCoon achieves consistently low calibration error across subgroups within and across datasets ( Figure S9 ,
+
+Table S5 ). On ClinVar_HQ, 15 of 16 calibrated nodes achieve ECE < 0.1, with only one low-sample node reaching 0.26; all but three nodes achieve MCE < 0.2. RaCoon also maintains calibration across datasets: when calibrated on ClinVar_HQ and tested on ProteinGym, all 
+
+14 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+nodes retain ECE < 0.13 and all but two maintain MCE < 0.2. By comparison, naive global logistic calibration over ClinVar_Balanced yields MCE > 0.3 in 8 of 16 nodes ( Table S5 ). 
+
+Figure 5. RaCoon performance evaluation across datasets. a–c Changes in performance on the ProteinGym clinical substitution benchmark after calibration on ClinVar_Balanced, relative to uncalibrated ESM1b. RaCoon improves both global and per-protein AUROC. Error bars indicate ±1 SD across 100 randomized calibration iterations, each evaluated using 100 non-parametric bootstrap test resamples. (a) overall AUROC (b) per-protein AUROC (c) Classification metrics. TP = true positive; TN = true negative. Classification thresholds were optimized per model using the Youden J-statistic. d-f. Structural examples of variants correctly reclassified after calibration in RAG2 (PDB 8T4R, d) and ARID1A (PDB 6LTJ, e-f). ClinVar-annotated variants (purple sticks) are shown with interface distances (orange, Å). Interface partners: yellow - Histone H3 (RAG2) and SMCE1 (ARID1A); pink - SMRD1. 
+
+RaCoon improves borderline variant interpretation in RAG2 and ARID1A 
+
+Complete calibration yields additional AUROC gains and significantly improves threshold-based metrics, enhancing discrimination of both benign and pathogenic variants. These benefits are most apparent for borderline cases, where misclassification risk is highest, as illustrated by example cases in RAG2 and ARID1A ( Figure 5d-f ). 
+
+15 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+RAG2 is a core V(D)J recombinase component whose mutations cause severe 
+
+immunodeficiencies 95–97 . Two variants at residue M443 (M443I pathogenic, M443T 
+
+likely-pathogenic 98,99 ), are misclassified as benign by ESM1b raw LLR scores. RaCoon correctly 
+
+identifies them as pathogenic, assigning interpretable and calibrated probabilities of 73% (M443I) and 74% (M443T). This improvement reflects methionine’s classification as asulfur-binding residue, which places these variants into a distinct calibration subgroup. In contrast, a nearby W453 variant (non-sulfur binding) affecting the same interaction is correctly classified as pathogenic by both models. 
+
+Context dependence is illustrated by the LLR scores mappings: M443I (-7.03) maps to 73% pathogenic probability, whereas W453R, assigned to a different node, receives a more negative LLR (−9.25) yet a similar calibrated probability (74%). Although more negative LLRs typically imply stronger pathogenicity, this example shows how RaCoon adjusts predictions according to local distributional context rather than LLR magnitude alone. 
+
+An opposite effect is seen in ARID1A, where calibration correctly reclassifies 12 variants from pathogenic to benign. ARID1A is a core subunit of the BAF (SWI/SNF) chromatin-remodeling 
+
+complex 100  and a major tumor suppressor recurrently altered across cancers 101–104 . Its large size, 
+
+long disordered regions, and multiple PPIs make variant interpretation particularly challenging. 
+
+Two benign ClinVar variants, P1643T and T1743M ( Figure 5e-f ), receive uncalibrated LLRs in the pathogenic range (−8.91 and −8.50) but are correctly reclassified as benign once residue context is incorporated. Notably, P1643T lies near the SMARCD1/SMARCE1 interface, yet RaCoon maps it to a pathogenicity ratio of 29%. Nearby variants (Q1650H, V1652A) remain misclassified, likely due to predicted interface involvement, but their calibrated probabilities (46% and 44%) are borderline. For comparison, an interface-associated variant in KCNQ2 (Q341H), with a comparable LLR (−9.05), receives a much higher calibrated pathogenicity of 68%. Together, these examples illustrate how region-specific score mappings can yield different pathogenicity estimates for similar LLRs, highlighting the importance of local residue context. 
+
+Ablation studies identify specific contributors to performance gains 
+
+To disentangle the contributions of individual components in our calibration pipeline, we compare naive ESM1b to our calibrated model under multiple single and pairwise feature ablations ( Figure 5a-b, Figure S13) . In addition to AUROC, we report complementary binary classification metrics, all averaged over repeated training and bootstrap iterations, and reported as changes relative to the uncalibrated ESM1b on variants not seen during the calibration process. 
+
+Calibration to protein length and fold emerge as key contributors to AUROC across all datasets, with largely additive effects. Notably, differences in protein length that are not reflected in the class-conditional score distribution, remain important, underscoring the need to correct for context length in transformer-based models. Pairwise calibration to fold and sulfur-binding residues also yielded consistent gains. 
+
+While several attributes contributed to AUROC improvement, their impact at the optimal classification threshold are more subtle (Figure 5c ), illustrating the limitations of global 
+
+thresholds. AUROC-based gains primarily reflect improved global ranking 105,106 , whereas 
+
+per-protein AUROC shows smaller gains. Per-protein AUROC is a less stable metric for proteins 
+
+16 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+with a few labeled variants 107,108  and does not account for inter-protein ordering, imperative for 
+
+genome-wide screening 4.
+
+GMM-based sampling provides efficient calibration with minimal labeled data 
+
+A key novelty of RaCoon is the use of GMM-based sampling, rather than direct binning of scored variants, to construct calibration histograms (Figure S13a-b , Methods). GMM-only calibration with as few as 100 training samples performs better than direct binning, which requires tens of thousands of labeled variants. We hypothesize that this reflects a denoising effect of the GMMs. By fitting a small number of parameters (two means), they capture the dominant structure of the score distribution while suppressing noise from individual samples. Consistent with this interpretation, a hybrid approach that combines GMM sampling with direct binning shows progressively degraded performance as more raw samples are introduced, indicating that these samples primarily add noise rather than useful signal ( Figure S13a ). Importantly, although GMM performance improves roughly linearly with training size, the number of retained calibration subgroups decreases due to pruning ( Figure S13b ). To balance accuracy with subgroup coverage, an important consideration for multicalibration, we set the final training size to 400 samples, which preserves most calibration nodes. 
+
+Finally, we assess the robustness of our calibration method to potential data leakage. To ensure that neither the base model nor the calibration step benefits from memorizing specific examples, we compare performance when models are evaluated on their own training data versus on held-out test data with matched pathogenic-benign ratios (Methods). Even under this extreme setting, performance remains unchanged on both ClinVar_Balanced and ProteinGym. Although our pipeline already separates GMM training from test samples, this ablation confirms that data leakage is not a practical concern for our framework. 
+
+Discussion 
+
+Recent years have seen a significant progress in missense variant effect prediction, leading to 
+
+growing adoption in both research and clinical variant classification 29,47 . As VEPs become more 
+
+deeply integrated into clinical workflows, the need for reliable interpretation frameworks that account for biases in training and evaluation has grown urgent. Various approaches have been 
+
+proposed to calibrate VEPs 29,34 , with global calibration on specific datasets and gene-level 
+
+calibration among the most widely used 1,6 .
+
+However, few studies have examined the robustness of current calibration approaches at the residue level. We observe widespread shifts in optimal classification thresholds across residue subgroups ( Figure 1a, Figure S1 ). This extends to similar gene-level observations reported by 
+
+Tejura et al. (2024) 70  at the residue-level, raising concrete concerns about the use of global 
+
+classification thresholds and highlighting the potential value of incorporating residue-level assessments into benchmarking protocols. Furthermore, our analysis shows that both global and gene-level calibration degrade substantially in reliability when evaluated within specific residue subgroups, most notably variants in disordered regions, protein-protein interfaces, and sulfur-binding residues ( Figure 1b-c ). Together, these findings motivated the development of calibration approaches that can capture residue-level variation. 
+
+17 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+We present a multicalibration approach based on differential score mapping ( Figure 2 ) which learns separate rescaling functions for predefined residue subgroups. Importantly, unlike 
+
+standard global calibration approaches 39 , differential score mapping can change the global 
+
+ordering of variants across subgroups and therefore affect model discrimination. When calibration targets are chosen appropriately, it not only preserves AUROC but also improves it across models (Figure 2c ). Although these improvements are generally modest, they are significant, consistent across models and datasets, and achieved without additional model training. We do not view this as merely a feature of differential score mapping, but as possible evidence that calibration can correct subgroup-dependent misordering caused by distributional differences. 
+
+This raises a central question: how should calibration targets be selected? In the calibration literature, miscalibration is often associated with two main types of distribution shift: label 
+
+shift 77–79  and shifts in model score distribution 78,80–82 . A key novelty of our framework is the use of 
+
+subgroup-specific score distributions to detect these shifts and guide calibration. Compared with label frequencies, score distributions offer several advantages. First, they are less affected by labelling biases, especially for unsupervised models, providing a more reliable signal to detect distribution shifts . Second, they capture model-specific rather than dataset-specific shifts. Third, they can reveal how different encoding strategies capture subgroup variation ( Figure 3c ). Consistent with this, we find that changes in model score distributions are strong predictors of calibration targets likely to improve AUROC ( Appendix 2, Figure S6 ). These advantages extend beyond residue-level calibration and could also be used to guide other calibration schemes, such as identifying informative gene-level subgroups. 
+
+Importantly, while our manuscript introduces the added value residue-level calibration, there are yet important biological signals that can only be captured at the gene-level such as inheritance 
+
+pattern or disease prevalence 14,109 . Although this is outside the scope of the present study 
+
+combining residue and gene level calibration would likely capture additional signals. A natural extension of this work would be to explore whether differential score mapping at the gene level, or hybrid residue-gene calibration, can provide further gains in model accuracy. Notably, as differential mapping only affects ordering across subgroups, similar gains from protein-level calibration would be captured using global AUROC rather than per-protein AUROC. 
+
+Building on these insights, we introduce RaCoon (Figure 4 ), a multicalibrated variant effect 
+
+predictor based on ESM1b 4,110  that applies residue-level calibration across key attributes 
+
+identified in this study. The framework learns class-conditional LLR distributions using GMMs and converts them into interpretable pathogenicity probabilities through calibration histograms. A central novelty of RaCoon is the use of GMM sampling to construct calibration histograms, which reduces the training set size required for stable calibration from thousands of labeled variants to only a few hundred samples. This provides a practical foundation for applying histogram-based calibration in other settings as well. Beyond delivering multicalibrated and interpretable predictions, RaCoon also improves AUROC relative to the uncalibrated model across benchmarks ( Figure 5 ). RaCoon can be readily extended to other unsupervised VEPs, enabling calibration guided by model-specific conditional score distributions. The model and 
+
+calibration framework are publicly available via an open-access  server .
+
+18 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+Acknowledgements. We thank Haimasree Bhattacharya for the development of the RaCoon web-server. This research was supported by the Israeli Science Foundation (ISF 737/23). The funders had no role in study design, data collection and analysis, decision to publish, or preparation of the manuscript. Molecular graphics and analyses were performed with UCSF ChimeraX, developed by the Resource for Biocomputing, Visualization, and Informatics at the University of California, San Francisco, with support from National Institutes of Health R01-GM129325 and the Office of Cyber Infrastructure and Computational Biology, National Institute of Allergy and Infectious Diseases. 
+
+19 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+Methods 
+
+Datasets Curation (Table 2) 
+
+ClinVar_HQ. The complete ClinVar 7 data was downloaded in GRCh38 VCF format (July 2025). 
+
+Records missing core ClinVar annotations (CLNSIG, CLNVC, CLNREVSTAT, or CLNHGVS) were excluded. We retained only single-nucleotide variants and required a review status ≥1 star, based on the CLNREVSTAT stars mapping. This filtering step removed conflicting variants, variants lacking clinical classification, and those with no assertion criteria, yielding 1,751,722 
+
+variants. Next, all transcript identifiers were resolved using the Entrez API 111 , and only variants 
+
+with valid protein-level variant symbols were retained (that is, those beginning and ending with canonical amino acids whose wild-type residue matched the reference transcript). Variants of uncertain significance were excluded, retaining only variants annotated as Likely pathogenic, Pathogenic/Likely pathogenic, Pathogenic, Benign, Benign/Likely benign, or Likely benign. These categories were mapped to binary labels. Finally, we unified duplicate variants, sharing the same binary label in the same transcripts and removed variants with contradicting labels. The resulting ClinVar_HQ dataset contained 171,196 variants across 14,564 unique protein sequences, of which 52,634 were pathogenic and 118,562 benign. 
+
+ClinVar_BM. This dataset represents a rigorously filtered subset of ClinVar designed for benchmarking VEPs and minimizing circularity and annotation biases. We use the dataset 
+
+recently published by Radjasandirane et al. 9, which includes 14,054 variants (11,757 pathogenic 
+
+and 2,296 benign), all published after May 1, 2021. Variants that also appeared in the Humsavar 
+
+dataset 112  or showed unbalanced annotations (ratio exceeding 60/40) were excluded. All 
+
+remaining variants were verified to represent valid protein-level alterations. Because transcript identifiers were not provided, variants were mapped to sequences using gene symbols, leveraging the transcript mappings established for the ClinVar_HQ dataset. 
+
+ClinVar_Balanced. This dataset is an extension of ClinVar_BM for unsupervised VEPs which do not require the removal of potential training data. Curated from ClinVar_HQ - we retain only proteins with at least six annotated variants and enforce a balanced label distribution at the protein level, requiring a pathogenic-to-benign ratio between 80:20 and 20:80. The resulting dataset contains 40,474 variants (19,526 pathogenic and 20,948 benign) across 1,337 unique protein sequences. The dataset is designed to increase sample size while remaining robust to gene-level biases in AUROC analysis. 
+
+Balanced Proteins Subset. This dataset is a robust subset of ClinVar_Balanced used to evaluate RaCoon’s gene-level performance. We retain only proteins with at least 100 annotations and a pathogenic-to-benign ratio between 70:30 and 30:70. The resulting dataset contains 9,354 variants (4,390 pathogenic and 4,964 benign) across 46 unique protein sequences. 
+
+ClinVar_AFM. AlphaMissense, published in 2023, includes a supervised calibration process that could potentially introduce variants present in the ClinVar_BM dataset. To prevent such 
+
+circularity, we used a subset of ClinVar variants published by Cheng et al. 6 that were explicitly 
+
+excluded from the AlphaMissense calibration process. We removed variants for which no matching transcript could be found in the ClinVar_HQ dataset, ensuring that all remaining variants met our established filtration criteria. The final dataset consists of 56,368 variants, 
+
+20 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+including 18,765 pathogenic and 37,603 benign variants across 6,272 unique protein sequences. 
+
+Well-annotated ClinVar proteins. This dataset was compiled directly from the ClinVar_HQ dataset, retaining only sequences with at least ten variants, of which we required a minimum of four pathogenic and four benign variants. The final dataset consists of 42,056 pathogenic and 44,155 benign variants across 1,285 protein sequences. 
+
+ProteinGym. Throughout the study we use the ProteinGym zero-shot clinical substitution 
+
+benchmark 8 obtained in June 2025. For attribute analysis we use the provided protein 
+
+sequences, labels are assigned using the DMS_bin_score column. The benchmark contains 62,727 variants (32,000 pathogenic and 30,727 benign) across 2,525 unique protein sequences. 
+
+Table 2. Summary of dataset used in the study. 
+
+VEPs scores were computed using Ensembl VEP 113 , except for EVE, CPT-1 and 
+
+AlphaMissense that were queried directly from the published precomputed scores. ESM1b scores were computed directly using the 'esm1b_t33_650M_UR50S' model, with LLR scores calculated as described below. 
+
+Log Likelihood Ratio Scores (LLR) 
+
+We use the LLR score derived from ESM1b as a quantitative measure of predicted 
+
+pathogenicity. Given a protein sequence  with a missense variant at residue position  , the LLR 𝑆  𝑖 
+
+score can be computed using either the wild-type (wt), mutant (mut), or masked (msk) 
+
+21 
+
+Dataset Name  Total variants 
+
+Pathogenic variants 
+
+Benign 
+
+variants 
+
+Unique sequences 
+
+Details  Figures 
+
+ClinVar_HQ  171,196  52,634  118,562  14,564  Curated directly from ClinVar  2a-c, 3a-c, S4, S5 
+
+ClinVar_BM  14,054  2,296  11,757  6,599  variants published in clinvar after may 2021, protein with unbalanced 
+
+annotations excluded 9
+
+1a, S1, S2 
+
+ClinVar_Balanced  40,474  19,526  20,948  1,337 
+
+Proteins with at least 6 variants and pathogenic to benign ratio between 80:20 and 20:80 
+
+S6d-e, 5a-c, S7, S8, S9, s11a-c, S12 
+
+Balanced Protein Subset (ClinVar)  9,354  4,390  4,964  46  Proteins with at least 100 variants and pathogenic to benign ratio between 70:30 and 30:70 
+
+S10 
+
+ClinVar_AFM  56,368  18,765  37,603  6,272  Published by Cheng et al. 6 proteins 
+
+with no matching transcript excluded  1c 
+
+Well-annotated ClinVar genes  86,211  42,056  44,155  1,285  Sequences with at least 10 variants of which at least 4 pathogenic and 4 benign variants 
+
+S3 
+
+ProteinGym  62,727  32,000  30,727  2,525 
+
+ProteinGym zero-shot clinical 
+
+substitution benchmark 8 obtained in 
+
+June 2025 
+
+1b, 2a-c, 5a-c, 10d-f, S4, S6d-e, S7, S8, S9 S12 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+sequence. These three inputs differ only at residue  , where the masked marginal substitutes 𝑖 
+
+the original residue with a special mask token. 
+
+Let  denote the model output vector (logits) for position  in sequence type 𝑋(𝑆 𝑡 𝑖 ) ∈ 𝑅 𝑁 𝐴𝐴  𝑖 
+
+, where  is the number of amino acid tokens. 𝑡 ∈ {𝑤𝑡, 𝑚𝑢𝑡, 𝑚𝑠𝑘}  𝑁 𝐴𝐴 
+
+We define the LLR score as: 
+
+(4)  𝐿𝐿𝑅 (𝑡) = 𝑙𝑜𝑔(𝑠𝑜𝑓𝑡𝑚𝑎𝑥(𝑋(𝑆 (𝑡) 𝑖 − (𝑋(𝑆 (𝑡) 𝑖 )𝑤𝑡−𝐴𝐴 )) 𝑚𝑢𝑡−𝐴𝐴 
+
+That is, we first subtract the wildtype entry from the entire output vector of residue  , apply a 𝑖 
+
+softmax to the resulting log-odds ratios, and finally take the mutant entry of this normalized vector as the LLR score. 
+
+We note that in some cases, prior works computed the LLR scores by first applying the 
+
+log_softmax function and then subtracting the wildtype score. However, this approach mathematically cancels the softmax normalization, reducing the computation to the raw logit difference. This follows directly from the definition of the softmax function. Given an 
+
+unnormalized logits vector  it holds that: 𝑙 
+
+(4. 1) 𝑙𝑜𝑔(𝑠𝑜𝑓𝑡𝑚𝑎𝑥(𝑙)) 𝑚𝑢𝑡−𝐴𝐴 − 𝑙𝑜𝑔(𝑠𝑜𝑓𝑡𝑚𝑎𝑥(𝑙)) 𝑤𝑡−𝐴𝐴 = (𝑙 𝑚𝑢𝑡−𝐴𝐴 − 𝑙𝑜𝑔( 𝑗 
+
+∑ 𝑒 𝑙 𝑗 )) − (𝑙 𝑤𝑡−𝐴𝐴 − 𝑙𝑜𝑔( 𝑗 
+
+∑ 𝑒 𝑙 𝑗 )) 
+
+= 𝑙 𝑚𝑢𝑡−𝐴𝐴 − 𝑙 𝑤𝑡−𝐴𝐴 
+
+Although we did not observe substantial performance differences using this formulation, all reported comparisons in this study were performed using the implementation described in (4). 
+
+Extending LLR to long sequences. ESM1b has a maximum input context of 1,024 tokens, which limits the model’s ability to process full-length proteins exceeding this length. To handle such cases, we applied a sliding-window approach with a window size of 1,022 residues and a 250-residue overlap between consecutive windows. For each window, the model computes ESM1b scores for the central 1,022 − 2×250 positions, excluding the overlapping regions to avoid redundancy. In the first and last windows, the terminal residues are also included to ensure full sequence coverage. This strategy preserves the model’s maximal input length while preventing indexing errors and maintaining smooth coverage across long proteins. Following window extraction, LLR computation proceeds identically to the method described above, using the wildtype, mutant, or masked representations as appropriate. 
+
+Classification Performance Metrics 
+
+Global and per-protein AUROC. The global and per-protein Area Under the Receiver Operating Characteristic curve (AUROC) are widely used metrics to assess VEP performance. For all models, we assume that higher scores indicate greater pathogenicity. This assumption holds for all cases where calibration using logistic regression was performed (Figure 1b, Figure 2a-c). When raw scores are analyzed (Figure 1a), we first learn a monotonic rescaling function using the modified min-max normalization described below and, if necessary, flip the scores so 
+
+22 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+that values closer to 1 correspond to pathogenic variants and those closer to 0 to benign variants. Because this transformation is strictly monotonic, it preserves the global rank order of scores and thus does not affect the AUROC. 
+
+The per-protein AUROC was computed by first calculating the AUROC independently for each protein sequence and then averaging across all valid sequences. Proteins lacking either pathogenic or benign labels were excluded from the mean calculation. Consistent with the ProteinGym benchmark protocol, we report the unweighted mean of per-protein AUROCs. We also tested a weighted-average variant, in which each protein’s contribution was proportional to its number of annotated variants; however, the results were nearly identical to the unweighted mean, and thus only the standard approach is reported. 
+
+All AUROC computations were performed on held-out test sets, strictly excluding any samples used during the calibration process. When comparing RaCoon to the uncalibrated ESM1b model, we always evaluated performance on identical test sets to ensure a fair comparison. We note that RaCoon’s ablation experiments (Figure S13) involved multiple calibration settings, which altered the composition of the resulting test sets leading to slight variations in reported AUROC values across experiments. 
+
+Residue Attributes 
+
+All attributes were directly inferred from the protein sequence associated with the variant. Predictors used as well as associated thresholds are specified in Table 3 .
+
+Disordered regions. Residues in disordered regions were inferred using ALBATROSS 
+
+Metapredict v1.3 114,115 . We precomputed disorder scores per residue for all isoforms of reviewed 
+
+human proteins in UniProt 116 , as well as for all transcripts in our datasets. Each residue was 
+
+locally mapped to the corresponding disorder score based on its position within the matching transcript. Residues with scores above 0.7 were defined as disordered. Although the suggested 
+
+threshold is 0.5, we found that a 0.7 cutoff better aligned with previous disorder estimates 44,114 ,
+
+predicting approximately 28% of residues as disordered compared to 32% using the 0.5 threshold. Increasing the threshold mainly changes the predictions of residues in transition regions therefore, aiming for more rigorous disorder prediction, we use the 0.7 threshold. 
+
+Protein-protein interface. To predict residues involved in protein–protein interfaces (PPIs), we 
+
+used PIONEER 88 . We obtain high-confidence interface predictions for all reviewed human 
+
+UniProt sequences. PIONEER integrates binary predictions from three sources: the PIONEER 
+
+model, experimentally resolved complexes from the Protein Data Bank (PDB) 117 , and homology 
+
+models. A residue predicted to be involved in a PPI by any of these sources was considered PPI-positive. Predictions were available for 74% of variants in the ClinVar_HQ dataset, of which 9% were predicted to participate in PPIs (N = 11,558). In the ProteinGym dataset, predictions were obtained for 77% of variants, with 12% predicted to participate in PPIs (N = 5,749). 
+
+Homology. To distinguish between sequences with few versus many homologs, we directly 
+
+queried the UniRef sequence clusters 118,119 . A key advantage of estimating homology using 
+
+UniRef clusters is that it avoids systematic similarity searches across the entire human proteome, which would be impractical at inference time. We experimented with both UniRef90 and UniRef50 clusters, testing multiple thresholds to maximize separation of class-conditional distributions. We ultimately used UniRef90, defining sequences with ten or fewer homologs as 
+
+23 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+low-homology. Using this threshold, approximately 9% and 7% of sequences in the ClinVar_HQ and ProteinGym datasets, respectively, were categorized as low-homology. While lower thresholds increased the class-conditional separation, they also produced very small subgroups. A threshold of nine therefore provided a suitable balance between subgroup size and distributional contrast. 
+
+Physico-chemical properties. We compiled an extensive set of amino acid physicochemical properties previously reported to influence the functional impact of missense variants ( Table 
+
+3)84,85,120–122 .
+
+Table 3. Summary of protein and residue properties. apercent of available prediction. 
+
+24 
+
+Attribute  Predictor  Threshold / Condition 
+
+Available Predictions  Positive Predictions a
+
+ClinVar_HQ (N=171,196) 
+
+ProteinGym (N=62,727) 
+
+ClinVar_HQ  ProteinGym 
+
+Disordered 
+
+ALBATROSS Metapredict 
+
+v1.3 114,115 
+
+0.7  100%  100%  31.7%  25.1% 
+
+PPI  PIONEER 88  Binary  74%  77%  9%  12% 
+
+Homology (low)  UniRef90 118,119  10  89.7%  88.3%  8.5%  6.8% 
+
+Length (long)  sequence  1022  100%  100%  47.1%  38.0% 
+
+Polar  Residue  S, T, C, Y, N, Q, G  100%  100%  32.3%  33.3% 
+
+Hydrophobic  Residue  A, V, I, L, M, F, Y, W  100%  100%  33.2%  31.4% 
+
+Charged  Residue  R, H, K, D, E  100%  100%  29.6%  30.5% 
+
+Aromatic  Residue  F, W, Y, H  100%  100%  6.8%  7.7% 
+
+Acidic  Residue  D, E  100%  100%  8.8%  9.4% 
+
+Basic  Residue  R, H, K  100%  100%  20.7%  21.1% 
+
+Uncharged Polar  Residue  S, T, N, Q, C, Y  100%  100%  22.8%  21.9% 
+
+Small  Residue  G, A, S, T, P  100%  100%  36.9%  37.5% 
+
+Sulfur Binding  Residue  C, M  100%  100%  6.8%  5.9% 
+
+Proline or Glycine  Residue  P, G  100%  100%  16.3%  18.5% 
+
+Aliphatic  Residue  V, I, L, M, A  100%  100%  28.9%  26.2% 
+
+Helix Breaker  Residue  G, P  100%  100%  16.3%  18.5% 
+
+Beta Branched  Residue  I, V, T  100%  100%  17.6%  15.3% 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+Optimal classification thresholds. Optimal classification thresholds were determined by 
+
+maximizing the Youden J-statistic 123  across all possible decision thresholds. That is, we chose 
+
+the threshold that maximized the difference between the true positive rate and the false positive rate: 
+
+(5) 𝑐 ∗ = 𝑎𝑟𝑔 𝑚𝑎𝑥 𝑐 {𝑇𝑃𝑅(𝑐) − 𝐹𝑃𝑅(𝑐)} 
+
+J-score is often preferred over accuracy in imbalanced test sets and, unlike the F1-score, it also 
+
+accounts for true-negatives 124 . These make it particularly suitable for clinical and diagnostic 
+
+tasks 125  and it has also been adopted for VEP benchmarking 73 .
+
+For the uncalibrated ESM1b model, the optimal threshold determined by maximizing the J-score on the ClinVar_HQ dataset was −8.22, which differs from the paper suggested threshold of −7.5. While the original rationale for the −7.5 threshold is not specified, using the J-score–derived threshold resulted in higher classification accuracy in our evaluation. 
+
+Mutual Information (MI) Estimation. To quantify the association between residue attributes and pathogenicity we computed the MI between selected attributes and the binary clinical label (Appendix1 , Table S3 ). At the residue level, MI was calculated directly from the binary attribute indicator and the pathogenic labels using scikit-learn’s mutual_info_score . At the protein level, each proteins’ residues were assigned to one of three groups, based on the proportion of residues exhibiting the attribute (corresponding to the violin bins in figure S3), MI was computed between these group assignments and the pathogenic labels of the residues. For both analyses, uncertainty was estimated using 1,000 non-parametric bootstrap iterations. 
+
+Learning Gaussian Mixture Models Over LLR Scores 
+
+Gaussian Mixture Models (GMMs) 126  are used in the study to fit the pathogenic and benign LLR 
+
+distributions. We train all GMMs using the following scheme: 
+
+Extreme outliers removal (modified z-score). We first removed extreme outliers from the full 
+
+dataset (without separating pathogenic and benign variants) using the modified z-score 127,128 .
+
+For a set of variants  the modified z-score  of a variant  is defined as: 𝑋  𝑧 𝑖  𝑥 𝑖 
+
+(6. 1) 𝑀𝐴𝐷 = 𝑚𝑒𝑑𝑖𝑎𝑛(|𝑋 − 𝑋 |) 
+
+(6. 2) 𝑧 𝑖 = 0. 6745 × 𝑥 𝑖 −𝑥 𝑀𝐴𝐷 
+
+Where  . Samples with  were considered extreme outliers and 𝑋 = 𝑚𝑒𝑑𝑖𝑎𝑛(𝑋)  |𝑧 𝑖 | > 4. 25 
+
+excluded from GMM training. This approach removes outliers symmetrically from both tails of the distribution, effectively eliminating extreme benign and pathogenic scores. The chosen threshold corresponds to a highly stringent cutoff intended to exclude only extreme samples that could otherwise distort GMM fitting. For instance, across the full CalinVar_HQ dataset, this process excluded 576 variants corresponding to 0.33% of all entries. 
+
+Fitting GMMs. Following extreme outlier removal, we fit separate GMMs for the benign and pathogenic samples. GMMs were implemented using the GaussianMixture module from 
+
+25 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+scikit-learn, configured with two components and diagonal covariance (equivalent to full covariance in one-dimensional data), while all other parameters were kept at default values. 
+
+The number of components was chosen by computing the Bayesian Information Criterion 
+
+(BIC) 129  across models with increasing component counts and selecting the point at which the 
+
+BIC curve plateaued. This procedure minimizes the risk of overfitting while maintaining sufficient flexibility to capture multimodal score distributions. 
+
+Calibration with Logistic Regression (LR) 
+
+We used logistic regression to learn monotonic mappings for distinct residue-level attributes. All experiments followed a consistent sampling and fitting scheme, as outlined below. 
+
+Extreme outlier removal (percentile). As per the GMM training protocol, we removed extreme outliers before fitting the logistic regression models. Specifically, samples falling in the top and bottom 0.1 percentiles (i.e., the most extreme 0.2% of values) were excluded. This proportion closely matches the number of outliers removed using the modified z-score method. However, because logistic regressions were fitted across multiple models with differing score ranges, we opted for a percentile-based criterion, which requires no model-specific adjustments (such as modifying the z-score threshold), ensuring consistent preprocessing across predictors. 
+
+Sampling. To mitigate majority-class bias 130,131  we train all LR models on balanced datasets 
+
+(either ClinVar_Balanced or the ProteinGym clinical substitution benchmark). To fit an LR model, 
+
+we randomly sampled  random train variants leaving the rest for test. For Figure 1b we used 𝑛 
+
+, for Figure 2a-c, we used  . For figure S6d-e the full dataset was partitioned 𝑛 = 6, 000  𝑛 = 500 
+
+into three disjoint subsets. In each iteration, one-third of the data was used for training, while the remaining two-thirds served as a test set. For the MCE,ECE comparisons of RaCoon against a naively-globally calibrated ESM1b we used 6,000 training samples. 
+
+Fitting logistic regression. Following outlier removal logistic regression (LR) models were fitted using the scikit-learn LogisticRegression . The model was trained with the Limited-memory 
+
+Broyden–Fletcher–Goldfarb–Shannon (L-BFGS) solver 132 , using otherwise default parameters. 
+
+Given  the raw LLR score and  the learnt scale and intercept coefficient of the fitted LR 𝑥  𝑐 1 , 𝑐 2
+
+the calibrated score is defined as: 
+
+(7) 𝐿𝐿𝑅 𝑐𝑎𝑙𝑖𝑏𝑟𝑎𝑡𝑒𝑑 = 𝑆𝑖𝑔𝑚𝑜𝑖𝑑(𝑐 1 • 𝑥 + 𝑐 2)
+
+Data Normalization 
+
+To analyze raw VEP scores within a unified reference frame ( Figure 1a ), we applied a modified version of the standard min-max normalization. First, extreme outliers, defined as values in the top and bottom 0.1 percentiles, were removed to prevent range distortion caused by outlier domination. Min-max normalization was then computed over the remaining inlier set. Following normalization, we verified that the mean score of pathogenic variants was higher that of benign variants, if not, the scores were flipped by subtracting them from 1. Finally, the excluded outliers were reinstated, assigning a score of 1 to pathogenic and 0 to benign variants. Scores that were already bounded within the [0, 1] range were not renormalized but were flipped if necessary. 
+
+26 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+Normalized Entropy 
+
+For a variant  in residue position  , we compute the normalized entropy from the full predicted 𝑥  𝑖 
+
+amino-acid distribution at position  . that is, across all possible amino-acid substitutions. Given 𝑖 
+
+the prediction vector  at position  , the normalized entropy is defined as: 𝑥(𝑖)  𝑖 
+
+(8) 𝑁𝑜𝑟𝑚𝑎𝑙𝑖𝑧𝑒𝑑𝐸𝑛𝑡𝑟𝑜𝑝𝑦(𝑥) = 1 − 𝐻(𝑥(𝑖)) 𝑙𝑜𝑔 𝑁 
+
+Where  in our study, corresponding to the 20 canonical amino acids. 𝑁 = 20 
+
+Jensen-Shannon distributions divergence 
+
+To quantify divergence between class-conditional score distributions, we used the 
+
+Jensen-Shannon divergence (JSD) 133 . JSD was empirically estimated by discretizing each 
+
+subgroup’s normalized-entropy probability into histograms with 100 equal-width bins. 
+
+To prevent zero-probability bins, a small smoothing factor  was added to all bins. JSD ε = 𝑒 −12 
+
+was then computed using the SciPy Jensen-Shannon implementation, the divergence is then obtained by squaring the Jenson-Shanon distance. The reported JSD value is calculated as the sum of the independently estimated JSDs between benign variants and between pathogenic variants across the two subgroups (equation 1, results): 
+
+(1) Δ𝑠𝑐𝑜𝑟𝑒_𝑑𝑖𝑠𝑡𝑟𝑖𝑏𝑢𝑡𝑖𝑜𝑛 = 𝑙∈{𝑝𝑎𝑡ℎ𝑜𝑔𝑒𝑛𝑖𝑐, 𝑏𝑒𝑛𝑖𝑔𝑛} 
+
+∑ 𝐽𝑆𝐷(𝑃(𝑋|𝑀, 𝑙) || 𝑃(𝑋|¬𝑀, 𝑙)) 
+
+Where ,  denotes the entropy distribution,  and  partitions over residue attribute (e.g. 𝑋  𝑀  ¬𝑀 
+
+polar vs. non-polar residues) and  - binary label. 𝑙 
+
+To ensure JSD values are not affected by bin size, we computed the JSD for all attributes in and datasets analyzed in figure S6d using four bin resolutions (200, 100, 50, and 25 bins). Rank stability across bin sizes was assessed using Kendall’s τ, computed using the SciPy kendalltau 
+
+implementation ( Table 4 ). All pairwise comparisons showed strong positive rank correlations ( 
+
+0.7-0.92), indicating that the relative ordering of attributes is highly robust to the choice of τ ≈ 
+
+bin size. 
+
+Bin-size  Kendall τ  p-value 
+
+200 vs 100  0.857  𝑝 < 1. 0𝑒 −12 
+
+20 vs 50  0.784  𝑝 < 1. 0𝑒 −10 
+
+200 vs 25  0.721  𝑝 < 1. 0𝑒 −9 
+
+100 vs 50  0.921  𝑝 < 1. 0𝑒 −14 
+
+10 vs 25  0.851  𝑝 < 1. 0𝑒 −12 
+
+50 vs 25  0.917  𝑝 < 1. 0𝑒 −15 
+
+Table 4. Bin size effect on JSD calculation. p-value two-sided test against τ = 0. 
+
+27 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+Calibration Matrices 
+
+Reliability histograms. Calibration, or reliability histograms 74,75 , were used to visualize the 
+
+reliability of the predicted model probabilities. Reliability histograms can only be applied to models that output probabilistic scores within the [0, 1] range. Histograms were constructed by discretizing model predictions into 10 equally-spaced bins. We then compute the per bin empirical pathogenic frequency. For a perfectly calibrated model, the average predicted confidence should match the observed frequency (up to binning artifacts), yielding points close to the identity line. Deviations above or below this line indicate overconfidence or underconfidence, respectively. 
+
+Expected Calibration Error. While reliability histograms provide intuitive visual insights, they are difficult to quantify and may be misleading when sample counts vary substantially across bins. To provide a quantitative measure of calibration, we computed the weighted Expected 
+
+Calibration Error (ECE) 39 . For  bins  let  and  denote, the empirical 𝑀  𝑏 1, ... , 𝑏 𝑀  𝑛 𝑏 , 𝑓𝑟𝑒𝑞 𝑏  𝑐𝑜𝑛𝑓 𝑏 
+
+pathogenic frequency, and the mean predicted confidence in bin  , respectively and let  be the 𝑏  𝑁 
+
+total number of variants. 
+
+(9) 𝐸𝐶𝐸 = 𝑏=1 𝑀 
+
+∑ 𝑛 𝑏  
+
+> 𝑁
+
+× |𝑐𝑜𝑛𝑓 𝑏 − 𝑓𝑟𝑒𝑞 𝑏 |
+
+An ECE of 0 indicates perfect calibration, while higher values represent poorer calibration. Although ECE does not distinguish between overconfidence and underconfidence, these effects can be easily inferred from the accompanying reliability histograms. 
+
+Maximal Calibration Error. Reported as the maximal calibration error across all bins with > 50 sample: 
+
+(8) 𝑀𝐶𝐸 = 𝑚𝑎𝑥 𝑏∈[𝑀] ∧ |𝑏 𝑖 | > 50 {|𝑐𝑜𝑛𝑓 𝑏 − 𝑓𝑟𝑒𝑞 𝑏 |} 
+
+P-value and multiple hypothesis correction . For Table S2, p-values were computed using Fisher’s exact test and adjusted for multiple comparisons with the Benjamini-Hochberg procedure. For the mutual-information (MI) analysis (Figure S3, Table S3) p-values were calculated using the Mann-Whitney U test (SciPy’s mannwhitneyu, two-sided test) over 1,000 non-parametric bootstrap MI values per attribute at the residue vs the protein level. The p-value reported in Figure S6d-e,S7,S8 corresponds to the default two-tailed p-value from SciPy’s 
+
+person method, calculated based on the t-distribution. 
+
+For the well-annotated, balanced protein analysis (Figure S10), we compared the AUROC of RaCoon with the raw ESM1b AUROC separately for each protein using a two-sided normal 
+
+z-test. For a protein with  variants, the standard error was estimated as in Eq. 9.1, and the 𝑛 
+
+corresponding z-statistic was computed as in Eq. 9.2. Resulting p-values were corrected for multiple testing across proteins using the Benjamini-Hochberg procedure, and proteins with adjusted q-values below 0.05 were considered significant. 
+
+(9. 1) 𝑆𝐸 = 𝑠𝑡𝑑 / 𝑛 
+
+28 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+(9. 2) 𝑧 = 𝐴𝑈𝐶 𝑅𝑎𝐶𝑜𝑜𝑛 −𝐴𝑈𝐶 𝐸𝑆𝑀1𝑏  
+
+> 𝑆𝐸(𝑅𝑎𝐶𝑜𝑜𝑛) 2+ 𝑆𝐸(𝐸𝑆𝑀1𝑏) 2
+
+The RaCoon Pipeline 
+
+Partitioning and Pruning. To construct the calibration tree, we first build a complete tree over all chosen binary residue attributes, where each leaf represents a distinct attribute combination. Because sparse attribute subsets are later pruned, the order of partitioning is important. We begin by dividing the data into residues from short and long proteins, and then iteratively split each node using the attribute that shows the most significant class-conditional entropy distribution difference within that subset until all attributes have been exhausted ( Algorithm 1, Methods ). This greedy ordering prioritizes the most discriminative attributes near the root and facilitates subsequent pruning by grouping nodes in ascending order of conditional distribution difference. After the initial tree is constructed, we iteratively prune leaves with insufficient data until all remaining leaves contain sufficient samples (Algorithm 2, Methods ). Following hyperparameters tuning we set a minimum threshold of 1600 variants per node, requiring at least 400 pathogenic and 400 benign variants. This criterion ensures that each subgroup contains sufficient training data for fitting the GMMs and enough held-out data to justify separate calibration ( Figure S13, Methods ). 
+
+Algorithm 1: Dataset partitioning 
+
+1.  Define a list binary partitioning attributes # [is_disordered, is_sulfur_binding, in_ppi] 
+
+2.  Initialize a tree with a single root node containing the unpartitioned dataset 
+
+3.  Split the dataset at the root by protein length (short vs. long) 
+
+4.  Associate each new node with the list of possible partitioning properties 
+
+5.  Iterative partitioning for each node at the current depth: 
+
+5.1.  If no partitioning attributes remain, stop splitting this node. 
+
+5.2.  For each available attribute, compute the class-conditional entropy distribution difference within the node’s data. ✝
+
+5.3.  Split the node to the positive and negative selections of the attribute with the maximal distribution difference split_properties 
+
+5.4.  remove the used attribute from each child’s list of available splits. 
+
+6.  Repeat Step 5 for each newly created node until all attributes have been exhausted or stopping criteria (e.g., minimum sample size) are met. 
+
+7.  return the calibration tree.  
+
+> ✝
+
+estimated using Jensen-Shanon Divergence over the normalized entropy values of a subset of benign and pathogenic variants of the data 
+
+Algorithm 2: Pruning 
+
+29 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+1.  Set  the minimal thresholds for the total number variants, benign variants, and 𝑁, 𝑛 𝑏 , 𝑛 𝑝 
+
+pathogenic variants per leaf. 
+
+2.  Traverse over all tree leafs until no leafs have been pruned: 
+
+2.1.  If a leaf does not meet minimal thresholds remove the leaf ✝
+
+3.  Return the pruned tree  
+
+> ✝
+
+the leaf data is still found in it’s parent data 
+
+Modelling. Our calibration strategy relies on estimating the pathogenic and benign LLR score distributions rather than using explicitly labeled samples. A natural approach for modeling these distributions is to fit two GMMs for each node of the calibration tree, one for pathogenic and one for benign variants (Algorithm 3, Methods ). We first estimate the fraction of pathogenic variants within each node using 500 randomly sampled variants ( Methods ). To reduce training size, the same variants are also used for GMM fitting. Each GMM is trained on 400 pathogenic and 400 benign variants, which we find yields results surpassing those obtained with tens of thousands of labeled examples ( Figure S10a-b ). Synthetic samples generated from the fitted GMMs, sampled according to the estimated pathogenic fraction, are then used to construct calibration histograms that map LLR values to pathogenicity probabilities. 
+
+The GMM-based strategy offers four key advantages. First, it effectively decouples calibration from the size of the node’s dataset, with only ~800 samples needed to fit the model ( Figure S10a-b ). Second, our hyperparameter choices intentionally constrain the expressiveness of the GMMs by limiting the number of fitted parameters. This reduces the risk of overfitting, preventing the model from capturing noise or outliers. Third, as generative models, GMMs enable unlimited synthetic sampling, facilitating the construction of finer-grained calibration histograms and thus improving scores interpretability. Importantly, drawing additional samples may, at most, lead to overfitting of the GMM distribution. Finally, drawing from GMMs prevents the calibration process from direct exposure to labeled examples, maintaining minimal downstream supervision and avoiding data leakage. In fact, even when GMMs are trained on the full node dataset, intentionally introducing potential leakage, no measurable improvement in AUROC is observed ( Results-Ablations ). 
+
+Algorithm 3: Fitting GMMs 
+
+1.  Set  number of variants required to train a GMM and to estimate pathogenic 𝑁 𝐺𝑀𝑀 , 𝑁 𝑝 
+
+fraction per node. 
+
+2.  Remove extreme outliers from the entire dataset using the modified z-score criterion (Methods). 
+
+3.  For each node in the calibration tree: 
+
+3.1.  Randomly sample  mutations from the node’s data to estimate the 𝑁 𝑝 
+
+proportion of pathogenic variants 
+
+3.2.  Sample  pathogenic and benign variants for model fitting ✝.𝑁 𝐺𝑀𝑀 
+
+3.3.  Train GMMs for the pathogenic and benign subsets. 
+
+30 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+4.  Return the GMMs and pathogenic fraction per-node.  
+
+> ✝
+
+We reuse variants used for 3.1 and randomly sample additional variants to complete to  𝑁 𝐺𝑀𝑀 
+
+Binning. To translate LLR scores into meaningful pathogenicity estimates, we construct calibration histograms with equal-frequency bins where each bin represents a specific range of LLR values (Algorithm 4, Methods ). As LLR scores are not uniformly distributed, using equal-frequency binning inherently adjusts bins granularity to match the underlying data density. Each bin is then assigned a pathogenic score given by the empirical proportion of pathogenic variants within that bin. In practice, we draw 40,000 synthetic samples from the fitted GMMs, sampling from the pathogenic and benign components according to the estimated pathogenic to benign ratio in the node’s data. We perform an extensive hyperparameter search over the number of bins and synthetic samples, and find that 40,000 synthetic samples and 50 bins yield optimal AUROC performance while producing finely grained and interpretable scores ( Figure S10c-d, Methods ). 
+
+Algorithm 4: Binning 
+
+1.  Set  number of bins, number of synthetically drawn samples and the 𝑁 𝑏𝑖𝑛𝑠 , 𝑁 𝑠𝑎𝑚𝑝𝑙𝑒 , 𝑃 𝑖 
+
+estimated pathogenic fraction per node respectively. 
+
+2.  For each node ✝ in the calibration tree: 𝑖 
+
+2.1.  Draw synthetic samples from the fitted GMMs,using the following rule: 
+
+2.1.1.  * from the pathogenic GMM. 𝑁 𝑠𝑎𝑚𝑝𝑙𝑒  𝑃 𝑖 
+
+2.1.2.  * (1 - ) from the benign GMM. 𝑁 𝑠𝑎𝑚𝑝𝑙𝑒  𝑃 𝑖 
+
+2.2.  Partition all sampled values into  equal-frequency bins. 𝑁 𝑏𝑖𝑛𝑠 
+
+2.3.  For each bin: 
+
+2.3.1.  Compute the pathogenic frequency within the bin. 
+
+3.  Return the per-node histogram.  
+
+> ✝
+
+In practise we calibrate all leaves, nodes with a single child and nodes corresponding to attributes without full coverage (such as PPIs) (Figure S9) 
+
+Mapping. At inference time, a new variant is first assigned to its corresponding node in the calibration tree. Its raw LLR score is then mapped to the appropriate bin, from which the corresponding pathogenic fraction is retrieved (Algorithm 5, Methods ). This procedure produces calibrated, interpretable predictions that directly translate model outputs into clinically meaningful frequencies. 
+
+Algorithm-5 Mapping: 
+
+1.  Given a variant  and its associated attributes  , traverse the calibration tree until: 𝑣  𝐴 𝑣 
+
+31 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+1.1.  A leaf node is reached. 
+
+1.2.  The next node in the path is missing ✝.
+
+1.3.  The next split involves a feature missing from  (NaN). 𝐴 𝑣 
+
+2.  Retrieve the calibration histogram associated with the node. . 
+
+3.  Map the variant’s ESM1b LLR score to the appropriate histogram bin. 
+
+4.  Return the pathogenic fraction associated with that bin..  
+
+> ✝
+
+The node was pruned 
+
+Hyperparameters Tuning 
+
+GMM training sample size. To isolate the effect of training set size on calibration performance we trained pathogenic and benign GMMs per-node with an increasing number of samples. We used a simplified calibration tree, partitioning only on length and fold, both having 100% coverage and proven to improve AUROC on ESM1b throughout the study. This step was essential because changing the number of training samples can also alter the pruning outcome, confounding the effects of tree composition and training set size on overall performance. To construct calibration histograms we fixed the number of synthetically drawn samples at 40,000 and the number of bins at 50. Reported results were obtained using the ClinVar_balanced dataset and represent the average over 100 independent training iterations, each consisting of 100 non-parametric bootstrap test iterations. Global AUROC was computed on an unseen test set composed of the remaining samples. We also report the effect of training sample size on the number of calibration subgroups in the resulting calibration tree (Figure S13b). We set the Racoon’s threshold at 400 training samples per node as it achieved significantly superior AUROC over the naive model while maintaining a large tree size . 
+
+Next, we compared the GMM-based calibration to direct histogram binning using the same simplified tree structure and hyperparameters. We progressively bin an increasing number of raw LLR, and evaluated AUROC on the remaining unseen samples. Direct binning yielded inferior results than the GMM approach by a significant margin even when using thousands of training samples. Furthermore, sampling over 2,000 scores did not improve performance, and may have even reduced it ( Figure S13a ). 
+
+Finally, we tested whether a hybrid strategy combining direct binning with synthetic sampling could further improve calibration. Using the same setup, we trained per-node GMMs on 400 samples, generated 40,000 synthetic samples and progressively combined them with increasing numbers of raw scores to construct the calibration histograms. The hybrid strategy only hindered the performance of the pure GMM approach, demonstrating degrading results with increased raw samples size (Figure S13a,b ). We hypothesize that without incorporating denoising procedures, raw samples have a low signal to noise ratio requiring very large train size to reach comparable performance. 
+
+Estimation of pathogenic frequency. To estimate the pathogenic frequency, we used 500 randomly sampled labels, which could also serve for GMM training to maintain a minimal training size. The labels were modeled as Bernoulli-distributed variables (1 pathogenic, 0 
+
+benign), and the sample size was selected to ensure an estimated pathogenic frequency  𝑝 
+
+32 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+achieves a 95% confidence interval within ±5% margin. Under the normal approximation, a 
+
+rigorous estimation, without assuming any prior on  , and without finite-population correction 𝑝 
+
+requires  samples, we increased this to 500 to provide a conservative margin. 𝑛 = 385 
+
+GMM-generated samples and number of bins. Having established the minimum number of variants required for GMM training and the superiority of synthetic sampling over direct binning, we next optimized the number of synthetic samples drawn from the GMMs and the number of bins used in the calibration histograms. We first computed the full calibration tree on the ClinVar_Balanced dataset using a minimum of 1600 total variants per node and the established thresholds of 400 benign and 400 pathogenic variants (Algorithms 1-3). All experiments were conducted over 100 independent GMM training iterations, each averaged over 100 non-parametric bootstrap test iterations. 
+
+To determine the optimal number of bins, we drew 100,000 synthetic samples from the GMMs and constructed calibration histograms with an increasing number of equal-frequency bins (Figure S13c ). Drawing 100,000 samples ensured sufficient coverage without constraining bin granularity. Performance plateaued at approximately 40-50 bins, with no further improvement observed beyond this range. Increasing the number of bins above 50 may create an artificial impression of better calibration, as the apparent gain reflects over-splitting of existing bins rather than genuinely improved estimation of fine-grained frequencies. We therefore set the number of bins to 50, this provides a high resolution that accurately reflects the model’s learned distributions. 
+
+Next, we fixed the number of bins at 50 and analyzed AUROC as a function of the number of synthetic samples drawn from the GMMs ( Figure S13d ). Following Algorithm 4, samples were drawn according to the pathogenic-to-benign ratio of each node’s fitted GMMs. We found that performance plateaued at 40,000 synthetic samples per leaf. Fewer samples likely failed to estimate per-bin pathogenic probabilities accurately, given the relatively high number of bins, while larger sample sizes neither improved nor degraded performance. This result supports our earlier claim that while the calibration process can overfit the learned GMM distribution, the GMM itself acts as a regularizer, preventing overfitting to the raw LLR distribution. Consequently, we set 40,000 synthetic samples per node as the default for all subsequent experiments. 
+
+Immunity to data leakage. To demonstrate that our pipeline can not memorize specific examples we compare RaCoon’s performance on a test-set consisting of samples seen during the calibration process and a test-set consisting of unseen samples. For each node, we retain an equal number of pathogenic and benign variants (matching the smaller class) and split this balanced dataset into balanced train and test subsets. The train set is used to fit the per-node GMMs. We then compare RaCoon’s performance on unseen variants (the test set) vs seen variants used to fit the GMMs - introducing deliberate data leakage. This setting ensures that in both scenarios the size and label distribution of the evaluation sets are equal, preventing biases in performance evaluation. 
+
+On the ClinVar_Balanced dataset, RaCoon achieves an AUROC of 0.889 ± 0.002 in both settings, while on ProteinGym the AUROC is 0.893 ± 0.002 without data leakage and 0.894 ± 0.002 with full data leakage. These results demonstrate that even under extreme 100% leakage, 
+
+33 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+RaCoon’s performance does not improve, confirming that the model does not memorize calibration samples. These AUROC values differ from those reported in the main text because this experiment uses very different test sets, designed specifically to equalize class distributions across all nodes. 
+
+RaCoon server version 
+
+RaCoon is made publicly available through an open-access  server . The server version returns 
+
+predictions averaged over the median of 75 out of 100 randomly initialized RaCoon models trained on the ClinVar_HQ dataset, allowing standard deviations to be reported for each prediction. In addition, node-specific ECE and MCE values are provided. Support for node-specific classification thresholds will be incorporated in a future release. 
+
+Data availability 
+
+All datasets used in the study are available at  zenodo.org  (17690936). 
+
+Code availability 
+
+All code used to implement RaCoon is publicly available through the RaCoon  Github repository .
+
+References 
+
+1.  Frazer, J. et al. Disease variant prediction with deep generative models of evolutionary 
+
+data. Nature 599 , 91–95 (2021). 
+
+2.  Truong, T., Jr & Bepler, T. PoET: A generative model of protein families as 
+
+sequences-of-sequences. Advances in Neural Information Processing Systems 36 ,
+
+77379–77415 (2023). 
+
+3.  Notin, P. et al. Tranception: protein fitness prediction with autoregressive transformers and 
+
+inference-time retrieval. (2022). 
+
+4.  Brandes, N., Goldman, G., Wang, C. H., Ye, C. J. & Ntranos, V. Genome-wide prediction of 
+
+disease variant effects with a deep protein language model. Nature Genetics 55 ,
+
+1512–1522 (2023). 
+
+5.  Lin, Z. et al. Evolutionary-scale prediction of atomic-level protein structure with a language 
+
+model. Science (2023) doi: 10.1126/science.ade2574 .
+
+6.  Cheng, J. et al. Accurate proteome-wide missense variant effect prediction with 
+
+AlphaMissense. Science (2023) doi: 10.1126/science.adg7492 .
+
+34 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+7.  Landrum, M. J. et al. ClinVar: public archive of relationships among sequence variation and 
+
+human phenotype. Nucleic Acids Research 42 , D980 (2013). 
+
+8.  Notin, P. et al. ProteinGym: Large-Scale Benchmarks for Protein Design and Fitness 
+
+Prediction. bioRxiv (2023) doi: 10.1101/2023.12.07.570727 .
+
+9.  Radjasandirane, R., Diharce, J., Gelly, J.-C. & de Brevern, A. G. Insights for variant clinical 
+
+interpretation based on a benchmark of 65 variant effect predictors. Genomics 117 , 111036 
+
+(2025). 
+
+10.  Alirezaie, N., Kernohan, K. D., Hartley, T., Majewski, J. & Hocking, T. D. ClinPred: 
+
+Prediction Tool to Identify Disease-Relevant Nonsynonymous Single-Nucleotide Variants. 
+
+American Journal of Human Genetics 103 , 474 (2018). 
+
+11.  Li, C., Zhi, D., Wang, K. & Liu, X. MetaRNN: differentiating rare pathogenic and rare benign 
+
+missense SNVs and InDels using deep learning. Genome Medicine 14 , 1–14 (2022). 
+
+12.  Tian, Y. et al. REVEL and BayesDel outperform other in silico meta-predictors for clinical 
+
+variant classification. Scientific Reports 9, 1–6 (2019). 
+
+13.  Gray, V. E., Hause, R. J., Luebeck, J., Shendure, J. & Fowler, D. M. Quantitative Missense 
+
+Variant Effect Prediction Using Large-Scale Mutagenesis Data. Cell systems 6, (2018). 
+
+14.  Fawzy, M. & Marsh, J. A. Understanding the heterogeneous performance of variant effect 
+
+predictors across human protein-coding genes. Sci Rep 14 , 26114 (2024). 
+
+15.  Rastogi, R. et al. Critical assessment of missense variant effect predictors on 
+
+disease-relevant variant data. Hum Genet 144 , 281–293 (2025). 
+
+16.  Grimm, D. G. et al. The Evaluation of Tools Used to Predict the Impact of Missense Variants 
+
+Is Hindered by Two Types of Circularity. Human Mutation 36 , 513–523 (2015). 
+
+17.  Pathak, A. et al. Pervasive ancestry bias in variant effect predictors. bioRxiv (2024) 
+
+doi: 10.1101/2024.05.20.594987 .
+
+18.  Bromberg, Y., Prabakaran, R., Kabir, A. & Shehu, A. Variant Effect Prediction in the Age of 
+
+Machine Learning. Cold Spring Harb Perspect Biol 16 , (2024). 
+
+35 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+19.  Updated benchmarking of variant effect predictors using deep mutational scanning. 
+
+http://dx.doi.org/10.15252/msb.202211474  doi: 10.15252/msb.202211474 .
+
+20.  Laine, E., Karami, Y. & Carbone, A. GEMME: A Simple and Fast Global Epistatic Model 
+
+Predicting Mutational Effects. Mol Biol Evol 36 , 2604–2619 (2019). 
+
+21.  Meier, J. et al. Language models enable zero-shot prediction of the effects of mutations on 
+
+protein function. bioRxiv (2021) doi: 10.1101/2021.07.09.450648 .
+
+22.  Glaser, M. & Braegelmann, J. ESM-Effect: An Effective and Efficient Fine-Tuning 
+
+Framework towards accurate prediction of Mutation’s Functional Effect. bioRxiv (2025) 
+
+doi: 10.1101/2025.02.03.635741 .
+
+23.  Elnaggar, A. et al. ProtTrans: Toward Understanding the Language of Life Through 
+
+Self-Supervised Learning. IEEE transactions on pattern analysis and machine intelligence 
+
+44 , (2022). 
+
+24.  Marquet, C., Schlensok, J., Abakarova, M., Rost, B. & Laine, E. Expert-guided protein 
+
+language models enable accurate and blazingly fast fitness prediction. Bioinformatics 40 ,
+
+btae621 (2024). 
+
+25.  Weitzman, R. et al. Protriever: End-to-End Differentiable Protein Homology Search for 
+
+Fitness Prediction. (2025). 
+
+26.  Zhang, Z. et al. Protein language models learn evolutionary statistics of interacting 
+
+sequence motifs. Proc Natl Acad Sci U S A 121 , e2406285121 (2024). 
+
+27.  Shaw, A. et al. Removing bias in sequence models of protein fitness. bioRxiv (2023) 
+
+doi: 10.1101/2023.09.28.560044 .
+
+28.  Benjamin Livesey, J. A. M. Why variant effect predictors and multiplexed assays agree and 
+
+disagree. bioRxiv doi: 10.1101/2025.07.31.667868 .
+
+29.  Bergquist, T. et al. Calibration of additional computational tools expands ClinGen 
+
+recommendation options for variant classification with PP3/BP4 criteria. bioRxiv (2024) 
+
+doi: 10.1101/2024.09.17.611902 .
+
+36 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+30.  Schmirler, R., Heinzinger, M. & Rost, B. Fine-tuning protein language models boosts 
+
+predictions across diverse tasks. Nature Communications 15 , 7407 (2024). 
+
+31.  Itan, Y. et al. The mutation significance cutoff: gene-level thresholds for variant predictions. 
+
+Nat Methods 13 , 109–110 (2016). 
+
+32.  Bikman, M., Kolodny, R. & Osadchy, M. Few-Shot prediction of the experimental functional 
+
+measurements for proteins with single point mutations. in ICLR 2024 Workshop on 
+
+Generative and Experimental Perspectives for Biomolecular Design (2024). 
+
+33.  Zhan, H., Moore, J. H. & Zhang, Z. A disease-specific language model for variant 
+
+pathogenicity in cardiac and regulatory genomics. Nature Machine Intelligence 7, 661–671 
+
+(2025). 
+
+34.  Marks, D., Gurev, S., Youssef, N. & Jain, N. Variant effect prediction with reliability 
+
+estimation across priority viruses. (2025) doi: 10.21203/rs.3.rs-7294637/v1 .
+
+35.  Vaicenavicius, J. et al. Evaluating model calibration in classification. (2019). 
+
+36.  Srivastava, A. et al. Beyond the Imitation Game: Quantifying and extrapolating the 
+
+capabilities of language models. (2022) doi: 10.48550/arXiv.2206.04615 .
+
+37.  Desai, S. & Durrett, G. Calibration of Pre-trained Transformers. (2020). 
+
+38.  Bommasani, R., Liang, P. & Lee, T. Holistic Evaluation of Language Models. Ann N Y Acad 
+
+Sci 1525 , 140–146 (2023). 
+
+39.  Guo, C., Pleiss, G., Sun, Y. & Weinberger, K. Q. On Calibration of Modern Neural Networks. 
+
+in International Conference on Machine Learning 1321–1330 (PMLR, 2017). 
+
+40.  Thorne, J. L. Models of protein sequence evolution and their applications. Curr Opin Genet 
+
+Dev 10 , 602–605 (2000). 
+
+41.  Thorne, J. L., Goldman, N. & Jones, D. T. Combining protein evolution and secondary 
+
+structure. Mol Biol Evol 13 , 666–673 (1996). 
+
+42.  Luppino, F., Lenz, S., Chow, C. F. W. & Toth-Petroczy, A. Deep learning tools predict 
+
+variants in disordered regions with lower sensitivity. BMC Genomics 26 , 367 (2025). 
+
+37 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+43.  Brown, C. J., Johnson, A. K. & Daughdrill, G. W. Comparing models of evolution for ordered 
+
+and disordered proteins. Mol Biol Evol 27 , 609–621 (2010). 
+
+44.  Ruff, K. M. & Pappu, R. V. AlphaFold and Implications for Intrinsically Disordered Proteins. 
+
+J Mol Biol 433 , 167208 (2021). 
+
+45.  Tesei, G. et al. Conformational ensembles of the human intrinsically disordered proteome. 
+
+Nature 626 , 897–904 (2024). 
+
+46.  Hou, C., Liu, D., Zafar, A. & Shen, Y. Understanding Language Model Scaling on Protein 
+
+Fitness Prediction. bioRxiv (2025) doi: 10.1101/2025.04.25.650688 .
+
+47.  Richards, S. et al. Standards and guidelines for the interpretation of sequence variants: a 
+
+joint consensus recommendation of the American College of Medical Genetics and 
+
+Genomics and the Association for Molecular Pathology. Genet Med 17 , 405–424 (2015). 
+
+48.  Dias, M., Orenbuch, R., Marks, D. S. & Frazer, J. Toward trustable use of machine learning 
+
+models of variant effects in the clinic. Am J Hum Genet 111 , 2589–2593 (2024). 
+
+49.  Lin, P.-Y. & Brandes, N. P-KNN: Maximizing variant classification evidence through joint 
+
+calibration of multiple pathogenicity prediction tools. bioRxiv (2025) 
+
+doi: 10.1101/2025.09.24.678417 .
+
+50.  Obermeyer, Z., Powers, B., Vogeli, C. & Mullainathan, S. Dissecting racial bias in an 
+
+algorithm used to manage the health of populations. Science (2019) 
+
+doi: 10.1126/science.aax2342 .
+
+51.  Hébert-Johnson, Ú., Kim, M. P., Reingold, O. & Rothblum, G. N. Calibration for the 
+
+(Computationally-Identifiable) Masses. (2017). 
+
+52.  Hansen, D., Devic, S., Nakkiran, P. & Sharan, V. When is Multicalibration Post-Processing 
+
+Necessary? Advances in Neural Information Processing Systems 37 , 38383–38455 (2024). 
+
+53.  La Cava, W. G., Lett, E. & Wan, G. Fair admission risk prediction with proportional 
+
+multicalibration. Proc Mach Learn Res 209 , 350–378 (2023). 
+
+54.  Sundaram, L. et al. Predicting the clinical impact of human mutation with deep neural 
+
+38 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+networks. Nat Genet 50 , 1161–1170 (2018). 
+
+55.  Malhis, N., Jacobson, M., Jones, S. J. M. & Gsponer, J. LIST-S2: taxonomy based sorting 
+
+of deleterious missense mutations across species. Nucleic Acids Res 48 , W154–W161 
+
+(2020). 
+
+56.  Choi, Y., Sims, G. E., Murphy, S., Miller, J. R. & Chan, A. P. Predicting the functional effect 
+
+of amino acid substitutions and indels. PLoS One 7, e46688 (2012). 
+
+57.  Ng, P. C. & Henikoff, S. SIFT: Predicting amino acid changes that affect protein function. 
+
+Nucleic Acids Res 31 , 3812–3814 (2003). 
+
+58.  Reva, B., Antipin, Y. & Sander, C. Predicting the functional impact of protein mutations: 
+
+application to cancer genomics. Nucleic Acids Res 39 , e118 (2011). 
+
+59.  Jagota, M. et al. Cross-protein transfer learning substantially improves disease variant 
+
+prediction. Genome Biol 24 , 182 (2023). 
+
+60.  Shihab, H. A. et al. Predicting the functional, molecular, and phenotypic consequences of 
+
+amino acid substitutions using hidden Markov models. Hum Mutat 34 , 57–65 (2013). 
+
+61.  Quang, D., Chen, Y. & Xie, X. DANN: a deep learning approach for annotating the 
+
+pathogenicity of genetic variants. Bioinformatics 31 , 761–763 (2015). 
+
+62.  Samocha, K. E. et al. Regional missense constraint improves variant deleteriousness 
+
+prediction. bioRxiv (2017) doi: 10.1101/148353 .
+
+63.  Raimondi, D. et al. DEOGEN2: prediction and interactive visualization of single amino acid 
+
+variant deleteriousness in human proteins. Nucleic Acids Res 45 , W201–W206 (2017). 
+
+64.  Adzhubei, I. A. et al. A method and server for predicting damaging missense mutations. Nat 
+
+Methods 7, 248–249 (2010). 
+
+65.  Kircher, M. et al. A general framework for estimating the relative pathogenicity of human 
+
+genetic variants. Nat Genet 46 , 310–315 (2014). 
+
+66.  Zhang, H., Xu, M. S., Fan, X., Chung, W. K. & Shen, Y. Predicting functional effect of 
+
+missense variants using graph attention neural networks. Nat Mach Intell 4, 1017–1028 
+
+39 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+(2022). 
+
+67.  Ioannidis, N. M. et al. REVEL: An Ensemble Method for Predicting the Pathogenicity of 
+
+Rare Missense Variants. Am J Hum Genet 99 , 877–885 (2016). 
+
+68.  Feng, B.-J. PERCH: A Unified Framework for Disease Gene Prioritization. Hum Mutat 38 ,
+
+243–251 (2017). 
+
+69.  Carter, H., Douville, C., Stenson, P. D., Cooper, D. N. & Karchin, R. Identifying Mendelian 
+
+disease genes with the variant effect scoring tool. BMC Genomics 14 Suppl 3 , S3 (2013). 
+
+70.  Tejura, M. et al. Calibration of variant effect predictors on genome-wide data masks 
+
+heterogeneous performance across genes. Am J Hum Genet 111 , 2031–2043 (2024). 
+
+71.  Badonyi, M. & Marsh, J. A. acmgscaler: an R package and Colab for standardized 
+
+gene-level variant effect score calibration within the ACMG/AMP framework. Bioinformatics 
+
+41 , (2025). 
+
+72.  Stenton, S. L. et al. Assessment of the evidence yield for the calibrated PP3/BP4 
+
+computational recommendations. medRxiv (2024) doi: 10.1101/2024.03.05.24303807 .
+
+73.  Fawzy, M. & Marsh, J. A. Assessing variant effect predictors and disease mechanisms in 
+
+intrinsically disordered proteins. PLoS Comput Biol 21 , e1013400 (2025). 
+
+74.  DeGroot, M. H. & Fienberg, S. E. The Comparison and Evaluation of Forecasters . (1982). 
+
+75.  Predicting good probabilities with supervised learning. 
+
+https://dl.acm.org/doi/10.1145/1102351.1102430  doi: 10.1145/1102351.1102430 .
+
+76.  Naeini, M. P., Cooper, G. F. & Hauskrecht, M. Obtaining Well Calibrated Probabilities Using 
+
+Bayesian Binning. Proc AAAI Conf Artif Intell 2015 , 2901–2907 (2015). 
+
+77.  Quinonero-Candela, J., Sugiyama, M., Schwaighofer, A. & Lawrence, N. D. Dataset Shift in 
+
+Machine Learning . (MIT Press, 2008). 
+
+78.  Lipton, Z., Wang, Y.-X. & Smola, A. Detecting and Correcting for Label Shift with Black Box 
+
+Predictors. in International Conference on Machine Learning 3122–3130 (PMLR, 2018). 
+
+79.  Schoelkopf, B. et al. On Causal and Anticausal Learning. (2012). 
+
+40 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+80.  González, P., Moreo, A. & Sebastiani, F. Binary quantification and dataset shift: an 
+
+experimental investigation. Data Mining and Knowledge Discovery 38 , 1670–1712 (2024). 
+
+81.  A unifying view on dataset shift in classification. Pattern Recognition 45 , 521–530 (2012). 
+
+82.  Prabakaran, R. & Bromberg, Y. Quantifying uncertainty in protein representations across 
+
+models and task. bioRxiv (2025) doi: 10.1101/2025.04.30.651545 .
+
+83.  Schmidt, A. et al. Predicting the pathogenicity of missense variants using features derived 
+
+from AlphaFold2. Bioinformatics 39 , (2023). 
+
+84.  Petukh, M., Kucukkal, T. G. & Alexov, E. On human disease-causing amino acid variants: 
+
+statistical study of sequence and structural patterns. Hum Mutat 36 , 524–534 (2015). 
+
+85.  Iqbal, S. et al. Comprehensive characterization of amino acid positions in protein structures 
+
+reveals molecular effect of missense variants. Proc Natl Acad Sci U S A 117 , 28201–28211 
+
+(2020). 
+
+86.  Kim, M. P., Ghorbani, A. & Zou, J. Multiaccuracy: Black-Box Post-Processing for Fairness in 
+
+Classification. (2018). 
+
+87.  Alam, R., Mahbub, S. & Bayzid, M. S. Pair-EGRET: enhancing the prediction of 
+
+protein-protein interaction sites through graph attention networks and protein language 
+
+models. Bioinformatics 40 , (2024). 
+
+88.  Xiong, D. et al. A structurally informed human protein-protein interactome reveals 
+
+proteome-wide perturbations caused by disease mutations. Nat Biotechnol (2024) 
+
+doi: 10.1038/s41587-024-02428-4 .
+
+89.  Gao, Z. et al. PFMBench: Protein Foundation Model Benchmark. (2025). 
+
+90.  Bar, Y., Shaer, S. & Romano, Y. Protected test-time adaptation via online entropy matching: 
+
+A betting approach. arXiv [cs.LG] (2024) doi: 10.48550/arXiv.2408.07511 .
+
+91.  Grandvalet, Y. Learning from Partial Labels with Minimum Entropy . (2004). 
+
+92.  Niu, S. et al. Towards stable test-time adaptation in dynamic wild world. arXiv [cs.LG] 
+
+(2023) doi: 10.48550/arXiv.2302.12400 .
+
+41 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+93.  Hawkins-Hooker, A. et al. Likelihood-based fine-tuning of protein language models for 
+
+few-shot fitness prediction and design. bioRxiv (2024) doi: 10.1101/2024.05.28.596156 .
+
+94.  Wang, Y. et al. Long-context Protein Language Modeling Using Bidirectional Mamba with 
+
+Shared Projection Layers. (2024). 
+
+95.  Oettinger, M. A., Schatz, D. G., Gorka, C. & Baltimore, D. RAG-1 and RAG-2, adjacent 
+
+genes that synergistically activate V(D)J recombination. Science 248 , 1517–1523 (1990). 
+
+96.  Lin, W. C. & Desiderio, S. Cell cycle regulation of V(D)J recombination-activating protein 
+
+RAG-2. Proceedings of the National Academy of Sciences of the United States of America 
+
+91 , (1994). 
+
+97.  Notarangelo, L. D., Kim, M.-S., Walter, J. E. & Lee, Y. N. Human RAG mutations: 
+
+biochemistry and clinical implications. Nat Rev Immunol 16 , 234–246 (2016). 
+
+98.  Matthews, A. G. W. et al. RAG2 PHD finger couples histone H3 lysine 4 trimethylation with 
+
+V(D)J recombination. Nature 450 , 1106–1110 (2007). 
+
+99.  Travis, C. R. et al. Trimethyllysine Reader Proteins Exhibit Widespread Charge-Agnostic 
+
+Binding via Different Mechanisms to Cationic and Neutral Ligands. Journal of the American 
+
+Chemical Society (2024) doi: 10.1021/jacs.3c10031 .
+
+100.  He, S. et al. Structure of nucleosome-bound human BAF complex. Science (2020) 
+
+doi: 10.1126/science.aaz9761 .
+
+101.  Gourisankar, S., Krokhotin, A., Wenderski, W. & Crabtree, G. R. Context-specific functions 
+
+of chromatin remodellers in development and disease. Nat Rev Genet 25 , 340–361 (2024). 
+
+102.  Sanchez-Vega, F. et al. Oncogenic Signaling Pathways in The Cancer Genome Atlas. Cell 
+
+173 , 321–337.e10 (2018). 
+
+103.  Berns, K. et al. Loss of ARID1A Activates ANXA1, which Serves as a Predictive Biomarker 
+
+for Trastuzumab Resistance. Clin Cancer Res 22 , 5238–5248 (2016). 
+
+104.  Yates, L. R. et al. Genomic Evolution of Breast Cancer Metastasis and Relapse. Cancer 
+
+Cell 32 , 169–184.e7 (2017). 
+
+42 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+105.  The use of the area under the ROC curve in the evaluation of machine learning algorithms. 
+
+Pattern Recognition 30 , 1145–1159 (1997). 
+
+106.  Richardson, E. et al. The receiver operating characteristic curve accurately assesses 
+
+imbalanced datasets. Patterns (N Y) 5, 100994 (2024). 
+
+107.  Hanczar, B. et al. Small-sample precision of ROC-related estimates. Bioinformatics (Oxford, 
+
+England) 26 , (2010). 
+
+108.  Nahm, F. S. Receiver operating characteristic curve: overview and practical use for 
+
+clinicians. Korean J Anesthesiol 75 , 25–36 (2022). 
+
+109.  Katsonis, P. & Lichtarge, O. Meta-EA: a gene-specific combination of available 
+
+computational tools for predicting missense variant effects. Nat Commun 16 , 159 (2025). 
+
+110.  Rives, A. et al. Biological structure and function emerge from scaling unsupervised learning 
+
+to 250 million protein sequences. Proc Natl Acad Sci U S A 118 , (2021). 
+
+111.  Sayers, E. W. et al. Database resources of the National Center for Biotechnology 
+
+Information in 2025. Nucleic Acids Res 53 , D20–D29 (2025). 
+
+112.  UniProt Consortium. UniProt: the Universal Protein Knowledgebase in 2023. Nucleic Acids 
+
+Res 51 , D523–D531 (2023). 
+
+113.  McLaren, W. et al. The Ensembl Variant Effect Predictor. Genome Biology 17 , 1–14 (2016). 
+
+114.  Lotthammer, J. M., Ginell, G. M., Griffith, D., Emenecker, R. J. & Holehouse, A. S. Direct 
+
+prediction of intrinsically disordered protein conformational properties from sequence. 
+
+Nature Methods 21 , 465–476 (2024). 
+
+115.  Emenecker, R. J., Griffith, D. & Holehouse, A. S. Metapredict: a fast, accurate, and 
+
+easy-to-use predictor of consensus disorder and structure. Biophys J 120 , 4312–4319 
+
+(2021). 
+
+116.  UniProt Consortium. UniProt: the Universal Protein Knowledgebase in 2025. Nucleic Acids 
+
+Res 53 , D609–D617 (2025). 
+
+117.  Burley, S. K. et al. RCSB Protein Data Bank: Celebrating 50 years of the PDB with new 
+
+43 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+tools for understanding and visualizing biological macromolecules in 3D. Protein Sci 31 ,
+
+187–208 (2022). 
+
+118.  Suzek, B. E., Huang, H., McGarvey, P., Mazumder, R. & Wu, C. H. UniRef: comprehensive 
+
+and non-redundant UniProt reference clusters. Bioinformatics 23 , 1282–1288 (2007). 
+
+119.  Suzek, B. E. et al. UniRef clusters: a comprehensive and scalable alternative for improving 
+
+sequence similarity searches. Bioinformatics 31 , 926–932 (2015). 
+
+120.  Stefl, S., Nishi, H., Petukh, M., Panchenko, A. R. & Alexov, E. Molecular mechanisms of 
+
+disease-causing missense mutations. J Mol Biol 425 , 3919–3936 (2013). 
+
+121.  Kucukkal, T. G., Petukh, M., Li, L. & Alexov, E. Structural and physico-chemical effects of 
+
+disease and non-disease nsSNPs on proteins. Curr Opin Struct Biol 32 , 18–24 (2015). 
+
+122.  David, A. & Sternberg, M. J. E. The Contribution of Missense Mutations in Core and Rim 
+
+Residues of Protein–Protein Interfaces to Human Disease. Journal of Molecular Biology 
+
+427 , 2886 (2015). 
+
+123.  Youden, W. J. Index for rating diagnostic tests. Cancer 3, 32–35 (1950). 
+
+124.  Powers, D. M. W. Evaluation: from precision, recall and F-measure to ROC, informedness, 
+
+markedness and correlation. (2020). 
+
+125.  Fluss, R., Faraggi, D. & Reiser, B. Estimation of the Youden Index and its associated cutoff 
+
+point. Biom J 47 , 458–472 (2005). 
+
+126.  Hand, D. J., McLachlan, G. J. & Basford, K. E. Mixture models: Inference and applications 
+
+to clustering. J. R. Stat. Soc. Ser. C. Appl. Stat. 38 , 384 (1989). 
+
+127.  Iglewicz, B. & Hoaglin, D. C. Volume 16: How to Detect and Handle Outliers . (Quality Press, 
+
+1993). 
+
+128.  Detecting outliers: Do not use standard deviation around the mean, use absolute deviation 
+
+around the median. Journal of Experimental Social Psychology 49 , 764–766 (2013). 
+
+129.  Schwarz, G. Estimating the dimension of a model. Ann. Stat. 6, 461–464 (1978). 
+
+130.  Handling class imbalance in customer churn prediction. Expert Systems with Applications 
+
+44 
+
+> .CC-BY 4.0 International license available under a was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint (which this version posted May 11, 2026. ;https://doi.org/10.1101/2025.11.24.690189 doi: bioRxiv preprint
+
+36 , 4626–4636 (2009). 
+
+131.  Weiss, G. M. & Provost, F. The effect of class distribution on classifier learning: an empirical 
+
+study. Preprint at https://doi.org/ 10.7282/T3-VPFW-SF95  (2001). 
+
+132.  Liu, D. C. & Nocedal, J. On the limited memory BFGS method for large scale optimization. 
+
+Math. Program. 45 , 503–528 (1989). 
+
+133.  Lin, J. Divergence measures based on the Shannon entropy. IEEE Trans. Inf. Theory 37 ,
+
+145–151 (1991). 
+
+45
