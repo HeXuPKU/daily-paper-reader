@@ -6,82 +6,73 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-12
-- 运行时间：2026-05-12 21:30:37 UTC
+- 最新运行日期：2026-05-13
+- 运行时间：2026-05-13 20:30:29 UTC
 - 运行状态：成功
-- 本次总论文数：20
-- 精读区：9
+- 本次总论文数：17
+- 精读区：6
 - 速读区：11
 
 ### 今日简报（AI）
-今日深度解析20篇医疗AI前沿进展，重点聚焦AI智能体在罕见病诊断领域的突破。
-满分论文展示了全能型AI Agent在罕见病识别与风险基因排序中的卓越表现，同时涵盖了EHR数据挖掘与风险预测的新方法。
-推荐优先关注罕见病AI Agent的架构设计，探索如何利用多模态临床数据提升复杂疾病的诊疗精度。
-- 详情：[/202605/12/README](/202605/12/README)
+今日精选17篇前沿成果，重点聚焦于满分AI智能体在罕见病诊断与致病基因识别中的突破性应用。
+核心结论显示全能型AI Agent能显著提升复杂疾病的诊断效率，而DNA语言模型与因果表征学习正重塑个性化医疗。
+建议优先研读罕见病诊断AI Agent的实现方案，探索AI如何精准锁定风险基因以辅助临床决策。
+- 详情：[/202605/13/README](/202605/13/README)
 
 ### 精读区论文标签
-1. [A Versatile AI Agent for Rare Disease Diagnosis and Risk Gene Prioritization](/202605/12/2605.06226v2-a-versatile-ai-agent-for-rare-disease-diagnosis-and-risk-gene-prioritization)  
+1. [A Versatile AI Agent for Rare Disease Diagnosis and Risk Gene Prioritization](/202605/13/2605.06226v1-a-versatile-ai-agent-for-rare-disease-diagnosis-and-risk-gene-prioritization)  
    标签：评分：10.0/10、query:med-ai
-   evidence：用于罕见病诊断和风险基因优先级排序的AI智能体
-2. [A Versatile AI Agent for Rare Disease Diagnosis and Risk Gene Prioritization](/202605/12/2605.06226v1-a-versatile-ai-agent-for-rare-disease-diagnosis-and-risk-gene-prioritization)  
+   evidence：用于罕见病诊断和风险基因优先排序的AI智能体
+2. [A Versatile AI Agent for Rare Disease Diagnosis and Risk Gene Prioritization](/202605/13/2605.06226v2-a-versatile-ai-agent-for-rare-disease-diagnosis-and-risk-gene-prioritization)  
+   标签：评分：10.0/10、query:med-ai
+   evidence：整合遗传图谱和临床记录进行疾病诊断的AI智能体
+3. [Semi-supervised Method for Risk Prediction with Doubly Censored EHR Data](/202605/13/2605.08046v1-semi-supervised-method-for-risk-prediction-with-doubly-censored-ehr-data)  
    标签：评分：9.0/10、query:med-ai
-   evidence：集成遗传图谱和临床记录的罕见病诊断AI智能体
-3. [OmicsLM: A Multimodal Large Language Model for Multi-Sample Omics Reasoning](/202605/12/2605.06728v1-omicslm-a-multimodal-large-language-model-for-multi-sample-omics-reasoning)  
+   evidence：利用大规模电子健康记录数据进行半监督风险预测
+4. [Shapley Regression for Rare Disease Diagnosis Support: a case study on APDS](/202605/13/2605.08897v1-shapley-regression-for-rare-disease-diagnosis-support-a-case-study-on-apds)  
    标签：评分：9.0/10、query:med-ai
-   evidence：用于组学推理的多模态大语言模型
-4. [Shapley Regression for Rare Disease Diagnosis Support: a case study on APDS](/202605/12/2605.08897v1-shapley-regression-for-rare-disease-diagnosis-support-a-case-study-on-apds)  
+   evidence：电子健康记录中罕见病诊断的数据驱动方法
+5. [Identity-by-descent captures Shared Environmental Factors at Biobank Scale](/202605/13/biorxiv-10-1101-2025-05-03-652048-v5-identity-by-descent-captures-shared-environmental-factors-at-biobank-scale)  
    标签：评分：9.0/10、query:med-ai
-   evidence：深度学习与电子健康档案用于罕见病诊断
-5. [CLCNet: a contrastive learning and chromosome-aware network for genomic prediction in plants](/202605/12/biorxiv-10-1101-2024-12-29-630569-v7-clcnet-a-contrastive-learning-and-chromosome-aware-network-for-genomic-prediction-in-plants)  
-   标签：评分：9.0/10、query:gwas
-   evidence：利用全基因组标记进行基因组预测的深度学习框架
-6. [Identity-by-descent captures Shared Environmental Factors at Biobank Scale](/202605/12/biorxiv-10-1101-2025-05-03-652048-v5-identity-by-descent-captures-shared-environmental-factors-at-biobank-scale)  
+   evidence：整合基因组和电子健康记录数据研究环境因素
+6. [Interpreting Omics Data Analysis with Large Language Models for Disease Target and Drug Discovery](/202605/13/biorxiv-10-64898-2026-04-30-721768-v1-interpreting-omics-data-analysis-with-large-language-models-for-disease-target-and-drug-discovery)  
    标签：评分：9.0/10、query:med-ai
-   evidence：整合基因组和电子健康档案数据以捕捉基因-环境相互作用
-7. [Joint Variable Selection for Omic Biomarkers in Time-to-Event Data](/202605/12/biorxiv-10-64898-2026-04-30-721585-v1-joint-variable-selection-for-omic-biomarkers-in-time-to-event-data)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：使用贝叶斯方法将电子健康档案与多组学联系起来
-8. [Interpreting Omics Data Analysis with Large Language Models for Disease Target and Drug Discovery](/202605/12/biorxiv-10-64898-2026-04-30-721768-v1-interpreting-omics-data-analysis-with-large-language-models-for-disease-target-and-drug-discovery)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：用于解释组学数据和药物发现的大语言模型框架
-9. [STARMAP: A 3D-informed framework for mapping functional regions in proteins to regulatory and cellular phenotypes](/202605/12/biorxiv-10-64898-2026-05-05-723010-v1-starmap-a-3d-informed-framework-for-mapping-functional-regions-in-proteins-to-regulatory-and-cellular-phenotypes)  
-   标签：评分：9.0/10、query:gwas
-   evidence：将功能基因组学与人群规模变异数据整合进行机制推断
+   evidence：大语言模型用于解释组学数据和疾病靶点发现
 
 ### 速读区论文标签
-1. [Augmented transfer regression learning for completely missing covariates](/202605/12/2605.04469v1-augmented-transfer-regression-learning-for-completely-missing-covariates)  
+1. [Resolving the bias-precision paradox with stochastic causal representation learning for personalized medicine](/202605/13/2605.05706v1-resolving-the-bias-precision-paradox-with-stochastic-causal-representation-learning-for-personalized-medicine)  
    标签：评分：8.0/10、query:med-ai
-   evidence：针对UK Biobank中缺失遗传或生活方式指标的迁移回归学习
-2. [Semi-supervised Method for Risk Prediction with Doubly Censored EHR Data](/202605/12/2605.08046v1-semi-supervised-method-for-risk-prediction-with-doubly-censored-ehr-data)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：利用大规模电子健康档案数据进行半监督风险预测
-3. [WISTERIA: Learning Clinical Representations from Noisy Supervision via Multi-View Consistency in Electronic Health Records](/202605/12/2605.09765v1-wisteria-learning-clinical-representations-from-noisy-supervision-via-multi-view-consistency-in-electronic-health-records)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：从噪声电子健康记录中进行表示学习
-4. [Distinct genetic architecture of gene and isoform level QTL in the Diversity Outbred (DO) mouse population](/202605/12/biorxiv-10-64898-2026-03-06-710203-v3-distinct-genetic-architecture-of-gene-and-isoform-level-qtl-in-the-diversity-outbred-do-mouse-population)  
-   标签：评分：8.0/10、query:gwas
-   evidence：mRNA丰度表型的遗传关联研究与QTL定位
-5. [Resolving the bias-precision paradox with stochastic causal representation learning for personalized medicine](/202605/12/2605.05706v1-resolving-the-bias-precision-paradox-with-stochastic-causal-representation-learning-for-personalized-medicine)  
-   标签：评分：7.0/10、query:med-ai
    evidence：ICU队列个性化医学的因果表示学习
-6. [Fourier Feature Methods for Nonlinear Causal Discovery: FFML Scoring, TRFF Scoring, and FFCI Testing in Mixed Data](/202605/12/2605.05743v2-fourier-feature-methods-for-nonlinear-causal-discovery-ffml-scoring-trff-scoring-and-ffci-testing-in-mixed-data)  
-   标签：评分：7.0/10、query:gwas
-   evidence：混合数据中非线性因果发现的傅里叶特征方法
-7. [Wisteria: A Unified Multi-Scale Feature Learning Framework for DNA Language Model](/202605/12/2605.05913v1-wisteria-a-unified-multi-scale-feature-learning-framework-for-dna-language-model)  
+2. [Wisteria: A Unified Multi-Scale Feature Learning Framework for DNA Language Model](/202605/13/2605.05913v1-wisteria-a-unified-multi-scale-feature-learning-framework-for-dna-language-model)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：用于DNA序列建模的大规模基因组语言模型
+3. [Active Multiple-Prediction-Powered Inference](/202605/13/2605.08429v1-active-multiple-prediction-powered-inference)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：针对医疗AI使用EHR病历审查的统计有效推断
+4. [CLCNet: a contrastive learning and chromosome-aware network for genomic prediction in plants](/202605/13/biorxiv-10-1101-2024-12-29-630569-v7-clcnet-a-contrastive-learning-and-chromosome-aware-network-for-genomic-prediction-in-plants)  
+   标签：评分：8.0/10、query:gwas
+   evidence：使用SNP进行基因组预测的深度学习框架
+5. [Disentangling Shared and Task-Specific Representations from Multi-Modal Clinical Data](/202605/13/2605.03570v1-disentangling-shared-and-task-specific-representations-from-multi-modal-clinical-data)  
    标签：评分：7.0/10、query:med-ai
-   evidence：DNA语言模型的多尺度特征学习
-8. [Correcting heterogeneous diagnostic bias when developing clinical prediction models using causal hidden Markov models](/202605/12/2605.06059v1-correcting-heterogeneous-diagnostic-bias-when-developing-clinical-prediction-models-using-causal-hidden-markov-models)  
+   evidence：多模态临床数据和用于患者表征的Transformer
+6. [Augmented transfer regression learning for completely missing covariates](/202605/13/2605.04469v1-augmented-transfer-regression-learning-for-completely-missing-covariates)  
    标签：评分：7.0/10、query:med-ai
-   evidence：用于临床预测和 EHR 偏差校正的因果隐马尔可夫模型
-9. [ORBIT: Learning Gene Program Co-Activation Structure for Cell-Type-Stratified Pathway Rewiring Analysis in Single-Cell Transcriptomics](/202605/12/2605.02142v1-orbit-learning-gene-program-co-activation-structure-for-cell-type-stratified-pathway-rewiring-analysis-in-single-cell-transcriptomics)  
+   evidence：针对英国生物银行和All of Us中缺失协变量的迁移学习
+7. [Correcting heterogeneous diagnostic bias when developing clinical prediction models using causal hidden Markov models](/202605/13/2605.06059v1-correcting-heterogeneous-diagnostic-bias-when-developing-clinical-prediction-models-using-causal-hidden-markov-models)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：用于临床预测和诊断偏差的因果隐马尔可夫模型
+8. [PPI-Net connects molecular protein interactions to functional processes in disease](/202605/13/2605.07838v1-ppi-net-connects-molecular-protein-interactions-to-functional-processes-in-disease)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：用于从分子谱建模疾病的分层图神经网络
+9. [Fourier Feature Methods for Nonlinear Causal Discovery: FFML Scoring and FFCI Testing in Mixed Data](/202605/13/2605.05743v1-fourier-feature-methods-for-nonlinear-causal-discovery-ffml-scoring-and-ffci-testing-in-mixed-data)  
    标签：评分：6.0/10、query:gwas
-   evidence：从观测转录组学中学习基因程序的依赖关系
-10. [Graph Neural Network based Hierarchy-Aware Embeddings of Knowledge Graphs: Applications to Yeast Phenotype Prediction](/202605/12/2605.03690v1-graph-neural-network-based-hierarchy-aware-embeddings-of-knowledge-graphs-applications-to-yeast-phenotype-prediction)  
+   evidence：用于混合数据的非线性因果发现方法
+10. [Learning Multi-Relational Graph Representations for DNA Methylation-Based Biological Age Estimation](/202605/13/2605.07175v1-learning-multi-relational-graph-representations-for-dna-methylation-based-biological-age-estimation)  
    标签：评分：6.0/10、query:med-ai
-   evidence：用于表型预测的图神经网络和知识图谱
-11. [FL-Sailer: Efficient and Privacy-Preserving Federated Learning for Scalable Single-Cell Epigenetic Data Analysis via Adaptive Sampling](/202605/12/2605.04519v1-fl-sailer-efficient-and-privacy-preserving-federated-learning-for-scalable-single-cell-epigenetic-data-analysis-via-adaptive-sampling)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：用于单细胞表观遗传数据分析的联邦学习
+   evidence：基于DNA甲基化的生物年龄预测图神经网络框架
+11. [Causal Stability Selection](/202605/13/2605.09300v1-causal-stability-selection)  
+   标签：评分：6.0/10、query:gwas
+   evidence：用于识别治疗效应协变量的因果稳定性选择方法
 
 
 <div class="dpr-home-promo-card">
