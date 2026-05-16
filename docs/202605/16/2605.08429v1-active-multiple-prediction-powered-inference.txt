@@ -1,0 +1,2340 @@
+Title: Active Multiple-Prediction-Powered Inference
+
+URL Source: https://arxiv.org/pdf/2605.08429v1
+
+Published Time: Tue, 12 May 2026 00:21:03 GMT
+
+Number of Pages: 31
+
+Markdown Content:
+# Active Multiple-Prediction-Powered Inference 
+
+Nicholas Peter Brawand 
+
+The MITRE Corporation 
+
+nbrawand@mitre.org 
+
+Nima Leclerc 
+
+The MITRE Corporation 
+
+nleclerc@mitre.org 
+
+Anhthy Ngo 
+
+The MITRE Corporation 
+
+ango@mitre.org 
+
+Matthew Peterson 
+
+The MITRE Corporation 
+
+mpeterson@mitre.org 
+
+Sriram Vishwanath 
+
+The MITRE Corporation Georgia Institute of Technology 
+
+sriram@ece.gatech.edu 
+
+Laith Alhussein 
+
+The MITRE Corporation 
+
+lalhussein@mitre.org 
+
+Ben Wellner 
+
+The MITRE Corporation 
+
+wellner@mitre.org 
+
+## Abstract 
+
+Post-deployment monitoring of healthcare AI requires statistically valid, label-efficient methods, but gold-standard labels from clinician chart review are expen-sive. Prediction-powered inference (PPI) and active statistical inference (ASI) reduce label cost by combining a small labeled sample with abundant model pre-dictions, but both are restricted to a single predictor, a poor fit for modern clinical pipelines that have multiple predictors of differing cost and accuracy available at inference time. We propose Active Multiple-Prediction-Powered Inference (AM-PPI), which routes each instance to a cost-appropriate predictor subset, samples gold-standard labels in proportion to the chosen subset’s residual uncertainty, and reweights predictions to minimize estimator variance, all under a single deployment-time budget. AM-PPI generalizes ASI to leverage multiple predictors and extends Multiple-PPI from global per-predictor allocation to per-instance adaptive routing. We derive closed-form Karush-Kuhn-Tucker (KKT) conditions for all three deci-sions and prove, via biconvexity and strong duality, that the resulting fixed point is a global optimum despite the joint problem being non-jointly-convex. We establish asymptotic normality with valid coverage, minimum-variance unbiasedness within the linear-prediction augmented inverse propensity weighted (AIPW) class, and a closed-form criterion identifying when multiple predictors help. On synthetic data and three healthcare monitoring tasks, AM-PPI produces 10 to 40 percent narrower confidence intervals (CIs) than single-predictor ASI in the budget regime where routing matters, and matches the better baseline elsewhere. 
+
+## 1 Introduction 
+
+AI models are increasingly deployed in clinical settings for tasks such as disease diagnosis, electronic health record summarization, treatment planning, and patient monitoring [Kelly et al., 2019, Chung 
+
+> Approved for Public Release; Distribution Unlimited. Public Release Case Number 26-0953. ©2026 The MITRE Corporation. ALL RIGHTS RESERVED. Preprint.
+> arXiv:2605.08429v1 [stat.ML] 8 May 2026
+
+et al., 2025], but model performance is not static in deployment settings. Distribution shifts in patient demographics, clinical protocols, medical equipment, and disease prevalence can degrade deployed models and lead to missed diagnoses or delayed interventions [Finlayson et al., 2021, Park et al., 2021]. Post-deployment monitoring is therefore essential, and both the FDA-issued Software as a Medical Device (SaMD) framework [U.S. Food and Drug Administration, 2021] and the NIST AI Risk Management Framework [Tabassi, 2023] call for ongoing performance evaluation. Despite this, a recent review found that only 9% of FDA-registered AI-based healthcare tools include a post-deployment surveillance plan [Wu et al., 2021]. Keyes et al. [2025] propose a practical monitoring framework, deployed at Stanford Health Care, organized around system integrity, performance, and impact, and highlight maintaining accurate system behavior as clinical practices and input distributions shift over time as a central challenge. Dolin et al. [2025] argue that post-deployment monitoring should be grounded in label-efficient, statistically valid testing frameworks, and identify label scarcity as a key open problem. The core challenge of developing statistically valid post-deployment testing frameworks is that monitoring requires gold-standard labels (e.g., clinician chart review, pathology confirmation), which are costly and slow to obtain. Classical inference from a small labeled sample yields wide CIs. At the same time, AI predictions are abundant but potentially biased. Prediction-powered inference (PPI) [Angelopoulos et al., 2023a] bridges this gap by combining a small labeled dataset with a large set of AI predictions to produce valid CIs that are tighter than classical inference alone. PPI++ [Angelopoulos et al., 2023b] introduced a tuning parameter λ that ensures PPI does not increase variance relative to labeled-only inference. Stratified PPI [Fisch et al., 2024] further tightens intervals by stratifying on prediction quality. Further extensions of PPI are covered in Section 2. All of these methods sample labels uniformly. Active statistical inference (ASI) [Zrnic and Candès, 2024a] introduced a complementary idea: rather than sampling labels uniformly, allocate the labeling budget to instances where the predictor is most uncertain, thereby reducing the width of CIs while making the best use of human labeling efforts in an online setting. Robust ASI [Li et al., 2025] improved the efficiency of the active sampling algorithm when uncertainty estimates are poorly calibrated, but both methods are restricted to a single predictor. In practice, modern clinical deployments often have several predictors of varying costs and accuracy available at inference time. A hospital may have a low-cost EHR-based triage model, a production model, and a more expensive specialized model or specialist chart review for borderline or high-risk cases. The predictors in such a pipeline differ substantially in both cost and accuracy, and the most informative predictor to trust varies from one instance to the next. Neither PPI nor ASI can exploit this structure. We propose Active Multiple-Prediction-Powered Inference (AM-PPI), which jointly optimizes three coupled decisions under a unified budget constraint that accounts for predictor quality, query costs, and labeling costs. AM-PPI determines (1) which subset of predictors to query for each instance; (2) whether to collect a gold-standard label , sampling proportional to the residual uncertainty of the chosen predictor subset; and (3) how to weight the predictions from each predictor in the subset to minimize estimator variance. Our contributions are (i) optimality conditions for these three decisions together with practical calibration and deployment algorithms for post-deployment monitoring (Section 3), recovering ASI as a special case, and a biconvexity / strong-duality argument certifying that these conditions identify a global optimum despite the joint variance-minimization problem not being jointly convex (Appendix C.5); (ii) asymptotic normality of the AM-PPI estimator yielding valid CIs, plus a minimum-variance unbiased optimality result within the natural class of AIPW estimators that respect the active-sampling mechanism (Section 4); (iii) a closed-form expression for the variance advantage of AM-PPI over single-predictor methods in a simplified data setting, identifying when multiple predictors help (Appendix E and G); and (iv) empirical validation on synthetic data and three healthcare monitoring tasks, showing consistently narrower CIs compared to ASI baselines while maintaining valid coverage (Section 5). 
+
+## 2 Related work 
+
+Prediction-powered inference. PPI [Angelopoulos et al., 2023a] introduced the idea of combining a small labeled dataset with a large ML-predicted dataset to form valid CIs for population parameters. PPI++ [Angelopoulos et al., 2023b] added a tuning parameter λ that interpolates between classical and prediction-powered estimators, ensuring PPI does not increase variance. Cross-PPI [Zrnic and Candès, 22024b] uses cross-fitting to avoid overfitting the ML model to labeled data. Stratified PPI [Fisch et al., 2024] partitions the data into strata based on autorater predictions and applies stratum-specific tuning, substantially reducing variance when prediction quality varies across subdomains. PSPS [Miao and Lu, 2024] provides a task-agnostic framework for post-prediction inference. Multiple-PPI [Cowen-Breen et al., 2026] extends PPI to multiple predictors, solving for a cost-aware global allocation of query counts across predictors under uniform labeling for prospective experimental design. AM-PPI differs in three important ways: (i) we adaptively route individual instances to predictor subsets based on their estimated residual variance rather than fixing a global per-predictor query count; (ii) we jointly optimize active label sampling alongside predictor selection; and (iii) our setting is post-deployment monitoring of a fixed stream of unlabeled instances rather than planning a future experiment. 
+
+Active statistical inference. ASI [Zrnic and Candès, 2024a] designs an optimal sampling rule π(x)
+
+that prioritizes labeling instances where the predictor is uncertain, yielding substantially tighter CIs than uniform sampling. Robust ASI [Li et al., 2025] improves active sampling when uncertainty estimates are inaccurate by interpolating between active and uniform sampling along a budget-preserving path. Both methods use a single predictor, and AM-PPI extends ASI from one predictor to multiple predictors with cost-aware subset routing. AM-PPI recovers ASI as a special case. We focus on the comparison with ASI but future work will include robust optimization extensions. 
+
+Post-deployment monitoring for health AI. Dolin et al. [2025] frame post-deployment monitoring as a collection of hypothesis tests and identify label scarcity as the central open challenge. Label-free approaches to performance estimation under distribution shift exist [Chen et al., 2022, Garg et al., 2022], but sacrifice the statistical guarantees that regulatory frameworks require. Sequential shift detection methods [Amoukou et al., 2024] can flag when performance may have changed, but cannot quantify the magnitude of degradation without labels. AM-PPI fills these gaps by providing a cost-efficient way to produce statistically valid CIs in a post-deployment setting. 
+
+## 3 Active multiple-prediction-powered inference 
+
+3.1 The AM-PPI estimator 
+
+We observe n unlabeled instances X1, . . . , X n drawn i.i.d. from PX . Each instance has an unobserved gold-standard label Yi that is expensive to obtain (e.g., clinician review). We have access to k
+
+predictors f1, . . . , f k with per-predictor query costs c1, . . . , c k; a subset I ⊆ { 1, . . . , k } of predictors has combined query cost cI = P 
+
+> j∈I
+
+cj . The total budget B covers both predictor queries and label collection (at cost clabel per label). Our goal is to estimate θ∗ = E[Y ] and construct a valid, minimal-length (1 − α) CI subject to the budget constraint; the framework extends to general M-estimation, but we focus on mean estimation for clarity. AM-PPI extends PPI++ [Angelopoulos et al., 2023b] and ASI [Zrnic and Candès, 2024a] by introducing a per-instance predictor query subset 
+
+Ii ⊆ { 1, . . . , k } with predictions fIi (Xi) ∈ R|Ii| and a weight vector λIi ∈ R|Ii| that combines them. Let ξi ∼ Bern( πIi (Xi)) indicate whether Yi is collected, with subset-dependent sampling probability πIi (Xi) ∈ (0 , 1] . The AM-PPI estimator is: 
+
+ˆθ = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+
+
+λ⊤ 
+
+> Ii
+
+fIi (Xi) +  Yi − λ⊤ 
+
+> Ii
+
+fIi (Xi) ξi
+
+πIi (Xi)
+
+
+
+. (1) When k = 1 and λ = 1 , this reduces to the ASI estimator of Zrnic and Candès [2024a]. 
+
+3.2 Variance minimization under budget constraints 
+
+The asymptotic variance of the AM-PPI estimator is (see Appendix A): 
+
+Var( ˆθ) = 1
+
+n Var( Y ) + 1
+
+n E
+
+
+
+rI(X)(X)
+
+ 1
+
+πI(X)(X) − 1
+
+ 
+
+, (2) where rI (x) := E(Y − λ⊤ 
+
+> I
+
+fI (x)) 2 | X = x is the conditional residual variance under predictor subset I and combination weights λI . We let uI (x) := prI (x) denote the per-instance residual 3standard deviation, our population-level measure of model uncertainty. Our goal is to construct the shortest valid (1 − α) CI for θ∗ subject to a per-instance budget constraint. Since the interval width scales with 
+
+q
+
+Var( ˆθ), this reduces to minimizing (2) jointly over the labeling policy π, the combination weights λ, and the subset policy I. The Var( Y ) term does not depend on (π, λ, I ) and therefore drops out of the optimization: 
+
+min  
+
+> π, λ, I
+
+E
+
+
+
+rI(X)(X)
+
+ 1
+
+πI(X)(X) − 1
+
+ 
+
+s.t. EcI(X) + πI(X)(X) · clabel 
+
+ ≤ b, (3) where b = B/n is the per-instance budget. Introducing a Lagrange multiplier μ ≥ 0 for the budget constraint gives: 
+
+L = 1
+
+n E
+
+
+
+rI(X)(X)
+
+ 1
+
+πI(X)(X) − 1
+
+ 
+
++ μ EcI(X) + πI(X)(X) · clabel 
+
+ − b . (4) Taking the functional derivative with respect to π(x) and setting it to zero yields the unconstrained optimum (Appendix C) 
+
+π∗ 
+
+> I
+
+(x) = uI (x)
+
+√n μ c label 
+
+. (5) The sampling rule is proportional to the per-instance uncertainty uI (x), so instances with higher model uncertainty are sampled more often. Since π must be a valid probability, AM-PPI uses the clipped quantity 
+
+ˆπI (x) := min  1, π ∗ 
+
+> I
+
+(x) (6) in all downstream substitutions. Differentiating with respect to λI yields the weighted least-squares condition 
+
+EwI (X) ( Y − λ⊤ 
+
+> I
+
+fI (X)) fI (X) = 0 , wI (x) = 1ˆπI (x) − 1, (7) where wI = 0 on {ˆπI = 1 } correctly drops the prediction term for instances always labeled. The multiplier μ is determined by the clipped budget constraint 
+
+EcI(X) + clabel ˆπI(X)(X) = b, (8) whose left-hand side is monotonically non-increasing in μ, so a unique root exists and is found by bisection. In the unclipped, single-fixed-subset case, Eq. (8) admits the closed form μ =(clabel /n ) EX [prI (X)] /(b − E[cI ]) 2, recovering the ASI scaling rule [Zrnic and Candès, 2024a] when cI = 0 . In general the routing I∗(x) itself depends on μ via Eq. (9) , so we solve Eq. (8) numer-ically, recomputing the routing at each candidate μ. The optimal subset minimizes the per-instance Lagrangian cost 
+
+I∗(x) = arg min 
+
+> I
+
+ rI (x)
+
+n
+
+ 1ˆπI (x) − 1
+
+
+
++ μ c I + μ c label ˆπI (x)
+
+
+
+, (9) which on the unclipped set collapses to 2√μc label 
+
+> √n
+
+prI (x) − rI (x)/n + μc I (Appendix C) and is non-decreasing in rI (x) across both regimes, capturing the per-instance tradeoff between query cost and residual variance. 
+
+3.3 Practical algorithms 
+
+The optimality conditions above depend on the unknown rI (x), which we estimate from a burn-in dataset of N fully-labeled samples and refine iteratively (Algorithm 1). Algorithm 2 then deploys the calibrated quantities (ˆλI , ˆuI , ˆμ) to a stream of n unlabeled instances, producing the estimator ˆθ and CI Cα.4Algorithm 1 AM-PPI Calibration 
+
+Require: Burn-in data {(Xj , Y j , f 1(Xj ), . . . , f k(Xj )) }Nj=1 ; candidate subsets I ⊆ 2{1,...,k }; costs 
+
+{cI }I∈I , c label ; per-instance budget b; deployment sample size n; max iterations T 
+
+> 1:
+
+for each I ∈ I do  
+
+> 2:
+
+ˆλI ← dCov( fI , f I )−1 dCov( fI , Y ) (OLS initialization)  
+
+> 3:
+
+ˆuI (·) ← fit |Y − ˆλ⊤ 
+
+> I
+
+fI (X)| 
+
+> 4:
+
+end for  
+
+> 5:
+
+for t = 1 , . . . , T do  
+
+> 6:
+
+ˆrI (x) ← ˆuI (x)2 
+
+> 7:
+
+ˆμ ← root of Eq. (8) (bisection; I(x) evaluated at each ˆμ) 
+
+> 8:
+
+ˆλI ← weighted least squares solution of Eq. (7)  
+
+> 9:
+
+ˆuI (·) ← refit |Y − ˆλ⊤ 
+
+> I
+
+fI (X)| 
+
+> 10:
+
+break if ˆμ and ˆλI have converged  
+
+> 11:
+
+end for  
+
+> 12:
+
+return ˆλI , ˆuI , ˆμ
+
+Algorithm 2 AM-PPI Deployment 
+
+Require: Unlabeled instances X1, . . . , X n; calibrated ˆλI , ˆu, ˆμ from Algorithm 1; candidate subsets 
+
+I; costs {cI }I∈I , c label ; confidence level α 
+
+> 1:
+
+for i = 1 , . . . , n do  
+
+> 2:
+
+ˆπI (Xi) ← min  1, pˆuI (Xi)2/(n ˆμ c label ) for each I ∈ I (Eq. 6)  
+
+> 3:
+
+Ii ← arg min I
+
+n ˆuI (Xi)2
+
+> n
+
+ 1ˆπI (Xi) − 1
+
+
+
++ ˆ μ c I + ˆ μ c label ˆπI (Xi)
+
+o
+
+; query fIi (Xi) (Eq. 9)  
+
+> 4:
+
+ˆπ(Xi) ← ˆπIi (Xi); ξi ∼ Bern(ˆ π(Xi)) ; if ξi = 1 , collect Yi 
+
+> 5:
+
+end for  
+
+> 6:
+
+ˆθ ← 1
+
+> n
+
+Pni=1 
+
+hˆλ⊤ 
+
+> Ii
+
+fIi (Xi) + 
+
+
+
+Yi − ˆλ⊤ 
+
+> Ii
+
+fIi (Xi)
+
+ ξi
+
+> ˆπ(Xi)
+
+i 
+
+> 7:
+
+ˆσ2 ← 1
+
+> n
+
+Pni=1 
+
+ˆλ⊤ 
+
+> Ii
+
+fIi (Xi) + 
+
+
+
+Yi − ˆλ⊤ 
+
+> Ii
+
+fIi (Xi)
+
+ ξi 
+
+> ˆπ(Xi)
+
+− ˆθ
+
+2 
+
+> 8:
+
+return ˆθ, Cα = ˆθ ± z1−α/ 2 · ˆσ/ √n
+
+The burn-in data may be a pre-existing labeled dataset or a small initial investment from the total budget B = nb . The deployment uncertainty models ˆuI are trained on covariates X alone. In practice the uncertainty models need not operate on the same feature representation as the predictors themselves and can instead rely on lightweight covariates that are cheap to extract (e.g., the length of a discharge summary rather than its full text), as we demonstrate in Section 5. 
+
+## 4 Theoretical analysis 
+
+4.1 Asymptotic normality and coverage 
+
+We establish that the AM-PPI estimator is asymptotically normal and produces valid CIs. Throughout this section and the asymptotic proofs in Appendix A, π∗ refers to the population sampling policy evaluated at the oracle (λ∗, I ∗, μ ∗).
+
+Theorem 1 (Asymptotic normality of AM-PPI) . Suppose the following regularity conditions hold: (i) the moments E[Y 4] and E[∥fI (X)∥4] are bounded for all I ∈ I ; (ii) the estimated quantities ˆπ,
+
+ˆλI , and ˆI converge in probability to their population counterparts π∗, λ∗ 
+
+> I
+
+, and I∗; (iii) the sampling probabilities are bounded away from zero, π(x) ≥ πmin > 0 for all x. Then the AM-PPI estimator satisfies √n(ˆθ − θ∗) d
+
+−→ N (0 , V ),
+
+where V = Var( Y ) + E
+
+h
+
+(Y − λ⊤ 
+
+> I∗
+
+fI∗ (X)) 2
+
+ 1 
+
+> π∗(X)
+
+− 1
+
+i 
+
+is the asymptotic variance from Eq. (2) .
+
+See Appendix A for full proof. 5Corollary 1 (Valid CIs) . Under the conditions of Theorem 1, the variance estimator ˆσ2 is consistent for V (Appendix B), and the CI Cα = ˆθ ± z1−α/ 2 ˆσ/ √n satisfies 
+
+lim  
+
+> n→∞
+
+P(θ∗ ∈ C α) ≥ 1 − α. 
+
+This follows from Theorem 1 and Slutsky’s theorem; see Appendix B. 
+
+4.2 Optimality of the AM-PPI estimator 
+
+Beyond asymptotic validity, AM-PPI identifies a global minimum despite the absence of joint convexity in (π, λ ), and is the unique minimum-asymptotic-variance unbiased estimator within a natural AIPW class. 
+
+Global optimality of the optimization. The joint objective J(π, λ, I ) in Eq. (3) is not jointly convex in (π, λ ): decomposing J = J1 − J2 with J1 = E[( Y − λ⊤ 
+
+> I
+
+fI )2/π I ] jointly convex in (π, λ )
+
+on {π > 0} (perspective of u2/v ; [Boyd and Vandenberghe, 2004, §3.2.6]) and J2 = E[( Y −λ⊤ 
+
+> I
+
+fI )2]
+
+concave in λ, the term −J2 destroys joint convexity. Two structural properties nonetheless suffice to certify that the AM-PPI fixed point is a global minimizer. ( A) Biconvexity with closed-form partial minimizers : for any fixed λ, J(·, λ ; I) is convex in π on the box-and-budget feasible set, with unique minimizer Eq. (5) ; for any fixed π, J(π, ·; I) = E[wI (X)( Y − λ⊤ 
+
+> I
+
+fI (X)) 2] with wI = 1 /ˆπI − 1 ≥ 0
+
+is convex (strongly convex when E[wI fI f ⊤ 
+
+> I
+
+] ≻ 0), with unique minimizer Eq. (7) . ( B) Strong duality of the constrained Lagrangian : under Slater’s condition E[cI ] + πmin clabel < b , the budget is a single scalar integral constraint, and the dual function obtained by pointwise minimization of L in 
+
+π followed by weighted least squares (WLS) minimization in λ is concave in the multiplier μ as an infimum of affine functions. Strong duality then closes the gap [Boyd and Vandenberghe, 2004, §5.2.3, §5.5.3], certifying that any KKT triple (π∗, λ ∗, μ ∗) satisfying Eqs. (5) , (7) and the budget identity Eq. (8) is a global minimum of the inner problem, with the discrete outer minimization over routings closed pointwise by Eq. (9) . Formal statements (Proposition 1, Theorems 4–5) and proofs are in Appendix C.5. 
+
+Minimum-variance unbiased estimator within the AIPW class. Consider the natural class C
+
+(Definition 1) of unbiased linear-prediction AIPW estimators that respect the AM-PPI sampling mechanism and budget constraint with the form 
+
+ˆθ(λ, π, I ) = 1
+
+> n
+
+P
+
+> i
+
+λ⊤ 
+
+> Ii
+
+fIi (Xi) +  Yi − λ⊤ 
+
+> Ii
+
+fIi (Xi) ξi
+
+πIi (Xi)
+
+with λI ∈ R|I| and measurable (π, I ) obeying π(x) ≥ πmin > 0 and E[cI + πI clabel ] ≤ b. The class subsumes ASI [Zrnic and Candès, 2024a] (the λ = 1 and k = 1 case). AM-PPI is the special case 
+
+(λ∗, ˆπ, I ∗) from Eqs. (7), (5)–(6), (9). 
+
+Theorem 2 (Minimum-variance unbiased estimator within C). Under the conditions of Theorem 1, the AM-PPI estimator uniquely achieves (up to PX -null sets) the minimum asymptotic variance within the class C of Definition 1, with V as in Eq. (2) .
+
+The argument reduces in two steps to (i) λ = λ∗ from the WLS condition Eq. (7) being the unique minimizer of the residual variance term in λ, and (ii) (π∗, I ∗) solving the resulting budget-constrained variance problem via Theorems 4–5; see Appendix D. 
+
+Theorem 3 (Local semiparametric efficiency) . Suppose in addition that the linear span {x 7 →
+
+λ⊤fI (x) : λ ∈ R|I|} contains the true regression function μ(x) = E[Y | X = x] for some I ∈ I .Then the AM-PPI estimator saturates the semiparametric efficiency bound V ∗ 
+
+> SP
+
+= Var( μ(X)) + 
+
+E[Var( Y | X)/π ∗(X)] for θ∗ = E[Y ] in the active-sampling model with general (not necessarily linear) prediction model and arbitrary inverse-propensity weighting; equivalently, V in Theorem 2 equals V ∗
+
+> SP
+
+.
+
+The proof, given in Appendix D, identifies the AM-PPI influence function with the efficient influence function of Robins and Rotnitzky [1995] when the linear span contains μ. Without this spanning condition, AM-PPI is best-in-class within C but not globally efficient relative to the broader semi-parametric model: efficiency in this setting is fundamentally limited by the predictive quality of the available models {fI }I∈I .65 Experiments 
+
+We evaluate AM-PPI on one synthetic and three healthcare monitoring tasks, comparing it against two ASI baselines: ASI (expensive), which uses a single high-accuracy (sometimes higher-cost) predictor, and ASI (cheap), which uses a single lower-accuracy predictor. We show AM-PPI’s advantage when the costs of the two predictors are equal and when one is greater than the other. Both ASI baselines are run through the AM-PPI calibration loop with |I| = 1 (a single fixed predictor), so they inherit the WLS combination weight λ from Eq. (7) rather than the unit weight λ = 1 of the original ASI [Zrnic and Candès, 2024a]; this strengthening tightens both baselines and isolates the per-instance routing decision as the sole remaining source of any AM-PPI advantage. All methods target the population mean θ∗ = E[Y ] and report 90% CIs ( α = 0 .1). Each experiment sweeps over a range of total budgets B and averages results over multiple independent trials. The total budget B covers only the deployment-time predictor queries and label collection. Figure 1 shows average CI width (left panel), empirical coverage (middle panel), and CI-width ratio against baseline (right panel) as a function of the total budget. Each method’s curve begins at the smallest budget where it can fund its predictor queries plus a minimum gold-label sample, so methods with higher predictor cost start further right on the x-axis (Appendix F). When predictor costs are different, the crossover regime targeted in Figure 1 is precisely the budget band where label scarcity binds and is the operationally relevant regime. Crucially, the crossover point is not known ahead of time, but AM-PPI uses the correct strategy and reduces to ASI(cheap), ASI(expensive), or mixed routing as the budget dictates, so the worst case is parity with the better single-predictor without prior knowledge of which one that is. Full per-experiment setup details are listed in Appendix F. 
+
+5.1 Synthetic regression 
+
+We generate n = 20 ,000 instances with d = 5 features drawn from a standard normal distribution. Approximately 70% of instances are “easy” (linear relationship, low noise: Y = 2 X1 + ε, ε ∼N (0 , 0.1) ) and 30% are “hard” (nonlinear, high noise: Y = sin(3 X1X2) + ε, ε ∼ N (0 , 2) ). The cheap predictor is a decision tree of depth 2; the expensive predictor is a decision tree of depth 6. The predictor costs are different and chosen so that the two ASI baselines cross within the low budget range, delineating three operating regions ( R1, R2, R3) shown in Figure 1 (first row). In the central region R2 of Figure 1 (first row), AM-PPI achieves narrower CIs than both ASI baselines by adopting a mixed routing strategy. In the peripheral regions, AM-PPI dynamically reduces to whichever single predictor the budget favors (e.g., ASI (cheap) in R1 and ASI (expensive) in R3), so practitioners can safely default to AM-PPI regardless of budget regime. All three methods maintain valid coverage at or above the 90% nominal level across all budget levels. ASI (expensive) is not able to operate deep within R1 due to budget constraints. Appendix G provides a synthetic mechanism analysis that decomposes this three-region behavior into the two ingredients of cost gap and accuracy gap, and verifies that random routing collapses AM-PPI onto the ASI baselines. 
+
+5.2 Healthcare monitoring tasks 
+
+We evaluate AM-PPI on three healthcare datasets that represent practical monitoring scenarios: verifying AI-generated clinical summaries, screening for thyroid disease, and fact-checking AI-generated Brief Hospital Course narratives. In each case, the estimand is a clinically relevant prevalence or agreement rate, and the cheap and expensive predictors differ in the features or models they use. All models of r(x) are classical machine learning models trained on derivative properties that are easy to compute. Results are shown in Figure 1 (rows two through four). 
+
+MIMIC-III: EHR-discharge consistency monitoring. We consider a practical post-deployment monitoring scenario: an AI-powered tool generates discharge summaries from structured EHR data, and we wish to estimate the rate at which these summaries are consistent with the underlying structured data [Chung et al., 2025]. Using the MIMIC-III v1.4 database [Johnson et al., 2016] (Phys-ioNet Credentialed Health Data License 1.5.0), we extracted and processed laboratory measurements recorded on the date of admission (“admission labs”) from the structured EHR to generate correspond-ing “Labs on Admission” summary sections via few-shot prompting of GPT-OSS-120B [OpenAI et al., 2025] (Apache 2.0). To construct ground-truth consistency labels, we pair each summary with both the original admission labs record (consistent) and a perturbed copy (inconsistent), where 7perturbations are applied to a random subset of lab entries within a record through value mutations (10–20% deviation), label swaps, and abnormal-flag inversions, following the error taxonomy of EHRCon [Kwon et al., 2024]. We generate two difficulty levels by tuning the proportion of lab entries perturbed within each admission record: 15% (hard to detect) and 50% (easy to detect). The consistency classifiers serving as cheap and expensive predictors are Nemotron-3-Nano-30B and Nemotron-3-Super-120B [NVIDIA et al., 2025] (NVIDIA Open Model License) respectively, both queried with few-shot prompting at temperature 0.1 (see Appendix H for the full prompt). Uncertainty models use 11 easy-to-derive features (note length, number of lab measurements, etc.) rather than the full clinical text. AM-PPI achieves a ∼ 10% reduction in CI width (Figure 1, second row) at the ASI crossing point budget. 
+
+Hypothyroid detection. Using the hypothyroid dataset from OpenML (dataset 57, Garavan Insti-tute; public domain), we estimate the prevalence of hypothyroidism. We explore a different situation where the predictor costs are equal. The “cheap” predictor is a gradient boosting model with 50 estimators trained on the Free Thyroxine Index (FTI) alone; the “expensive” predictor uses all 25 features but only has 10 estimators. This mirrors a screening scenario where the predictor costs are equal but the strengths are different. AM-PPI leverages both predictors simultaneously across the budget range, producing tighter CIs than either single-predictor baseline (Figure 1, third row), achieving up to ∼ 40% reduction in CI widths at the lowest viable budget and ∼ 20% at the largest budget swept. 
+
+VeriFact-BHC: proposition consistency monitoring. We consider a second LLM monitoring scenario at finer granularity: an AI BHC writer generates Brief Hospital Course narratives, the narratives are decomposed into atomic propositions, and we wish to estimate the rate at which those propositions are clinically supported by the patient’s underlying EHR. We use the public VeriFact-BHC dataset [Chung et al., 2025], which provides 13 ,070 propositions extracted from human- and LLM-written BHCs together with adjudicated clinician verdicts. From the dataset, we retain only seventeen lightweight per-proposition metadata features (proposition and parent-chunk token counts, character counts, digit counts, claim-vs-sentence flag, BHC author flag, position within the BHC, length of stay) and the binary clinician label; no clinical text is kept downstream. Authorship of the example (model vs. human) correlates with difficulty. Both the cheap predictor (a depth-1 gradient boosting classifier on four structural features only, deliberately excluding the author flag) and the expensive predictor (a depth-3 gradient boosting classifier on all seventeen features) are trained on the metadata. Again, we set the two predictor query costs equal in this experiment, but the uncertainty models are less accurate compared to the previous example. AM-PPI achieves a ∼ 15% reduction in CI width at the lowest budgets and converges to the ASI baselines at high budgets (Figure 1, fourth row), demonstrating the impact of the uncertainty model accuracy on routing. 
+
+## 6 Discussion 
+
+When AM-PPI helps most. The analysis in (Appendix G) and experiments both point to the same conditions: AM-PPI provides the largest gains when prediction difficulty is heterogeneous across instances and predictors, so that AM-PPI can utilize per-instance routing to reduce the variance. The advantage is demonstrated when budgets are tight. The analysis covered the tradeoff between model capacity and cost and routing across predictors with differing strengths. When predictor costs are different, AM-PPI can adopt a distinct three regime behavior with a routing strategy influenced by cost and predicted residual. When costs are the same, AM-PPI exhibits a simpler behavior based on minimizing the per-instance residual. 
+
+Limitations. Calibration. AM-PPI requires a burn-in labeled dataset to calibrate uncertainty surrogates. Similar to ASI, poor model calibration can degrade both the labeling policy and the subset router. Drift. In a real deployment, covariate distributions, the outcome distribution, the deployed predictors themselves, and even user behavior can shift over time, which would invalidate the cached uncertainty surrogates ˆuI and the routing policy ˆI that AM-PPI relies on. Extending AM-PPI to detect and adapt to data, model, and user drift is an important direction for future work [Kilian et al., 2025]. Approaches could include periodically recalibrating ˆuI on fresh labels or treating sustained shifts in ˆθ and the estimated routing distribution as drift signals. 8Figure 1: Experimental results. Row 1: Synthetic regression (costs different). Row 2: MIMIC EHR-discharge consistency (costs different). Row 3: Hypothyroid detection (costs equal). Row 4: 
+
+VeriFact-BHC proposition consistency (costs equal). Left panels show CI width as a function of total budget; middle panels show empirical coverage with 90% target (dashed); right panels show the AM-PPI / ASI CI-width ratio (%), where values below 100% indicate AM-PPI produces narrower intervals than the baseline. Each method’s curve begins at the smallest budget where it can fund its predictor queries plus a minimum gold-label sample (Appendix F). Shaded bands show ±1 standard error of the mean (SEM) across independent trials. 
+
+Broader impacts. AM-PPI lowers the cost of evaluating AI systems deployed in healthcare, but poorly calibrated uncertainty surrogates can cause systematic over- or under-sampling of patient subgroups, biasing aggregate estimates and masking subgroup-specific degradation. We recommend validating ˆuI per subgroup and reporting empirical coverage on burn-in data before trusting AM-PPI intervals for safety-critical decisions. 9Conclusion. AM-PPI jointly optimizes predictor subset selection and active label sampling under a unified budget constraint, producing tighter CIs than single-predictor methods. In addition to asymptotic validity, we prove AM-PPI identifies a global minimum and is the unique minimum-asymptotoic-variance unbiased estimator within the AIPW class. The advantage (Appendix E) and ablation (Appendix G) analyses give practitioners simple criteria for when multiple predictors help and explain the origin of the behaviors of AM-PPI. AM-PPI is able to adopt mixed routing strategies across budget regimes even where expensive single predictors are too costly to operate and when predictors specialize on different instances. AM-PPI pairs naturally with shift-detection pipelines [Dolin et al., 2025] for the quantification stage. For healthcare AI monitoring, where clinician labels are scarce and statistical validity is required, AM-PPI offers a principled path toward label-efficient post-deployment monitoring. 
+
+## References 
+
+Salim I. Amoukou, Tom Bewley, Saumitra Mishra, Freddy Lecue, Daniele Magazzeni, and Manuela Veloso. Sequential harmful shift detection without labels. In Advances in Neural Information Processing Systems 37 , NeurIPS 2024, pages 129279–129302. Neural Information Processing Systems Foundation, Inc. (NeurIPS), 2024. doi: 10.52202/079017-4107. URL http://dx.doi. org/10.52202/079017-4107 .Anastasios N. Angelopoulos, Stephen Bates, Clara Fannjiang, Michael I. Jordan, and Tijana Zrnic. Prediction-powered inference. Science , 382(6671):669–674, November 2023a. ISSN 1095-9203. doi: 10.1126/science.adi6000. URL http://dx.doi.org/10.1126/science.adi6000 .Anastasios N. Angelopoulos, John C. Duchi, and Tijana Zrnic. PPI++: Efficient prediction-powered inference, 2023b. URL https://arxiv.org/abs/2311.01453 .Stephen Boyd and Lieven Vandenberghe. Convex Optimization . Cambridge University Press, 2004. ISBN 9780521833783. Lingjiao Chen, Matei Zaharia, and James Zou. Estimating and explaining model performance when both covariates and labels shift. In Advances in Neural Information Processing Systems 35 , NeurIPS 2022, pages 11467–11479. Neural Information Processing Systems Foundation, Inc. (NeurIPS), 2022. doi: 10.52202/068431-0833. URL http://dx.doi.org/10.52202/068431-0833 .Philip Chung, Akshay Swaminathan, Alex J. Goodell, Yeasul Kim, S. Momsen Reincke, Lichy Han, Ben Deverett, Mohammad Amin Sadeghi, Abdel-Badih Ariss, Marc Ghanem, David Seong, Andrew A. Lee, Caitlin E. Coombes, Brad Bradshaw, Mahir A. Sufian, Hyo Jung Hong, Teresa P. Nguyen, Mohammad R. Rasouli, Komal Kamra, Mark A. Burbridge, James C. McAvoy, Roya Saffary, Stephen P. Ma, Dev Dash, James Xie, Ellen Y. Wang, Clifford A. Schmiesing, Nigam Shah, and Nima Aghaeepour. VeriFact: Verifying facts in LLM-generated clinical text with electronic health records, 2025. URL https://arxiv.org/abs/2501.16672 .Charlie Cowen-Breen, Alekh Agarwal, Stephen Bates, William W. Cohen, Jacob Eisenstein, Amir Globerson, and Adam Fisch. Multiple-prediction-powered inference, 2026. URL https://arxiv. org/abs/2603.27414 .Pavel Dolin, Weizhi Li, Gautam Dasarathy, and Visar Berisha. Statistically valid post-deployment monitoring should be standard for AI-based digital health, 2025. URL https://arxiv.org/ abs/2506.05701 .Samuel G. Finlayson, Adarsh Subbaswamy, Karandeep Singh, John Bowers, Annabel Kupke, Jonathan Zittrain, Isaac S. Kohane, and Suchi Saria. The clinician and dataset shift in artifi-cial intelligence. New England Journal of Medicine , 385(3):283–286, July 2021. ISSN 1533-4406. doi: 10.1056/NEJMc2104626. URL http://dx.doi.org/10.1056/NEJMc2104626 .Adam Fisch, Joshua Maynez, R. Alex Hofer, Bhuwan Dhingra, Amir Globerson, and William W. Cohen. Stratified prediction-powered inference for hybrid language model evaluation. In Advances in Neural Information Processing Systems 37 , NeurIPS 2024, pages 111489–111514. Neural Information Processing Systems Foundation, Inc. (NeurIPS), 2024. doi: 10.52202/079017-3541. URL http://dx.doi.org/10.52202/079017-3541 .10 Saurabh Garg, Sivaraman Balakrishnan, Zachary C. Lipton, Behnam Neyshabur, and Hanie Sedghi. Leveraging unlabeled data to predict out-of-distribution performance, 2022. URL https:// arxiv.org/abs/2201.04234 .Alistair E.W. Johnson, Tom J. Pollard, Lu Shen, Li-wei H. Lehman, Mengling Feng, Mohammad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G. Mark. MIMIC-III, a freely accessible critical care database. Scientific Data , 3(1), May 2016. ISSN 2052-4463. doi: 10.1038/sdata.2016.35. URL http://dx.doi.org/10.1038/sdata.2016.35 .Christopher J. Kelly, Alan Karthikesalingam, Mustafa Suleyman, Greg Corrado, and Dominic King. Key challenges for delivering clinical impact with artificial intelligence. BMC Medicine , 17(1), October 2019. ISSN 1741-7015. doi: 10.1186/s12916-019-1426-2. URL http://dx.doi.org/ 10.1186/s12916-019-1426-2 .Timothy Keyes, Alison Callahan, Abby S. Pandya, Nerissa Ambers, Juan M. Banda, Miguel Fuentes, Carlene Lugtu, Pranav Masariya, Srikar Nallan, Connor O’Brien, Thomas Wang, Emily Alsentzer, Jonathan H. Chen, Dev Dash, Matthew A. Eisenberg, Patricia Garcia, Nikesh Kotecha, Anurang Revri, Michael A. Pfeffer, Nigam H. Shah, and Sneha S. Jain. Monitoring deployed AI systems in health care, 2025. URL https://arxiv.org/abs/2512.09048 .Valentin Kilian, Stefano Cortinovis, and François Caron. Anytime-valid, Bayes-assisted, prediction-powered inference, 2025. URL https://arxiv.org/abs/2505.18000 .Yeonsu Kwon, Jiho Kim, Gyubok Lee, Seongsu Bae, Daeun Kyung, Wonchul Cha, Tom Pol-lard, Alistair Johnson, and Edward Choi. EHRCon: Dataset for checking consistency be-tween unstructured notes and structured tables in electronic health records, 2024. URL 
+
+https://arxiv.org/abs/2406.16341 .Puheng Li, Tijana Zrnic, and Emmanuel Candès. Robust sampling for active statistical inference, 2025. URL https://arxiv.org/abs/2511.08991 .Jiacheng Miao and Qiongshi Lu. Task-agnostic machine-learning-assisted inference. In Advances in Neural Information Processing Systems 37 , NeurIPS 2024, pages 106162–106189. Neural Information Processing Systems Foundation, Inc. (NeurIPS), 2024. doi: 10.52202/079017-3368. URL http://dx.doi.org/10.52202/079017-3368 .NVIDIA, Aaron Blakeman, Boris Ginsburg, Bryan Catanzaro, Mohammad Shoeybi, et al. NVIDIA Nemotron 3: Efficient and open intelligence, 2025. URL https://arxiv.org/abs/2512. 20856 .OpenAI, Sandhini Agarwal, Lama Ahmad, Sam Altman, Greg Brockman, et al. GPT-OSS-120B & GPT-OSS-20B model card, 2025. URL https://arxiv.org/abs/2508.10925 .Chunjong Park, Anas Awadalla, Tadayoshi Kohno, and Shwetak Patel. Reliable and trustworthy machine learning for health using dataset shift detection, 2021. URL https://arxiv.org/abs/ 2110.14019 .James M. Robins and Andrea Rotnitzky. Semiparametric efficiency in multivariate regression models with missing data. Journal of the American Statistical Association , 90(429):122–129, March 1995. ISSN 1537-274X. doi: 10.1080/01621459.1995.10476494. URL http://dx.doi.org/ 10.1080/01621459.1995.10476494 .Elham Tabassi. Artificial intelligence risk management framework (AI RMF 1.0). Technical report, National Institute of Standards and Technology (U.S.), January 2023. URL http://dx.doi. org/10.6028/NIST.AI.100-1 .U.S. Food and Drug Administration. Artificial intelligence/machine learning (AI/ML)-based software as a medical device (SaMD) action plan, 2021. URL 
+
+https://www.fda.gov/medical-devices/software-medical-device-samd/ artificial-intelligence-and-machine-learning-software-medical-device .A. W. van der Vaart. Asymptotic Statistics . Cambridge University Press, October 1998. ISBN 9780521784504. doi: 10.1017/cbo9780511802256. URL http://dx.doi.org/10.1017/ cbo9780511802256 .11 Eric Wu, Kevin Wu, Roxana Daneshjou, David Ouyang, Daniel E. Ho, and James Zou. How medical AI devices are evaluated: limitations and recommendations from an analysis of FDA approvals. Nature Medicine , 27(4):582–584, April 2021. ISSN 1546-170X. doi: 10.1038/ s41591-021-01312-x. URL http://dx.doi.org/10.1038/s41591-021-01312-x .Tijana Zrnic and Emmanuel J. Candès. Active statistical inference, 2024a. URL https://arxiv. org/abs/2403.03208 .Tijana Zrnic and Emmanuel J. Candès. Cross-prediction-powered inference. Proceedings of the National Academy of Sciences , 121(15), April 2024b. ISSN 1091-6490. doi: 10.1073/pnas. 2322083121. URL http://dx.doi.org/10.1073/pnas.2322083121 .
+
+## A Proof of Theorem 1 (Asymptotic Normality) 
+
+Proof Overview 
+
+The proof exploits the fact that all nuisance parameters (ˆ π, ˆλ, ˆI) are estimated from the burn-in sample and are therefore fixed constants conditional on the burn-in data. Here we make the following assumptions: (i) Moment bounds: E[Y 4] < ∞ and E[∥fI (X)∥4] < ∞ for all I ∈ I .(ii) Nuisance convergence: As the burn-in size N → ∞ ,
+
+∥ˆπ − π∗∥L2(PX )
+
+> p
+
+−→ 0,
+
+∥ˆλI − λ∗ 
+
+> I
+
+∥2
+
+> p
+
+−→ 0 for all I ∈ I ,PX ( ˆI(X)̸ = I∗(X)) p
+
+−→ 0.
+
+(iii) Sampling lower bound: π∗(x) ≥ πmin > 0 and ˆπ(x) ≥ πmin > 0 for all x, where the latter holds either by assumption or by algorithmic clipping. This permits a direct application of the classical central limit theorem (CLT) to the increments: 1. Compute the conditional mean over the given burn-in data and show it equals θ∗ for any nuisance value with ˆπ > 0.2. Apply the Lindeberg–Lévy CLT conditionally on the burn-in. 3. Show the conditional variance converges in probability to V .4. Show unconditional convergence. 
+
+Step 1: Conditional Mean 
+
+Let FN denote the σ-algebra generated by the burn-in data. Conditional on FN , the nuisance parameters (ˆ π, ˆλI , ˆI) are deterministic, and the deployment data (Xi, Y i)ni=1 are i.i.d. with ξi ∼
+
+Bern(ˆ π(Xi)) drawn independently. The increments 
+
+∆i = ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi) + 
+
+ Yi − ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi) ξi
+
+ˆπ(Xi)
+
+are therefore conditionally i.i.d. given FN .We compute the conditional mean of the summands given the burn-in and show it equals θ∗ for any nuisance values. We first apply linearity of expectation: 
+
+E[∆ i | Xi, FN ] = Eˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi) | Xi, FN
+
+ + E
+
+ (Yi − ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi)) ξi
+
+ˆπ(Xi) Xi, FN
+
+
+
+.
+
+12 Conditional on FN , the functions ˆπ, ˆλ, and ˆI are deterministic; evaluating at the fixed point Xi
+
+makes ˆπ(Xi), ˆλˆI , and fˆI (Xi) deterministic constants. The first term is therefore equal to ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi),and ˆπ(Xi) pulls out of the second term: 
+
+E[∆ i | Xi, FN ] = ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi) + 1ˆπ(Xi) E(Yi − ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi)) ξi | Xi, FN
+
+.
+
+Since ξi is independent of Yi conditional on Xi, the expectation factors: 
+
+E(Yi − ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi)) ξi | Xi, FN
+
+ = EYi − ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi) | Xi
+
+ · E[ξi | Xi, FN ].
+
+Using E[ξi | Xi, FN ] = ˆ π(Xi) and substituting back: 
+
+E[∆ i | Xi, FN ] = ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi) + EYi − ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi) | Xi
+
+ · ˆπ(Xi)ˆπ(Xi) .
+
+The ˆπ(Xi) factors cancel; this is the cancellation that makes this form structurally unbiased for any nuisance values with ˆπ(x) > 0. The remaining prediction terms cancel as well: 
+
+E[∆ i | Xi, FN ] = ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi) + E[Yi | Xi] − ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi) = E[Yi | Xi]. (10) By the tower property: 
+
+E[∆ i | F N ] = E[E[∆ i | Xi, FN ] | F N ] = E[E[Yi | Xi] | F N ] = E[Yi] = θ∗.
+
+Step 2: Conditional CLT 
+
+Since {∆i}ni=1 are conditionally i.i.d. given FN with mean θ∗, we compute the conditional variance and invoke the CLT. Define ˆMi = ˆλ⊤ 
+
+> ˆI
+
+fˆI (Xi) and ˆRi = Yi − ˆMi. Then rewrite the summand as 
+
+∆i = ˆMi + ˆRi · ξi
+
+ˆπ(Xi) .
+
+Conditional on (Xi, Y i, FN ), the quantities ˆπ(Xi), ˆI(Xi), ˆMi, and ˆRi are deterministic, and the only remaining randomness is ξi ∼ Bern(ˆ π(Xi)) . Using E[ξi | Xi, Y i, FN ] = ˆ π(Xi) (the labeling decision depends only on Xi) and Var( ξi | Xi, Y i, FN ) = ˆ π(Xi)(1 − ˆπ(Xi)) (considering that Var (aZ ) = a2 Var (Z)) : 
+
+E[∆ i | Xi, Y i, FN ] = ˆMi + ˆRi · ˆπ(Xi)ˆπ(Xi) = Yi,
+
+Var(∆ i | Xi, Y i, FN ) = ˆRi
+
+ˆπ(Xi)
+
+!2
+
+· ˆπ(Xi)(1 − ˆπ(Xi)) = ˆR2 
+
+> i
+
+· 1 − ˆπ(Xi)ˆπ(Xi) .
+
+Applying the law of total variance and using the independence of (Xi, Y i) from FN to simplify 
+
+Var( Yi | F N ) = Var( Y ):
+
+VN := Var(∆ i | F N ) = Var( Y ) + E
+
+" ˆR2 
+
+> i
+
+(1 − ˆπ(Xi)) ˆπ(Xi) FN
+
+#
+
+. (11) The first term is the irreducible variance of the outcome. The second term is the additional variance introduced by the labeling lottery: instances with large residuals ˆR2 
+
+> i
+
+and low sampling probabil-ities ˆπ(Xi) contribute the most variance, which is precisely the trade-off that the optimal sam-pling rule π∗(x) ∝ prI (x) is designed to minimize. Under assumption (i), E[Y 2] < ∞ and 
+
+E[∥fI (X)∥2] < ∞; combined with the boundedness of ˆλ (which holds on a probability-one event under assumption (ii)), this gives E[ ˆM 2 
+
+> i
+
+| F N ] < ∞ and hence E[ ˆR2 
+
+> i
+
+| F N ] < ∞. Under assump-tion (iii), 1/ˆπ(Xi) ≤ 1/π min . Therefore VN < ∞.Since {∆i} are conditionally i.i.d. given FN with finite conditional variance VN , the Lindeberg–Lévy CLT applied conditionally on FN gives: 
+
+√n ˆθ − θ∗ | F Nd
+
+−→ N (0 , V N ). (12) 13 Step 3: Convergence of Conditional Variance 
+
+We show VNp
+
+−→ V . From Step 2: 
+
+VN = Var( Y ) + E
+
+" ˆR2 
+
+> i
+
+(1 − ˆπ(Xi)) ˆπ(Xi) FN
+
+#
+
+.
+
+At oracle values, the asymptotic variance defined in the statement of Theorem 1 (with R∗ 
+
+> i
+
+=
+
+Yi − λ∗⊤  
+
+> I∗
+
+fI∗ (Xi)) is exactly 
+
+V = Var( Y ) + E
+
+
+
+R∗2
+
+> i
+
+ 1
+
+π∗(Xi) − 1
+
+ 
+
+= Var( Y ) + E
+
+ R∗2 
+
+> i
+
+(1 − π∗(Xi)) 
+
+π∗(Xi)
+
+
+
+,
+
+which already matches the form of VN derived in Step 2: both have a leading Var( Y ) term plus a residual-variance term involving 1/π − 1. We can therefore proceed directly to comparing the residual terms without any further rewriting of V .With both quantities in the same form, the difference is: 
+
+VN − V = E
+
+" ˆR2 
+
+> i
+
+(1 − ˆπ(Xi)) ˆπ(Xi) FN
+
+#
+
+− E
+
+ R∗2 
+
+> i
+
+(1 − π∗(Xi)) 
+
+π∗(Xi)
+
+
+
+. (13) Define w(x, π ) = (1 − π(x)) /π (x) for shorthand. We decompose the difference into a sampling-weight term and a residual term: 
+
+VN − V = E ˆR2 
+
+> i
+
+(w(Xi, ˆπ) − w(Xi, π ∗)) | {z }
+
+> (A)
+
++ E( ˆR2 
+
+> i
+
+− R∗2 
+
+> i
+
+) w(Xi, π ∗)| {z }
+
+> (B)
+
+, (14) where all expectations are over (Xi, Y i) ∼ PX,Y with nuisance parameters held fixed (i.e., conditional on FN ). 
+
+Bounding (A): Since w(x, π ) = (1 − π)/π , we have 
+
+|w(Xi, ˆπ) − w(Xi, π ∗)| = 1ˆπ(Xi) − 1
+
+π∗(Xi) · | 1| = |π∗(Xi) − ˆπ(Xi)|
+
+ˆπ(Xi) π∗(Xi) ≤ |ˆπ(Xi) − π∗(Xi)|
+
+π2min 
+
+.
+
+Therefore: 
+
+|A| ≤ 1
+
+π2min 
+
+E ˆR2 
+
+> i
+
+· | ˆπ(Xi) − π∗(Xi)| FN
+
+
+
+≤ 1
+
+π2min 
+
+ E[ ˆR4 
+
+> i
+
+| F N ]1/2 ∥ˆπ − π∗∥L2(PX ), (Cauchy–Schwarz) where the conditional fourth moment E[ ˆR4 
+
+> i
+
+| F N ] is bounded in probability: by assumption (ii), 
+
+ˆλ converges and is therefore stochastically confined to a compact set, so assumption (i) gives that 
+
+E[ ˆR4 
+
+> i
+
+| F N ] is bounded in probability. The second factor vanishes by assumption (ii). The product of a bounded-in-probability term with one that vanishes in probability vanishes in probability, so 
+
+A p
+
+−→ 0.
+
+Bounding (B): Since w(Xi, π ∗) ≤ 1/π min , we have |B| ≤ 1 
+
+> πmin
+
+E[| ˆR2 
+
+> i
+
+− R∗2 
+
+> i
+
+|]. We decompose by the event { ˆI(Xi) = I∗(Xi)}:
+
+|B| ≤ 1
+
+πmin 
+
+E| ˆR2 
+
+> i
+
+−R∗2 
+
+> i
+
+|· 1{ ˆI(Xi) = I∗(Xi)}+ 1
+
+πmin 
+
+E| ˆR2 
+
+> i
+
+−R∗2 
+
+> i
+
+|· 1{ ˆI(Xi)̸ = I∗(Xi)} =: B1+B2.
+
+For B1: on the event { ˆI(Xi) = I∗(Xi)}, both residuals use the same predictor subset, so ˆRi − R∗ 
+
+> i
+
+=(λ∗ 
+
+> I∗
+
+− ˆλI∗ )⊤fI∗ (Xi). Factoring the difference of squares: 
+
+| ˆR2 
+
+> i
+
+− R∗2 
+
+> i
+
+| = | ˆRi − R∗ 
+
+> i
+
+| · | ˆRi + R∗ 
+
+> i
+
+| = |(ˆλI∗ − λ∗ 
+
+> I∗
+
+)⊤fI∗ (Xi)| · | 2Yi − (ˆλI∗ + λ∗ 
+
+> I∗
+
+)⊤fI∗ (Xi)|.
+
+By Cauchy–Schwarz, B1 ≤ C ∥ˆλI∗ − λ∗ 
+
+> I∗
+
+∥ where C depends only on the moment bounds in assumption (i). By assumption (ii), ∥ˆλI∗ − λ∗ 
+
+> I∗
+
+∥ p
+
+−→ 0, so B1
+
+> p
+
+−→ 0.14 For B2: by Cauchy–Schwarz, 
+
+B2 ≤ 1
+
+πmin 
+
+ E[( ˆR2 
+
+> i
+
+− R∗2 
+
+> i
+
+)2]1/2  PX ( ˆI(X)̸ = I∗(X)) 1/2.
+
+The first factor is bounded by the moment assumptions; the second vanishes by assumption (ii). Therefore B p
+
+−→ 0, and hence VNp
+
+−→ V .
+
+Step 4: Unconditional Convergence 
+
+We have established: 1. √n(ˆθ − θ∗) | F Nd
+
+−→ N (0 , V N ) (Step 2, Eq. (12)) 2. VNp
+
+−→ V (Step 3) We now lift to unconditional convergence. Let Zn = √n(ˆθ − θ∗). The conditional convergence in (1) implies that the conditional characteristic function converges: 
+
+EeitZ n | F N
+
+ p
+
+−→ e−t2VN /2
+
+for each t ∈ R. Since VNp
+
+−→ V by (2), we have e−t2VN /2 p
+
+−→ e−t2V / 2. Taking unconditional expectations via the tower property: 
+
+EeitZ n  = EE[eitZ n | F N ] → e−t2V / 2,
+
+where the convergence follows from dominated convergence (the characteristic function is bounded by 1). The right-hand side is the characteristic function of N (0 , V ), so by Lévy’s continuity theorem: 
+
+√n(ˆθ − θ∗) d
+
+−→ N (0 , V ).
+
+This completes the proof. 
+
+## B Proof of Corollary 1 (Valid Confidence Intervals) 
+
+We can now use the result from Theorem 1 to prove Corollary 1. 
+
+Proof. The proof requires showing ˆσ2 p
+
+−→ V , after which the result follows from Theorem 1 by Slutsky’s theorem. The conditional framework makes this straightforward. 
+
+Step 1: Conditional law of large numbers. 
+
+Conditional on FN , the increments {∆i}ni=1 are i.i.d. with 
+
+E[∆ i | F N ] = θ∗, Var(∆ i | F N ) = VN ,
+
+as established in the proof of Theorem 1. Rewrite the variance estimator as 
+
+ˆσ2 = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+(∆ i)2 − ˆθ2.
+
+Since the {∆i} are conditionally i.i.d. and E[(∆ i)4 | F N ] < ∞ (verified in the Theorem 1 proof), the conditional law of large numbers (LLN) gives: 
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+(∆ i)2 FNp
+
+−→ E[(∆ i)2 | F N ] = VN + ( θ∗)2, (15) 
+
+ˆθ2 FNp
+
+−→ (θ∗)2. (16) 15 Equation (16) follows because ˆθ | F Np
+
+−→ θ∗ (immediate from the conditional CLT with √n-scaling, or directly from the conditional LLN applied to ˆθ itself). Subtracting: 
+
+ˆσ2 FNp
+
+−→ VN . (17) 
+
+Step 2: From conditional to unconditional consistency. 
+
+From the proof of Theorem 1 (Step 3), we have VNp
+
+−→ V . Combining with (17): For any ε > 0,
+
+P (|ˆσ2 − V | > ε ) ≤ P (|ˆσ2 − VN | > ε/ 2) + P (|VN − V | > ε/ 2) .
+
+For the first term, condition on FN :
+
+P (|ˆσ2 − VN | > ε/ 2) = EP (|ˆσ2 − VN | > ε/ 2 | F N ) → 0,
+
+since the inner probability tends to zero for each burn-in realization (by (17) ) and is bounded by 1, so dominated convergence applies. The second term vanishes by VNp
+
+−→ V . Therefore 
+
+ˆσ2 p
+
+−→ V. 
+
+Step 3: Slutsky’s theorem. From Theorem 1: √n(ˆθ − θ∗) d
+
+−→ N (0 , V ). From Step 2: ˆσ2 p
+
+−→ V ,hence ˆσ p
+
+−→ √V by the continuous mapping theorem. By Slutsky’s theorem: 
+
+√n(ˆθ − θ∗)ˆσ
+
+> d
+
+−→ N (0 , 1) .
+
+Therefore 
+
+lim  
+
+> n→∞
+
+P (θ∗ ∈ Cα) = lim  
+
+> n→∞
+
+P
+
+√n(ˆθ − θ∗)ˆσ ≤ z1−α/ 2
+
+!
+
+= 1 − α. 
+
+## C Derivation of Optimality Conditions 
+
+We derive the optimality conditions stated in Section 3. We use the shorthand rI (x) = E[( Y −
+
+λ⊤ 
+
+> I
+
+fI (x)) 2 | X = x] for the conditional residual variance throughout this section. The Lagrangian for the constrained optimization (3) is 
+
+L = 1
+
+n E
+
+
+
+rI(X)(X)
+
+ 1
+
+πI(X)(X) − 1
+
+ 
+
++ μ EcI(X) + πI(X)(X) clabel 
+
+ − b .
+
+C.1 Optimal sampling probability π∗
+
+The π-dependent terms of the Lagrangian are 
+
+Lπ = 1
+
+n E
+
+ rI (X)
+
+πI (X)
+
+
+
++ μ E[πI (X) clabel ] ,
+
+where we used the tower property to write E[( Y − λ⊤ 
+
+> I
+
+fI )2/π I (X)] = E[rI (X)/π I (X)] since πI is a function of X alone. Perturbing πI (x) → πI (x) + ε η (x) and differentiating at ε = 0 :
+
+ddε Lπ
+
+> ε=0
+
+= E
+
+ 
+
+− rI (X)
+
+n π I (X)2 + μ c label 
+
+
+
+η(X)
+
+
+
+= 0 .
+
+Since this must hold for all perturbations η, the integrand vanishes pointwise, giving 
+
+rI (x)/(n π I (x)2) = μ c label . Solving yields Eq. (5): 
+
+π∗ 
+
+> I
+
+(x) = 
+
+s
+
+rI (x)
+
+n μ c label 
+
+,
+
+where μ is chosen to satisfy the budget constraint. The unconstrained pointwise minimizer π∗
+
+> I
+
+may exceed 1 on instances with sufficiently large rI (x). The feasible projection onto (0 , 1] is the clipped probability ˆπI (x) = min(1 , π ∗ 
+
+> I
+
+(x)) (Eq. (6) ); on the deterministic set {ˆπI = 1 } the variance contribution rI (x)(1 /ˆπI − 1) vanishes, recovering exact PPI on those instances. We use ˆπI in all downstream substitutions. 16 C.2 Optimal combination weights λ∗
+
+We differentiate the full Lagrangian with respect to λI , noting that rI (x) depends on λI and that π∗
+
+(which also depends on λI through rI ) has been substituted. The λ-dependent terms after dropping 
+
+Var( Y )/n are 
+
+ddλ I
+
+ 1
+
+n E
+
+
+
+rI (X)
+
+ 1
+
+π∗ 
+
+> I
+
+(X) − 1
+
+ 
+
++ μ E[π∗ 
+
+> I
+
+(X) clabel ]
+
+
+
+= 0 .
+
+Substituting π∗ 
+
+> I
+
+= prI /(nμc label ), the three contributions are: 1. The 1/π ∗ term: 1 
+
+> n
+
+E[rI /π ∗ 
+
+> I
+
+] = pμc label /n E[√rI ].2. The −1 term: − 1 
+
+> n
+
+E[rI ].3. The budget term: μ c label E[π∗ 
+
+> I
+
+] = pμc label /n E[√rI ].Since terms (1) and (3) are equal, the combined coefficient on E[√rI ] is 2pμc label /n . Multiplying through by n and differentiating: 
+
+2√nμc label 
+
+ddλ I
+
+E
+
+hp rI (X)
+
+i
+
+− ddλ I
+
+E[rI (X)] = 0 .
+
+For the second derivative, ddλ I E[rI ] = −2 E[( Y − λ⊤ 
+
+> I
+
+fI ) fI ]. For the first, define s(x) = rI (x) and apply the chain rule: 
+
+ddλ I
+
+E
+
+hp s(X)
+
+i
+
+= E
+
+"
+
+−E[( Y − λ⊤ 
+
+> I
+
+fI ) fI | X]
+
+prI (X)
+
+#
+
+.
+
+Substituting both derivatives and rearranging yields the moment condition in Eq. (7) , with the unclipped weight expression 
+
+EwI (X) ( Y − λ⊤ 
+
+> I
+
+fI (X)) fI (X) = 0 , wI (x) = 
+
+√nμc label 
+
+prI (x) − 1.
+
+Equivalently, in terms of the deployed clipped probability, wI (x) = 1 /ˆπI (x) − 1, which is non-negative everywhere and equals 0 on the deterministic set {ˆπI = 1 }. This is the form used in Eq. (7) and in Algorithm 1; the derivation above substituted the unclipped π∗ for algebraic simplicity, but the resulting first-order condition is valid only on {ˆπI < 1} where the unconstrained minimizer is interior, and the deterministic set contributes weight 0 to the moment condition by construction. 
+
+C.3 Lagrange multiplier μ
+
+The budget constraint with the deployed clipped probability is 
+
+EcI(X) + clabel ˆπI(X)(X) = b (Eq. (8)) ,
+
+which is monotonically non-increasing in μ (since ˆπ is non-increasing in μ) and is solved numerically by bisection on μ. Substituting the unclipped π∗ 
+
+> I
+
+(i.e., assuming the unclipped regime is global and a fixed predictor subset is used) yields the algebraic identity 
+
+E[cI ] + 
+
+r clabel 
+
+nμ E
+
+hp rI (X)
+
+i
+
+= b, 
+
+which solves to the closed form 
+
+μ = clabel 
+
+n
+
+ E
+
+hprI (X)
+
+i
+
+b − E[cI ]
+
+
+
+> 2
+
+,
+
+requiring b > E[cI ] (the per-instance budget exceeds the expected prediction cost). This closed form recovers the original ASI solution [Zrnic and Candès, 2024a] but is exact only when no instance clips and a single fixed subset is used. In the general AM-PPI setting, the optimal subset I∗(x; μ)
+
+depends on μ via Eq. (9) , so the right-hand side E[prI∗(X;μ)(X)] depends on μ and the expression is a fixed-point equation rather than an algebraic closed form. Algorithm 1 therefore always solves Eq. (8) via bisection. 17 C.4 Optimal predictor assignment I∗
+
+The subset assignment I is a function of X. Conditioning on X = x, and writing the cost in terms of the deployed clipped probability ˆπI , the per-instance Lagrangian cost of choosing predictor subset I
+
+is 
+
+ℓI (x) = rI (x)
+
+n
+
+ 1ˆπI (x) − 1
+
+
+
++ μ c I + μ c label ˆπI (x),
+
+which is the form used in Eq. (9) . The optimal assignment selects the subset minimizing ℓI (x) at each x.
+
+Two regimes. On the unclipped set {ˆπI (x) < 1}, substituting ˆπI = π∗ 
+
+> I
+
+= prI /(nμc label ) gives 
+
+rI (x)
+
+n
+
+ 1
+
+π∗ 
+
+> I
+
+(x) − 1
+
+
+
+=
+
+√μc label 
+
+√n
+
+prI (x) − rI (x)
+
+n ,μ c label π∗ 
+
+> I
+
+(x) = 
+
+√μc label 
+
+√n
+
+prI (x),
+
+so the cost simplifies to 
+
+ℓI (x) = 2√μc label 
+
+√n
+
+prI (x) − rI (x)
+
+n + μ c I ,
+
+which is monotonically increasing in prI (x) on {ˆπI < 1} (i.e., for prI (x) ≤ √nμc label ). On the deterministic set {ˆπI (x) = 1 }, the variance contribution vanishes and ℓI (x) = μ(cI + clabel ), a constant in rI . Combining the two regimes, the unified expression in Eq. (9) is non-decreasing in 
+
+rI (x) across the entire range. 
+
+C.5 Global optimality of the AM-PPI fixed point 
+
+The four optimality conditions derived above (Eqs. (5) , (7) , (8) , (9) ) are first-order conditions of a constrained problem that is not jointly convex in (π, λ ).1 We show here that they nonetheless identify a global minimum of the inner (π, λ ) problem in Eq. (3) , not merely a stationary point. The argument rests on three structural facts: a compact convex feasible set under Slater’s condition (Proposition 1), biconvexity of the objective with closed-form partial minimizers (Theorem 4), and strong duality of the constrained Lagrangian (Theorem 5). The discrete outer minimization over routings is closed pointwise by Eq. (9) (§C.5). 
+
+Hierarchical decomposition 
+
+Because I : X → I takes finitely many values ( |I| ≤ 2k − 1), we decompose the joint minimization in Eq. (3) hierarchically: 
+
+min  
+
+> π,λ,I
+
+J(π, λ, I ) = min 
+
+> I(·)∈I X
+
+min 
+
+> (π,λ )∈F I
+
+J(π, λ ; I)
+
+| {z }  
+
+> inner (π, λ )problem
+
+, (18) where FI collects the box constraints πI (·) ∈ [πmin , 1] , the budget constraint E[cI + πI clabel ] ≤ b,and a compact-set constraint λI ∈ Λ ⊂ R|I| on the combination weights for the routing I(·). The outer minimization over I is solved pointwise via Eq. (9) (§C.5); the remainder of this subsection analyzes the inner problem. 
+
+Compact convex feasible set Proposition 1 (Compact convex feasible set) . Fix any measurable routing I : X → I . Suppose Slater’s condition holds, i.e., E[cI ] + πmin clabel < b . Then FI is non-empty, convex, and compact in 
+
+L∞(PX ) × R|I| (the product of the weak-∗ topology on π and the Euclidean topology on λ).                                
+
+> 1Decomposing the objective as J=J1−J2with J1=E[( Y−λ⊤
+> IfI)2/π I]and J2=E[( Y−λ⊤
+> IfI)2], the term
+> −J2is concave in λ. A direct Hessian computation shows that the bordered Schur complement of the joint Hessian of Jcan be indefinite for πnear 1, so joint convexity fails on FI.
+
+18 Proof. The pointwise box {π : π(·) ∈ [πmin , 1] a.s. } is the closed unit ball of L∞(PX ) shifted and scaled, which is weak-∗ compact and convex by the Banach–Alaoglu theorem. The budget constraint 
+
+E[cI + πI clabel ] ≤ b is a single linear (weak-∗ continuous) inequality in π and so defines a closed convex half-space. The set Λ ⊂ R|I| is compact and convex by assumption. Finite intersections of closed convex sets are closed and convex, and closed subsets of compact sets are compact; hence FI
+
+is closed, convex, and compact in the product topology. Slater’s condition guarantees FI̸ = ∅.
+
+Biconvexity of the objective 
+
+The objective decomposes additively as 
+
+J(π, λ ; I) = E
+
+ (Y − λ⊤ 
+
+> I
+
+fI (X)) 2
+
+πI (X)
+
+| {z } 
+
+> =: J1(π,λ ;I)
+
+− E(Y − λ⊤ 
+
+> I
+
+fI (X)) 2| {z } 
+
+> =: J2(λ;I)
+
+, (19) with J2 independent of π. The convexity engine is J1.
+
+Lemma 1 (Perspective convexity of the IPW term) . The map (λ, π ) 7 → J1(π, λ ; I) is jointly convex on R|I| × { π : π(·) > 0 a.s. }.Proof. The scalar function ϕ(u, v ) = u2/v is jointly convex on R × (0 , ∞) as the perspective of 
+
+ϕ0(u) = u2 [Boyd and Vandenberghe, 2004, §3.2.6]. The map Tx,y (λ, π ) := ( y − λ⊤ 
+
+> I
+
+fI (x), π I (x)) 
+
+is affine in (λ, π ) for each (x, y ), and the composition of a jointly convex function with an affine map is jointly convex. Therefore the integrand g(λ, π ; x, y ) = ( y − λ⊤ 
+
+> I
+
+fI (x)) 2/π I (x) is jointly convex in 
+
+(λ, π ). Taking expectations preserves convexity, so J1 is jointly convex. 
+
+Theorem 4 (Biconvexity with closed-form partial minimizers) . For each fixed routing I : X → I :(a) Convexity in π. For any fixed λ, the map π 7 → J(π, λ ; I) is convex on FπI := {π : πI (·) ∈
+
+[πmin , 1] a.s. , E[cI + πI clabel ] ≤ b}. Subject to the box and budget constraints, its unique minimizer is the clipped rule 
+
+ˆπI (x) = min 
+
+
+
+1, prI (x)/(n μ c label )
+
+
+
+,
+
+with μ ≥ 0 the Lagrange multiplier that activates the budget; this is Eqs. (5) –(6) .(b) Convexity in λ. For any fixed π, the map λ 7 → J(π, λ ; I) is convex on Λ (strongly convex when 
+
+E[wI (X) fI (X)fI (X)⊤] ≻ 0, where wI (x) := 1 /ˆπI (x) − 1 ≥ 0). Its unique minimizer is the weighted-least-squares solution 
+
+λ∗ 
+
+> I
+
+=  E[wI (X) fI (X)fI (X)⊤]−1 E[wI (X) fI (X) Y ],
+
+which is the moment condition of Eq. (7) .Consequently J(·, ·; I) is biconvex on FI , and alternating minimization over the two blocks generates a non-increasing, bounded-below sequence {J(π(t), λ (t); I)}t≥0.Proof. Part (a): convexity in π. For fixed λ, the conditional residual variance rI (·; λI ) ≥ 0 is a deterministic function of X. Pointwise the map π 7 → rI (x)/π is convex on π > 0 (second derivative 
+
+2rI (x)/π 3 ≥ 0), and −E[rI ] is constant in π. The budget functional E[cI + πI clabel ] is linear in 
+
+π, and the box πI (·) ∈ [πmin , 1] is convex. Hence J(·, λ ; I) is convex on the convex set FπI . The pointwise variational optimality condition for the Lagrangian 
+
+∂∂π (x)
+
+ rI (x)
+
+n π I (x) + μ c label πI (x)
+
+
+
+= − rI (x)
+
+n π I (x)2 + μ c label = 0 
+
+yields the unclipped pointwise minimizer π∗ 
+
+> I
+
+(x) = prI (x)/(nμc label ) of Eq. (5) ; projecting onto the box [πmin , 1] produces the clipped minimizer ˆπI (x) = min(1 , π ∗ 
+
+> I
+
+(x)) of Eq. (6) (the lower bound is inactive whenever the budget is feasible). On the open set {ˆπI ∈ (πmin , 1) }, strict convexity of 1/π 
+
+in π > 0 gives uniqueness of the minimizer. 19 Part (b): convexity in λ. For fixed π, substituting J = J1 − J2 and pulling the common factor 
+
+(Y − λ⊤ 
+
+> I
+
+fI )2 into a single expectation gives 
+
+J(π, λ ; I) = E
+
+
+
+(Y − λ⊤ 
+
+> I
+
+fI (X)) 2
+
+ 1ˆπI (X) − 1
+
+ 
+
+= EwI (X) ( Y − λ⊤ 
+
+> I
+
+fI (X)) 2 ,
+
+with wI (x) = 1 /ˆπI (x) − 1 ≥ 0. This is a non-negatively-weighted quadratic in λ, hence convex; positive definiteness of E[wI fI f ⊤ 
+
+> I
+
+] yields strong convexity. Setting the gradient to zero, 
+
+∇λI J(π, λ ; I) = −2 EwI (X) ( Y − λ⊤ 
+
+> I
+
+fI (X)) fI (X) = 0 ,
+
+recovers the weighted least-squares moment condition of Eq. (7) and the closed-form minimizer 
+
+λ∗ 
+
+> I
+
+= ( E[wI fI f ⊤ 
+
+> I
+
+]) −1 E[wI fI Y ].The two parts together imply that J(·, ·; I) is biconvex on FI . Alternating between the two blocks produces J(π(t+1) , λ (t); I) ≤ J(π(t), λ (t); I) and J(π(t+1) , λ (t+1) ; I) ≤ J(π(t+1) , λ (t); I), so the iterates form a non-increasing sequence; boundedness below by 0 is immediate from rI ≥ 0 and 
+
+1/ˆπI − 1 ≥ 0.
+
+Remark 1 (Why biconvexity and not joint convexity) . The collapse J = E[wI (Y − λ⊤ 
+
+> I
+
+fI )2] in the proof of (b) makes convexity in λ for fixed π transparent. It does not extend to joint convexity, because wI = 1 /ˆπI − 1 is itself a function of π: the combined dependence in (λ, π ) is the same non-jointly-convex J1 − J2 identified in the footnote. Biconvexity is therefore the correct structural statement; joint convexity is genuinely false and is not what global optimality rests on. 
+
+Strong duality of the constrained Lagrangian 
+
+The Lagrangian for the inner problem is 
+
+L(π, λ ; μ, I ) := J(π, λ ; I) + μ E[cI + πI clabel ] − b, μ ≥ 0, (20) with the box constraints πI (·) ∈ [πmin , 1] and λI ∈ Λ kept implicit. 
+
+Theorem 5 (Strong duality and KKT sufficiency) . Assume Slater’s condition (Proposition 1). Then: (a) Saddle-point representation. The inner (π, λ ) problem in Eq. (18) satisfies strong duality: 
+
+min 
+
+> (π,λ )∈F I
+
+J(π, λ ; I) = max  
+
+> μ≥0
+
+min  
+
+> (π,λ )∈¯FI
+
+L(π, λ ; μ, I ), (21) 
+
+where ¯FI retains only the box constraints. The maximum is attained at a unique μ∗ ≥ 0,characterized by the budget-binding identity Eq. (8) , which is monotone in μ on its active range. (b) KKT sufficiency. A triple (π∗, λ ∗, μ ∗) satisfying the partial optimality conditions of Theo-rem 4(a)–(b) at μ = μ∗ together with the budget identity Eq. (8) is a global minimizer of the inner problem. Proof. Part (a): strong duality. Substituting J = J1 − J2 into Eq. (20) gives 
+
+L(π, λ ; μ, I ) = J1(π, λ ; I) + μ E[cI + πI clabel ] − b| {z }   
+
+> jointly convex in (π,λ )on {π> 0}
+
+− J2(λ; I).
+
+Two observations make the duality work. 
+
+π-block. For fixed λ, L( · , λ ; μ, I ) is convex in π on ¯FπI := {π : πI (·) ∈ [πmin , 1] } (perspective convexity of J1 in π from Lemma 1, plus a linear term in π, plus a constant in π). It admits the closed-form pointwise minimizer of Theorem 4(a). Slater’s condition guarantees a strictly feasible π,so weak duality is tight on this block. 
+
+λ-block. The constraint contains no λ, so the partial minimum of L over λ at any π ∈ ¯FπI coincides with the partial minimum of J over λ. By Theorem 4(b) this partial minimum is the strongly-convex WLS solution λ∗(π) = ( E[wI fI f ⊤ 
+
+> I
+
+]) −1E[wI fI Y ], which is unique. The remaining argument no longer requires global joint convexity of J: the budget is a single scalar integral constraint coupling only π (not λ) to μ, and the per-instance Lagrangian decouples in π.Concretely, for any μ ≥ 0, the dual function 
+
+g(μ) := inf  
+
+> (π,λ )∈¯FI
+
+L(π, λ ; μ, I )
+
+20 is the infimum of an affine function of μ at each fixed (π, λ ), hence concave in μ on R≥0, and the inner infimum is attained pointwise: at fixed μ, minimize λ to the closed-form WLS solution 
+
+λ∗(π) from Theorem 4(b), then minimize π(x) pointwise (the integrand is the convex per-instance cost rI (x; λ∗(x)) /(nπ (x)) + μc label π(x), plus terms independent of π(x)) to obtain the clipped rule 
+
+ˆπI (x; μ) of Theorem 4(a). Under Slater’s condition, weak duality sup μ g(μ) ≤ inf FI J is tight: any primal-feasible π that activates the budget at μ = μ∗ yields a (π, λ ∗(π), μ ∗) triple satisfying complementary slackness, and the gap closes (cf. Boyd and Vandenberghe, 2004, §5.2.3, §5.5.3 for the integral-constraint variant). Therefore 
+
+sup 
+
+> μ≥0
+
+inf  
+
+> (π,λ )∈¯FI
+
+L(π, λ ; μ, I ) = inf  
+
+> (π,λ )∈¯FI
+
+sup 
+
+> μ≥0
+
+L(π, λ ; μ, I ) = inf 
+
+> (π,λ )∈F I
+
+J(π, λ ; I).
+
+Uniqueness of μ∗ follows from strict monotonicity of μ 7 → E[cI + ˆ πI (X; μ)clabel ] on {μ : ˆ πI (·; μ)̸ ≡
+
+πmin and ̸ ≡ 1}, established in §C as the basis for the bisection in Algorithm 1. 
+
+Part (b): KKT sufficiency. If (π∗, λ ∗, μ ∗) satisfies (i) Theorem 4(a) at μ = μ∗, (ii) Theorem 4(b), and (iii) the budget identity Eq. (8) , then it is a saddle point of L on ¯FI × R≥0: the partial minimum over (π, λ ) at μ = μ∗ is attained at (π∗, λ ∗) by (i)–(ii), and complementary slackness from (iii) pins the dual maximum at μ∗. By part (a), saddle points of L on ¯FI × R≥0 are global minimizers of the inner problem. 
+
+Remark 2 (Why duality survives even though J is not jointly convex) . The non-joint-convexity in J
+
+comes entirely from −J2(λ; I), which depends only on λ and is decoupled from the budget constraint. Eliminating it via the closed-form WLS partial minimizer λ∗(π), then minimizing π pointwise against the convex per-instance Lagrangian (perspective rI /(nπ ) plus a linear term), exposes a tractable dual function g(μ) that is concave in μ as the infimum of affine functions; weak duality is tight under Slater’s condition because the budget is a single integral constraint with a strictly feasible π. This is the structural reason that the AM-PPI optimality conditions are global, not merely local, despite the absence of joint convexity in the original (π, λ ) formulation. 
+
+Discrete routing closes the outer minimization 
+
+The outer minimization over I : X → I in Eq. (18) is finite ( ≤ 2k − 1 candidate subsets per instance). For each candidate I, the inner-problem optimum is identified by Theorems 4–5. Pointwise minimization of the per-instance Lagrangian cost 
+
+ℓI (x) = rI (x)
+
+n
+
+ 1ˆπI (x) − 1
+
+
+
++ μ∗ cI + μ∗ clabel ˆπI (x)
+
+over I, with μ∗ from Eq. (8) and ˆπI (x) from Theorem 4(a) evaluated at the candidate subset I, gives the routing rule of Eq. (9). This closes the outer minimization pointwise. 
+
+Summary of the structural guarantee 
+
+(S1) Compact convex feasible set (Proposition 1), so Slater’s condition is meaningful and KKT applies. (S2) Biconvexity of J (Theorem 4): convex in each block with closed-form partial minimizers (Eqs. (5) and (7)). (S3) Strong duality of L (Theorem 5): KKT necessary and sufficient at the unique μ∗ from the budget identity (Eq. (8)). (S4) Discrete routing (§C.5): Eq. (9) closes the outer minimization pointwise. Items (S1)–(S4) together replace the (false) statement of joint convexity in (π, λ ) and deliver exactly what is needed: the AM-PPI fixed point identified by Eqs. (5) –(9) is a global minimum of the joint variance-minimization problem Eq. (3). 
+
+## D Proof of Theorems 2 and 3 (AM-PPI is optimal within the AIPW class) 
+
+Theorem 1 shows that the AM-PPI estimator is asymptotically normal with valid coverage. A natural follow-up question is whether a different estimator could achieve smaller asymptotic variance under 21 the same sampling mechanism and budget constraint. The classical UMVU theorem (Lehmann– Scheffé) requires a complete sufficient statistic in a parametric family, which is unavailable in the present semiparametric setting. We instead establish two complementary statements: (i) within the natural class of linear-prediction unbiased AIPW estimators that respect the AM-PPI sampling mechanism and budget constraint, the AM-PPI estimator uniquely achieves the minimum asymptotic variance (Theorem 2); and (ii) when the predictors span the regression function, that minimum variance equals the semiparametric efficiency bound for θ∗ = E[Y ] in the broader model with general (non-linear) prediction model and arbitrary inverse-propensity scaling (Theorem 3). 
+
+D.1 The admissible class Definition 1 (Admissible AIPW class C). For a routing I : X → I , sampling rule πI (·) ∈ [πmin , 1] ,and parameters λI ∈ R|I|, define the linear-prediction augmented inverse-propensity-weighted (AIPW) estimator 
+
+ˆθ(λ, π, I ) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+
+
+λ⊤
+
+> I(Xi)
+
+fI(Xi)(Xi) +  Yi − λ⊤
+
+> I(Xi)
+
+fI(Xi)(Xi) ξi
+
+πI(Xi)(Xi)
+
+
+
+. (22) The class C consists of all such estimators with: (i) λ, π, I measurable and not depending on Y or ξ;(ii) π(x) ≥ πmin > 0 a.s.; (iii) the per-instance budget E[cI + πI clabel ] ≤ b; and (iv) finite second moments E[∥fI (X)∥2] < ∞, E[Y 2] < ∞. AM-PPI is the special case (λ∗, ˆπ, I ∗) with λ∗ from Eq. (7), ˆπ from Eqs. (5)–(6), and I∗ from Eq. (9). 
+
+Why this class. Relative to the broadest natural AIPW form (with measurable prediction model gI
+
+and measurable IPW scaling hI , both allowed to vary with X), the class C embeds two restrictions: (i) the prediction model is linear in the predictors, gI = λ⊤ 
+
+> I
+
+fI , and (ii) the IPW residual carries no auxiliary scaling factor, i.e., hI ≡ 1 implicitly multiplies (Yi − λ⊤ 
+
+> I
+
+fI (Xi)) ξi/π I (Xi). Restriction (ii) is without loss of generality: within that broader AIPW class, the asymptotic variance is uniquely minimized at hI ≡ 1 (Lemma 2 below). Restriction (i) is genuine: holding hI ≡ 1, the strictly broader prediction-model class (allowing measurable g : X → R in place of λ⊤fI ) achieves its global minimum at the semiparametric-efficient choice g = μ, and that broader minimum coincides with AM-PPI’s exactly when μ ∈ span {fI } (Theorem 3). The class C subsumes ASI [Zrnic and Candès, 2024a] (the k = 1 case with a single fixed predictor) and PPI++ [Angelopoulos et al., 2023b] (with 
+
+λ as the scalar tuning parameter, |I| = 1 ), and matches the parameterization that Algorithms 1–2 actually produce. 
+
+Unbiasedness is automatic in C. For any (λ, π, I ) ∈ C , write gI = λ⊤ 
+
+> I
+
+fI , μ(x) := E[Y | X = x],and use E[ξi | Xi] = πI(Xi)(Xi):
+
+E[ˆθ(λ, π, I )] = E
+
+
+
+gI (X) +  Y − gI (X) E[ξ | X]
+
+πI (X)
+
+
+
+= E[gI (X)+ μ(X)−gI (X)] = E[Y ] = θ∗.
+
+The IPW correction cancels the dependence on the (possibly misspecified) prediction model gI in expectation, so any choice of λI yields an unbiased estimator for θ∗.
+
+The implicit hI ≡ 1 choice is variance-optimal. Definition 1 fixes the IPW scaling at unity. The next lemma shows that this is not an arbitrary modeling choice: within the broadest natural AIPW class allowing both a measurable prediction model gI : X → R and a measurable scalar factor 
+
+hI : X → R multiplying the residual, the asymptotic variance is uniquely minimized at hI ≡ 1. The linear-prediction restriction gI = λ⊤ 
+
+> I
+
+fI in C is genuine (Theorem 3 controls when it is binding); the 
+
+hI ≡ 1 restriction is not. 
+
+Lemma 2 (hI ≡ 1 is variance-optimal in the broader AIPW class) . Let ˜C denote the broader AIPW class obtained by replacing λ⊤ 
+
+> I
+
+fI in Eq. (22) with a measurable prediction model gI : X → R and the implicit unit IPW scaling with a measurable factor hI : X → R:
+
+ˆθ(g, h, π, I ) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+
+
+gI(Xi)(Xi) + hI(Xi)(Xi) Yi − gI(Xi)(Xi) ξi
+
+πI(Xi)(Xi)
+
+
+
+, (23) 
+
+with (π, I ) as in Definition 1, gI and hI measurable and not depending on Y or ξ, and finite second moments E[gI (X)2], E[hI (X)2Y 2] < ∞. Write μ(x) := E[Y | X = x].
+
+22 1. (Unbiasedness condition.) ˆθ(g, h, π, I ) is unbiased for θ∗ iff E[gI (X)+ hI (X)( μ(X)−gI (X))] = 
+
+E[Y ]. The choice hI ≡ 1 makes this automatic. 2. (Reduction to hI ≡ 1.) For any unbiased (g, h, π, I ) ∈ ˜C, define ˜gI (x) := hI (x)gI (x) +  1 − hI (x)μ(x). Then (˜ g, 1, π, I ) ∈ ˜C is unbiased and its asymptotic variance satisfies 
+
+V (˜ g, 1, π, I ) ≤ V (g, h, π, I ), with equality only when hI (x) = 1 on {μ(x)̸ = gI (x)} PX -a.s. Consequently, hI ≡ 1 uniquely (up to PX -null sets where μ = gI ) attains the variance minimum within ˜C. Definition 1’s restriction hI ≡ 1 is therefore without loss of generality, and the minimum-variance question over C coincides with the minimum-variance question over ˜C ∩ { hI ≡ 1} further restricted to linear prediction models. Proof sketch. Unbiasedness. Applying the tower property and E[ξ | X] = πI (X) to Eq. (23) ,
+
+E[ˆθ(g, h, π, I )] = E[gI (X) + hI (X)( μ(X) − gI (X))] . Setting this equal to E[Y ] = E[μ(X)] gives the stated condition; under hI ≡ 1 both sides equal E[μ] identically, recovering the calculation already given for C.
+
+Variance reduction. Substituting ˜gI = hI gI + (1 − hI )μ into the unbiasedness identity confirms that 
+
+(˜ g, 1, π, I ) is unbiased. A law-of-total-variance expansion of the per-instance increment, parallel to the calculation that produced Eq. (25), gives the gap 
+
+V (g, h, π, I ) − V (˜ g, 1, π, I ) = E
+
+ 1 − hI (X)2 μ(X) − gI (X)2
+
+ 1
+
+πI (X) − 1
+
+ 
+
++ C, (24) where C ≥ 0 is a non-negative residual cross term (the variance of a quantity linear in 1 − hI , arising from the Var( Y | X) contribution to total variance). Both summands in Eq. (24) vanish only when 
+
+hI (x) = 1 on {μ(x)̸ = gI (x)}; on {μ = gI } the variance is hI -independent. Provided (μ − gI )2
+
+is positive on a set of positive PX -measure, the right-hand side is strictly positive unless hI ≡ 1
+
+PX -a.s., establishing uniqueness. The proof of Theorem 2 below therefore loses no generality by fixing hI ≡ 1 at the outset and optimizing only over λI , πI , and I: by Lemma 2, any element of ˜C with non-trivial hI is strictly dominated (unless hI ≡ 1 a.s. on {μ̸ = gI }), so the search reduces to ˜C ∩ { hI ≡ 1}, of which C is the linear-prediction subclass. 
+
+D.2 Minimum variance within C (proof of Theorem 2) 
+
+Proof of Theorem 2. We proceed in two steps: minimize the per-instance asymptotic variance over λ
+
+at fixed (π, I ) via WLS; then minimize over (π, I ) subject to the budget via the global-optimality argument of Appendix C.5. 
+
+Step 1: Per-instance variance and WLS minimization in λ. The per-instance increment ∆i := 
+
+λ⊤
+
+> I(Xi)
+
+fI(Xi)(Xi) +  Yi − λ⊤
+
+> I(Xi)
+
+fI(Xi)(Xi)ξi/π I(Xi)(Xi) satisfies E[∆ i | Xi, Y i] = Yi (the IPW correction; see Eq. (10) in the proof of Theorem 1). By the law of total variance applied with 
+
+Var( ξi | Xi, Y i) = πI(Xi)(Xi)(1 − πI(Xi)(Xi)) , the conditional variance given (Xi, Y i) is 
+
+Var(∆ i | Xi, Y i) =  Yi − λ⊤
+
+> I(Xi)
+
+fI(Xi)(Xi)2 1 − πI(Xi)(Xi)
+
+πI(Xi)(Xi) .
+
+Combining with Var( E[∆ i | Xi, Y i]) = Var( Y ) and integrating gives the asymptotic variance 
+
+V (λ, π, I ) := lim  
+
+> n→∞
+
+nVar  ˆθ(λ, π, I ) = Var( Y ) + E
+
+
+
+(Y − λ⊤ 
+
+> I
+
+fI (X)) 2
+
+ 1
+
+πI (X) − 1
+
+ 
+
+.
+
+(25) Conditioning the residual term on X, E[( Y −λ⊤ 
+
+> I
+
+fI (X)) 2 | X = x] = ( μ(x)−λ⊤ 
+
+> I
+
+fI (x)) 2 +Var( Y |
+
+X = x) =: rI (x; λI ), so 
+
+V (λ, π, I ) = Var( Y ) + E
+
+
+
+rI (X; λI )
+
+ 1
+
+πI (X) − 1
+
+ 
+
+.
+
+23 The leading Var( Y ) does not depend on λ. Holding (π, I ) fixed, minimizing the residual term in λ is exactly the WLS problem of Theorem 4(b): the integrand is a non-negatively-weighted quadratic in λ with weight wI (x) := 1/π I (x) − 1 ≥ 0, hence convex, and (under posi-tive definiteness of E[wI (X) fI (X)fI (X)⊤]) strongly convex, so the minimizer is unique. Set-ting the gradient to zero yields the WLS moment condition Eq. (7) , with closed-form solution 
+
+λ∗ 
+
+> I
+
+=  E[wI fI f ⊤ 
+
+> I
+
+]−1 E[wI fI Y ]. Substituting, 
+
+min  
+
+> λ
+
+V (λ, π, I ) = Var( Y ) + E
+
+
+
+rI (X; λ∗ 
+
+> I
+
+)
+
+ 1
+
+πI (X) − 1
+
+ 
+
+.
+
+Step 2: Joint optimization over (π, I ) subject to the budget. Substituting λ = λ∗ from Step 1 and dropping the λ-independent Var( Y ), the remaining optimization 
+
+min  
+
+> π,I
+
+E
+
+
+
+rI (X; λ∗ 
+
+> I
+
+)
+
+ 1
+
+πI (X) − 1
+
+ 
+
+subject to E[cI + πI clabel ] ≤ b, πI (·) ∈ [πmin , 1] a.s. ,
+
+is exactly the AM-PPI variance problem Eq. (3) . By Theorems 4–5 of Appendix C.5, the KKT triple 
+
+(ˆ πI∗ , λ ∗ 
+
+> I∗
+
+, μ ∗) given by Eqs. (5) , (7) , (8) together with the pointwise routing rule Eq. (9) is the global minimizer. Combining Steps 1 and 2, the AM-PPI estimator achieves the minimum asymptotic variance 
+
+V ∗ = Var( Y ) + E
+
+
+
+rI∗ (X; λ∗ 
+
+> I∗
+
+)
+
+ 1ˆπI∗ (X) − 1
+
+ 
+
+(26) within the class C, matching the variance V of Eq. (2) from Theorem 1. Strong convexity of the WLS step gives uniqueness in λ; strict convexity of rI /π in π > 0 gives uniqueness in ˆπ on {rI∗ > 0},and on the complement (where the variance contribution vanishes) ˆπ is unconstrained. The minimizer is therefore unique up to PX -null sets. 
+
+D.3 Connection to the semiparametric efficiency bound (proof of Theorem 3) 
+
+The argument of Theorem 2 optimizes within the linear-prediction class C. We now show that this optimum coincides with the semiparametric efficiency bound for θ∗ = E[Y ] in the broader model whenever the predictors span the true regression function. 
+
+Proof of Theorem 3. Consider the broader semiparametric model in which the prediction model is allowed to be any measurable g : X → R and the inverse-propensity correction is allowed an arbitrary measurable scaling h : X → R, with the same active-sampling and budget constraints. The pathwise derivative at θ∗ = E[Y ] has efficient influence function (see, e.g., van der Vaart, 1998 and Robins and Rotnitzky, 1995) 
+
+ψ∗(X, Y, ξ ) = μ(X) +  Y − μ(X) ξπ(X) − θ∗,
+
+yielding the semiparametric efficiency bound 
+
+V ∗ 
+
+> SP
+
+= Var( ψ∗) = Var( μ(X)) + E
+
+ Var( Y | X)
+
+π(X)
+
+
+
+.
+
+Suppose now that μ ∈ span {x 7 → λ⊤fI (x) : λ ∈ R|I|} for some I ∈ I . Then there exists λ∗ 
+
+> I
+
+∈ R|I|
+
+with λ∗⊤  
+
+> I
+
+fI (x) = μ(x) for PX -a.e. x. This λ∗ 
+
+> I
+
+also solves the WLS condition Eq. (7) : the residual 
+
+Y − λ∗⊤  
+
+> I
+
+fI (X) = Y − μ(X) has E[Y − μ | X] = 0 , so for any non-negative weight wI and any choice of fI , E[wI (X) ( Y − μ(X)) fI (X)] = E[wI (X) fI (X) E[Y − μ | X]] = 0 by the tower property. Substituting λ∗ 
+
+> I
+
+into the AM-PPI per-instance increment, 
+
+∆i = λ∗⊤  
+
+> I∗
+
+fI∗ (Xi) +  Yi − λ∗⊤  
+
+> I∗
+
+fI∗ (Xi) ξi
+
+ˆπ(Xi) = μ(Xi) +  Yi − μ(Xi) ξi
+
+ˆπ(Xi) ,
+
+so the AM-PPI influence function ∆i − θ∗ equals ψ∗(Xi, Y i, ξ i) for PX -a.e. Xi. The conditional residual variance reduces to rI∗ (X; λ∗ 
+
+> I∗
+
+) = Var( Y | X) a.s.; substituting into Eq. (26), 
+
+V ∗ = Var( Y ) + E
+
+
+
+Var( Y | X)
+
+ 1ˆπ(X) − 1
+
+ 
+
+= Var( μ(X)) + E
+
+ Var( Y | X)ˆπ(X)
+
+
+
+= V ∗
+
+> SP
+
+,
+
+24 where the second equality uses the law of total variance Var( Y ) = Var( μ(X)) + E[Var( Y | X)] .Asymptotic normality (Theorem 1) then gives √n(ˆθAM-PPI − θ∗) d
+
+−→ N (0 , V ∗
+
+> SP
+
+).
+
+Remark 3 (What is and is not claimed) . Theorem 2 is the natural UMVU statement for AM-PPI: it certifies minimum-asymptotic-variance unbiasedness within the linear-prediction AIPW class compatible with active sampling and the budget constraint , matching the parameterization that Algorithms 1–2 actually produce. Theorem 3 strengthens this to a global semiparametric efficiency claim under the additional condition that the predictors span the regression function. Without that condition, AM-PPI is best-in-class within C but does not saturate the broader semiparametric bound; the gap between V ∗ and V ∗ 
+
+> SP
+
+is the squared L2(PX , 1/ˆπ−1) -distance from μ to span {fI∗ }, reflecting the practical reality that statistical efficiency in this problem is fundamentally limited by the predictive quality of the available models {fI }I∈I .
+
+## E Two-population model advantage analysis 
+
+To develop intuition around when two predictors with differing costs and strengths provide a statistical advantage over a single predictor, we derive a closed-form variance ratio between ASI [Zrnic and Candès, 2024a] and AM-PPI under a simplified two-population model. Consider k = 2 predictors with costs c1 < c 2. A fraction p of instances are “easy” (all predictors achieve small residual variance 
+
+re) and a fraction 1 − p are “hard” (the cheap predictor has residual variance rh on hard examples, whereas the expensive predictor achieves rh(1 − δ) for δ ∈ [0 , 1] ). In this example, AM-PPI has access to two predictors while ASI commits to a single predictor j for all instances under each test scenario. Here we define the average root residual as Sj = p√rj,e + (1 − p)√rj,h . The ASI variance for the jth predictor is thus: 
+
+Var( ˆθASI ,j ) = 1
+
+n Var( Y ) + 1
+
+n
+
+" S2 
+
+> j
+
+· clabel 
+
+b − cj
+
+− Tj
+
+#
+
+, (27) where Tj := E[rj ] = p r j,e + (1 − p) rj,h . The variance consists of a tradeoff between the residual 
+
+Sj and budget-related factors. AM-PPI navigates this tradeoff by routing easy instances to the cheap predictor and hard instances to the expensive one. The average model cost is Croute = p c 1 +(1 −p) c2,and the variance is: 
+
+Var( ˆθAM-PPI ) = 1
+
+n Var( Y ) + 1
+
+n
+
+ S22 · clabel 
+
+b − Croute 
+
+− T2
+
+
+
+. (28) Note that the AM-PPI residual in the two-population model is equal to S2; the population of easy examples p are routed to the easy model with variance re and likewise for the hard instances yielding an average root residual of p√re + (1 − p)prh(1 − δ) = S2. Since Croute < c 2, AM-PPI retains more budget for labels than ASI with the expensive predictor. In the tight-budget regime where active sampling dominates ( π∗ ≪ 1, so E[r/π ∗] ≫ E[r]), the Var( Y ) − Tj terms in Eqs. (27) – (28) are sub-leading relative to the budget-amplified residual term, and the variance ratio simplifies to a pure budget-savings form. We now analyze this ratio of AM-PPI relative to ASI. 
+
+Case 1: ASI uses the expensive predictor. The variance ratio (ASI/AM-PPI) simplifies to a pure budget-savings ratio. With a normalized model budget φ = c2/b and c1 ≪ c2:
+
+R2 ≈ 1 + p φ 
+
+1 − φ . (29) 
+
+R2 depends only on the fraction of easy instances p in the dataset and the budget fraction φ. In this case, AM-PPI improves upon ASI (R2 > 1) as the number of easy examples in the dataset and the cost of the expensive model increases. Figure 2 (left) visualizes the CI width reduction. 
+
+Case 2: ASI uses the cheap predictor. Unlike Case 1, the variance ratio reflects a tradeoff between variance reduction due to model performance and model cost. Assuming re ≪ rh and c1 ≪ c2, the ratio simplifies to: 25 R1 ≈ 1 − (1 − p) φ
+
+1 − δ . (30) AM-PPI improves upon ASI ( R1 > 1) precisely when δ > (1 − p)φ, i.e., the per-hard-instance variance gain exceeds the budget cost. Figure 2 (right) visualizes this region at p = 0 .5; from Eq. 30, increasing p shrinks the (1 − p)φ threshold and further expands the region in which AM-PPI improves upon ASI. 
+
+Figure 2: CI width reduction (%) under the two-population model. Left: Case 1 (AM-PPI versus ASI using the expensive predictor) depends only on the fraction of easy examples p and φ = c2/b . Right: 
+
+Case 2 at p = 0 .5 (AM-PPI versus ASI using the cheap predictor) under c1 ≪ c2 and re ≪ rh;AM-PPI improves upon ASI where δ > (1 − p)φ.
+
+## F Experimental details 
+
+This appendix collects per-experiment setup details for the runs reported in Section 5. The total budget B covers only deployment-time predictor queries and label collection; the burn-in (calibration) sample is treated as a fixed prior resource and is not deducted from B.
+
+Data splits. Each dataset is partitioned into three disjoint subsets: a training split (used to fit the cheap and expensive predictors), a calibration split (the burn-in sample used by Algorithm 1 to estimate ˆλI , ˆuI , ˆμ), and a test split (the deployment stream on which Algorithm 2 runs). Different fractions are explored: 60/20/20 for synthetic regression, 40/30/30 for MIMIC-III, and 50/25/25 for VeriFact-BHC and hypothyroid (train/calibration/test). 
+
+Differing Costs. The labeling cost clabel is set to 1.0 across all four experiments, providing a common reference scale for the budget axes. For two of the four experiments the cheap-predictor cost 
+
+c1 is chosen so that c1 < c 2 ≪ clabel (specifically c1 = 0 .01 for synthetic regression and c1 = 0 .1
+
+for MIMIC-III). The expensive-predictor cost c2 is set so that the two ASI baselines cross within the earlier portion of the budget range to show the behavior of AM-PPI when the two predictors cross. This places the ASI crossing point near the regime where the budget is binding. Operating in a batched mode and keeping the size of the deployment data fixed, the expensive model becomes too costly to operate at low budgets below the crossing point while the cheaper model and AM-PPI can still function. 
+
+Equivalent Costs. The VeriFact-BHC and hypothyroid experiments explore the behavior of AM-PPI when the predictor costs ( 0.005 , 0.15 respectively) are equal and the average performance of the predictors are similar while being specialized so that both ASI baselines collapse onto a single curve, isolating the contribution of per-instance routing from any cost savings. 26 Number of trials. Smooth CI curves were obtained with 200 for synthetic regression, 1,000 
+
+MIMIC-III, and VeriFact-BHC, and 2,000 trials for hypothyroid. Per-trial CI widths and coverage indicators are aggregated to compute the mean curves and the ±1 SEM bands shown in Figure 1. 
+
+Per-method viability cutoff. Each method’s curve in Figure 1 begins at the smallest budget where the method can fund at least nmin = 7 gold labels in addition to its required predictor queries: 
+
+B ≥ cI · ntest + nmin · clabel . For ASI(expensive), cI is the expensive predictor cost; for ASI(cheap), the cheap predictor cost; and for AM-PPI we use the mean of the two as a routing-cost approximation. Below this threshold, the implementation’s ˆπ ≥ 0.01 stability floor (a clip on the active-sampling probabilities introduced for numerical safety in the importance-weighted variance estimator) collapses sampling to near-uniform coverage at probability 0.01 , which yields too few gold labels in expectation and produces unstable CIs from a small biased subset of trials. We omit those budget points rather than report them. All confidence intervals use the asymptotic pivot of Theorem 1 with the standard normal quantile z1−α/ 2.
+
+Uncertainty model architecture. Each ˆuI (x) is a gradient boosting regressor (sklearn 
+
+GradientBoostingRegressor ) trained on the calibration split to predict the absolute residual 
+
+|Y − ˆλ⊤ 
+
+> I
+
+fI (X)| from the raw covariates X (or, for MIMIC-III and VeriFact-BHC, lightweight per-record summary features: 11 for MIMIC-III and 17 for VeriFact-BHC). Hyperparameters are selected via 3-fold cross-validation over the grid {nestimators ∈ { 25 , 50 , 100 }} × { max_depth ∈{2, 6, 8}} × { learning_rate ∈ { 0.05 , 0.1}} , using negative mean absolute error as the scoring metric. 
+
+Hypothyroid dataset balancing. The OpenML hypothyroid dataset (dataset 57) has a strongly imbalanced positive class. We undersample the majority (negative) class to match the size of the positive class, producing a balanced dataset before applying the train/calibration/test split. The predictors are fit on the training split; only the calibration and test splits are used by Algorithms 1–2. 
+
+VeriFact-BHC predictors and feature panel. The VeriFact-BHC dataset [Chung et al., 2025] provides 13 ,070 propositions extracted from human- and LLM-written Brief Hospital Course nar-ratives, paired with adjudicated clinician “Supported” / “Not Supported” / “Not Addressed” labels. We binarize the label to 1 if Supported and 0 otherwise. From the public dataset we derive seven-teen lightweight per-proposition metadata features (proposition character/word/digit counts, average characters per word, parent-chunk character/word/digit counts, BHC character/word/line counts, claim-vs-sentence flag, BHC author flag, number of propositions in the BHC, raw position, normal-ized position, proposition-to-chunk word ratio, length of stay in days). No proposition or chunk text is retained downstream. The “cheap” predictor is a depth-1 gradient boosting classifier ( nestimators = 10 )trained on a four-feature subset (proposition word count, parent-chunk word count, proposition-to-chunk word ratio, claim flag) deliberately excluding the strongest signal (BHC author flag). The expensive predictor is a depth-3 gradient boosting classifier ( nestimators = 200 ) trained on all sev-enteen features. Both predictors output continuous probabilities. The total budget is swept over 
+
+B ∈ [50 , 500] on a 24 -point grid. 
+
+Compute resources. AM-PPI and ASI results were generated using a single Apple M3 Pro CPU. LLM predictions were generated using 4 ×144 GB H200 and 1 ×96 GB H100. 
+
+## G Synthetic mechanism analysis 
+
+This appendix decomposes the AM-PPI advantage observed in Section 5 into its underlying mecha-nisms: cost gap, accuracy gap, candidate subset family, and routing fidelity. We use a stripped-down synthetic setting in which both predictors and the deployment-time uncertainty model are oracles, so that any observed effect is attributable to the AM-PPI optimization itself rather than to predictor or surrogate fitting. 
+
+Setup. We draw n = 10 ,000 instances X ∈ R5 from a standard normal and target Y from the same heteroscedastic generator used for the main synthetic regression experiment (Section 5). Each predictor is constructed as fj (x) = Y + σj ηj with ηj ∼ N (0 , 1) drawn i.i.d. across instances and across predictors (we reserve η for predictor noise to distinguish it from the data-generating noise ε
+
+in Section 5). This lets us tune the cheap-versus-expensive accuracy gap directly via σ1, σ 2 without 27 confounding from predictor fitting. The deployment-time uncertainty model returns the exact realized residual |Yi − λ⊤ 
+
+> I
+
+fI (Xi)| per instance. We then run the full AM-PPI calibration and deployment pipeline (Algorithms 1–2) on a 20% test split, sweeping the total budget B ∈ [20 , 150] and averaging 
+
+10 Bernoulli draws per budget. The cheap-predictor cost is fixed at c1 = 0 .01 . Figure 3 reports CI width versus B for AM-PPI and the two ASI baselines under six configurations. 
+
+Panels (a) and (b): subset structure with identical predictors. When σ1 = σ2 = 2 .5 and c1 = c2
+
+the two predictors are statistically identical. Panel (a) includes the compound subset {f1, f 2} in I;AM-PPI gains over both ASIs because of smart routing. Panel (b) restricts I to singletons; AM-PPI still gains as before this time without the contribution of the compound predictor set. We see this AM-PPI behavior in the real experiments when the predictor costs are the same. 
+
+Panel (c): accuracy gap alone. Next we increase the accuracy of the 2nd predictor by setting σ2 =0.3 σ1 at equal cost. This makes the expensive predictor uniformly preferable so that ASI(expensive) is below ASI(cheap) at every budget and AM-PPI tracks ASI(expensive) closely. 
+
+Panel (d): cost gap alone. Next we increase the cost of the 2nd predictor by setting c2 = 4 c1
+
+but keep it at equal accuracy. This makes the expensive predictor unaffordable at small budgets (B ∼ 50 ); a numerical ˆπ ≥ 0.01 floor in the implementation produces a flat ASI(expensive) plateau in this region rather than a divergence. This is a numerical artifact in that regime. AM-PPI tracks ASI(cheap) and the curves converge at large budgets. 
+
+Panel (e): cost gap and accuracy gap together (paper regime). With differing costs c2 = 4 c1 and predictor accuracy σ2 = 0 .3 σ1 the two effects combine and produce the crossing behavior observed in the paper. ASI(expensive) is infeasible at small B, so ASI(cheap) wins region R1. At large B the cost gap is small relative to the budget and ASI(expensive)’s lower variance dominates region R3. In the middle region R2 AM-PPI outperforms both by routing instances with small cheap-residual to the cheap predictor, freeing budget for labels on harder instances routed to the expensive predictor. This is the three-region pattern observed in the two real-world experiments in Figure 1. 
+
+Panel (f): random routing collapses AM-PPI onto ASI. Panel (f) replaces the optimal routing 
+
+arg min with a uniform random subset choice for every instance; AM-PPI degrades to the ASI baselines exactly, as expected, confirming that the gains in panels (a)–(e) come from the routing decision itself rather than from any artifact of averaging or sampling. 
+
+Takeaway. The three-region pattern in Figure 1 is fully explained by the interaction of two ingredi-ents: a meaningful cost gap and accuracy gap, which creates the single predictor crossover. Either ingredient alone produces only a degenerate version of the pattern. AM-PPI converts this pair of crossovers into a strict middle-region win whenever the routing surrogate is informative enough to identify which instances would prefer which predictor. If both predictors are equal in cost and strength, AM-PPI is still able to improve by adopting a mixed strategy across the entire budget range making good use of each predictor. 28 Figure 3: Synthetic mechanism analysis. Each panel sweeps total budget B for one configuration of the cheap and expensive cost ratio, accuracy ratio, candidate subset family I, and routing-error rate; predictors and uncertainty surrogate are oracles so all observed effects are attributable to the AM-PPI optimization itself. Panels (a) through (e) build incrementally to the cost-plus-accuracy regime that produces the three-region pattern observed in Figure 1; panel (f) verifies that random routing collapses AM-PPI onto the ASI baselines. Shaded bands show ±1 SEM across 10 Bernoulli draws per budget. 
+
+## H Prompts used in MIMIC-III experiment 
+
+We reproduce below the two prompts used in the MIMIC-III EHR–discharge consistency experiment (Section 5): the few-shot prompt used to generate synthetic “Labs on Admission” sections with GPT-OSS-120B and the few-shot prompt used by the Nemotron-3 consistency checkers. Placeholders in braces (e.g., {EHR} , {ehr_data} , {clinical_note} ) are substituted at inference time. In-prompt few-shot examples are omitted below to avoid reproducing MIMIC-III patient data, per the PhysioNet Credentialed Health Data use agreement. 
+
+H.1 Synthetic “Labs on Admission” generation prompt 
+
+> You are an expert clinical physician who specializes in writing discharge summaries at the end of a patient’s ICU hospital stay. These discharge summaries are expansive, semi-structured clinical documents generated at ICU discharge that detail patient histories, treatments, and follow-up recommendations. Your task is to generate the Labs on Admission section of a discharge summary provided Admission Labs EHR. CRITICAL CONSTRAINTS - You must use only the provided structured EHR data, do NOT invent or infer information not explicitly supported by the EHR. - Prefer concise clinical phrasing and typical discharge-summary formatting. - You should output the lab, lab value, fluid associated with the lab, and whether the lab was abnormal or not. - If a lab is flagged as abnormal, please add a * after the lab.
+
+29 --------------------------------------------------OUTPUT REQUIREMENTS --------------------------------------------------- Output ONLY the discharge summary section text. - Match section headers exactly (including colons). - Follow the formatting style of the example output below. ======================== EXAMPLE ======================== [Few-shot example redacted to comply with the MIMIC-III / PhysioNet Credentialed Health Data use agreement.] Now generate for these EHR inputs: INPUT: {EHR} OUTPUT: 
+
+H.2 Consistency checker prompt (few-shot, labs) 
+
+You are an expert Medical Records auditor. Your goal is to verify if the clinical note is fully supported by the structured Electronic Health Record (EHR) data. ### Evaluation Framework: 1. **Contradictions (Inconsistent):** Does the EHR say "Diabetes" while the note says "No history of Diabetes"? 2. **Numerical Mismatch (Inconsistent):** Do lab values, dosages, or dates in the EHR contradict the note? 3. **Omissions (Inconsistent):** If information is in the note but missing from the EHR, mark as INCONSISTENT. 4. **Extra EHR Data (Consistent):** The EHR is a comprehensive record that can contain information not mentioned in the brief discharge note. Do NOT penalize this. As long as everything in the note exists in the EHR, mark as 1. 5. **Mutual Absence (Consistent):** If a section in the clinical note is empty, blank, or says "None," and the corresponding section in the structured EHR is also empty (e.g., [] or no codes listed), this is CONSISTENT. Do not mark as an omission if there was nothing to report in either source. Analyze whether all key information documented in the clinical note is present and fully supported by the structured EHR data. ### Expected Output: Return ONLY a valid JSON object without markdown formatting, backticks, or conversational text. It must contain: - ‘reasoning‘: A brief explanation of your determination, specifically cite the conflicting values if ‘is_consistent‘ is 0. - ‘is_consistent‘: 1 (Matches/No contradictions) or 0 (Clear contradiction). - ‘certainty‘: Your certainty in the is_consistent determination (1 = completely uncertain, 2 = somewhat uncertain, 3 = completely certain) [Few-shot examples redacted to comply with the MIMIC-III / PhysioNet Credentialed Health Data use agreement.] Now given the examples above, please provide output for the following input: ### Input Data: ---#### [STRUCTURED EHR DATA] {ehr_data} #### [CLINICAL NOTE] 
+
+30 {clinical_note} #### [OUTPUT] 
+
+31
