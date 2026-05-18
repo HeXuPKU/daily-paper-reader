@@ -1,0 +1,3310 @@
+Title: OgBench: A Framework for Evaluating Graph Neural Networks on Omics Data
+
+URL Source: https://arxiv.org/pdf/2605.15511v1
+
+Published Time: Mon, 18 May 2026 00:22:44 GMT
+
+Number of Pages: 42
+
+Markdown Content:
+# OgBench: A Framework for Evaluating Graph Neural Networks on Omics Data 
+
+Louisa Cornelis ∗
+
+UC Santa Barbara 
+
+louisacornelis@ucsb.edu 
+
+Johan Mathe 
+
+Atmo, Inc. 
+
+Louis Van Langendonck 
+
+Universitat Politècnica de Catalunya 
+
+Guillermo Bernárdez †
+
+UC Santa Barbara 
+
+Nina Miolane †
+
+UC Santa Barbara 
+
+## Abstract 
+
+Graph Neural Networks (GNNs) have become the dominant framework for in-ductive graph-level learning. Yet most benchmarks focus on the regime n ≫ p,where the number of graphs n greatly exceeds the number of nodes per graph 
+
+p. This overlooks biological domains such as omics, which operate in the op-posite n ≪ p regime, characterized by large graphs of genes, transcripts, or proteins across few patient samples. This raises the question: how do GNNs perform in this low-sample, high-node omics setting? We introduce OgBench 
+
+(Omics-Graph Bench), the first benchmarking platform for graph-level prediction in the n ≪ p regime characteristic of omics data. We provide a standardized, end-to-end modular infrastructure from raw omics data to families of featured graphs with varied structural properties. We benchmark classical GNNs, as well as GNNs designed for large graphs and omics applications, alongside MLPs and machine learning baselines to establish reference performances. Our results show that widely used GNNs often do not outperform simple MLPs and classical base-lines. These findings challenge the prevailing assumption that graph structure inherently adds value in this domain, fostering a critical reassessment of current learning paradigms. Ultimately, by exposing these limitations, OgBench provides the open-source ecosystem necessary for the community to develop and validate novel architectures explicitly tailored for biological graphs. The code is available at https://github.com/geometric-intelligence/ogbench .
+
+## 1 Introduction 
+
+Many real-world systems—such as biological [ 3] or social networks [ 19 ]—can be naturally rep-resented as graphs, where entities serve as nodes and their interactions as edges. Graph Neural Networks (GNNs) [ 50 ] are designed to extract knowledge from these complex structures [ 23 , 30 , 22 ]. This structural approach has found application in omics [ 33 ], where the challenge is to understand how genes, transcripts, and proteins interact to drive biological function. The field is increasingly adopting graph representations because traditional “bag-of-features” analyses miss these interactions. In genomics, nodes can represent genes linked by regulatory or spatial relationships; in transcrip-tomics, nodes usually correspond to RNA transcripts with edges reflecting co-expression patterns; and in proteomics, the connectivity between proteins can be formulated using known or predicted protein-protein interactions (PPI). These biological graphs provide a mechanism-aware framework for using GNNs to study disease complexity.  
+
+> 1∗Corresponding author. †Equal contribution. Preprint.
+> arXiv:2605.15511v1 [cs.LG] 15 May 2026
+
+However, a significant disconnect exists between standard GNN practices and the unique char-acteristics of omics data. On the one hand, the regime n ≪ p, where the number of nodes per graph p far exceeds the number of graphs n, is a defining characteristic of modern omics. Over the past two decades, advances in high-throughput measurement technologies have enabled genome-, transcriptome-, and proteome-wide profiling at an unprecedented scale [ 53 , 11 ]. In proteomics, for example, it is now feasible to measure the expression of tens of thousands of proteins in vivo , a dramatic expansion over the few hundred previously accessible [ 31 ]—with comparable orders of magnitude observed in genomics [ 49 ] and transcriptomics [ 38 ]. This surge in dimensionality naturally leads to graph-based representations with a large number of nodes p, such as networks representing gene co-expressions, protein–protein interactions, or metabolic pathways [ 62 , 70 , 1 ]. Yet, while node counts have exploded, the number of labeled samples n (e.g., subjects in a study) remains constrained by costs, privacy regulations, and clinical availability. 10 0 10 1 10 2 10 3 10 4n / p (log scale) DD REDDIT-BINARY SAT-L (LCG) SAT-M (VCG) REDDIT-MULTI-5K MUTAG BZR COX2 DHFR ENZYMES PTC_MR PROTEINS REDDIT-MULTI-12K IMDB-BINARY SAT-S (VG) COLLAB Peptides-func IMDB-MULTI AIDS NCI1 NCI109 Mutagenicity FRANKENSTEIN ogbg-ppa MNIST (superpixels) ogbg-molhiv ogbg-molpcba Dataset regime: ratio n/p (graphs per avg #nodes) Existing datasets are all in the n > p regime  
+
+> n=p n>p
+> n<p
+
+Figure 1: Existing graph benchmarks operate in the n ≫ p regime , where the number of graphs 
+
+n far exceeds the average number of nodes per graph p. Bar plot of n/p for benchmark graph classification datasets from [39, 25, 55, 18, 17]. On the other hand, existing GNN in-ductive benchmarks—ranging from the recent GraphBench [ 55 ] to established ones like OGB [ 25 ], TUDataset [ 39 ], and LRGB [18 ]—predominantly operate in the opposite regime. As quantified in Figure 1, which visualizes major classification dataset statistics across these suites, the prevailing landscape is almost exclusively defined by the 
+
+n ≫ p ratio regime. Consequently, while these benchmarks have driven consistent progress in “many-graph” learning, they fail to reflect the n ≪ p structure inherent of omics data: massive graphs with scarce labeled samples. Notably, in statistical learning the n ≪ p regime is notoriously prone to overfitting and instability [ 61 , 24 ]. Operating here requires regularization and strong inductive biases to extract a mean-ingful signal from the noise. Given their ability to leverage structural priors, GNNs could be ideal candidates for this task, as demonstrated by their success in molecular property predic-tion [ 22 ] and drug discovery [ 54 ]. However, that success has largely been confined to settings where training data is abundant. In the data-scarce omics setting, the advantages of GNNs are less clear. For instance, recent work shows that ChebNet-based architectures rarely outperform traditional machine learning baselines on transcriptomic datasets [ 7]. Such results suggest that the structural benefits of GNNs may be surpassed by the challenges of the n ≪ p regime, prompting the question: do current GNN architectures consistently underperform in these high-node, low-sample environments? Answering this question is further complicated by the current pipeline heterogeneity in the omics field [ 21 ]. Unlike computer vision or natural language processing benchmarks where the input data is often static and standardized, biological datasets require extensive upstream processing before a graph can even be constructed. Studies often use different datasets and if they use the same ones, critical steps–such as probe-to-gene aggregation, normalization, and covariate adjustment–are frequently undocumented or implemented inconsistently [ 71 ]. These discrepancies mean reported performance gains may stem from preprocessing choices rather than architectural innovations. Consequently, the field currently lacks a consistent benchmarking infrastructure that separates model performance from pipeline artifacts, obscuring whether GNNs are truly advancing the state of the art. 
+
+Contributions. To address these challenges, we introduce OgBench , the first benchmark framework explicitly designed to evaluate inductive graph learning in low-sample, large-graph omics settings (see Figure 2 for a pipeline overview). Our contributions are: • Standardized datasets for the n ≪ p regime. We integrate critical upstream processing—e.g. probe-to-gene aggregation, normalization, covariate adjustment—directly into the benchmark pipeline. Alongside this open-source preprocessing code, we release a suite of cleaned, model-ready graph classification tasks spanning neurology, oncology, and cardiorespiratory fitness. These 2Input Data Datasets Construct graph Add node features n samples p proteins or genes Select nodes Pearson Correlation Variance Distance Correlation Random Your Method Benchmark Models GCN, GIN, GATv2, GraphSAGE, SAGN SVM, Elastic Net ChebNet, MLA-GNN Your Model Your Method Raw Data Co-expression analysis Omics expression values Graph Building Model Training Leaderboard PPI networks MLP Graph Transformer Parkinson’s 
+
+> Transcriptomics AddNeuroMed
+> Transcriptomics HERITAGE
+> Proteomics BRCA
+> Epigenomics
+
+Figure 2: Overview of OgBench : First GNN benchmark platform for omics graph datasets. Left: Transcriptomics or proteomics expression data across p genes/proteins and n samples. Middle — 1) Co-expression or PPI graphs are constructed using classical omics approaches; each sample becomes a graph with nodes representing genes/proteins and normalized expression values as node features. 2) A model is trained on a graph-level classification task. Right: Our reference benchmark trains 80k models across hyperparameters, dataset statistics, graph structures, and classification tasks. datasets provide a rigorous, reproducible testbed with standardized splits, ensuring performance differences reflect model capability rather than preprocessing artifacts. • An extensible, open benchmarking platform. OgBench provides a complete, end-to-end infras-tructure to facilitate immediate adoption—including cleaned datasets hosted on Hugging Face, automated preprocessing scripts, and standardized training and evaluation pipelines. Its modular architecture is explicitly designed for extensibility: omics practitioners can seamlessly integrate custom datasets, while AI researchers can rapidly evaluate novel architectures. To foster community-driven progress, we maintain a companion website at https://ogbench.org featuring interactive graph statistics and a public leaderboard for tracking community progress. • Enabling controlled inductive bias studies. OgBench decouples node selection and graph construction from the learning pipeline, allowing researchers to swap strategies (e.g., varying the 
+
+n/p ratio, comparing edge construction strategies) without altering the whole workflow. We use this design to benchmark feature selection methods and evaluate how graph structure influences performance in high-dimensional settings. • A reference evaluation of GNNs vs. classical baselines. To demonstrate the platform’s capabili-ties, we benchmark a diverse array of models: classical GNNs (GCN, GATv2, GIN, GraphSAGE), scalable models (SAGN), and omics-specific architectures (MLA-GNN, ChebNet), comparing these against MLPs and traditional machine learning techniques (SVM, Elastic Net) to determine whether structural learning provides a tangible advantage over simpler methods. The framework’s modular design ensures new models can be rapidly integrated and evaluated against these baselines. Through this reference evaluation, our experimental results reveal a critical insight: widely-used GNNs often struggle to convincingly outperform simple MLPs and classical baselines in the omics domain. These findings echo recent warnings that “graph learning will lose relevance due to poor benchmarks” [ 4] if the field blindly applies graph methods to data without questioning the validity of the underlying structure. By facilitating objective evaluation, OgBench sheds light on the true utility of GNNs in high-stakes scenarios, redirecting attention from incremental performance gains to a critical reassessment of the learning paradigm itself: does the path forward lie in specialized architectures, or rather in fundamentally rethinking how, and if, biological priors should be encoded as graphs? 
+
+## 2 Related Work 
+
+Inductive GNN Benchmarking. The reliability of GNN research has recently been called into question, with warnings that the field risks stagnation due to poor benchmarking practices and a lack of real-world relevance [ 4 ]. While foundational efforts—such as TUDataset [ 39 ], OGB [ 25 ], or LRGB [ 18 ]—have successfully driven architectural innovation, they have been criticized for inconsistent evaluation protocols and a reliance on datasets that do not reflect the complexity of modern scientific problems. Crucially, another fundamental limitation shared by these suites is their focus on the n ≫ p regime, where the number of graphs n far exceeds the number of nodes per graph p (see Figure 1). Even the most recent GraphBench [ 55 ], which explicitly aims to address the 3aforementioned methodological concerns by introducing diverse domains, fails to cover the n ≪ p
+
+setting characteristic of omics. 
+
+Challenges in Applying GNNs to Omics. Driven by the hypothesis that biological function is governed by complex interactomes, GNNs have seen wide adoption across bioinformatics [ 75 ], with applications across transcriptomics, proteomics and epigenomics [ 33 ], spanning drug discovery [ 27 ], cancer classification [ 63 ], and biomarker discovery [ 65 ]. However, despite this widespread adoption, the actual predictive utility of GNNs in these settings remains contentious. Recent independent evaluations suggest that structural models often fail to outperform simpler baselines. Notably, [ 7]found that ChebNet-based GNNs [ 14 ] rarely yield performance gains over traditional machine learn-ing methods, despite incurring significantly higher computational costs. Yet, their study examined only a single dataset in the n ≪ p regime and did not investigate how performance is influenced by upstream choices like node selection, graph construction, or regularization. By contrast, OgBench 
+
+systematically varies these factors using standardized protocols across a wide range of models and datasets. 
+
+Lack of GNN Benchmarks for Omics Expression Data. While biological graphs are widely used, no standard benchmark exists for graph-level tasks constructed from omics expression data. Existing biological graph datasets fall into two main categories: interaction graphs and protein structure graphs. Interaction graphs from [ 25 ] — such as ogbg-ppa , ogbl-ppa , and ogbl-biokg — are built from known biological relationships but do not include sample-level omics expression data; likewise, ogbn-proteins encodes interaction evidence rather than per-sample expression profiles. Protein structure datasets such as D&D [ 15 ] and ENZYMES [ 51 ] classify protein function from 3D molecular graphs but do not reflect omics measurements, and static databases such as STRING [ 58 ]and HINT [41] describe protein–protein associations but are disease-agnostic. Additionally, despite new releases of omics datasets for machine learning applications [ 72 ], they are not tailored to GNNs with graph building pipelines–so no public benchmark exists where each graph is a biological sample, nodes correspond to genes or proteins, and node features encode expression. OgBench fills this gap by introducing omics graph datasets, derived from sample-specific expression profiles and tailored for evaluating models in the n ∼ p and n ≪ p regimes. 
+
+## 3 Overview of OgBench 
+
+We design OgBench as a modular framework (Figure 2) that adapts the flexible, configuration-driven architecture of TopoBench [60 ] to the specific requirements of the omics domain. By building upon this robust backbone, which is naturally compatible with GNNs, OgBench provides a standardized pipeline comprising: (i) a dataset selection module, (ii) a graph building module, which includes critical upstream choices of node-selection and edge-construction methods, (iii) a model selection module, encompassing classical baselines, MLPs, and a diverse suite of GNNs (scalable, omics-specific, and general-purpose) with customizable encoders and readouts, (iv) a training procedure with rigorous regularization controls for the n ≪ p regime, and (v) a performance evaluation module. This structure enables controlled ablations and rapid iteration. New node-selectors and edge-constructors can be tested by swapping one component while keeping splits, preprocessing, and training fixed. We describe each module next: 
+
+3.1 Datasets 
+
+To demonstrate the platform, we release a suite of cleaned, model-ready graph classification tasks from omics datasets spanning neurology, oncology, and cardiorespiratory fitness. We start from raw omics expression datasets that are publicly available online [ 36 , 52 , 47 , 10 ], chosen for their biomedical relevance, and diversity across transcriptomic, proteomic and epigenomic modalities. We preprocess all four with a consistent pipeline (see Appendix A) to create clean omics benchmark datasets with defined targets, all deposited on Hugging Face as parquet files for accessible use. Upon training, each dataset is transformed into featured graphs where nodes represent genes or proteins. For the epigenomic data, node features represent the methylation state associated with the corresponding 4gene. Graphs are processed at runtime with a fixed 70/15/15 train/validation/test split (using a fixed random seed for reproducibility), and converted to PyTorch Geometric-compatible [ 20 ] objects to support standardized evaluation. We summarize the characteristics of our datasets in Table 1, which includes class distributions, with Parkinson’s having the most imbalanced split (62.1% and 37.9%). 
+
+HERITAGE Plasma Proteomics: Binary classification of exercise responder. This dataset includes plasma proteomic profiles for n = 654 sedentary adults from the HERITAGE Family Study, quantified via an aptamer-based platform measuring 4977 proteins [ 47 ]. We define a binary classification task to predict exercise responders based on change in VO 2max after a 20-week exercise intervention, where responders are defined as individuals with a relative improvement in VO 2max greater than 15% [28, 66, 67]. 
+
+Parkinson’s Transcriptomics: Binary classification of cognitive status based on MoCA score. 
+
+This dataset contains whole-blood gene expression profiles from n = 535 individuals in the GENEPARK consortium, measuring 21755 genes via microarray reported on the probe level[ 52 ]. We take the mean of all probe measurements corresponding to the same gene to get gene level measurements. We define a binary classification task targeting cognitive status based on the Montreal Cognitive Assessment (MoCA) [ 40 ]. Samples with MoCA ≥ 21 are classified as MCI/Normal (class 0), while scores < 21 are classified as Dementia (class 1), consistent with established clinical thresholds [ 12 , 26 , 13 ]. The cohort includes idiopathic Parkinson’s disease (IPD) patients, healthy controls, and individuals with other neurodegenerative diseases. 
+
+AddNeuroMed Transcriptomics: Classification of clinical diagnosis with three classes. This transcriptomic dataset contains microarray measurements from n = 711 subjects (Alzheimer’s disease, mild cognitive impairment, and controls) and genes from the AddNeuroMed study [ 36 ]. We take the mean of all probe measurements corresponding to the same gene to get 17198 gene level measurements. We define a three-class classification task targeting clinical status: MCI (mild cognitive impairment), CTL (control), and AD (Alzheimer’s disease). 
+
+BRCA Epigenomics: Classification of four breast cancer subtypes. This dataset contains DNA methylation profiles of Breast Invasive Carcinoma from TCGA [ 10 ], using the preprocessed version from MLOmics [ 72 ], which maps methylation regions to gene promoters, applies median-centering normalization, and selects the lowest-methylation promoter per gene to produce gene-level profiles. The task is four-class classification of breast cancer subtypes. We deliberately include this epige-nomic modality as it reflects stable chromatin state rather than gene activity, making both edge sources biologically uncertain (co-expression captures regulatory co-variation rather than functional relationships; PPI edges require an approximate gene-to-protein mapping) and thus providing the hardest test of whether graph topology adds value. Table 1: Omics graph classification datasets in OgBench across proteomics and transcriptomics modalities. The number of graphs per dataset is denoted n and the number of nodes per graph is p.                                       
+
+> Dataset Modality npTarget Class distribution
+> HERITAGE Proteomics 654 4977 ∆VO 2max >15% ≤15% : 279; >15% : 375 Parkinson’s Transcriptomics 535 21755 MoCA score ≥21 ≥21 : 332; <21 : 203 AddNeuroMed Transcriptomics 711 17198 Diagnosis AD : 284; CTL : 238; MCI : 189 BRCA Epigenomics 640 19049 Cancer Subtype LumA : 353; LumB : 132;
+> Her2 : 42; Basal : 113
+
+3.2 Node Selection: Subsampling and Feature Selection 
+
+To address the n ≪ p challenge, a common strategy is to reduce p via feature selection, improving the n/p ratio and mitigating overfitting. To support this step within the platform, we include four reference strategies: two standard univariate filters commonly used by the omics community (variance and Pearson correlation), a non-linear filter (distance correlation), and random selection (as a control). These strategies are filter methods, intentionally selected because they are independent of the subsequent classification model, unlike wrapper or embedded techniques. Importantly, node selection is implemented as an interchangeable submodule with a standardized interface (inputs: training features/labels; output: selected node indices). To illustrate the modularity of our pipeline, we provide distance correlation as an example, showing how practitioners can easily plug in custom 5or complex selectors while leaving edge construction and model training fixed. As with all OgBench 
+
+preprocessing, node selection only considers the training split to prevent data leakage. 
+
+(1) Variance-based filtering: Features are ranked by standard deviation across samples and the top p
+
+retained. Common in transcriptomic preprocessing [ 5 , 32 , 64 , 59 ], this serves as a simple proxy for information: highly variable genes/proteins are more likely to separate groups, while low-variance features are discarded as uninformative or noisy. 
+
+(2) Correlation-based filtering: Features are ranked by absolute Pearson correlation with the target and the top p retained. This method is widely used in omics settings [37, 5, 34, 42]. 
+
+(3) Distance Correlation filtering: To capture complex dependencies that linear metrics might miss, we compute the distance correlation [57] between each feature and the target. Unlike Pearson correlation, distance correlation is zero if and only if the variables are statistically independent, allowing it to detect non-linear relationships. Including this strategy allows us to test whether non-linear filtering yields better graph inputs for downstream GNNs. 
+
+(4) Random subsampling: We randomly select p nodes from the full set, without regard to variance or association with the target. This provides a control for evaluating the benefit of informed feature selection relative to uninformed dimensionality reduction. These strategies provide a principled way to probe the impact of node selection priors on model performance in n ≪ p regimes. our framework also controls the number of selected nodes ( p) as a function of the dataset’s sample size ( n), letting practitioners study how performance changes with feature count separately from the choice of selection method (as we do in Section 4). 
+
+3.3 Edge Construction: Data-driven vs. Biologically Motivated Data-driven Approach: Co-expression. As a purely data-driven approach to edge construc-tion, we adopt the gene expression correlation method, widely used in biomedical graph learning [ 45 , 35 , 2]. Following [ 68 ], we compute a co-expression similarity matrix via pairwise Pearson correlation between features in the preprocessed training data, motivated by the observation that co-expressed features tend to share biological function. We transform this matrix into a graph using soft-thresholding, selecting a power that best approximates scale-free topology [ 62 ], then binarize the result with a hard threshold retaining the top 10% of edges (density = 0.1). This heuristic balances sparsity and connectivity: enforcing a single connected component typically yields an overly dense, computationally intractable graph at this dimensionality. 
+
+Using a Biological Prior: Protein-Protein Interactions. To incorporate functional biological knowledge, we construct edges using the STRING database [ 58 ], which aggregates physical and functional protein-protein interactions (PPI) from high-throughput experiments, co-expression, and literature mining, a widely used approach [ 8, 43 , 46 , 48 ]. We map dataset features (genes or proteins) to STRING identifiers via UniProt or Entrez IDs and consider interactions between any constituent members and retain the maximum combined score. Edge weights are derived from STRING’s 
+
+combined score . As recommended by STRING [ 58 ], we retain medium-confidence interactions (combined score ≥ 400 ). Crucially, both approaches yield a single global graph topology shared across all samples. While the node features (omics expression) are sample-specific, the adjacency matrix is fixed throughout training and inference. Edge construction is modular though, enabling users to swap alternative priors (e.g., reactome pathways) or learned structure, enabling direct comparisons under identical preprocessing and training protocols. 
+
+3.4 Models 
+
+We implement and provide a range of GNNs within OgBench spanning classical, scalable, and omics specific architectures. Additionally, we include non-relational baselines to serve as reference points to evaluate whether graph structure yields predictive benefits beyond standard machine-learning and deep learning approaches. All methods are reproduced according to their original papers and code. 
+
+Machine Learning Baselines. In the n ≪ p regime, linear models with strong regularization are often the most competitive baseline and hence default choice. We include Support Vector Machines (SVM) [ 9] and Elastic Net [ 76 ] as our primary sanity checks. These models are widely used in 6MLP   
+
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.5
+> 0.6
+> F1 Macro Score  Heritage
+> MLP
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.4
+> 0.5
+> 0.6 Addneuromed
+> MLP
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.4
+> 0.6
+> 0.8
+> Parkinsons
+> MLP
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.8
+> 0.9
+> BRCA
+> Best Overall Model Performance by Test F1 Macro
+> SVM baseline Elastic Net baseline
+
+Figure 3: Best model performance per dataset (selected by validation F1, error bars = std across 3 seeds). No model type consistently outperforms across datasets. Linear baselines remain competitive or superior on Parkinsons and BRCA. bioinformatics because their objective functions (margin maximization and L1/L2 regularization, resp.) are tailored to handle high-dimensional, sparse data without overfitting. 
+
+Deep Learning Baseline. To isolate the contribution of graph topology from non-linear feature transformation, we evaluate a standard Multi-Layer Perceptron (MLP) as a graph-free baseline. Comparing GNNs to it directly tests whether graph structure adds value in omics. 
+
+Classical GNNs and Graph Transformers . We include the most widely adopted GNN and Graph Transformer architectures: GCN [ 30 ], GraphSAGE [ 23 ], GATv2 [ 6], GIN [ 69 ] and GPS [ 44 ]. These models represent the default toolkit for graph representation learning. However, they are often applied to biological data without verifying whether their inductive biases are suitable for them. 
+
+Scalable GNNs. Omics graphs are often massive, containing tens of thousands of nodes per sample, which can cause standard GNNs to run out of memory. To address this, we include SAGN [ 56 ], a representative scalable architecture selected from the large-scale benchmarking work of [ 16 ]. Scalable GNNs typically decouple feature propagation from training to handle size constraints. Our goal is to assess whether these efficiency-focused design choices—originally optimized for node classification on single giant graphs (e.g., ogbn-products [25], Flickr [74])—remain effective. 
+
+Omics-specific GNNs . Finally, we evaluate models tailored for biological tasks. We include MLA-GNN [ 68 ], a multi-level attention architecture designed for transcriptomic biomarker discovery, and ChebNet [ 14 ], which utilizes spectral convolutions and has been applied to cancer classification [ 43 ]. These models are justified by their ability to encode biological priors or modularity. However, they are often validated on datasets where preprocessing ensures n ≫ p.
+
+3.5 Evaluation Metrics 
+
+To ensure standardized comparisons, our evaluation pipeline measures performance according to predictive capability (Accuracy, Macro F1, Weighted F1, and Macro AUROC, ensuring robust assessment across both balanced and imbalanced classes) and computational efficiency. Details of the evaluation module are in Appendix B.3. Computational costs of all models is reported in Appendix B.4. 
+
+## 4 Experiments 
+
+To demonstrate the platform’s evaluation capabilities, we benchmark the built-in models across the four provided omics datasets, systematically varying node selection strategies (Section 3.2), edge construction methods (Section 3.3), and sample-to-node ratios ( n/p ∈ { 0.3, 0.5, 0.8, 1.0}) to establish a comprehensive reference baseline. Detailed pipeline configurations are in Appendix B. 
+
+RQ1: Do Complex Models Consistently Outperform Simple Baselines? Figure 3 shows test performance across model types (full metrics in Table 3). Performance is highly dataset-dependent. On Heritage (proteomics), several graph-based approaches achieve higher mean F1 than baselines and MLP. On AddNeuroMed (transcriptomics), GCN shows marginally higher means than baselines and MLP, though not statistically significant, with configurations clustering tightly with overlapping 70.3 0.5 0.8 1.0                                                           
+
+> 0.4
+> 0.6
+> Heritage
+> F1 Macro Score  Correlation
+> 0.3 0.5 0.8 1.0
+> Distance Correlation
+> 0.3 0.5 0.8 1.0
+> Random
+> 0.3 0.5 0.8 1.0
+> Variance
+> 0.3 0.5 0.8 1.0
+> 0.4
+> 0.6
+> Addneuromed
+> F1 Macro Score
+> 0.3 0.5 0.8 1.0 0.3 0.5 0.8 1.0 0.3 0.5 0.8 1.0
+> 0.3 0.5 0.8 1.0
+> 0.4
+> 0.6
+> 0.8
+> Parkinsons
+> F1 Macro Score
+> 0.3 0.5 0.8 1.0 0.3 0.5 0.8 1.0 0.3 0.5 0.8 1.0
+> 0.3 0.5 0.8 1.0
+> 0.50
+> 0.75
+> BRCA
+> F1 Macro Score
+> 0.3 0.5 0.8 1.0 0.3 0.5 0.8 1.0 0.3 0.5 0.8 1.0
+> Best Model Performance by Dataset, Node Selection Method and Sampling Ratio
+> Node Sampling Ratio
+> MLP GPS Classical GNNs SAGN ChebNet MLA-GNN SVM Elastic Net
+
+Figure 4: Best test F1 by node selection method and sampling ratio. For each model family, the configuration with the highest validation F1 is selected per method-ratio combination and evaluated on the test set. confidence intervals. On Parkinsons and BRCA, linear baselines remain competitive or superior. Clearly, more complex models (GPS, ChebNet, SAGN, MLA-GNN) do not guarantee better perfor-mance, with rankings differing across datasets. This suggests that whether graph structure is useful depends on the specific biological task, rather than on architectural complexity. No single architecture consistently outperforms simple baselines across all settings. 
+
+RQ2: When Do Graph-Based Methods Outperform MLPs? To investigate when graph structure provides value, we examine readout mechanism as a diagnostic (Figure 5, Appendix C). Since omics graphs share fixed topology across samples, graph-based models can use vanilla pooling (mean/sum aggregation over graph-convoluted embeddings) or MLP readout (position-specific learned weights on node embeddings). The former relies on graph convolutions to extract relational features; the latter can bypass graph structure when it provides limited signal, revealing whether message-passing contributes. On Parkinsons and BRCA, where graph-based models do not outperform baselines, MLP readout substantially outperforms vanilla pooling. It is likely that the global integration of the readout—rather than the local message passing—is what drives predictive performance. Conversely, on Heritage and AddNeuroMed, where graph-based models show advantages, vanilla readout remains competitive, suggesting message-passing extracts meaningful relational patterns. This confirms that Heritage and AddNeuroMed encode task-relevant biological relationships in their graph structure, while on Parkinsons and BRCA, graph topology adds limited value beyond node features alone. 
+
+RQ3: How Does Node Selection Interact with Graph-Based Learning? Figure 4 reveals a counterintuitive pattern: on Heritage, the strongest graph-based performance tends to emerge under random node selection, yet no single method dominates uniformly across model families. This suggests that GNNs and feature-based models differ in what they need from node selection rather than one method being categorically better. Correlation-based selection retains nodes that are individually predictive–well-suited to models that aggregate features directly. But in the presence of meaningful graph structure, a gene or protein’s value to a GNN depends on its role in the network, not its association with the target. Weakly correlated nodes may still be critical connectors between graph clusters, and removing them disrupts the information flow that message-passing relies on. Random selection avoids this by preserving a mix of nodes regardless of individual predictive power. 8On the other datasets, where graph-based methods fail to convincingly outperform baselines, this pattern largely disappears–correlation-based selection tends to win across all model families. When predictive information resides in node features rather than graph structure, all models seem to converge on the same preference, and the distinction between graph-based and feature-based approaches collapses. This points to a broader principle: in graph-based learning, node selection is a first-class parameter. Unlike in standard feature selection, the choice of nodes jointly determines both what information the model sees and the relational structure through which it flows–making it a potentially critical driver of GNN performance. The effects of sampling ratio are modest and secondary to selection method across all settings, as visualized in Figure 11. 
+
+RQ4: Do Biological Priors Improve Graph Construction? We compare protein-protein inter-action (PPI) networks against data-driven co-expression graphs in Figure 6 (detailed ablations in Appendix E). Rather than one edge source consistently outperforming the other, the winning strategy switches depending on the GNN backbone, suggesting the interaction between architecture and graph topology matters more than the choice of edge source itself. Where graph-based methods show an advantage (Heritage), both PPI and co-expression yield competitive performance with overlapping confidence intervals. We speculate this reflects the fact that both sources capture partially overlapping biological relationships, and that the fixed shared topology may obscure finer-grained differences between the two. Where graphs fail to outperform baselines, neither edge source recovers a consistent advantage. Taken together, edge construction appears secondary to node selection and architecture in data-scarce settings, and distinguishing the true value of different edge sources may require sample-adaptive graph construction. 
+
+RQ5: Does The n ≪ p Setting Affect Model Selection Reliability? Standard single-best-validation selection may be unreliable in the n ≪ p regime, where small validation sets introduce noise in hyperparameter selection. To investigate this, we evaluate top-K ensemble aggregation, averaging predictions from multiple top-validation configurations rather than selecting a single best model (details in Appendix D). Ensembling reveals broadly consistent patterns with RQ1–4, but with one notable exception: on AddNeuroMed, where single-config selection showed only marginal graph advantages, ensemble aggregation confirms and strengthens this result, suggesting the graph signal was present but obscured by validation noise. On Heritage, ensembling provides little benefit, consistent with its near-zero validation-test rank correlation. On Parkinsons, all model families struggle to beat baselines under ensembling, confirming the absence of graph advantage. On BRCA, some GNNs exceed classical baselines but fall short of MLP, suggesting graph structure adds limited value beyond what node features alone provide. Across all datasets, ensemble aggregation reduces variance and improves stability. For practitioners in data-scarce settings, we recommend K=5 to K=10, particularly when distinguishing between similarly-performing models. Crucially, the core findings of RQ1–4 hold under both selection methods, confirming that observed patterns reflect model-task alignment rather than selection artifacts. 
+
+## 5 Conclusion 
+
+OgBench establishes the first standardized benchmark framework for graph-level learning in the 
+
+n ≪ p omics regime, providing a modular infrastructure for reproducible and easily extensible research–inviting the community to contribute new datasets and models. Our results show that standard GNNs often underperform classical ML and simple MLPs, challenging the assumed benefits of structural inductive biases in data-scarce settings. This performance gap highlights a call to action for developing architectures specifically tailored to large-scale biological networks. The suite’s public release aims to foster innovation at the intersection of geometric deep learning and biomedicine. 
+
+Limitations OgBench currently provides four reference datasets across three omics modalities (transcriptomics, proteomics, epigenomics), so conclusions may not generalize to other modalities (e.g., metabolomics, single-cell, spatial transcriptomics), disease areas, or cohort sizes. Our fixed shared topology is a deliberate first step: by holding the adjacency matrix constant across samples, we isolate the question of whether message-passing over a shared biological graph adds value beyond node features, decoupling structural inductive biases from sample-adaptive graph learning. This design choice may however underrepresent biological heterogeneity across individuals or disease subtypes, and sample-adaptive topology construction is an important direction for future work. 9References 
+
+[1] Francis E. Agamah, Jumamurat R. Bayjanov, Anna Niehues, Kelechi F. Njoku, Michelle Skelton, Gaston K. Mazandu, Thomas H. A. Ederveen, Nicola Mulder, Emile R. Chimusa, and Peter A. C. ’t Hoen. Computational approaches for network-based integrative multi-omics analysis. 
+
+Frontiers in Molecular Biosciences , 9:967205, November 2022. [2] Fadi Alharbi, Aleksandar Vakanski, Boyu Zhang, Murtada K. Elbashir, and Mohanad Mo-hammed. Comparative analysis of multi-omics integration using graph neural networks for cancer classification. IEEE Access , 13:37724–37736, 2025. [3] Albert-Laszlo Barabasi and Zoltan N Oltvai. Network biology: understanding the cell’s functional organization. Nature reviews genetics , 5(2):101–113, 2004. [4] Maya Bechler-Speicher, Ben Finkelshtein, Fabrizio Frasca, Luis Müller, Jan Tönshoff, Antoine Siraudin, Viktor Zaverkin, Michael M. Bronstein, Mathias Niepert, Bryan Perozzi, Mikhail Galkin, and Christopher Morris. Position: Graph learning will lose relevance due to poor benchmarks, 2025. [5] Andrea Bommert, Thomas Welchowski, Matthias Schmid, and Jörg Rahnenführer. Bench-mark of filter methods for feature selection in high-dimensional gene expression survival data. 
+
+Briefings in Bioinformatics , 23(1):bbab354, 09 2021. [6] Shaked Brody, Uri Alon, and Eran Yahav. How attentive are graph attention networks? In 
+
+International Conference on Learning Representations , 2022. [7] Céline Brouard, Raphaël Mourad, and Nathalie Vialaneix. Should we really use graph neural networks for transcriptomic prediction? Briefings in Bioinformatics , 25(2):bbae027, 02 2024. [8] Hryhorii Chereda, Annalen Bleckmann, Kerstin Menck, Júlia Perera-Bel, Philip Stegmaier, Florian Auer, Frank Kramer, Andreas Leha, and Tim Beißbarth. Explaining decisions of graph convolutional neural networks: patient-specific molecular subnetworks responsible for metastasis prediction in breast cancer. Genome medicine , 13(1):42, 2021. [9] Corinna Cortes and Vladimir Vapnik. Support-vector networks. Machine learning , 20(3):273– 297, 1995. [10] Chad J. Creighton, Margaret Morgan, Preethi H. Gunaratne, David A. Wheeler, Richard A. Gibbs, A. Gordon Robertson, Andy Chu, Rameen Beroukhim, Kristian Cibulskis, Sabina Signoretti, Fabio Vandin Hsin-Ta Wu, Benjamin J. Raphael, Roel G. W. Verhaak, Pheroze Tam-boli, Wandaliz Torres-Garcia, Rehan Akbani, John N. Weinstein, Victor Reuter, James J. Hsieh, A. Rose Brannon, A. Ari Hakimi, Anders Jacobsen, Giovanni Ciriello, Boris Reva, Christopher J. Ricketts, W. Marston Linehan, Joshua M. Stuart, W. Kimryn Rathmell, Hui Shen, Peter W. Laird, Donna Muzny, Caleb Davis, Liu Xi, Kyle Chang, Nipun Kakkar, Lisa R. Treviño, Susan Benton, Jeffrey G. Reid, Donna Morton, Harsha Doddapaneni, Yi Han, Lora Lewis, Huyen Dinh, Christie Kovar, Yiming Zhu, Jireh Santibanez, Min Wang, Walker Hale, Divya Kalra, Gad Getz, Michael S. Lawrence, Carrie Sougnez, Scott L. Carter, Andrey Sivachenko, Lee Lichtenstein, Chip Stewart, Doug Voet, Sheila Fisher, Stacey B. Gabriel, Eric Lander, Steve E. Schumacher, Barbara Tabak, Gordon Saksena, Robert C. Onofrio, Andrew D. Cherniack, Jeff Gentry, Kristin Ardlie, Carrie Sougnez, Stacey B. Gabriel, Matthew Meyerson, Hye-Jung E. Chun, Andrew J. Mungall, Payal Sipahimalani, Dominik Stoll, Adrian Ally, Miruna Balasun-daram, Yaron S. N. Butterfield, Rebecca Carlsen, Candace Carter, Eric Chuah, Robin J. N. Coope, Noreen Dhalla, Sharon Gorski, Ranabir Guin, Carrie Hirst, Martin Hirst, Robert A. Holt, Chandra Lebovitz, Darlene Lee, Haiyan I. Li, Michael Mayo, Richard A. Moore, Erin Pleasance, Patrick Plettner, Jacqueline E. Schein, Arash Shafiei, Jared R. Slobodan, Angela Tam, Nina Thiessen, Richard J. Varhol, Natasja Wye, Yongjun Zhao, Inanc Birol, Steven J. M. Jones, Marco A. Marra, J.Todd Auman, Donghui Tan, Corbin D. Jones, Katherine A. Hoadley, Piotr A. Mieczkowski, Lisle E. Mose, Stuart R. Jefferys, Michael D. Topal, Christina Liquori, Yidi J. Turman, Yan Shi, Scot Waring, Elizabeth Buda, Jesse Walsh, Junyuan Wu, Tom Bodenheimer, Alan P. Hoyle, Janae V. Simons, Mathew G. Soloway, Saianand Balu, Joel S. Parker, D. Neil Hayes, Charles M. Perou, Raju Kucherlapati, Peter Park, Timothy Triche Jr, Daniel J. Weisenberger, Phillip H. Lai, Moiz S. Bootwalla, Dennis T. Maglinte, 10 Swapna Mahurkar, Benjamin P. Berman, David J. Van Den Berg, Leslie Cope, Stephen B. Baylin, Michael S. Noble, Daniel DiCara, Hailei Zhang, Juok Cho, David I. Heiman, Nils Gehlenborg, William Mallard, Pei Lin, Scott Frazer, Petar Stojanov, Yingchun Liu, Lihua Zhou, Jaegil Kim, Lynda Chin, Fabio Vandin, Hsin-Ta Wu, Christopher Benz, Christina Yau, Sheila M. Reynolds, Ilya Shmulevich, Roel G.W. Verhaak, Rahul Vegesna, Hoon Kim, Wei Zhang, David Cogdell, Eric Jonasch, Zhiyong Ding, Yiling Lu, Nianxiang Zhang, Anna K. Unruh, Tod D. Casasent, Chris Wakefield, Dimitra Tsavachidou, Gordon B. Mills, Nikolaus Schultz, Yevgeniy Antipin, Jianjiong Gao, Ethan Cerami, Benjamin Gross, B. Arman Aksoy, Rileen Sinha, Nils Weinhold, S. Onur Sumer, Barry S. Taylor, Ronglai Shen, Irina Ostrov-naya, Michael F. Berger, Marc Ladanyi, Chris Sander, Suzanne S. Fei, Andrew Stout, Paul T. Spellman, Daniel L. Rubin, Tiffany T. Liu, Sam Ng, Evan O. Paull, Daniel Carlin, Theodore Goldstein, Peter Waltman, Kyle Ellrott, Jing Zhu, David Haussler, Weimin Xiao, Candace Shelton, Johanna Gardner, Robert Penny, Mark Sherman, David Mallery, Scott Morris, Joseph Paulauskis, Ken Burnett, Troy Shelton, William G. Kaelin, Toni Choueiri, Michael B. Atkins, Erin Curley, Satish Tickoo, Leigh Thorne, Lori Boice, Mei Huang, Jennifer C. Fisher, Cathy D. Vocke, James Peterson, Robert Worrell, Maria J. Merino, The Cancer Genome Atlas Research Network, Analysis working group: Baylor College of Medicine, BC Cancer Agency, Broad Institute, Brigham & Women’s Hospital, Brown University, The University of Texas MD An-derson Cancer Center, Memorial Sloan-Kettering Cancer Center, National Cancer Institute, University of California Santa Cruz, Chapel Hill University of North Carolina, University of Southern California, Genome sequencing centres: Baylor College of Medicine, Genome characterization centres: Broad Institute, Harvard Medical School, University of Southern Cali-fornia & Johns Hopkins University, Genome data analysis: Baylor College of Medicine, Buck Institute for Research on Aging, Institute for Systems Biology, Oregon Health & Science Uni-versity, Stanford University, University of Houston, Biospecimen core resource: International Genomics Consortium, Tissue source sites: Brigham & Women’s Hospital, Dana-Farber Can-cer Institute, Georgetown University, International Genomics Consortium, and University of North Carolina at Chapel Hill. Comprehensive molecular characterization of clear cell renal cell carcinoma. Nature , 499(7456):43–49, Jul 2013. [11] Xiaofeng Dai and Li Shen. Advances and trends in omics technology development. Frontiers in Medicine , Volume 9 - 2022, 2022. [12] JC Dalrymple-Alford, MR MacAskill, CT Nakas, L Livingston, C Graham, GP Crucian, TR Melzer, J Kirwan, R Keenan, S Wells, et al. The moca: well-suited screen for cognitive impairment in parkinson disease. Neurology , 75(19):1717–1725, 2010. [13] Géraud Dautzenberg, Jeroen Lijmer, and Aartjan Beekman. Clinical value of the montreal cognitive assessment (moca) in patients suspected of cognitive impairment in old age psychiatry. using the moca for triaging to a memory clinic. Cognitive Neuropsychiatry , 26(1):1–17, 2021. [14] Michaël Defferrard, Xavier Bresson, and Pierre Vandergheynst. Convolutional neural networks on graphs with fast localized spectral filtering. In Proceedings of the 30th International Conference on Neural Information Processing Systems , NIPS’16, page 3844–3852, Red Hook, NY, USA, 2016. Curran Associates Inc. [15] Paul D. Dobson and Andrew J. Doig. Distinguishing enzyme structures from non-enzymes without alignments. Journal of Molecular Biology , 330(4):771–783, July 2003. [16] Keyu Duan, Zirui Liu, Peihao Wang, Wenqing Zheng, Kaixiong Zhou, Tianlong Chen, Xia Hu, and Zhangyang Wang. A comprehensive study on large-scale graph training: Benchmarking and rethinking. In Thirty-sixth Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2022. [17] Vijay Prakash Dwivedi, Chaitanya K Joshi, Thomas Laurent, Yoshua Bengio, and Xavier Bresson. Benchmarking graph neural networks. In International Conference on Learning Representations (ICLR) , 2020. [18] Vijay Prakash Dwivedi, Ladislav Rampášek, Mikhail Galkin, Ali Parviz, Guy Wolf, Anh Tuan Luu, and Dominique Beaini. Long range graph benchmark. In Thirty-sixth Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2022. 11 [19] David Easley and Jon Kleinberg. Networks, Crowds, and Markets: Reasoning About a Highly Connected World . Cambridge University Press, Cambridge, UK, 2010. [20] Matthias Fey and Jan Eric Lenssen. Fast graph representation learning with pytorch geometric. 
+
+arXiv preprint arXiv:1903.02428 , 2019. [21] Dyani Gaudilliere and Brice Gaudilliere. Harnessing the n+1 dimensions of single-cell omics data for the prediction and prevention of human diseases. Seminars in immunopathology , 45:1–2, 02 2023. [22] Justin Gilmer, Samuel S. Schoenholz, Patrick F. Riley, Oriol Vinyals, and George E. Dahl. Neural message passing for quantum chemistry. In Proceedings of the 34th International Conference on Machine Learning - Volume 70 , ICML’17, page 1263–1272. JMLR.org, 2017. [23] William L. Hamilton, Rex Ying, and Jure Leskovec. Inductive representation learning on large graphs. In Proceedings of the 31st International Conference on Neural Information Processing Systems , NIPS’17, page 1025–1035, Red Hook, NY, USA, 2017. Curran Associates Inc. [24] Trevor Hastie, Robert Tibshirani, and Jerome Friedman. The Elements of Statistical Learning: Data Mining, Inference, and Prediction . Springer, 2nd edition, 2010. [25] Weihua Hu, Matthias Fey, Marinka Zitnik, Yuxiao Dong, Hongyu Ren, Jure Liu, and Jure Leskovec. Open graph benchmark: Datasets for machine learning on graphs. In Advances in Neural Information Processing Systems (NeurIPS) , volume 33, pages 22118–22133, 2020. [26] Youssef A Ismail, Huda A Auf, Shahd A Sadik, Nada M Ahmed, and Yasmeen Ali. Sensitivity and specificity of the montreal cognitive assessment using us national alzheimer coordinating centre uniform data set: a retrospective analysis of 16,309 participants. BMC neurology ,25(1):381, 2025. [27] Wei Jiang, Weicai Ye, Xiaoming Tan, and Yun-Juan Bao. Network-based multi-omics integrative analysis methods in drug discovery: a systematic review. BioData Mining , 18(1):27, 2025. [28] Lee W Jones, Neil D Eves, Bercedis L Peterson, Jennifer Garst, Jeffrey Crawford, Miranda J West, Stephanie Mabe, David Harpole, William E Kraus, and Pamela S Douglas. Safety and feasibility of aerobic training on cardiopulmonary function and quality of life in postsurgical nonsmall cell lung cancer patients: a pilot study. Cancer , 113(12):3430–3439, 2008. [29] Diederik P. Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In Interna-tional Conference on Learning Representations (ICLR) , 2015. [30] Thomas N. Kipf and Max Welling. Semi-supervised classification with graph convolutional networks. In International Conference on Learning Representations , 2017. [31] Bernhard Kuster, Johanna Tüshaus, and Florian P. Bayer. A new mass analyzer shakes up the proteomics field. Nature Biotechnology , February 2024. [32] Justine Labory, Evariste Njomgue-Fotso, and Silvia Bottini. Benchmarking feature selection and feature extraction methods to improve the performances of machine-learning algorithms for patient classification using metabolomics biomedical data. Computational and Structural Biotechnology Journal , 23:1274–1287, 2024. [33] Sijie Li, Heyang Hua, and Shengquan Chen. Graph neural networks for single-cell omics data: a review of approaches and applications. Briefings in Bioinformatics , 26(2):bbaf109, 03 2025. [34] Yingxia Li, Ulrich Mansmann, Shangming Du, and Roman Hornung. Benchmark study of feature selection strategies for multi-omics data. BMC bioinformatics , 23(1):412, 2022. [35] Jian Liu, Yichen Pan, Zhihan Ruan, and Jun Guo. Scdd: a novel single-cell rna-seq imputation method with diffusion and denoising. Briefings in Bioinformatics , 23(5):bbac398, 09 2022. [36] Simon Lovestone, Paul Francis, Iwona Kloszewska, Patrizia Mecocci, Andrew Simmons, Hilkka Soininen, Christian Spenger, Magda Tsolaki, Bruno Vellas, Lars-Olof Wahlund, Malcolm Ward, and on behalf of the AddNeuroMed Consortium. Addneuromed—the european collaboration for the discovery of novel biomarkers for alzheimer’s disease. Annals of the New York Academy of Sciences , 1180(1):36–46, 2009. 12 [37] Nenad S Miti´ c, Saša N Malkov, Mirjana M Maljkovi´ c Ružiˇ ci´ c, Aleksandar N Veljkovi´ c, Ivan Lj ˇCuki´ c, Xin Lin, Minjie Lyu, and Vladimir Brusi´ c. Correlation-based feature selection of single cell transcriptomics data from multiple sources. Journal of Big Data , 12(1):4, 2025. [38] Getnet Molla Desta and Alemayehu Godana Birhanu. Advancements in single-cell rna sequenc-ing and spatial transcriptomics: transforming biomedical research. Acta Biochimica Polonica ,72:13922, 2025. [39] Christopher Morris, Nils M. Kriege, Franka Bause, Kristian Kersting, Petra Mutzel, and Marion Neumann. Tudataset: A collection of benchmark datasets for learning with graphs. In ICML 2020 Workshop on Graph Representation Learning and Beyond (GRL+ 2020) , 2020. [40] Ziad S Nasreddine, Natalie A Phillips, Valérie Bédirian, Simon Charbonneau, Victor Whitehead, Isabelle Collin, Jeffrey L Cummings, and Howard Chertkow. The montreal cognitive assessment, moca: a brief screening tool for mild cognitive impairment. Journal of the American Geriatrics Society , 53(4):695–699, 2005. [41] Ashwini Patil and Haruki Nakamura. HINT: a database of annotated protein-protein interactions and their homologs. Biophysics , 1:21–24, 2005. [42] Yasset Perez-Riverol, Moritz Kuhn, Juan Antonio Vizcaíno, Martin P. Hitz, and Edward Audain. Accurate and fast feature selection workflow for high-dimensional omics data. PLOS ONE ,12(12):e0189875, 2017. [43] Ricardo Ramirez, Yu-Chiao Chiu, Allen Hererra, Milad Mostavi, Joshua Ramirez, Yidong Chen, Yufei Huang, and Yu-Fang Jin. Classification of cancer types using graph convolutional neural networks. Frontiers in Physics , 8:203, 06 2020. [44] Ladislav Rampášek, Michael Galkin, Vijay Prakash Dwivedi, Anh Tuan Luu, Guy Wolf, and Dominique Beaini. Recipe for a general, powerful, scalable graph transformer. Advances in Neural Information Processing Systems , 35:14501–14515, 2022. [45] Jiahua Rao, Xiang Zhou, Yutong Lu, Huiying Zhao, and Yuedong Yang. Imputing single-cell rna-seq data by combining graph convolution and autoencoder neural networks. iScience ,24(5):102393, 2021. [46] Sungmin Rhee, Seokjun Seo, and Sun Kim. Hybrid approach of relation network and localized graph convolutional filtering for breast cancer subtype classification. In Proceedings of the Twenty-Seventh International Joint Conference on Artificial Intelligence, IJCAI-18 , pages 3527–3534. International Joint Conferences on Artificial Intelligence Organization, 7 2018. [47] Jeremy M Robbins, Bennet Peterson, Daniela Schranner, Usman A Tahir, Theresa Rienmüller, Shuliang Deng, Michelle J Keyes, Daniel H Katz, Pierre M Jean Beltran, Jacob L Barber, et al. Human plasma proteomic profiles indicative of cardiorespiratory fitness. Nature metabolism ,3(6):786–797, 2021. [48] Ali Saadat and Jacques Fellay. Proteome-wide prediction of the mode of inheritance and molecular mechanisms underlying genetic diseases using structural interactomics. iScience ,28(7):112812, 2025. [49] Heena Satam, Kandarp Joshi, Upasana Mangrolia, Sanober Waghoo, Gulnaz Zaidi, Shravani Rawool, Ritesh P Thakare, Shahid Banday, Alok K Mishra, Gautam Das, et al. Next-generation sequencing technology: current trends and advancements. Biology , 12(7):997, 2023. [50] Franco Scarselli, Marco Gori, Ah Chung Tsoi, Markus Hagenbuchner, and Gabriele Monfardini. The graph neural network model. IEEE Transactions on Neural Networks , 20(1):61–80, 2009. [51] Ida Schomburg, Antje Chang, Christian Ebeling, Marion Gremse, Christian Heldt, Gregor Huhn, and Dietmar Schomburg. Brenda, the enzyme database: updates and major new developments. 
+
+Nucleic acids research , 32(suppl_1):D431–D433, 2004. [52] Roded Shamir, Christine Klein, David Amar, Eva J Vollstedt, et al. Analysis of blood-based gene expression in idiopathic parkinson disease. Neurology , 89(16):1676–1683, 2017. 13 [53] Wendy Weijia Soon, Manoj Hariharan, and Michael P Snyder. High-throughput sequencing for biology and medicine. Molecular Systems Biology , 9(1):640, 2013. [54] Jonathan M. Stokes, Kevin Yang, Kyle Swanson, Wengong Jin, Andres Cubillos-Ruiz, Nina M. Donghia, Craig R. MacNair, Shawn French, Lindsey A. Carfrae, Zohar Bloom-Ackermann, Victoria M. Tran, Anush Chiappino-Pepe, Ahmed H. Badran, Ian W. Andrews, Emma J. Chory, George M. Church, Eric D. Brown, Tommi S. Jaakkola, Regina Barzilay, and James J. Collins. A deep learning approach to antibiotic discovery. Cell , 180(4):688–702.e13, 2020. [55] Timo Stoll, Chendi Qian, Ben Finkelshtein, Ali Parviz, Darius Weber, Fabrizio Frasca, Hadar Shavit, Antoine Siraudin, Arman Mielke, Marie Anastacio, Erik Müller, Maya Bechler-Speicher, Michael Bronstein, Mikhail Galkin, Holger Hoos, Mathias Niepert, Bryan Perozzi, Jan Tönshoff, and Christopher Morris. Graphbench: Next-generation graph learning benchmarking, 2025. [56] Chuxiong Sun, Hongming Gu, and Jie Hu. Scalable and adaptive graph neural networks with self-label-enhanced training, 2021. [57] Gábor J Székely, Maria L Rizzo, and Nail K Bakirov. Measuring and testing dependence by correlation of distances. The Annals of Statistics , pages 2769–2794, 2007. [58] Damian Szklarczyk, Rebecca Kirsch, Mikaela Koutrouli, Katerina Nastou, Farrokh Mehryary, Radja Hachilif, Annika L Gable, Tao Fang, Nadezhda T Doncheva, Sampo Pyysalo, Peer Bork, Lars J Jensen, and Christian von Mering. The string database in 2023: protein–protein association networks and functional enrichment analyses for any sequenced genome of interest. 
+
+Nucleic Acids Research , 51(D1):D638–D646, 11 2022. [59] Chia Yan Tan, Huey Fang Ong, Chern Hong Lim, Mei Sze Tan, Ean Hin Ooi, and KokSheik Wong. Amogel: a multi-omics classification framework using associative graph neural networks with prior knowledge for biomarker identification. BMC bioinformatics , 26(1):1–27, 2025. [60] Lev Telyatnikov, Guillermo Bernardez, Marco Montagna, Mustafa Hajij, Martin Carrasco, Pavlo Vasylenko, Mathilde Papillon, Ghada Zamzmi, Michael T Schaub, Jonas Verhellen, Pavel Snopov, Bertran Miquel-Oliver, Manel Gil-Sorribes, Alexis Molina, VICTOR GUAL-LAR, Theodore Long, Julian Suk, Patryk Rygiel, Alexander V Nikitin, Giordan Escalona, Michael Banf, Dominik Filipiak, Liliya Imasheva, Max Schattauer, Alvaro L. Martinez, Halley Fritze, Marissa Masden, Valentina Sánchez, Manuel Lecha, Andrea Cavallo, Claudio Battiloro, Matthew Piekenbrock, Mauricio Tec, George Dasoulas, Nina Miolane, Simone Scardapane, and Theodore Papamarkou. Topobench: A framework for benchmarking topological deep learning. 
+
+Journal of Data-centric Machine Learning Research , 2025. [61] Robert Tibshirani. Regression shrinkage and selection via the lasso. Journal of the Royal Statistical Society: Series B , 58(1):267–288, 1996. [62] Sipko van Dam, Urmo Võsa, Adriaan van der Graaf, Lude Franke, and João Pedro de Magalhães. Gene co-expression analysis for functional classification and gene–disease predictions. Briefings in Bioinformatics , 19(4):575–592, 01 2017. [63] Chunyu Wang, Junling Guo, Ning Zhao, Yang Liu, Xiaoyan Liu, Guojun Liu, and Maozu Guo. A cancer survival prediction method based on graph convolutional network. IEEE transactions on nanobioscience , 19(1):117–126, 2019. [64] Juexin Wang, Anjun Ma, Yuzhou Chang, Jianting Gong, Yuexu Jiang, Ren Qi, Cankun Wang, Hongjun Fu, Qin Ma, and Dong Xu. scgnn is a novel graph neural network framework for single-cell rna-seq analyses. Nature communications , 12(1):1882, 2021. [65] Yuhan Wang, Zhikang Wang, Xuan Yu, Xiaoyu Wang, Jiangning Song, Dong-Jun Yu, and Fang Ge. More: a multi-omics data-driven hypergraph integration network for biomedical data classification and biomarker identification. Briefings in Bioinformatics , 26(1):bbae658, 12 2024. [66] Darren ER Warburton, Crystal Whitney Nicol, and Shannon SD Bredin. Health benefits of physical activity: the evidence. Cmaj , 174(6):801–809, 2006. [67] Darren ER Warburton, Crystal Whitney Nicol, and Shannon SD Bredin. Prescribing exercise as preventive therapy. Cmaj , 174(7):961–974, 2006. 14 [68] Xiaohan Xing, Fan Yang, Hang Li, Jun Zhang, Yu Zhao, Mingxuan Gao, Junzhou Huang, and Jianhua Yao. Multi-level attention graph neural network based on co-expression gene modules for disease diagnosis and prognosis. Bioinformatics , 38, 02 2022. [69] Keyulu Xu, Weihua Hu, Jure Leskovec, and Stefanie Jegelka. How powerful are graph neural networks? In International Conference on Learning Representations , 2019. [70] Rui Yan, Md Tauhidul Islam, and Lei Xing. Deep representation learning of protein-protein interaction networks for enhanced pattern discovery. Science Advances , 10(51):eadq4324, 2024. [71] Tiantian Yang and Zhiqian Chen. Motgnn: interpretable graph neural networks for multi-omics disease classification. arXiv preprint arXiv:2508.07465 , 2025. [72] Ziwei Yang, Rikuto Kotoge, Xihao Piao, Zheng Chen, Lingwei Zhu, Peng Gao, Yasuko Matsubara, Yasushi Sakurai, and J. Sun. Mlomics: Cancer multi-omics database for machine learning. Scientific Data , 12, 05 2025. [73] Ying Yu, Yuanbang Mai, Yuanting Zheng, and Leming Shi. Assessing and mitigating batch effects in large-scale omics studies. Genome biology , 25(1):254, 2024. [74] Hanqing Zeng, Hongkuan Zhou, Ajitesh Srivastava, Rajgopal Kannan, and Viktor Prasanna. GraphSAINT: Graph sampling based inductive learning method. In International Conference on Learning Representations , 2020. [75] Xiao-Meng Zhang, Li Liang, Lin Liu, and Ming-Jing Tang. Graph neural networks and their current applications in bioinformatics. Frontiers in Genetics , Volume 12 - 2021, 2021. [76] Hui Zou and Trevor Hastie. Regularization and variable selection via the elastic net. Journal of the Royal Statistical Society Series B: Statistical Methodology , 67(2):301–320, 2005. 15 A Dataset Preprocessing 
+
+In depth preprocessing steps for each dataset are included below. 
+
+A.1 Heritage 
+
+We downloaded the MoTrPAC HERITAGE SomaLogic proteomics matrix and analyte annotation file, used the analyte table to select and name valid protein (analyte) columns, and filtered participants to those with non-missing baseline and post-training VO 2 max values. We computed relative VO 2 max 
+
+change ∆rel = (VO 2 max post −VO 2 max base )/VO 2 max base and defined a binary target label as 
+
+∆rel > 0.15 [ 28 , 66 , 67 ]. Baseline covariates (age, sex, BMI, race) were extracted, and analytes with 
+
+> 10% missing values were removed (remaining missing values were left for downstream train-only imputation). Protein abundances were log 2-transformed and then adjusted for age, sex, BMI and race using linear regression with one-hot encoding for categorical covariates: for each protein, we fit the model protein ∼ covariates and removed the covariate-driven component (centered at the mean covariate profile) from each sample’s protein value. 
+
+A.2 AddNeuroMed 
+
+The AddNeuroMed dataset was preprocessed as follows. Expression data from two microarray platforms (GPL6947 and GPL10558) were downloaded and processed separately. Probe-level expression values were aggregated to gene-level by averaging across all probes mapping to the same gene identifier, using a gene-probe mapping constructed from platform annotation files. Only genes common to both platforms were retained to ensure compatibility. The two platform-specific datasets were then combined, and clinical status labels were extracted from GEO metadata. Samples with ambiguous or transitional status labels (CTL to AD, MCI to CTL, OTHER, and borderline MCI) were excluded. To account for platform-specific batch effects, ComBat batch correction [ 73 ] was applied to the combined dataset, preserving biological signal while removing technical variation between platforms. Finally, categorical status labels were converted to integer class labels, and samples with missing values were removed. 
+
+A.3 Parkinsons 
+
+The Parkinsons dataset was preprocessed as follows. Gene expression data and Montreal Cognitive Assessment (MoCA) scores were extracted from the GEO series matrix file. Affymetrix probe IDs were mapped to gene symbols using the GPL570 platform annotation file, and when multiple probes mapped to the same gene, expression values were averaged to obtain a single gene-level measurement. Samples with missing MoCA scores were excluded. The continuous MoCA scores were then converted to binary classification labels based on clinical interpretation: scores of 21 or higher were classified as MCI/Normal (class 0), while scores below 21 were classified as Dementia (class 1), consistent with established clinical thresholds for cognitive impairment [ 12 , 26 , 13 ]. Samples with missing expression values were removed, resulting in a complete dataset ready for downstream analysis. 
+
+A.4 BRCA 
+
+The BRCA dataset was preprocessed by [ 72 ] as follows. The BRCA DNA methylation data in MLOmics is sourced from TCGA via the Genomic Data Commons Data Portal and processed through MLOmics’ unified methylation pipeline. Methylation regions are first identified from the metadata and mapped to genes, using descriptions such as average methylation ( β-values) of promoters defined as 500 bp upstream and 50 bp downstream of the transcription start site, retaining only regions with coverage ≥ 20 in 70% of tumor samples. The data are then normalized using median-centering via the R package limma to correct for systematic biases and technical variation across samples. For genes with multiple promoters, the promoter with the lowest methylation level in normal tissues is selected as the representative. After processing, samples are annotated with unified gene IDs to resolve naming inconsistencies across sequencing platforms and reference standards, and aligned across omics sources by sample ID. We use the Original feature scale, which retains the full set of genes extracted directly from the processed methylation files. We apply z-score normalization to the features as part of our downstream pipeline. 16 B Experimental Setup Details 
+
+This appendix provides supplementary details regarding the experimental setup used in this work to ensure reproducibility. 
+
+B.1 Hardware 
+
+All experiments were run on a server with 128 CPU cores, 1 TB RAM, 4.5 TB Solid State Drive storage, and 8 NVIDIA A100 GPUs (80 GB each). 
+
+B.2 Model Configurations Training Setup. Models are trained in PyTorch Lightning for up to 200 epochs (minimum 50), with early stopping (patience = 50 ) based on validation F1-Macro to reduce overfitting. Adam optimizer [ 29 ] is used with a Step Learning Rate schedule (step_size = 50 , γ = 0 .5), and the best checkpoint is selected via validation check-pointing each epoch. 
+
+Hyperparameter Optimization of Deep Learning Models. For each model–dataset configuration, we conduct a comprehensive grid search over architecture-specific hyper-parameters (Table 2, see Appendix B.2). Each hyperparameter configuration is trained three times using the same data splits, varying only the model initialization and other training-time randomness via the random seed. We select hyperparameters by mean validation performance across three training seeds, then report the mean and standard deviation of the corresponding three test-set scores (one per seed) for the selected configuration. Full deep learning hyperparameters are outlined in Table 2. The standard machine learning experiment configuration is outlined below. 
+
+SVM and Elastic Net Baselines. The baseline models operate on GNN-preprocessed features—the same feature-selected, imputed, and scaled representation used by the GNN pipeline—ensuring a fair comparison on identical inputs. Each baseline applies StandardScaler followed by ei-ther a sigmoid-calibrated linear SVM ( CalibratedClassifierCV wrapping LinearSVC ) or elas-tic net logistic regression ( LogisticRegression with penalty=elasticnet , solver=saga ). Both models use balanced class weights and are optimized via GridSearchCV over regulariza-tion parameters (SVM: C ∈ { 0.001 , 0.01 , 0.1, 1.0}; elastic net: C ∈ { 0.001 , 0.01 , 0.1, 1.0} and 
+
+l1_ratio ∈ {0.0, 0.1, 0.3, 0.5, 0.7}), with model selection based on macro-F1 using a fixed train/validation split matching the GNN evaluation protocol. After identifying the best hyper-parameters, the pipeline is refit on the training split only and evaluated on held-out validation and test sets. 
+
+B.3 Evaluation Metrics 
+
+In evaluating model performance in OgBench , we consider metrics that provide a comprehensive view of predictive accuracy, performance across classes, and computational efficiency. We rely on a variety of metrics to capture both overall accuracy and class-specific performance: • Accuracy: The overall proportion of correct predictions across all classes. • Macro F1 Score: The unweighted average of F1 scores computed independently for each class, treating all classes equally regardless of size. • Weighted F1 Score: The average of F1 scores weighted by the number of true instances per class, accounting for class imbalance. • Macro AUROC: The average Area Under the Receiver Operating Characteristic curve computed in a one-vs-rest manner for each class. Finally, we report measures of efficiency and scalability: • Number of parameters of the model: Total trainable parameters of the model, providing a measure of its size and capacity. • Memory: Peak GPU memory usage during inference, reflecting the model’s scalability and hardware efficiency. • Training time end-to-end: Full training time. 17 Table 2: Hyperparameter search space for the multi-dataset grid search. Readout MLP is applied to all backbones in the omics_readout experiment configuration. 
+
+Category Hyperparameter Candidates 
+
+Data & Graph Datasets parkinsons, addneuromed, motrpac, brca Edge construction Co-Expression (wgcna), PPI (string) Sample node ratio 1.0, 0.8 Node selection method variance, random, correlation, distance correlation Seeds 42, 123, 456 Optimization & Regularization Learning rate 10 −4, 10 −3
+
+Weight decay 0.0 Backbone dropout 0.1 Experiment Configuration no_readout, omics_readout Readout dropout 0.1 (when using omics_readout) 
+
+Model-Specific Hyperparameters 
+
+GCN, GIN Feature encoder out channels 16, 64 # layers 2, 4 GATv2 Feature encoder out channels 16, 64 # layers 2, 4 Attention heads 2, 4 MLA-GNN Hidden channels [16, 32], [32, 64] Attention heads [4, 4], [8, 8] Layer normalization true, false GraphSAGE Feature encoder out channels 16, 64 # layers 2, 4 ChebNet Feature encoder out channels 16, 64 # layers 2, 4 SAGN Hidden channels 16, 64 # layers 2, 4 Attention heads 2, 4 GPS Feature encoder out channels 16, 64 # layers 2, 4 Positional encodings [LapPE], [RWSE] MLP Hidden channels [16, 32, 8], [32, 64, 16], [64, 128, 32] Normalization null, batch • Training time per epoch: Wall-clock time per epoch on the training set. Together, these metrics capture not only predictive accuracy but also resource requirements and efficiency, enabling a balanced evaluation of model performance. 
+
+B.4 Best Model Results, Timing and Performance Details 
+
+18 Table 3: Best configuration per model and dataset, selected by validation Fmacro . Best value per dataset and column is bold; other entries within one std of that best are shaded blue. 
+
+Fmacro 
+
+(↑)
+
+Fweighted 
+
+(↑)
+
+Accuracy 
+
+(↑)
+
+AUROC 
+
+(↑)# Params. 
+
+(↓)
+
+GPU memory (GB) 
+
+(↓)
+
+Training time end-to-end (s) 
+
+(↓)
+
+Time / epoch (s) 
+
+(↓)
+
+Heritage 
+
+MLP 0.495 ± 0.017 0.498 ± 0.016 0.498 ± 0.015 0.466 ± 0.022 33K 0.17 25.98 ± 4.49 0.32 ± 0.05 
+
+GIN 0.548 ± 0.047 0.552 ± 0.046 0.552 ± 0.046 0.536 ± 0.035 148K 0.03 42.37 ± 15.19 0.56 ± 0.05 GCN 0.538 ± 0.037 0.543 ± 0.032 0.549 ± 0.021 0.573 ± 0.045 489K 0.40 70.58 ± 6.46 0.94 ± 0.17 GATv2 0.514 ± 0.032 0.520 ± 0.032 0.522 ± 0.032 0.532 ± 0.021 295K 1.40 128.87 ± 58.00 1.44 ± 0.18 SAGE 0.576 ± 0.062 0.579 ± 0.065 0.582 ± 0.067 0.592 ± 0.079 490K 0.18 58.74 ± 9.05 0.88 ± 0.08 GPS 0.475 ± 0.032 0.480 ± 0.032 0.481 ± 0.031 0.447 ± 0.034 674K 0.10 83.87 ± 16.12 0.90 ± 0.04 SAGN 0.528 ± 0.023 0.536 ± 0.020 0.545 ± 0.010 0.545 ± 0.008 1.3M 0.82 232.27 ± 34.86 2.38 ± 0.13 ChebNet 0.566 ± 0.037 0.570 ± 0.035 0.572 ± 0.032 0.576 ± 0.016 1.2M 0.82 97.80 ± 16.71 1.03 ± 0.09 MLA-GNN 0.507 ± 0.044 0.513 ± 0.043 0.515 ± 0.044 0.514 ± 0.024 162K 4.34 92.99 ± 6.79 1.46 ± 0.10 
+
+Addneuromed 
+
+MLP 0.511 ± 0.016 0.515 ± 0.015 0.512 ± 0.019 0.713 ± 0.015 56K 3.75 243.67 ± 12.89 1.93 ± 0.28 GIN 0.419 ± 0.037 0.426 ± 0.034 0.432 ± 0.037 0.634 ± 0.006 21K 0.07 71.61 ± 9.00 0.46 ± 0.08 
+
+GCN 0.514 ± 0.036 0.519 ± 0.037 0.522 ± 0.037 0.690 ± 0.017 2.2M 0.51 75.27 ± 21.74 0.67 ± 0.05 GATv2 0.452 ± 0.085 0.465 ± 0.080 0.481 ± 0.061 0.681 ± 0.025 558K 0.56 69.18 ± 7.82 0.81 ± 0.01 SAGE 0.502 ± 0.040 0.507 ± 0.037 0.506 ± 0.037 0.677 ± 0.009 336K 0.15 86.17 ± 18.16 0.81 ± 0.06 GPS 0.506 ± 0.034 0.514 ± 0.033 0.512 ± 0.030 0.674 ± 0.032 1.4M 0.53 272.39 ± 71.38 3.33 ± 0.02 SAGN 0.501 ± 0.037 0.509 ± 0.035 0.515 ± 0.033 0.696 ± 0.019 998K 0.86 224.63 ± 43.68 1.89 ± 0.01 ChebNet 0.493 ± 0.046 0.502 ± 0.045 0.506 ± 0.035 0.711 ± 0.006 1.4M 0.91 77.71 ± 17.91 0.83 ± 0.04 MLA-GNN 0.458 ± 0.011 0.466 ± 0.009 0.466 ± 0.014 0.683 ± 0.008 133K 2.45 123.27 ± 14.57 1.06 ± 0.07 
+
+Parkinsons 
+
+MLP 0.747 ± 0.014 0.761 ± 0.013 0.765 ± 0.012 0.784 ± 0.013 27K 1.24 60.12 ± 13.36 1.07 ± 0.27 GIN 0.748 ± 0.069 0.758 ± 0.067 0.757 ± 0.068 0.814 ± 0.036 1.6M 0.14 54.61 ± 6.63 0.44 ± 0.05 
+
+GCN 0.654 ± 0.016 0.677 ± 0.015 0.687 ± 0.014 0.722 ± 0.010 619K 0.06 28.57 ± 9.17 0.45 ± 0.14 GATv2 0.646 ± 0.028 0.664 ± 0.025 0.667 ± 0.021 0.707 ± 0.030 1.6M 5.04 158.58 ± 14.83 1.91 ± 0.10 SAGE 0.750 ± 0.003 0.763 ± 0.002 0.765 ± 0.000 0.783 ± 0.014 1.6M 0.43 62.45 ± 11.92 0.76 ± 0.17 GPS 0.653 ± 0.016 0.673 ± 0.014 0.679 ± 0.012 0.743 ± 0.015 687K 0.14 44.44 ± 5.85 0.79 ± 0.05 SAGN 0.722 ± 0.048 0.740 ± 0.047 0.749 ± 0.050 0.787 ± 0.056 1.6M 0.36 69.34 ± 14.76 0.82 ± 0.09 ChebNet 0.710 ± 0.111 0.730 ± 0.094 0.745 ± 0.070 0.779 ± 0.032 1.6M 0.28 46.32 ± 19.27 0.48 ± 0.03 MLA-GNN 0.559 ± 0.169 0.596 ± 0.148 0.630 ± 0.119 0.684 ± 0.096 97K 2.25 74.35 ± 18.03 0.69 ± 0.04 
+
+BRCA 
+
+MLP 0.840 ± 0.048 0.840 ± 0.040 0.840 ± 0.042 0.962 ± 0.010 108K 0.18 33.89 ± 8.90 0.34 ± 0.04 
+
+GIN 0.780 ± 0.022 0.802 ± 0.006 0.806 ± 0.016 0.933 ± 0.011 159K 0.03 31.37 ± 9.36 0.42 ± 0.08 GCN 0.778 ± 0.023 0.794 ± 0.018 0.802 ± 0.018 0.913 ± 0.040 527K 0.34 80.47 ± 11.92 0.78 ± 0.09 GATv2 0.785 ± 0.044 0.801 ± 0.024 0.799 ± 0.022 0.919 ± 0.034 652K 0.09 44.90 ± 14.52 0.49 ± 0.03 SAGE 0.778 ± 0.032 0.787 ± 0.030 0.788 ± 0.037 0.906 ± 0.041 527K 0.18 74.72 ± 13.78 0.75 ± 0.09 GPS 0.824 ± 0.041 0.818 ± 0.029 0.819 ± 0.026 0.938 ± 0.013 878K 0.20 79.76 ± 8.79 1.17 ± 0.04 SAGN 0.800 ± 0.029 0.807 ± 0.016 0.812 ± 0.018 0.942 ± 0.008 204K 0.09 81.32 ± 36.64 0.76 ± 0.02 ChebNet 0.808 ± 0.052 0.816 ± 0.032 0.816 ± 0.033 0.944 ± 0.010 159K 0.03 53.99 ± 13.73 0.58 ± 0.14 MLA-GNN 0.837 ± 0.019 0.833 ± 0.030 0.833 ± 0.028 0.950 ± 0.014 106K 0.26 70.56 ± 25.76 0.65 ± 0.07 
+
+19 C Effect of Edge Construction Methods and Model Readout 
+
+C.1 Readout Ablation 
+
+Below, we further quantify in detail how readout impacts model performance. GPS     
+
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.4
+> 0.5
+> 0.6
+> F1 Macro Score  Heritage
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.3
+> 0.4
+> 0.5
+> 0.6 Addneuromed
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.4
+> 0.6
+> 0.8
+> Parkinsons
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.6
+> 0.8
+> BRCA
+> Effect of Readout on Model Performance
+> MLP Readout Vanilla Readout SVM baseline Elastic Net baseline
+
+Figure 5: Test F1 by readout type for each GNN backbone, sweeping over node selection method, sampling ratio, and model hyperparameters. For each model, the configuration with the highest mean validation F1-macro across seeds is selected and reported as test F1-macro (mean ± std). MLP readout dominance indicates limited graph signal (AddNeuroMed, Parkinsons, BRCA); vanilla readout competitiveness indicates useful graph structure (Heritage). 
+
+Discussion: The readout ablation reveals a clear diagnostic pattern that explains when graph structure provides genuine value. On datasets where graph-based models underperform baselines (Parkinsons, BRCA), MLP readout substantially outperforms vanilla pooling, indicating that flexible feature learning drives results rather than message-passing operations. Conversely, on Heritage and AddNeuroMed where graphs show advantages, vanilla pooling remains competitive with MLP readout, demonstrating that graph convolutions extract meaningful relational patterns. This suggests that Heritage and AddNeuroMed’s graph structures encode task-relevant biological relationships, while Parkinsons and BRCA’s topology contributes limited signal beyond node features alone. 
+
+C.2 Edge Construction Ablation 
+
+We quantify how edge construction strategies (Biological prior: PPI vs. Data-driven: Co-Expression) impact model performance below. GPS 
+
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.4
+> 0.5
+> 0.6
+> F1 Macro Score
+
+Heritage 
+
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.4
+> 0.5
+> 0.6
+
+Addneuromed 
+
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.4
+> 0.6
+> 0.8
+
+Parkinsons 
+
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.7
+> 0.8
+> 0.9
+
+BRCA 
+
+Effect of Edge Construction on Model Performance    
+
+> PPI Co-expression SVM baseline Elastic Net baseline
+
+Figure 6: Test F1 by edge construction method for each GNN backbone, sweeping over node selection method, sampling ratio, and model hyperparameters. For each model, the configuration with the highest mean validation F1-macro across seeds is selected and reported as test F1-macro (mean ±
+
+std). PPI dominance or co-expression dominance varies by backbone and dataset, with no universally superior edge source. 
+
+Discussion: The results confirm that edge construction strategy exhibits dataset-dependent effects with no universally dominant approach. On Heritage, PPI and co-expression networks achieve comparable performance with overlapping confidence intervals, suggesting that the presence of task-aligned relational structure matters more than the specific edge source. Across datasets where 20 graph-based methods fail to outperform non-graph baselines (Parkinsons, BRCA), edge construction effects remain inconsistent with high variance, indicating that edge choice is unlikely the limiting factor in these settings. This aligns with findings from RQ4, reinforcing that node selection and architecture may be more critical than edge specification for success in data-scarce biomedical learning. 21 D Ensemble-Based Model Selection for Validation Set Instability 
+
+D.1 Motivation 
+
+Figure 9 reveals a fundamental challenge: validation-based hyperparameter selection is unreliable in the n ≪ p regime. On Heritage, validation rank shows near-zero correlation with test performance, and even on datasets with moderate validation-test correlation (AddNeuroMed, Parkinsons, BRCA), substantial scatter remains among top-ranked configurations. This instability raises a critical ques-tion: do reported performance differences reflect true model capability, or artifacts of which configuration happened to rank first on a small, noisy validation set? 
+
+To disentangle selection bias from true signal, we evaluate top-K ensemble aggregation : instead of selecting the single best validation configuration, we average predictions from the top-K configu-rations (by mean validation F1 across seeds) and report ensemble test performance. This approach mitigates overfitting to validation noise while preserving the inductive biases of well-performing model families. 
+
+D.2 Method 
+
+For each dataset and model family (MLP, GNN architectures): 1. Rank all hyperparameter configurations by mean validation F1 across 3 random seeds 2. Select top-K configurations (K ∈ { 1, 3, 5, 10 })3. For each seed independently: • Load checkpoints for the top-K configs (all trained with that seed) • Obtain class probability predictions on the test set from each checkpoint • Compute ensemble prediction via soft voting: ˆyens = argmax 
+
+ 1
+
+> K
+
+PKk=1 pk(y | x)
+
+
+
+• Compute test F1-macro for the ensemble 4. Report mean ± std of ensemble test F1 across the 3 seeds Note that seeds remain independent: we ensemble within each seed’s checkpoints and average performance across seeds, preserving valid uncertainty quantification. 
+
+D.3 Results 
+
+Figure 7 compares single-best-validation selection (K=1, black bars) against ensembles of increasing size. In Figure 8 we show K=10 performance relative to the original K=1 results. These are our findings: 
+
+Variance reduction across all datasets. Ensemble aggregation seemingly reduces error bars relative to K=1, reflecting improved stability. This is most pronounced on Parkinsons and BRCA. 
+
+Mean performance improvements on AddNeuroMed. On AddNeuroMed, where single-config selection showed marginal graph advantages with large overlapping confidence intervals (Figure 3), K=10 ensembles reveal substantial and consistent gains for GCN, GATv2, SAGE, and SAGN as shown in Figure 8. This suggests the graph signal was present but obscured by validation noise; ensemble aggregation stabilizes selection enough to detect it. 
+
+Heritage shows minimal ensemble gain. Unlike other datasets, Heritage exhibits little improve-ment (and slight degradation for some models) with ensembling. We interpret this as follows: Heritage’s near-zero validation-test rank correlation (Figure 9) means the top-K configs selected by validation F1 are essentially a random sample from the hyperparameter space. However, our analysis in RQ3 (Section 4.3) identified a specific setting —random node selection combined with certain GNN architectures—that generalizes exceptionally well despite not consistently ranking first on validation. Ensembling dilutes this high-performing configuration by averaging it with 9 other configs that ranked high on validation by chance but do not generalize. This is not a failure of ensembling; rather, it confirms that Heritage’s validation set is fundamentally unreliable, and the true signal lies in 22 MLP    
+
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> Test F1 macro
+> Heritage
+> MLP
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> Addneuromed
+> MLP
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Test F1 macro
+> Parkinsons
+> MLP
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.725
+> 0.750
+> 0.775
+> 0.800
+> 0.825
+> 0.850
+> 0.875
+> BRCA
+> Test F1 macro: validation-selected best vs. top-K ensemble (mean ± std)
+> Val best Ens K=3 Ens K=5 Ens K=10
+
+Figure 7: Test F1-macro for validation-best (K=1) vs. top-K ensembles (K=3, 5, 10) across model families and datasets. Error bars show std across 3 seeds. Ensemble aggregation reduces variance and improves mean performance on all datasets except Heritage. architecture-data alignment (e.g. random node selection preserving graph connectivity) rather than validation rank. 
+
+Parkinsons and BRCA: Ensemble confirms little graph advantage. On these datasets, ensemble aggregation improves stability and performance but does not convincingly change the fundamental ranking: linear baselines (parkinsons) or MLP models (BRCA) remain competitive. This confirms that the lack of graph advantage is not a selection artifact but reflects genuine mismatch between graph structure and task. 
+
+D.4 Implications for Practitioners Recommendation for n ≪ p settings. When validation sets are small relative to feature dimension-ality, ensemble-based selection (K=5 to K=10) should be preferred over single-best-validation selection . This approach: • Reduces sensitivity to validation noise • Surfaces true model advantages that single-config selection obscures (e.g., AddNeuroMed) • Provides more honest uncertainty estimates via reduced variance 
+
+When single-config selection may suffice. If a dataset exhibits strong validation-test rank corre-lation and a single configuration substantially outperforms others with non-overlapping confidence intervals, ensemble aggregation may provide minimal benefit. However, in the n ≪ p regime, such cases are rare. 23 MLP   
+
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.5
+> 0.6
+> F1 Macro Score  Heritage
+> MLP
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.4
+> 0.5
+> 0.6 Addneuromed
+> MLP
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.4
+> 0.6
+> 0.8
+> Parkinsons
+> MLP
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.8
+> 0.9
+> BRCA
+> Best Overall Model Performance by Test F1 Macro
+> SVM baseline Elastic Net baseline
+
+(a) Single-best-validation (K=1) MLP 
+
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.4
+> 0.5
+> 0.6
+> F1 Macro Score
+
+Heritage 
+
+> MLP
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> 0.4
+> 0.5
+> 0.6
+
+Addneuromed 
+
+> MLP
+> GPS
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.6
+> 0.8
+
+Parkinsons 
+
+> MLP
+> GIN
+> GCN
+> GATv2
+> SAGE
+> SAGN
+> ChebNet
+> MLA-GNN
+> 0.8
+> 0.9
+
+BRCA 
+
+Best Overall Model Performance by Test F1 Macro (Ensemble K=10)  
+
+> SVM baseline Elastic Net baseline
+
+(b) Top-10 ensemble (K=10) 
+
+Figure 8: Comparison of model performance under (a) traditional single-best-validation selection vs. (b) top-10 ensemble aggregation. Ensemble selection reveals clearer graph advantages on AddNeuroMed while maintaining or slightly reducing Heritage performance, consistent with dataset-specific validation reliability patterns. 
+
+A Note on Computational Overhead We acknowledge that ensemble-based selection multiplies inference cost by K; practitioners should weigh this against the stability gains reported in Appendix D. 
+
+D.5 Validation Instability Analysis 
+
+Figure 9 examines the relationship between validation rank and test performance across all hyperpa-rameter configurations. Configurations are ranked left-to-right by mean validation F1 (rank 1 = best on validation). The red dashed line indicates the best achievable test F1. 
+
+Heritage (strongest graph signal, weakest validation predictor). The relationship between validation rank and test F1 is nearly flat. The best validation configurations (leftmost points) do not consistently achieve the highest test performance, indicating that validation-based selection is unreliable. This suggests that when graph structure provides meaningful signal, small validation sets fail to capture the complex relational patterns that generalize to test data. 
+
+AddNeuroMed, Parkinsons, BRCA. These datasets exhibit moderate downward trends, indicating validation rank provides some predictive signal for test performance. The best validation configura-tions do not guarantee optimal test performance, though the validation set is more informative than on Heritage. 
+
+Band width as a measure of instability. The vertical spread of points at any given validation rank reflects hyperparameter sensitivity and seed variance. On Heritage, this band spans ∼20 percentage points even among top-ranked configurations, highlighting the difficulty of hyperparameter selection in the n ≪ p regime. Parkinsons and BRCA show similarly wide bands despite stronger validation-test correlation, suggesting that even when validation rank is moderately predictive, individual configurations remain unstable. 24 0 1000 2000 3000 4000 5000 6000                   
+
+> Validation rank
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Test F1 macro
+> Heritage
+> Best test F1
+> 01000 2000 3000 4000 5000 6000
+> Validation rank
+> Test F1 macro
+> Addneuromed
+> Best test F1
+> 01000 2000 3000 4000 5000 6000
+> Validation rank
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Test F1 macro
+> Parkinsons
+> Best test F1
+> 01000 2000 3000 4000 5000 6000
+> Validation rank
+> Test F1 macro
+> BRCA
+> Best test F1
+
+Test F1 vs validation rank Figure 9: Validation rank vs. test F1 for all hyperparameter configurations (pooled: MLP + GNNs). Heritage shows nearly flat relationship (weak validation-test correlation); AddNeuroMed, Parkinsons, and BRCA show moderate downward trends but also have show substantial scatter. Validation-test misalignment is most pronounced on Heritage, the dataset where graph methods provide the strongest signal. Figure 10 zooms into the top-100 validation ranks, emphasizing the lack of concentration of high-performing test configurations at the best validation ranks. On all datasets, test F1 is nearly uniformly distributed across all top-100 ranks, confirming that selecting the single best validation configuration is unreliable. 25 20 40 60 80 100 
+
+Validation rank 
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7 
+
+0.8 
+
+> Test F1 macro
+
+Heritage 
+
+> Best test F1
+
+20 40 60 80 100 
+
+Validation rank 
+
+> Test F1 macro
+
+Addneuromed 
+
+> Best test F1
+
+20 40 60 80 100 
+
+Validation rank 
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7 
+
+0.8 
+
+> Test F1 macro
+
+Parkinsons 
+
+> Best test F1
+
+20 40 60 80 100 
+
+Validation rank 
+
+> Test F1 macro
+
+BRCA 
+
+> Best test F1
+
+Test F1 vs validation rank, top 100 ranks Figure 10: Validation rank vs. test F1 (top 100 validation ranks only). All models show a wide (about 20 percent) uniform scatter, indicating unreliable validation set hyperparameter selection. 26 Table 4: Adjacency ablation on Addneuromed . For each (model, adjacency method), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ±
+
+std) from summary.best_test/* . PPI vs Co-expression. For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥
+
+best mean − best std). 
+
+Dataset Model Adjacency Fmacro Fweighted Accuracy AUROC 
+
+Addneuromed 
+
+GIN PPI 0.419 ±
+
+0.037 0.426 ±
+
+0.034 0.432 ±
+
+0.037 0.634 ±
+
+0.006 Co-expression 0.476 ±
+
+0.013 0.482 ±
+
+0.012 0.488 ±
+
+0.005 0.683 ±
+
+0.015 
+
+GCN PPI 0.514 ±
+
+0.036 0.519 ±
+
+0.037 0.522 ±
+
+0.037 0.690 ±
+
+0.017 
+
+Co-expression 0.490 ±
+
+0.024 0.497 ±
+
+0.023 0.505 ±
+
+0.020 0.659 ±
+
+0.005 GATv2 PPI 0.452 ±
+
+0.085 0.465 ±
+
+0.080 0.481 ±
+
+0.061 0.681 ±
+
+0.025 Co-expression 0.519 ±
+
+0.053 0.524 ±
+
+0.053 0.525 ±
+
+0.057 0.700 ±
+
+0.040 
+
+SAGE PPI 0.476 ±
+
+0.040 0.482 ±
+
+0.038 0.481 ±
+
+0.037 
+
+0.697 ±
+
+0.012 
+
+Co-expression 0.502 ±
+
+0.040 0.507 ±
+
+0.037 0.506 ±
+
+0.037 
+
+0.677 ±
+
+0.009 GPS PPI 0.440 ±
+
+0.036 0.444 ±
+
+0.037 0.451 ±
+
+0.039 0.662 ±
+
+0.012 Co-expression 0.506 ±
+
+0.034 0.514 ±
+
+0.033 0.512 ±
+
+0.030 0.674 ±
+
+0.032 
+
+SAGN PPI 0.518 ±
+
+0.009 0.519 ±
+
+0.009 0.519 ±
+
+0.009 0.712 ±
+
+0.012 
+
+Co-expression 0.501 ±
+
+0.037 0.509 ±
+
+0.035 0.515 ±
+
+0.033 0.696 ±
+
+0.019 ChebNet PPI 0.453 ±
+
+0.044 0.463 ±
+
+0.041 0.475 ±
+
+0.039 0.679 ±
+
+0.004 Co-expression 0.493 ±
+
+0.046 0.502 ±
+
+0.045 0.506 ±
+
+0.035 0.711 ±
+
+0.006 
+
+MLA-GNN PPI 0.458 ±
+
+0.011 0.466 ±
+
+0.009 0.466 ±
+
+0.014 
+
+0.683 ±
+
+0.008 
+
+Co-expression 0.473 ±
+
+0.032 0.481 ±
+
+0.032 0.485 ±
+
+0.030 
+
+0.676 ±
+
+0.039 
+
+27 Table 5: Adjacency ablation on Parkinsons . For each (model, adjacency method), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ±
+
+std) from summary.best_test/* . PPI vs Co-expression. For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥
+
+best mean − best std). 
+
+Dataset Model Adjacency Fmacro Fweighted Accuracy AUROC 
+
+Parkinsons 
+
+GIN PPI 0.748 ±
+
+0.069 0.758 ±
+
+0.067 0.757 ±
+
+0.068 0.814 ±
+
+0.036 
+
+Co-expression 0.637 ±
+
+0.059 0.652 ±
+
+0.050 0.654 ±
+
+0.049 0.723 ±
+
+0.041 GCN PPI 0.654 ±
+
+0.016 0.677 ±
+
+0.015 0.687 ±
+
+0.014 
+
+0.722 ±
+
+0.010 Co-expression 0.649 ±
+
+0.017 0.669 ±
+
+0.017 0.675 ±
+
+0.019 
+
+0.727 ±
+
+0.014 
+
+GATv2 PPI 0.630 ±
+
+0.052 0.650 ±
+
+0.053 0.654 ±
+
+0.057 0.699 ±
+
+0.023 Co-expression 0.646 ±
+
+0.028 0.664 ±
+
+0.025 0.667 ±
+
+0.021 0.707 ±
+
+0.030 
+
+SAGE PPI 0.741 ±
+
+0.016 0.755 ±
+
+0.017 0.757 ±
+
+0.019 
+
+0.805 ±
+
+0.030 
+
+Co-expression 0.750 ±
+
+0.003 0.763 ±
+
+0.002 0.765 ±
+
+0.000 
+
+0.783 ±
+
+0.014 GPS PPI 0.735 ±
+
+0.036 0.750 ±
+
+0.036 0.753 ±
+
+0.037 0.776 ±
+
+0.014 
+
+Co-expression 0.653 ±
+
+0.016 0.673 ±
+
+0.014 0.679 ±
+
+0.012 0.743 ±
+
+0.015 SAGN PPI 0.716 ±
+
+0.047 0.730 ±
+
+0.045 0.733 ±
+
+0.047 0.773 ±
+
+0.049 Co-expression 0.722 ±
+
+0.048 0.740 ±
+
+0.047 0.749 ±
+
+0.050 0.787 ±
+
+0.056 
+
+ChebNet PPI 0.673 ±
+
+0.094 0.689 ±
+
+0.088 0.691 ±
+
+0.086 0.744 ±
+
+0.042 Co-expression 0.710 ±
+
+0.111 0.730 ±
+
+0.094 0.745 ±
+
+0.070 0.779 ±
+
+0.032 
+
+MLA-GNN PPI 0.699 ±
+
+0.021 0.710 ±
+
+0.019 0.708 ±
+
+0.019 0.776 ±
+
+0.051 
+
+Co-expression 0.559 ±
+
+0.169 0.596 ±
+
+0.148 0.630 ±
+
+0.119 0.684 ±
+
+0.096 
+
+28 Table 6: Adjacency ablation on BRCA . For each (model, adjacency method), we select the configura-tion with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ± std) from 
+
+summary.best_test/* . PPI vs Co-expression. For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥ best mean − best std). 
+
+Dataset Model Adjacency Fmacro Fweighted Accuracy AUROC 
+
+BRCA 
+
+GIN PPI 0.780 ±
+
+0.022 0.802 ±
+
+0.006 0.806 ±
+
+0.016 0.933 ±
+
+0.011 
+
+Co-expression 0.685 ±
+
+0.019 0.702 ±
+
+0.017 0.687 ±
+
+0.018 0.907 ±
+
+0.006 GCN PPI 0.750 ±
+
+0.040 0.780 ±
+
+0.031 0.778 ±
+
+0.032 0.903 ±
+
+0.033 Co-expression 0.778 ±
+
+0.023 0.794 ±
+
+0.018 0.802 ±
+
+0.018 0.913 ±
+
+0.040 
+
+GATv2 PPI 0.785 ±
+
+0.044 0.801 ±
+
+0.024 0.799 ±
+
+0.022 0.919 ±
+
+0.034 
+
+Co-expression 0.734 ±
+
+0.019 0.757 ±
+
+0.002 0.771 ±
+
+0.010 0.903 ±
+
+0.025 SAGE PPI 0.835 ±
+
+0.013 0.830 ±
+
+0.002 0.833 ±
+
+0.000 0.943 ±
+
+0.012 
+
+Co-expression 0.778 ±
+
+0.032 0.787 ±
+
+0.030 0.788 ±
+
+0.037 0.906 ±
+
+0.041 GPS PPI 0.754 ±
+
+0.044 0.793 ±
+
+0.021 0.799 ±
+
+0.022 0.931 ±
+
+0.019 Co-expression 0.824 ±
+
+0.041 0.818 ±
+
+0.029 0.819 ±
+
+0.026 0.938 ±
+
+0.013 
+
+SAGN PPI 0.800 ±
+
+0.029 0.807 ±
+
+0.016 0.812 ±
+
+0.018 
+
+0.942 ±
+
+0.008 
+
+Co-expression 0.803 ±
+
+0.014 0.818 ±
+
+0.015 0.819 ±
+
+0.022 
+
+0.917 ±
+
+0.028 ChebNet PPI 0.808 ±
+
+0.052 
+
+0.816 ±
+
+0.032 0.816 ±
+
+0.033 
+
+0.944 ±
+
+0.010 
+
+Co-expression 0.805 ±
+
+0.073 
+
+0.817 ±
+
+0.034 0.819 ±
+
+0.033 
+
+0.904 ±
+
+0.059 MLA-GNN PPI 0.837 ±
+
+0.019 0.833 ±
+
+0.030 0.833 ±
+
+0.028 
+
+0.950 ±
+
+0.014 Co-expression 0.809 ±
+
+0.056 0.819 ±
+
+0.033 0.816 ±
+
+0.037 
+
+0.951 ±
+
+0.015 
+
+29 Table 7: Readout ablation on Heritage . For each (model, readout), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ± std) from 
+
+summary.best_test/* . For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥ best mean − best std). 
+
+Dataset Model Readout Fmacro Fweighted Accuracy AUROC 
+
+Heritage 
+
+GIN NoReadOut 0.518 ±
+
+0.045 0.528 ±
+
+0.041 0.542 ±
+
+0.025 0.535 ±
+
+0.022 OmicsReadOut 0.548 ±
+
+0.047 0.552 ±
+
+0.046 0.552 ±
+
+0.046 0.536 ±
+
+0.035 
+
+GCN NoReadOut 0.492 ±
+
+0.047 0.502 ±
+
+0.040 0.522 ±
+
+0.015 0.536 ±
+
+0.017 OmicsReadOut 0.538 ±
+
+0.037 0.543 ±
+
+0.032 0.549 ±
+
+0.021 0.573 ±
+
+0.045 
+
+GATv2 NoReadOut 0.576 ±
+
+0.033 0.579 ±
+
+0.032 0.579 ±
+
+0.031 0.586 ±
+
+0.007 
+
+OmicsReadOut 0.514 ±
+
+0.032 0.520 ±
+
+0.032 0.522 ±
+
+0.032 0.532 ±
+
+0.021 SAGE NoReadOut 0.537 ±
+
+0.038 0.543 ±
+
+0.037 0.545 ±
+
+0.035 0.584 ±
+
+0.029 OmicsReadOut 0.576 ±
+
+0.062 0.579 ±
+
+0.065 0.582 ±
+
+0.067 0.592 ±
+
+0.079 
+
+GPS NoReadOut 0.552 ±
+
+0.028 0.559 ±
+
+0.024 0.569 ±
+
+0.012 0.575 ±
+
+0.023 
+
+OmicsReadOut 0.475 ±
+
+0.032 0.480 ±
+
+0.032 0.481 ±
+
+0.031 0.447 ±
+
+0.034 SAGN NoReadOut 0.491 ±
+
+0.005 0.489 ±
+
+0.005 0.492 ±
+
+0.006 0.526 ±
+
+0.007 OmicsReadOut 0.528 ±
+
+0.023 0.536 ±
+
+0.020 0.545 ±
+
+0.010 0.545 ±
+
+0.008 
+
+ChebNet NoReadOut 0.537 ±
+
+0.024 0.543 ±
+
+0.023 0.545 ±
+
+0.020 0.562 ±
+
+0.013 OmicsReadOut 0.566 ±
+
+0.037 0.570 ±
+
+0.035 0.572 ±
+
+0.032 0.576 ±
+
+0.016 
+
+MLA-GNN NoReadOut 0.558 ±
+
+0.027 0.563 ±
+
+0.024 0.566 ±
+
+0.020 0.559 ±
+
+0.043 
+
+OmicsReadOut 0.507 ±
+
+0.044 0.513 ±
+
+0.043 0.515 ±
+
+0.044 0.514 ±
+
+0.024 
+
+30 Table 8: Readout ablation on Addneuromed . For each (model, readout), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ± std) from 
+
+summary.best_test/* . For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥ best mean − best std). 
+
+Dataset Model Readout Fmacro Fweighted Accuracy AUROC 
+
+Addneuromed 
+
+GIN NoReadOut 0.419 ±
+
+0.037 
+
+0.426 ±
+
+0.034 0.432 ±
+
+0.037 0.634 ±
+
+0.006 OmicsReadOut 0.413 ±
+
+0.031 
+
+0.427 ±
+
+0.022 0.463 ±
+
+0.016 0.635 ±
+
+0.018 
+
+GCN NoReadOut 0.493 ±
+
+0.024 0.498 ±
+
+0.022 0.500 ±
+
+0.019 0.672 ±
+
+0.012 OmicsReadOut 0.514 ±
+
+0.036 0.519 ±
+
+0.037 0.522 ±
+
+0.037 0.690 ±
+
+0.017 
+
+GATv2 NoReadOut 0.390 ±
+
+0.047 0.400 ±
+
+0.040 0.420 ±
+
+0.023 0.588 ±
+
+0.024 OmicsReadOut 0.452 ±
+
+0.085 0.465 ±
+
+0.080 0.481 ±
+
+0.061 0.681 ±
+
+0.025 
+
+SAGE NoReadOut 0.511 ±
+
+0.044 0.515 ±
+
+0.038 0.519 ±
+
+0.033 0.702 ±
+
+0.019 
+
+OmicsReadOut 0.502 ±
+
+0.040 0.507 ±
+
+0.037 0.506 ±
+
+0.037 0.677 ±
+
+0.009 GPS NoReadOut 0.450 ±
+
+0.040 0.459 ±
+
+0.035 0.469 ±
+
+0.028 0.650 ±
+
+0.012 OmicsReadOut 0.506 ±
+
+0.034 0.514 ±
+
+0.033 0.512 ±
+
+0.030 0.674 ±
+
+0.032 
+
+SAGN NoReadOut 0.446 ±
+
+0.022 0.452 ±
+
+0.022 0.454 ±
+
+0.019 0.658 ±
+
+0.002 OmicsReadOut 0.501 ±
+
+0.037 0.509 ±
+
+0.035 0.515 ±
+
+0.033 0.696 ±
+
+0.019 
+
+ChebNet NoReadOut 0.508 ±
+
+0.025 0.508 ±
+
+0.028 0.509 ±
+
+0.024 
+
+0.693 ±
+
+0.020 OmicsReadOut 0.493 ±
+
+0.046 0.502 ±
+
+0.045 0.506 ±
+
+0.035 
+
+0.711 ±
+
+0.006 
+
+MLA-GNN NoReadOut 0.461 ±
+
+0.053 
+
+0.461 ±
+
+0.053 0.463 ±
+
+0.052 0.624 ±
+
+0.026 OmicsReadOut 0.458 ±
+
+0.011 
+
+0.466 ±
+
+0.009 0.466 ±
+
+0.014 0.683 ±
+
+0.008 
+
+31 Table 9: Readout ablation on Parkinsons . For each (model, readout), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ± std) from 
+
+summary.best_test/* . For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥ best mean − best std). 
+
+Dataset Model Readout Fmacro Fweighted Accuracy AUROC 
+
+Parkinsons 
+
+GIN NoReadOut 0.491 ±
+
+0.022 0.528 ±
+
+0.009 0.556 ±
+
+0.017 0.502 ±
+
+0.013 OmicsReadOut 0.748 ±
+
+0.069 0.758 ±
+
+0.067 0.757 ±
+
+0.068 0.814 ±
+
+0.036 
+
+GCN NoReadOut 0.517 ±
+
+0.018 0.541 ±
+
+0.015 0.543 ±
+
+0.012 0.494 ±
+
+0.011 OmicsReadOut 0.654 ±
+
+0.016 0.677 ±
+
+0.015 0.687 ±
+
+0.014 0.722 ±
+
+0.010 
+
+GATv2 NoReadOut 0.598 ±
+
+0.085 0.629 ±
+
+0.070 0.654 ±
+
+0.045 0.698 ±
+
+0.022 OmicsReadOut 0.646 ±
+
+0.028 0.664 ±
+
+0.025 0.667 ±
+
+0.021 0.707 ±
+
+0.030 
+
+SAGE NoReadOut 0.518 ±
+
+0.047 0.539 ±
+
+0.047 0.539 ±
+
+0.050 0.509 ±
+
+0.059 OmicsReadOut 0.750 ±
+
+0.003 0.763 ±
+
+0.002 0.765 ±
+
+0.000 0.783 ±
+
+0.014 
+
+GPS NoReadOut 0.611 ±
+
+0.035 0.636 ±
+
+0.034 0.646 ±
+
+0.036 0.667 ±
+
+0.029 OmicsReadOut 0.653 ±
+
+0.016 0.673 ±
+
+0.014 0.679 ±
+
+0.012 0.743 ±
+
+0.015 
+
+SAGN NoReadOut 0.462 ±
+
+0.025 0.509 ±
+
+0.023 0.556 ±
+
+0.021 0.509 ±
+
+0.024 OmicsReadOut 0.722 ±
+
+0.048 0.740 ±
+
+0.047 0.749 ±
+
+0.050 0.787 ±
+
+0.056 
+
+ChebNet NoReadOut 0.489 ±
+
+0.010 0.508 ±
+
+0.011 0.506 ±
+
+0.012 0.469 ±
+
+0.015 OmicsReadOut 0.710 ±
+
+0.111 0.730 ±
+
+0.094 0.745 ±
+
+0.070 0.779 ±
+
+0.032 
+
+MLA-GNN NoReadOut 0.646 ±
+
+0.086 0.665 ±
+
+0.077 0.671 ±
+
+0.070 0.704 ±
+
+0.080 
+
+OmicsReadOut 0.559 ±
+
+0.169 0.596 ±
+
+0.148 0.630 ±
+
+0.119 0.684 ±
+
+0.096 
+
+32 Table 10: Readout ablation on BRCA . For each (model, readout), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ± std) from 
+
+summary.best_test/* . For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥ best mean − best std). 
+
+Dataset Model Readout Fmacro Fweighted Accuracy AUROC 
+
+BRCA 
+
+GIN NoReadOut 0.607 ±
+
+0.020 0.611 ±
+
+0.021 0.594 ±
+
+0.018 0.872 ±
+
+0.008 OmicsReadOut 0.780 ±
+
+0.022 0.802 ±
+
+0.006 0.806 ±
+
+0.016 0.933 ±
+
+0.011 
+
+GCN NoReadOut 0.637 ±
+
+0.016 0.652 ±
+
+0.011 0.635 ±
+
+0.015 0.872 ±
+
+0.002 OmicsReadOut 0.778 ±
+
+0.023 0.794 ±
+
+0.018 0.802 ±
+
+0.018 0.913 ±
+
+0.040 
+
+GATv2 NoReadOut 0.666 ±
+
+0.074 0.678 ±
+
+0.044 0.663 ±
+
+0.047 0.887 ±
+
+0.020 OmicsReadOut 0.785 ±
+
+0.044 0.801 ±
+
+0.024 0.799 ±
+
+0.022 0.919 ±
+
+0.034 
+
+SAGE NoReadOut 0.663 ±
+
+0.008 0.711 ±
+
+0.004 0.705 ±
+
+0.012 0.895 ±
+
+0.008 OmicsReadOut 0.778 ±
+
+0.032 0.787 ±
+
+0.030 0.788 ±
+
+0.037 0.906 ±
+
+0.041 
+
+GPS NoReadOut 0.757 ±
+
+0.025 0.771 ±
+
+0.028 0.764 ±
+
+0.024 0.932 ±
+
+0.007 OmicsReadOut 0.824 ±
+
+0.041 0.818 ±
+
+0.029 0.819 ±
+
+0.026 0.938 ±
+
+0.013 
+
+SAGN NoReadOut 0.657 ±
+
+0.059 0.678 ±
+
+0.040 0.677 ±
+
+0.038 0.864 ±
+
+0.013 OmicsReadOut 0.800 ±
+
+0.029 0.807 ±
+
+0.016 0.812 ±
+
+0.018 0.942 ±
+
+0.008 
+
+ChebNet NoReadOut 0.674 ±
+
+0.033 0.722 ±
+
+0.030 0.715 ±
+
+0.033 0.907 ±
+
+0.003 OmicsReadOut 0.808 ±
+
+0.052 0.816 ±
+
+0.032 0.816 ±
+
+0.033 0.944 ±
+
+0.010 
+
+MLA-GNN NoReadOut 0.583 ±
+
+0.053 0.640 ±
+
+0.027 0.653 ±
+
+0.030 0.815 ±
+
+0.024 OmicsReadOut 0.837 ±
+
+0.019 0.833 ±
+
+0.030 0.833 ±
+
+0.028 0.950 ±
+
+0.014 
+
+33 E Ablation Tables 
+
+Table 11: Adjacency ablation on Heritage . For each (model, adjacency method), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ±
+
+std) from summary.best_test/* . PPI vs Co-expression. For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥
+
+best mean − best std). 
+
+Dataset Model Adjacency Fmacro Fweighted Accuracy AUROC 
+
+Heritage 
+
+GIN PPI 0.548 ±
+
+0.047 0.552 ±
+
+0.046 0.552 ±
+
+0.046 0.536 ±
+
+0.035 
+
+Co-expression 0.518 ±
+
+0.045 0.528 ±
+
+0.041 0.542 ±
+
+0.025 0.535 ±
+
+0.022 GCN PPI 0.482 ±
+
+0.029 0.491 ±
+
+0.029 0.498 ±
+
+0.031 0.515 ±
+
+0.028 Co-expression 0.538 ±
+
+0.037 0.543 ±
+
+0.032 0.549 ±
+
+0.021 0.573 ±
+
+0.045 
+
+GATv2 PPI 0.576 ±
+
+0.033 0.579 ±
+
+0.032 0.579 ±
+
+0.031 0.586 ±
+
+0.007 
+
+Co-expression 0.514 ±
+
+0.032 0.520 ±
+
+0.032 0.522 ±
+
+0.032 0.532 ±
+
+0.021 SAGE PPI 0.468 ±
+
+0.010 0.470 ±
+
+0.007 0.471 ±
+
+0.006 0.481 ±
+
+0.021 Co-expression 0.576 ±
+
+0.062 0.579 ±
+
+0.065 0.582 ±
+
+0.067 0.592 ±
+
+0.079 
+
+GPS PPI 0.475 ±
+
+0.032 0.480 ±
+
+0.032 0.481 ±
+
+0.031 0.447 ±
+
+0.034 Co-expression 0.522 ±
+
+0.015 0.525 ±
+
+0.016 0.525 ±
+
+0.017 0.542 ±
+
+0.013 
+
+SAGN PPI 0.464 ±
+
+0.026 0.468 ±
+
+0.026 0.468 ±
+
+0.025 0.488 ±
+
+0.016 Co-expression 0.528 ±
+
+0.023 0.536 ±
+
+0.020 0.545 ±
+
+0.010 0.545 ±
+
+0.008 
+
+ChebNet PPI 0.491 ±
+
+0.109 0.498 ±
+
+0.109 0.502 ±
+
+0.109 0.513 ±
+
+0.101 Co-expression 0.566 ±
+
+0.037 0.570 ±
+
+0.035 0.572 ±
+
+0.032 0.576 ±
+
+0.016 
+
+MLA-GNN PPI 0.507 ±
+
+0.044 0.513 ±
+
+0.043 
+
+0.515 ±
+
+0.044 0.514 ±
+
+0.024 
+
+Co-expression 0.510 ±
+
+0.023 0.514 ±
+
+0.021 
+
+0.515 ±
+
+0.017 0.490 ±
+
+0.021 
+
+34 Table 12: Adjacency ablation on Addneuromed . For each (model, adjacency method), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ±
+
+std) from summary.best_test/* . PPI vs Co-expression. For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥
+
+best mean − best std). 
+
+Dataset Model Adjacency Fmacro Fweighted Accuracy AUROC 
+
+Addneuromed 
+
+GIN PPI 0.419 ±
+
+0.037 0.426 ±
+
+0.034 0.432 ±
+
+0.037 0.634 ±
+
+0.006 Co-expression 0.476 ±
+
+0.013 0.482 ±
+
+0.012 0.488 ±
+
+0.005 0.683 ±
+
+0.015 
+
+GCN PPI 0.514 ±
+
+0.036 0.519 ±
+
+0.037 0.522 ±
+
+0.037 0.690 ±
+
+0.017 
+
+Co-expression 0.490 ±
+
+0.024 0.497 ±
+
+0.023 0.505 ±
+
+0.020 0.659 ±
+
+0.005 GATv2 PPI 0.452 ±
+
+0.085 0.465 ±
+
+0.080 0.481 ±
+
+0.061 0.681 ±
+
+0.025 Co-expression 0.519 ±
+
+0.053 0.524 ±
+
+0.053 0.525 ±
+
+0.057 0.700 ±
+
+0.040 
+
+SAGE PPI 0.476 ±
+
+0.040 0.482 ±
+
+0.038 0.481 ±
+
+0.037 
+
+0.697 ±
+
+0.012 
+
+Co-expression 0.502 ±
+
+0.040 0.507 ±
+
+0.037 0.506 ±
+
+0.037 
+
+0.677 ±
+
+0.009 GPS PPI 0.440 ±
+
+0.036 0.444 ±
+
+0.037 0.451 ±
+
+0.039 0.662 ±
+
+0.012 Co-expression 0.506 ±
+
+0.034 0.514 ±
+
+0.033 0.512 ±
+
+0.030 0.674 ±
+
+0.032 
+
+SAGN PPI 0.518 ±
+
+0.009 0.519 ±
+
+0.009 0.519 ±
+
+0.009 0.712 ±
+
+0.012 
+
+Co-expression 0.501 ±
+
+0.037 0.509 ±
+
+0.035 0.515 ±
+
+0.033 0.696 ±
+
+0.019 ChebNet PPI 0.453 ±
+
+0.044 0.463 ±
+
+0.041 0.475 ±
+
+0.039 0.679 ±
+
+0.004 Co-expression 0.493 ±
+
+0.046 0.502 ±
+
+0.045 0.506 ±
+
+0.035 0.711 ±
+
+0.006 
+
+MLA-GNN PPI 0.458 ±
+
+0.011 0.466 ±
+
+0.009 0.466 ±
+
+0.014 
+
+0.683 ±
+
+0.008 
+
+Co-expression 0.473 ±
+
+0.032 0.481 ±
+
+0.032 0.485 ±
+
+0.030 
+
+0.676 ±
+
+0.039 
+
+E.1 Node Sample Ratio Results 
+
+35 Table 13: Adjacency ablation on Parkinsons . For each (model, adjacency method), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ±
+
+std) from summary.best_test/* . PPI vs Co-expression. For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥
+
+best mean − best std). 
+
+Dataset Model Adjacency Fmacro Fweighted Accuracy AUROC 
+
+Parkinsons 
+
+GIN PPI 0.748 ±
+
+0.069 0.758 ±
+
+0.067 0.757 ±
+
+0.068 0.814 ±
+
+0.036 
+
+Co-expression 0.637 ±
+
+0.059 0.652 ±
+
+0.050 0.654 ±
+
+0.049 0.723 ±
+
+0.041 GCN PPI 0.654 ±
+
+0.016 0.677 ±
+
+0.015 0.687 ±
+
+0.014 
+
+0.722 ±
+
+0.010 Co-expression 0.649 ±
+
+0.017 0.669 ±
+
+0.017 0.675 ±
+
+0.019 
+
+0.727 ±
+
+0.014 
+
+GATv2 PPI 0.630 ±
+
+0.052 0.650 ±
+
+0.053 0.654 ±
+
+0.057 0.699 ±
+
+0.023 Co-expression 0.646 ±
+
+0.028 0.664 ±
+
+0.025 0.667 ±
+
+0.021 0.707 ±
+
+0.030 
+
+SAGE PPI 0.741 ±
+
+0.016 0.755 ±
+
+0.017 0.757 ±
+
+0.019 
+
+0.805 ±
+
+0.030 
+
+Co-expression 0.750 ±
+
+0.003 0.763 ±
+
+0.002 0.765 ±
+
+0.000 
+
+0.783 ±
+
+0.014 GPS PPI 0.735 ±
+
+0.036 0.750 ±
+
+0.036 0.753 ±
+
+0.037 0.776 ±
+
+0.014 
+
+Co-expression 0.653 ±
+
+0.016 0.673 ±
+
+0.014 0.679 ±
+
+0.012 0.743 ±
+
+0.015 SAGN PPI 0.716 ±
+
+0.047 0.730 ±
+
+0.045 0.733 ±
+
+0.047 0.773 ±
+
+0.049 Co-expression 0.722 ±
+
+0.048 0.740 ±
+
+0.047 0.749 ±
+
+0.050 0.787 ±
+
+0.056 
+
+ChebNet PPI 0.673 ±
+
+0.094 0.689 ±
+
+0.088 0.691 ±
+
+0.086 0.744 ±
+
+0.042 Co-expression 0.710 ±
+
+0.111 0.730 ±
+
+0.094 0.745 ±
+
+0.070 0.779 ±
+
+0.032 
+
+MLA-GNN PPI 0.699 ±
+
+0.021 0.710 ±
+
+0.019 0.708 ±
+
+0.019 0.776 ±
+
+0.051 
+
+Co-expression 0.559 ±
+
+0.169 0.596 ±
+
+0.148 0.630 ±
+
+0.119 0.684 ±
+
+0.096 
+
+36 Table 14: Adjacency ablation on BRCA . For each (model, adjacency method), we select the configura-tion with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ± std) from 
+
+summary.best_test/* . PPI vs Co-expression. For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥ best mean − best std). 
+
+Dataset Model Adjacency Fmacro Fweighted Accuracy AUROC 
+
+BRCA 
+
+GIN PPI 0.780 ±
+
+0.022 0.802 ±
+
+0.006 0.806 ±
+
+0.016 0.933 ±
+
+0.011 
+
+Co-expression 0.685 ±
+
+0.019 0.702 ±
+
+0.017 0.687 ±
+
+0.018 0.907 ±
+
+0.006 GCN PPI 0.750 ±
+
+0.040 0.780 ±
+
+0.031 0.778 ±
+
+0.032 0.903 ±
+
+0.033 Co-expression 0.778 ±
+
+0.023 0.794 ±
+
+0.018 0.802 ±
+
+0.018 0.913 ±
+
+0.040 
+
+GATv2 PPI 0.785 ±
+
+0.044 0.801 ±
+
+0.024 0.799 ±
+
+0.022 0.919 ±
+
+0.034 
+
+Co-expression 0.734 ±
+
+0.019 0.757 ±
+
+0.002 0.771 ±
+
+0.010 0.903 ±
+
+0.025 SAGE PPI 0.835 ±
+
+0.013 0.830 ±
+
+0.002 0.833 ±
+
+0.000 0.943 ±
+
+0.012 
+
+Co-expression 0.778 ±
+
+0.032 0.787 ±
+
+0.030 0.788 ±
+
+0.037 0.906 ±
+
+0.041 GPS PPI 0.754 ±
+
+0.044 0.793 ±
+
+0.021 0.799 ±
+
+0.022 0.931 ±
+
+0.019 Co-expression 0.824 ±
+
+0.041 0.818 ±
+
+0.029 0.819 ±
+
+0.026 0.938 ±
+
+0.013 
+
+SAGN PPI 0.800 ±
+
+0.029 0.807 ±
+
+0.016 0.812 ±
+
+0.018 
+
+0.942 ±
+
+0.008 
+
+Co-expression 0.803 ±
+
+0.014 0.818 ±
+
+0.015 0.819 ±
+
+0.022 
+
+0.917 ±
+
+0.028 ChebNet PPI 0.808 ±
+
+0.052 
+
+0.816 ±
+
+0.032 0.816 ±
+
+0.033 
+
+0.944 ±
+
+0.010 
+
+Co-expression 0.805 ±
+
+0.073 
+
+0.817 ±
+
+0.034 0.819 ±
+
+0.033 
+
+0.904 ±
+
+0.059 MLA-GNN PPI 0.837 ±
+
+0.019 0.833 ±
+
+0.030 0.833 ±
+
+0.028 
+
+0.950 ±
+
+0.014 Co-expression 0.809 ±
+
+0.056 0.819 ±
+
+0.033 0.816 ±
+
+0.037 
+
+0.951 ±
+
+0.015 
+
+37 Table 15: Readout ablation on Heritage . For each (model, readout), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ± std) from 
+
+summary.best_test/* . For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥ best mean − best std). 
+
+Dataset Model Readout Fmacro Fweighted Accuracy AUROC 
+
+Heritage 
+
+GIN NoReadOut 0.518 ±
+
+0.045 0.528 ±
+
+0.041 0.542 ±
+
+0.025 0.535 ±
+
+0.022 OmicsReadOut 0.548 ±
+
+0.047 0.552 ±
+
+0.046 0.552 ±
+
+0.046 0.536 ±
+
+0.035 
+
+GCN NoReadOut 0.492 ±
+
+0.047 0.502 ±
+
+0.040 0.522 ±
+
+0.015 0.536 ±
+
+0.017 OmicsReadOut 0.538 ±
+
+0.037 0.543 ±
+
+0.032 0.549 ±
+
+0.021 0.573 ±
+
+0.045 
+
+GATv2 NoReadOut 0.576 ±
+
+0.033 0.579 ±
+
+0.032 0.579 ±
+
+0.031 0.586 ±
+
+0.007 
+
+OmicsReadOut 0.514 ±
+
+0.032 0.520 ±
+
+0.032 0.522 ±
+
+0.032 0.532 ±
+
+0.021 SAGE NoReadOut 0.537 ±
+
+0.038 0.543 ±
+
+0.037 0.545 ±
+
+0.035 0.584 ±
+
+0.029 OmicsReadOut 0.576 ±
+
+0.062 0.579 ±
+
+0.065 0.582 ±
+
+0.067 0.592 ±
+
+0.079 
+
+GPS NoReadOut 0.552 ±
+
+0.028 0.559 ±
+
+0.024 0.569 ±
+
+0.012 0.575 ±
+
+0.023 
+
+OmicsReadOut 0.475 ±
+
+0.032 0.480 ±
+
+0.032 0.481 ±
+
+0.031 0.447 ±
+
+0.034 SAGN NoReadOut 0.491 ±
+
+0.005 0.489 ±
+
+0.005 0.492 ±
+
+0.006 0.526 ±
+
+0.007 OmicsReadOut 0.528 ±
+
+0.023 0.536 ±
+
+0.020 0.545 ±
+
+0.010 0.545 ±
+
+0.008 
+
+ChebNet NoReadOut 0.537 ±
+
+0.024 0.543 ±
+
+0.023 0.545 ±
+
+0.020 0.562 ±
+
+0.013 OmicsReadOut 0.566 ±
+
+0.037 0.570 ±
+
+0.035 0.572 ±
+
+0.032 0.576 ±
+
+0.016 
+
+MLA-GNN NoReadOut 0.558 ±
+
+0.027 0.563 ±
+
+0.024 0.566 ±
+
+0.020 0.559 ±
+
+0.043 
+
+OmicsReadOut 0.507 ±
+
+0.044 0.513 ±
+
+0.043 0.515 ±
+
+0.044 0.514 ±
+
+0.024 
+
+38 Table 16: Readout ablation on Addneuromed . For each (model, readout), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ± std) from 
+
+summary.best_test/* . For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥ best mean − best std). 
+
+Dataset Model Readout Fmacro Fweighted Accuracy AUROC 
+
+Addneuromed 
+
+GIN NoReadOut 0.419 ±
+
+0.037 
+
+0.426 ±
+
+0.034 0.432 ±
+
+0.037 0.634 ±
+
+0.006 OmicsReadOut 0.413 ±
+
+0.031 
+
+0.427 ±
+
+0.022 0.463 ±
+
+0.016 0.635 ±
+
+0.018 
+
+GCN NoReadOut 0.493 ±
+
+0.024 0.498 ±
+
+0.022 0.500 ±
+
+0.019 0.672 ±
+
+0.012 OmicsReadOut 0.514 ±
+
+0.036 0.519 ±
+
+0.037 0.522 ±
+
+0.037 0.690 ±
+
+0.017 
+
+GATv2 NoReadOut 0.390 ±
+
+0.047 0.400 ±
+
+0.040 0.420 ±
+
+0.023 0.588 ±
+
+0.024 OmicsReadOut 0.452 ±
+
+0.085 0.465 ±
+
+0.080 0.481 ±
+
+0.061 0.681 ±
+
+0.025 
+
+SAGE NoReadOut 0.511 ±
+
+0.044 0.515 ±
+
+0.038 0.519 ±
+
+0.033 0.702 ±
+
+0.019 
+
+OmicsReadOut 0.502 ±
+
+0.040 0.507 ±
+
+0.037 0.506 ±
+
+0.037 0.677 ±
+
+0.009 GPS NoReadOut 0.450 ±
+
+0.040 0.459 ±
+
+0.035 0.469 ±
+
+0.028 0.650 ±
+
+0.012 OmicsReadOut 0.506 ±
+
+0.034 0.514 ±
+
+0.033 0.512 ±
+
+0.030 0.674 ±
+
+0.032 
+
+SAGN NoReadOut 0.446 ±
+
+0.022 0.452 ±
+
+0.022 0.454 ±
+
+0.019 0.658 ±
+
+0.002 OmicsReadOut 0.501 ±
+
+0.037 0.509 ±
+
+0.035 0.515 ±
+
+0.033 0.696 ±
+
+0.019 
+
+ChebNet NoReadOut 0.508 ±
+
+0.025 0.508 ±
+
+0.028 0.509 ±
+
+0.024 
+
+0.693 ±
+
+0.020 OmicsReadOut 0.493 ±
+
+0.046 0.502 ±
+
+0.045 0.506 ±
+
+0.035 
+
+0.711 ±
+
+0.006 
+
+MLA-GNN NoReadOut 0.461 ±
+
+0.053 
+
+0.461 ±
+
+0.053 0.463 ±
+
+0.052 0.624 ±
+
+0.026 OmicsReadOut 0.458 ±
+
+0.011 
+
+0.466 ±
+
+0.009 0.466 ±
+
+0.014 0.683 ±
+
+0.008 
+
+39 Table 17: Readout ablation on Parkinsons . For each (model, readout), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ± std) from 
+
+summary.best_test/* . For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥ best mean − best std). 
+
+Dataset Model Readout Fmacro Fweighted Accuracy AUROC 
+
+Parkinsons 
+
+GIN NoReadOut 0.491 ±
+
+0.022 0.528 ±
+
+0.009 0.556 ±
+
+0.017 0.502 ±
+
+0.013 OmicsReadOut 0.748 ±
+
+0.069 0.758 ±
+
+0.067 0.757 ±
+
+0.068 0.814 ±
+
+0.036 
+
+GCN NoReadOut 0.517 ±
+
+0.018 0.541 ±
+
+0.015 0.543 ±
+
+0.012 0.494 ±
+
+0.011 OmicsReadOut 0.654 ±
+
+0.016 0.677 ±
+
+0.015 0.687 ±
+
+0.014 0.722 ±
+
+0.010 
+
+GATv2 NoReadOut 0.598 ±
+
+0.085 0.629 ±
+
+0.070 0.654 ±
+
+0.045 0.698 ±
+
+0.022 OmicsReadOut 0.646 ±
+
+0.028 0.664 ±
+
+0.025 0.667 ±
+
+0.021 0.707 ±
+
+0.030 
+
+SAGE NoReadOut 0.518 ±
+
+0.047 0.539 ±
+
+0.047 0.539 ±
+
+0.050 0.509 ±
+
+0.059 OmicsReadOut 0.750 ±
+
+0.003 0.763 ±
+
+0.002 0.765 ±
+
+0.000 0.783 ±
+
+0.014 
+
+GPS NoReadOut 0.611 ±
+
+0.035 0.636 ±
+
+0.034 0.646 ±
+
+0.036 0.667 ±
+
+0.029 OmicsReadOut 0.653 ±
+
+0.016 0.673 ±
+
+0.014 0.679 ±
+
+0.012 0.743 ±
+
+0.015 
+
+SAGN NoReadOut 0.462 ±
+
+0.025 0.509 ±
+
+0.023 0.556 ±
+
+0.021 0.509 ±
+
+0.024 OmicsReadOut 0.722 ±
+
+0.048 0.740 ±
+
+0.047 0.749 ±
+
+0.050 0.787 ±
+
+0.056 
+
+ChebNet NoReadOut 0.489 ±
+
+0.010 0.508 ±
+
+0.011 0.506 ±
+
+0.012 0.469 ±
+
+0.015 OmicsReadOut 0.710 ±
+
+0.111 0.730 ±
+
+0.094 0.745 ±
+
+0.070 0.779 ±
+
+0.032 
+
+MLA-GNN NoReadOut 0.646 ±
+
+0.086 0.665 ±
+
+0.077 0.671 ±
+
+0.070 0.704 ±
+
+0.080 
+
+OmicsReadOut 0.559 ±
+
+0.169 0.596 ±
+
+0.148 0.630 ±
+
+0.119 0.684 ±
+
+0.096 
+
+40 Table 18: Readout ablation on BRCA . For each (model, readout), we select the configuration with the highest validation Fmacro (val_f1_macro ) and report test metrics (mean ± std) from 
+
+summary.best_test/* . For each metric within a model pair, the higher mean is bolded; the other cell is shaded blue if it is within one std of the bolded cell (mean ≥ best mean − best std). 
+
+Dataset Model Readout Fmacro Fweighted Accuracy AUROC 
+
+BRCA 
+
+GIN NoReadOut 0.607 ±
+
+0.020 0.611 ±
+
+0.021 0.594 ±
+
+0.018 0.872 ±
+
+0.008 OmicsReadOut 0.780 ±
+
+0.022 0.802 ±
+
+0.006 0.806 ±
+
+0.016 0.933 ±
+
+0.011 
+
+GCN NoReadOut 0.637 ±
+
+0.016 0.652 ±
+
+0.011 0.635 ±
+
+0.015 0.872 ±
+
+0.002 OmicsReadOut 0.778 ±
+
+0.023 0.794 ±
+
+0.018 0.802 ±
+
+0.018 0.913 ±
+
+0.040 
+
+GATv2 NoReadOut 0.666 ±
+
+0.074 0.678 ±
+
+0.044 0.663 ±
+
+0.047 0.887 ±
+
+0.020 OmicsReadOut 0.785 ±
+
+0.044 0.801 ±
+
+0.024 0.799 ±
+
+0.022 0.919 ±
+
+0.034 
+
+SAGE NoReadOut 0.663 ±
+
+0.008 0.711 ±
+
+0.004 0.705 ±
+
+0.012 0.895 ±
+
+0.008 OmicsReadOut 0.778 ±
+
+0.032 0.787 ±
+
+0.030 0.788 ±
+
+0.037 0.906 ±
+
+0.041 
+
+GPS NoReadOut 0.757 ±
+
+0.025 0.771 ±
+
+0.028 0.764 ±
+
+0.024 0.932 ±
+
+0.007 OmicsReadOut 0.824 ±
+
+0.041 0.818 ±
+
+0.029 0.819 ±
+
+0.026 0.938 ±
+
+0.013 
+
+SAGN NoReadOut 0.657 ±
+
+0.059 0.678 ±
+
+0.040 0.677 ±
+
+0.038 0.864 ±
+
+0.013 OmicsReadOut 0.800 ±
+
+0.029 0.807 ±
+
+0.016 0.812 ±
+
+0.018 0.942 ±
+
+0.008 
+
+ChebNet NoReadOut 0.674 ±
+
+0.033 0.722 ±
+
+0.030 0.715 ±
+
+0.033 0.907 ±
+
+0.003 OmicsReadOut 0.808 ±
+
+0.052 0.816 ±
+
+0.032 0.816 ±
+
+0.033 0.944 ±
+
+0.010 
+
+MLA-GNN NoReadOut 0.583 ±
+
+0.053 0.640 ±
+
+0.027 0.653 ±
+
+0.030 0.815 ±
+
+0.024 OmicsReadOut 0.837 ±
+
+0.019 0.833 ±
+
+0.030 0.833 ±
+
+0.028 0.950 ±
+
+0.014 
+
+41 0.25 0.50 0.75 1.00 
+
+0.45 
+
+0.50 
+
+0.55 
+
+> Correlation
+> F1 Macro Score
+
+Heritage 
+
+0.25 0.50 0.75 1.00 
+
+Addneuromed 
+
+0.25 0.50 0.75 1.00 
+
+Parkinsons 
+
+0.25 0.50 0.75 1.00 
+
+BRCA 
+
+0.25 0.50 0.75 1.00 
+
+0.45 
+
+0.50 
+
+0.55 
+
+> Distance Correlation
+> F1 Macro Score
+
+0.25 0.50 0.75 1.00 0.25 0.50 0.75 1.00 0.25 0.50 0.75 1.00 
+
+0.25 0.50 0.75 1.00 
+
+0.45 
+
+0.50 
+
+0.55 
+
+> Random
+> F1 Macro Score
+
+0.25 0.50 0.75 1.00 0.25 0.50 0.75 1.00 0.25 0.50 0.75 1.00 
+
+0.25 0.50 0.75 1.00 
+
+0.45 
+
+0.50 
+
+0.55 
+
+> Variance
+> F1 Macro Score
+
+0.25 0.50 0.75 1.00 0.25 0.50 0.75 1.00 0.25 0.50 0.75 1.00 
+
+Effect of Node Sample Ratio on F1 Macro (Linear Regression, * = p < 0.05) 
+
+Node Sample Ratio 
+
+> MLP
+> GIN
+> GCN
+> GATv2
+> SAGE
+> GPS
+> SAGN
+> ChebNet
+> MLA-GNN
+> p < 0.05
+> p >= 0.05
+
+Figure 11: Linear regression of node sample ratio vs. Test F1 Macro score . Each subplot shows fitted regression lines for all models within a specific dataset and graph construction method. Solid lines indicate p < 0.05 ; dashed lines indicate p ≥ 0.05 .42
