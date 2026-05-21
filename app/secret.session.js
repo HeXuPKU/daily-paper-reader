@@ -246,6 +246,7 @@
       model: 'Qwen/Qwen3-Reranker-0.6B',
       baseUrl: 'https://zwwen.online/rerank',
       requiresApiKey: false,
+      testApiKey: '26932a86d772001af60cbd9d2c162bfda3a90e094f797f3d6806f6077478b27a',
       note: '默认推荐；使用 zwwen.online 公益 rerank 服务。',
     },
     {
@@ -1358,6 +1359,7 @@
           provider: profile.provider,
           model: profile.model,
           apiKey: requiresApiKey ? apiKey : '',
+          testApiKey: profile.testApiKey || '',
           baseUrl: profile.provider === 'local' ? '' : baseUrl,
         };
       };
@@ -1464,8 +1466,9 @@
           const headers = {
             'Content-Type': 'application/json',
           };
-          if (draft.apiKey) {
-            headers.Authorization = `Bearer ${draft.apiKey}`;
+          const authApiKey = draft.apiKey || draft.testApiKey || '';
+          if (authApiKey) {
+            headers.Authorization = `Bearer ${authApiKey}`;
           }
           const res = await fetch(endpoint, {
             method: 'POST',
