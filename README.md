@@ -155,7 +155,7 @@ scripts/bootstrap_local.sh
 这个脚本会自动创建 `.venv`、按需从 `.env.example` 生成 `.env`，然后启动本地后端。默认使用快速部署模式，不会下载 `torch` 等重依赖。启动完成后访问：
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:8567
 ```
 
 如果你已经准备好了 Python 环境，也可以只启动后端：
@@ -167,7 +167,7 @@ scripts/local_debug.sh
 也可以手动指定监听地址和端口：
 
 ```bash
-python src/local_debug_server.py --host 127.0.0.1 --port 8000
+python src/local_debug_server.py --host 127.0.0.1 --port 8567
 ```
 
 如果要一次性安装完整运行依赖，可以使用：
@@ -194,17 +194,17 @@ DPR_SKIP_INSTALL=1 scripts/bootstrap_local.sh
 
 ```html
 <script>
-  window.DPR_LOCAL_API_BASE = 'http://127.0.0.1:8000';
+  window.DPR_LOCAL_API_BASE = 'http://127.0.0.1:8567';
 </script>
 ```
 
 如果要部署到自己的服务器上调试，请同时启动这个后端，并对内网或受信任网络开放端口：
 
 ```bash
-DPR_LOCAL_HOST=0.0.0.0 DPR_LOCAL_PORT=8000 scripts/local_debug.sh
+DPR_LOCAL_HOST=0.0.0.0 DPR_LOCAL_PORT=8567 scripts/local_debug.sh
 ```
 
-然后访问 `http://<服务器地址>:8000`。这样页面和后端同源，点击触发按钮会在服务器本机执行工作流命令，而不是调用 GitHub Actions。
+然后访问 `http://<服务器地址>:8567`。这样页面和后端同源，点击触发按钮会在服务器本机执行工作流命令，而不是调用 GitHub Actions。
 
 ## ❓ FAQ
 

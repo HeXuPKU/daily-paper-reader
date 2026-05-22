@@ -53,7 +53,7 @@ class ConferenceWorkflowAndUiTest(unittest.TestCase):
         self.assertIn("runConferenceRetrieval", runner)
         self.assertIn("/api/local/workflows/dispatch", runner)
         self.assertIn("DPR_LOCAL_API_BASE", runner)
-        self.assertIn(":8000${path}", runner)
+        self.assertIn(":8567${path}", runner)
         self.assertIn("loadLocalConfigOverride", runner)
         self.assertIn("config: localConfigOverride", runner)
         self.assertIn("secret: localSecret", runner)

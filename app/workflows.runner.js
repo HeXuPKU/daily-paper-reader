@@ -219,7 +219,7 @@ window.DPRWorkflowRunner = (function () {
     if (!base && isLocalDebugPage()) {
       const protocol = String((window.location && window.location.protocol) || 'http:');
       const hostname = String((window.location && window.location.hostname) || '127.0.0.1');
-      return `${protocol}//${hostname}:8000${path}`;
+      return `${protocol}//${hostname}:8567${path}`;
     }
     if (!base) return path;
     return `${base}${path}`;
@@ -683,7 +683,7 @@ window.DPRWorkflowRunner = (function () {
         console.error(e);
         const msg = e.message || String(e);
         setStatus(`本地触发失败：${msg}`, '#c00');
-        runsEl.innerHTML = `<div style="color:#c00;">${escapeHtml(msg)}<br/>请确认本地后端已启动：<code>scripts/local_debug.sh</code> 或 <code>python src/local_debug_server.py --port 8000</code></div>`;
+        runsEl.innerHTML = `<div style="color:#c00;">${escapeHtml(msg)}<br/>请确认本地后端已启动：<code>scripts/local_debug.sh</code> 或 <code>python src/local_debug_server.py --port 8567</code></div>`;
         return;
       }
     }

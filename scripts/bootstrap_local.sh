@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 HOST="${DPR_LOCAL_HOST:-127.0.0.1}"
-PORT="${DPR_LOCAL_PORT:-8000}"
+PORT="${DPR_LOCAL_PORT:-8567}"
 VENV_DIR="${DPR_LOCAL_VENV:-.venv}"
 PYTHON_BIN="${PYTHON:-python3}"
 INSTALL_MODE="${DPR_INSTALL_MODE:-minimal}"

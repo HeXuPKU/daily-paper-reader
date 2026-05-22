@@ -22,7 +22,7 @@
     if (base) return `${base}${path}`;
     const protocol = String((window.location && window.location.protocol) || 'http:');
     const hostname = String((window.location && window.location.hostname) || '127.0.0.1');
-    return `${protocol}//${hostname}:8000${path}`;
+    return `${protocol}//${hostname}:8567${path}`;
   };
 
   function loadLocalSecretPayload() {
