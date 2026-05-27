@@ -1,0 +1,1153 @@
+Title: TreeText-CTS: Compact, Source-Traceable Tree-Path Evidence for Irregular Clinical Time-Series Prediction
+
+URL Source: https://arxiv.org/pdf/2605.20292v1
+
+Published Time: Thu, 21 May 2026 00:03:57 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# TreeText-CTS: Compact, Source-Traceable Tree-Path Evidence for Irregular Clinical Time-Series Prediction 
+
+Kwanhyung Lee 1,2, Juhwan Choi 2, Jongheon Kim 1, Joohyung Lee 2,Hyeongwon Jang 1, Eunho Yang 11Kim Jaechul Graduate School of AI, KAIST 2AITRICS 
+
+kwanlee9209@kaist.ac.kr 
+
+Abstract 
+
+Numerical time-series models can effectively process irregular electronic health record (EHR) trajectories, but they do not naturally expose the measurements and temporal patterns supporting each risk estimate as readable evidence. Existing text-based interfaces improve readability, but typically rely on either raw serializa-tion, which is lengthy and redundant, or patient-level free-form summaries, which are difficult to trace to source measurements and time windows. To bridge this gap, we introduce TreeText-CTS (Clinical Time-Series), which converts irregular EHR trajectories into human-readable, compact, source-traceable tree-path evi-dence units without patient-level summarization or inference-time autoregressive decoding. TreeText-CTS routes multi-scale window summaries through frozen XG-Boost models and verbalizes activated tree paths as deterministic, source-traceable evidence units composed of threshold conditions. An evidence selector assem-bles an informative subset of these units, which a language-model encoder then integrates for prediction. Across PhysioNet 2012 mortality, MIMIC-III mortality, and PhysioNet 2019 sepsis-onset forecasting, TreeText-CTS achieves the best AUROC and AUPRC among evaluated text-based EHR time-series interfaces, improving AUPRC by 6.0 to 9.7 absolute percentage points over the strongest prior text-based interface while remaining competitive with numerical time-series models. Ablations show that tree-path evidence construction, evidence selection, and language-model composition each contribute to performance. Because every span passed to the language-model encoder is constructed from activated tree-path threshold conditions, TreeText-CTS makes the evidence supplied to the final predictor inspectable and source-traceable. 
+
+1 Introduction 
+
+Large language models (LLMs) have emerged as broadly useful foundation models across domains. Trained on large-scale corpora, they encode broad prior knowledge that can be especially valuable in healthcare, where labeled data are limited, costly, and difficult to share. Moreover, their language outputs also provide a natural medium for reasoning, evidence presentation, and human inspection. These properties motivate LLM use in healthcare prediction, where models should support both accuracy and interpretable decision-making. Recent EHR modeling efforts reflect this trend through instruction-tuned EHR interfaces [ 26 ], long-context clinical modeling [ 25 ], knowledge-augmented prediction and reasoning [8, 9], and LLM-derived representations for irregular ICU time series [7]. Irregular EHR time-series prediction, however, remains dominated by numerical models that directly ingest values, timestamps, masks, and missingness patterns [ 2, 19 , 6, 22 , 28 , 14 , 12 ]. Existing LLM-based EHR interfaces often underperform these predictors, suggesting that language-based methods must preserve the structured signals numerical models exploit. A central challenge is representational: raw EHR time series are not naturally linguistic, but consist of irregular values, timestamps, labs, 
+
+> Preprint.
+> arXiv:2605.20292v1 [cs.LG] 19 May 2026
+
+vitals, interventions, missingness patterns, and static covariates. Applying LLMs to EHR time series, therefore, requires an interface that converts structured observations into language while preserving information for accurate and inspectable prediction. Existing EHR-to-language interfaces fall into two broad groups. Rule-based approaches serialize observations with fixed templates, preserving source values and avoiding patient-level generation [4, 3]. They are deterministic, but often heuristic and exhaustive: they verbalize observations because they are present, not because they are compact evidence. This yields long, redundant inputs that are difficult to verify. Model-based approaches instead use LLMs to summarize, contextualize, or embed patient trajectories [ 7 , 13 ]. They can improve readability, but may require costly patient-level generation, raise deployment and privacy concerns, and require faithfulness checks because generated text can omit or distort source measurements [ 11 , 1, 24 ]. These limitations point to a missing interface: compact like a summary, deterministic like a rule-based representation, and traceable to source EHR windows. We propose TreeText-CTS, a tree-grounded language interface for irregular EHR time-series pre-diction. TreeText-CTS uses trees to discover prediction-relevant thresholds and language to expose activated tree paths as readable evidence. It summarizes trajectories over multiple look-back windows, routes the summaries through fixed window-specific XGBoost models, and renders activated root-to-leaf paths as deterministic threshold predicates, e.g., “minimum MAP is at most 65” or “last heart rate is higher than 110.” Each predicate is linked to its source window, tree, and leaf. A Compact Evidence Selector (CES) assembles a compact subset of tree-path evidence units, and a clinical language model classifier composes them for final prediction. This design combines strengths of prior interfaces. Like rule-based serialization, the classifier input is deterministic, reproducible, and source-traceable. Like model-based summarization, it is selective and readable rather than a raw observation list. Unlike patient-level free-form summarization, TreeText-CTS requires no inference-time autoregressive decoding and keeps deterministic predicate text as the auditable evidence anchor; optional clinical glosses are cached offline to provide clinically meaningful context, but never replace tree-derived predicates. Unlike recent LLM-tree methods that use LLMs to generate features or refine tree rules [ 15 , 27 ], TreeText-CTS keeps the tree inventory fixed and uses a language encoder only after deterministic tree-path evidence construction. 
+
+Contributions. Our contributions are threefold. • Tree-path evidence construction for irregular EHR time series. We convert multi-scale EHR window summaries into activated paths in fixed XGBoost models and render each path as deterministic predicate text, yielding readable evidence units linked to source windows, clinical variables, trees, and leaves. • Compact classifier-input construction. We introduce a selector that assembles a compact subset of tree-path evidence units, enabling the LM classifier to compose informative conditions rather than redundant raw serializations or free-form patient summaries. • Accuracy–traceability evaluation on ICU benchmarks. Across three ICU prediction bench-marks, TreeText-CTS achieves the strongest results among text-based EHR time-series interfaces and remains competitive with numerical irregular time-series models, while preserving source traceability for every selected classifier-input span. 
+
+2 Related work 
+
+Numerical models for irregular clinical time series. Conventional models for EHR time-series data handle missingness and uneven observation times through various strategies, such as recurrent decay, set functions, time-aware attention, sparse-event transformers, or variable graphs [ 2, 19 , 6, 22 ,28 , 14 , 12 ]. These numerical time-series models directly optimize prediction from clinical values, timestamps, masks, and missingness patterns and are strong baselines for clinical forecasting, but the evidence behind each prediction is not naturally exposed in a human-readable form. 
+
+Text-based interfaces for EHR time-series prediction. Recent text-based EHR time-series inter-faces use LLM embeddings, verbalized observations, and generated patient representations. WRDP evaluates LLM embeddings of numerical EHR features and finds that raw numerical features often remain competitive or stronger [ 4 ]; Decode Like a Clinician verbalizes temporal EHR observations 2Figure 1: Overview of TreeText-CTS. Irregular EHR trajectories are summarized over multiple windows, routed through fixed per-window XGBoost models, and mapped by the Tree-to-Evidence Mapper (TEM) into deterministic, source-traceable tree-path evidence units. The Compact Evidence Selector (CES) selects at most K evidence units, which are concatenated after a static-covariate prefix and read by a clinical language encoder without patient-level free-form generation. for LLM fine-tuning [ 3]; TimeCP uses LLM-based contextualization for time-series event prediction [13 ]; and Record2Vec embeds LLM-generated clinical summaries of irregular ICU time series [ 7]. These methods motivate text or language-model interfaces for structured clinical data, with the poten-tial to leverage pretrained language-model priors. However, they generally build patient-level LM inputs or representations through serialization, verbalization, embedding, or generation. In contrast, TreeText-CTS separates cohort-level structure learning from patient-specific evidence construction. Fixed tree models learn reusable split thresholds on window summaries; patient-specific activated paths instantiate these thresholds as traceable textual evidence units, from which a selector retains a compact subset for the LM classifier. 
+
+Language models and tree-based structured prediction. Recent LLM-tree hybrids use decision trees for LLM-guided feature generation or rule refinement in tabular prediction [ 15 , 27 ]. TreeText-CTS instead keeps trees fixed and treats activated paths as an intermediate evidence representation for irregular clinical time series. This separates local evidence extraction from language-based evidence composition, rather than using an LLM to modify the tabular predictor. Prior tree-based representation methods also use leaves or rules as derived features, but typically consume them as numerical indicators instead of rendering them as source-traceable text for LM classification. 
+
+3 Method 
+
+Overview. TreeText-CTS builds a compact, human-readable, source-traceable text interface be-tween irregular EHR trajectories and a LM classifier. As shown in Figure 1, multi-scale window summaries are routed through fixed XGBoost models, activated paths are rendered as deterministic condition text by the Tree-to-Evidence Mapper (TEM), and the Compact Evidence Selector (CES) selects a compact subset of these evidence units. The LM classifier predicts from a static-covariate prefix followed by the selected evidence, avoiding raw trajectory serialization, patient-level free-form summarization, and inference-time autoregressive decoding. We train CES with a self-critical objective to handle compact selection. 3Problem setup. For patient i, let Oi = {(vj , t j , x j )}ni 
+
+> j=1
+
+denote the ni irregular EHR observations, where vj is the measured variable, tj is the observation time, and xj is the observed value. Let si
+
+denote static covariates and let yi ∈ { 0, 1} be the binary outcome. We render si as a deterministic text prefix ci, such as Age is ... , prepended to the selected evidence sequence read by the LM classifier; only tree-path evidence units count toward the evidence budget K.From Oi, TreeText-CTS constructs a candidate tree-path evidence set Ei = {ei1, . . . , e iN i }, from which CES selects Si ⊆ E i. The final predictor is 
+
+ˆpi = σ w⊤fθ
+
+ ci ∥ concat e∈sort( Si) Text( e) + b , (1) where ˆpi is the predicted probability of yi = 1 , σ is the sigmoid function, ∥ denotes text concatenation, 
+
+sort orders evidence by source time and window size, fθ denotes the LM encoder representation, and 
+
+w, b are the linear classification head. 
+
+Multi-scale tree evidence. Clinical risk signals can appear at different temporal scales, from abrupt changes in short windows to sustained abnormalities over longer histories. We therefore summarize each patient trajectory over multiple look-back windows before extracting tree-path evidence. For each patient, candidate time point t, and look-back window size W , we form a local summary over the source interval [t − W, t ], where t is the right endpoint of the window and W is the temporal scale. For a fixed window size W , candidate windows are placed on a non-overlapping grid. For each variable and window size W , we compute nine fixed statistics over the corresponding interval 
+
+[t − W, t ]: last value, mean, standard deviation, minimum, maximum, count, net change, time since last observation, and missingness indicator. For example, at t = 24 h, the W = 1 h and W = 8 hsummaries describe the intervals [23 , 24] h and [16 , 24] h, respectively. The set of candidate prediction times follows the dataset-specific evaluation protocol in Section 4. For each window size W , we train a separate XGBoost ensemble on dynamic summary rows 
+
+{(ϕW (i, t ), y i) : i ∈ D train , t ∈ G i(W )}, where ϕW (i, t ) denotes the nine-statistic summary at source-window endpoint t. After training, we freeze the trees, yielding a fixed inventory of threshold rules that later patients can only activate, not modify. For a patient-endpoint-window tuple (i, t, W ), each tree b in the window-specific XGBoost ensemble activates one leaf ℓ. The corresponding root-to-leaf path defines one tree-path evidence unit indexed by the source tuple (t, W, b, ℓ ). The source tuple records provenance, while the path records the satisfied threshold conditions. We define a simple leaf score for first-stage candidate pruning, 
+
+sleaf (e) = log(1 + nleaf (W, b, ℓ )) |pleaf (W, b, ℓ ) − p0| , (2) where p0 is the training-set base rate, and pleaf and nleaf are the empirical positive rate and support of the leaf on the training split. Within each (i, t, W ), we retain the top M activated leaves by sleaf .
+
+Tree-to-Evidence Mapper. TEM maps each activated root-to-leaf path to a source-traceable text unit for the LM classifier. Each unit stores its source tuple (t, W, b, ℓ ), identifying the source-window endpoint, window size, tree, and leaf, so the original path is recoverable. We refer to each rendered XGBoost split along an activated path as a tree-path predicate, i.e., a deterministic threshold condition on a window-summary feature. Let Pred( e) denote the canonical deterministic rendering of the resulting path predicates. Fixed templates convert raw split inequalities into natural-language predicate text, e.g., x > 40 becomes “ x is higher than 40.” Path canonicalization merges redundant bounds and removes feature-range restatements before caching; see Appendix C.3.1. Because not every path warrants a task-relevant clinical gloss, we use a local LLM offline at the leaf level to annotate each predicate using Pred( e) and the task description. The annotator outputs 
+
+g(e) ∈ { 0, 1} and produces Gloss( e) only when g(e) = 1 ; in that case, the final text appends cg: 
+
+Gloss( e) to Pred( e), and otherwise uses Pred( e) alone. Glosses are cached, reused across patients, and never replace or modify the deterministic predicate text, which remains the source-traceable evidence anchor. Table 1 shows one example; Appendix C.4 provides the annotation prompt. 
+
+Compact Evidence Selector. Multi-scale routing generates many activated paths per patient across prediction times, look-back windows, and XGBoost trees. The CES module selects a compact subset of these evidence units before they are assembled as the LM classifier input. For each evidence unit eij , we construct a 72-dimensional selector token uij = [ P v ij ; mij ], where vij is a fixed 4Table 1: Example TEM rendering for one activated PhysioNet 2019 leaf with g(e) = 1 . The source tuple identifies the prediction time, window, tree, and leaf; the final evidence text unit is Pred( e)
+
+followed by cg: Gloss( e).            
+
+> Field Example Source tuple (t= 24h , W = 8h , b = 7 , ℓ = 26) , interval [16 ,24]h
+> Path predicates MAP_min <= 65; HR_last > 110; Lactate_max > 2.0
+> Pred( e)From 16:00 to 24:00: minimum MAP is at most 65; last HR is higher than 110; maximum lactate is higher than 2.0.
+> Gloss( e)compatible with hypotension, tachycardia, and elevated lactate.
+
+cached embedding of the corresponding tree-path evidence text, P is a trainable linear projection to 64 dimensions, and mij ∈ R8 contains scalar metadata. The metadata covers temporal/window information, XGBoost leaf statistics, text length, and a binary gloss-availability indicator; the exact fields are listed in Appendix D.1. A lightweight Transformer contextualizes the candidate tokens and a linear gate produces margins and selection probabilities: 
+
+hij = Tϕ(ui1, . . . , u iN i )j , rij = w⊤ 
+
+> r
+
+hij + br , qij = σ(rij ).
+
+For greedy assembly, CES keeps positive-margin evidence units, supplements them with the highest-margin remaining units when fewer than Kmin are selected to avoid all-reject inputs, and enforces the final budget by retaining the top-K units by margin. 
+
+Self-critical selector learning. Evidence selection is discrete, and the quality of a selected set is observed only after the LM classifier reads the assembled input and incurs prediction loss. We therefore train CES with a self-critical policy-gradient objective [ 17 ]. For each patient, we sample selector actions zsij ∼ Bernoulli( qij ) and use the greedy baseline zgij = 1[rij > 0] . Both action sets are passed through the same Kmin floor and final top-K cap, yielding Ssi and Sgi .The LM classifier reads two assemblies that share the static prefix ci and differ only in the selected tree-path evidence suffix. Let ℓsi and ℓgi denote the binary cross-entropy task losses for the sampled and greedy assemblies. We train the LM classifier and classification head on both: 
+
+Ltask = 12|B| 
+
+X
+
+> i∈B
+
+(ℓsi + ℓgi ) . (3) The selector receives a normalized self-critical advantage, 
+
+ˆAi = stopgrad 
+
+ (ℓgi − ℓsi ) − μB
+
+σB + ϵ
+
+
+
+, (4) where μB and σB are mini-batch statistics. Thus, sampled evidence receives a positive advantage when it improves prediction loss over the greedy assembly for the same patient. The selector loss is 
+
+LSC sel = − 1
+
+|B| 
+
+X
+
+> i∈B
+
+ˆAiNiX
+
+> j=1
+
+zsij log qij + (1 − zsij ) log(1 − qij ) . (5) The full objective is 
+
+L = Ltask + λsel LSC sel − λent H(πϕ). (6) where H(πϕ) is the entropy of the Bernoulli selection policy. The XGBoost models, predicate verbalizations, optional glosses, and evidence-text embedding cache are fixed, while the selector-token projection, CES, and the LM classifier are trained jointly. 
+
+4 Experiments 
+
+Datasets and tasks. We evaluate on three public ICU benchmarks: PhysioNet 2012 (P12) in-hospital mortality [ 20 ], MIMIC-III in-hospital mortality [ 10 ], and PhysioNet 2019 (P19) 6-hour-ahead sepsis onset [ 18 ]. All methods use identical train/validation/test cohorts. Appendix A.1 reports source preprocessing, cohort filters, excluded-visit counts, split sizes, and positive rates. 5Baselines. We compare against two groups of baselines. First, we evaluate text-based EHR time-series interfaces: WRDP [ 4], Record2Vec [ 7], Decode Like a Clinician [ 3 ], and TimeCP [ 13 ]. For each interface family, we report a faithful variant that preserves the original-style generator, embedder, and predictor, and an adapted variant that keeps the same patient text but replaces the final predictor with the BioClinical ModernBERT [ 21 ] used by TreeText-CTS. This adapted setting isolates representation quality from the downstream encoder. Second, we compare against numerical irregular-time-series models: Last Observation Carried Forward (LOCF) LSTM [ 5 ], LOCF Transformer [ 23 ], GRU-D [ 2], mTAND Transformer [ 19 ], SeFT [ 6], STraTS [ 22 ], KEDGN [ 14 ], and DuETT [ 12 ]. Full text-baseline interface instantiations are summarized in Table A.5, and numerical-baseline training protocols are given in Appendix A.2. 
+
+TreeText-CTS configuration. We use the tree-to-evidence pipeline from Section 3. XGBoost ensembles are trained separately for seven look-back windows, W ∈ { 1, 2, 4, 8, 16 , 32 , 48 } hours, using the window-summary bank in Section 3. Each activated leaf is converted into deterministic predicate text, optionally augmented with a cached clinical gloss when the leaf is judged clinically meaningful. For TreeText-CTS, leaf-level clinical-meaningfulness judgments and optional glosses are generated offline with Qwen3.5-27B [ 16 ] and cached once per unique tree leaf. These calls are not patient-level generation and are not performed during validation/test inference. For CES, we compute cached evidence-text embeddings using Qwen3-Embedding-8B [ 29 ] and project them to 64 dimensions through the trainable selector projection described in Section 3. For Model-based text baselines, Qwen3.5-27B is used to generate the corresponding patient-level summaries or contextualized patient text according to each baseline interface; these patient-level generation calls are counted in the online latency protocol when required at test time. The tree inventory, leaf verbalization cache, and evidence-text embedding cache are built from the training split and then fixed for validation and test patients. Unless stated otherwise, TreeText-CTS uses top-M = 5 candidate leaves per (i, t, W ), minimum-selection floor Kmin = 5 , final evidence budget K = 30 , and BioClinical ModernBERT as the LM classifier. Implementation details, the gloss annotation prompt, and sensitivity analyses are reported in Appendices B.3, B.4, C.4, and D.1. 
+
+Evaluation protocol. We report AUROC and AUPRC as the primary metrics. Results are mean ±
+
+standard deviation over three independent random seeds. For each seed, checkpoints are selected by validation AUROC and evaluated once on the held-out test set. Validation labels are used only for learning-rate and best epoch model selection; test labels are used to estimate final perfomance. Online latency is measured as end-to-end wall-clock time per test patient after model and cache loading, with the full timing protocol in Appendix D.2. 
+
+5 Results and discussion 
+
+Overview. We evaluate TreeText-CTS along three axes: (1) whether tree-path evidence units improve LM inputs over existing text interfaces for irregular EHR time series, (2) whether the gains come from Tree-to-Evidence Mapper, Compact Evidence Selection, optional clinical glosses, and language-based composition, and (3) how its prediction accuracy, readability, and traceability compare with numerical time-series models. 
+
+Tree-path evidence yields a stronger text-based interface for irregular EHR trajectories. Ta-ble 2 compares TreeText-CTS with existing text-based EHR time-series interfaces under faithful and adapted variants. TreeText-CTS obtains the highest AUROC and AUPRC point estimates across all three benchmarks among the evaluated text-interface baselines. Relative to the strongest text-interface baseline on each dataset (WRDP-Adapted on PhysioNet 2012, Decode-Faithful on MIMIC-III, and WRDP-Adapted on PhysioNet 2019), TreeText-CTS improves absolute AUROC by 0.034, 0.019, and 0.021, and absolute AUPRC by 0.060, 0.072, and 0.097, respectively. The adapted variants further control for the final LM classifier by replacing each baseline’s original predictor with the same BioClinical ModernBERT architecture used by TreeText-CTS; under this controlled LM-classifier setting, prior patient-level text interfaces still remain below the selected tree-path evidence interface. Table 2 also shows a favorable operational profile. TreeText-CTS is the only evaluated interface that exposes a compact selected sequence of readable source-traceable evidence units while requiring nei-ther patient-level free-form generation nor inference-time autoregressive decoding. Raw-serialization 6Table 2: Text-based EHR time-series interface comparison. Faithful variants preserve the original-style predictor, whereas Adapted variants keep the same text representation but use BioClinical ModernBERT. Metrics are test mean ±std. No patient gen. , No AR decode , and Traceable evid. 
+
+indicate whether the method avoids patient-level free-form generation, avoids inference-time autore-gressive decoding, and exposes a readable, source-traceable evidence sequence, respectively. Online latency follows the end-to-end protocol in Appendix D.2.                                                  
+
+> Method No patient gen. No AR decode Traceable evid. Online lat. (s/pt) P2012 MIMIC-III P2019 AUROC AUPRC AUROC AUPRC AUROC AUPRC WRDP-Faithful ✓✓✗0.299 0.7715
+> ±0.0019
+> 0.3528
+> ±0.0001
+> 0.7543
+> ±0.0028
+> 0.2958
+> ±0.0035
+> 0.8509
+> ±0.0012
+> 0.3038
+> ±0.0096
+> WRDP-Adapted ✓✓✗0.071 0.8236
+> ±0.0008
+> 0.4636
+> ±0.0181
+> 0.7843
+> ±0.0017
+> 0.3580
+> ±0.0089
+> 0.8853
+> ±0.0042
+> 0.3792
+> ±0.0025
+> Record2Vec-Faithful ✗✗✗272.308 0.7720
+> ±0.0006
+> 0.4033
+> ±0.0020
+> 0.7839
+> ±0.0028
+> 0.3738
+> ±0.0009
+> 0.7450
+> ±0.0024
+> 0.1151
+> ±0.0029
+> Record2Vec-Adapted ✗✗✗272.228 0.7675
+> ±0.0109
+> 0.3788
+> ±0.0273
+> 0.8040
+> ±0.0005
+> 0.3692
+> ±0.0014
+> 0.7894
+> ±0.0025
+> 0.1636
+> ±0.0065
+> Decode-Faithful ✓✓✗0.213 0.7821
+> ±0.0217
+> 0.4376
+> ±0.0310
+> 0.8394
+> ±0.0126
+> 0.4292
+> ±0.0041
+> 0.7913
+> ±0.0236
+> 0.3266
+> ±0.0072
+> Decode-Adapted ✓✓✗0.074 0.7854
+> ±0.0031
+> 0.3598
+> ±0.0001
+> 0.7933
+> ±0.0026
+> 0.3629
+> ±0.0060
+> 0.8118
+> ±0.0041
+> 0.2448
+> ±0.0011
+> TimeCP-Faithful ✗✗✗273.473 0.5663
+> ±0.0037
+> 0.1579
+> ±0.0149
+> 0.6120
+> ±0.0020
+> 0.1453
+> ±0.0051
+> 0.5266
+> ±0.0117
+> 0.0457
+> ±0.0276
+> TimeCP-Adapted ✗✗✗272.228 0.7999
+> ±0.0213
+> 0.4156
+> ±0.0142
+> 0.8065
+> ±0.0086
+> 0.4110
+> ±0.0090
+> 0.7949
+> ±0.0006
+> 0.1520
+> ±0.0040
+> TreeText-CTS (Ours) ✓✓✓0.094 0.8571
+> ±0.0038
+> 0.5239
+> ±0.0004
+> 0.8579
+> ±0.0015
+> 0.5011
+> ±0.0090
+> 0.9066
+> ±0.0045
+> 0.4757
+> ±0.0248
+
+interfaces such as WRDP and Decode retain source traceability, but they do so by passing redundant observation lists rather than compactly readable evidence units. TreeText-CTS’s measured online latency remains comparable to the fastest adapted baselines, while delivering consistently higher AUROC and AUPRC; in contrast to patient-level generative interfaces, it avoids large generation-time overhead through cached leaf-level evidence and a forward-only encoder pass. 
+
+What the component ablations establish. Table 3 separates the contributions of tree-path evidence units, selection by CES, optional clinical glosses, and LM-classifier composition. First, the XGB-only aggregation controls show that the gain is not simply inherited from the frozen window-specific XGBoost models. Relative to the stronger XGB-only aggregation in each dataset, TreeText-CTS improves AUROC by 0.022–0.048 and AUPRC by 0.043–0.224. Second, learned selection by CES matters: replacing CES with leaf-score top-K evidence consistently lowers performance by 0.017– 0.034 AUROC and 0.032–0.126 AUPRC. Third, clinical glosses provide useful auxiliary hints as removing glosses while retaining deterministic predicate text causes smaller drops than removing learned selection. Fourth, the leaf-ID controls show that selected tree identities already carry strong predictive signal, but converting selected paths into readable evidence units improves AUPRC over a non-readable leaf-ID MLP on all three datasets. Together, these ablations support a local-to-global evidence composition view in which tree paths expose local evidence, CES assembles a budgeted subset from evidence-text embeddings and scalar metadata, and the LM classifier composes the selected source-traceable units. Tables A.14 and A.15 show that selector-side evidence representations and domain-aligned LM pretraining contribute. 
+
+CES margins rank tree-path evidence units beyond score, recency, or gloss shortcuts. Fig-ure 2 analyzes CES from two complementary views: a fixed-count evidence-budget sweep and the enrichment profile of the evidence units selected by the trained selector. In the left panel, every selector exposes exactly K tree-path evidence units to the same LM classifier, thereby isolating evidence-ranking quality from input-length effects. On PhysioNet 2012, CES top-K is the strongest selector throughout the practical range K ≥ 5, outperforming leaf-score, recency, and random top-K
+
+selection in AUPRC. The same qualitative AUROC pattern is reported in Appendix B. Since the default K = 30 operating point is already evaluated in Table 3, this sweep is used mainly to interpret the selector, showing that the learned CES define a useful utility ordering over candidate evidence units rather than merely increasing the amount of text read by the classifier. The bottom-K diagnostic 7Table 3: Component ablation and diagnostic controls. Cells report test AUROC/AUPRC means over independent seeds. CG denotes optional clinical glosses, CES the Compact Evidence Selector, 
+
+LM the BioClinical ModernBERT classifier, and Tree the XGBoost tree-evidence source. All rows use the same final evidence budget unless noted. Bold marks the best point estimate in each metric column. 
+
+Method CG CES LM Tree P2012 MIMIC-III P2019 AUROC AUPRC AUROC AUPRC AUROC AUPRC 
+
+Text-evidence pipeline ablations 
+
+TreeText-CTS w/o clinical gloss – ✓ ✓ ✓ 0.8531 0.4834 0.8449 0.4620 0.9039 0.4664 Leaf-score top-K evidence + gloss ✓ – ✓ ✓ 0.8404 0.4915 0.8255 0.4398 0.8728 0.3499 Leaf-score top-K + predicate-only, no CG/CES – – ✓ ✓ 0.8260 0.4798 0.8271 0.4350 0.8766 0.3661 
+
+Leaf-ID controls without an LM classifier 
+
+Heuristic top-K leaf-ID MLP – – – ✓ 0.8224 0.4805 0.8215 0.4444 0.8931 0.4301 CES-no-LM leaf-ID MLP – ✓ – ✓ 0.8478 0.5061 0.8526 0.4822 0.8815 0.4194 Reused-CES leaf-ID MLP † – ✓† – ✓ 0.8528 0.5070 0.8597 0.4903 0.8819 0.4080 
+
+XGB-only aggregation controls 
+
+XGB multi-window mean – – – ✓ 0.8355 0.4475 0.8346 0.4051 0.8583 0.2388 XGB multi-window max – – – ✓ 0.8316 0.4810 0.7925 0.4066 0.8435 0.2516 
+
+TreeText-CTS (Ours) ✓ ✓ ✓ ✓ 0.8571 0.5239 0.8579 0.5011 0.9066 0.4757 
+
+A dash indicates that the component is absent or not applicable. For text-evidence rows without CES, evidence units are selected by fixed leaf-score top-K under the same budget as TreeText-CTS. Leaf-ID MLP controls remove readable text evidence and the LM classifier: the selected leaves are encoded as a sparse multi-hot vector over source-window endpoints, window scales, tree indices, and leaf IDs, then passed to a 3-layer MLP. Heuristic top-K uses fixed leaf-score selection. CES-no-LM trains the same compact selector architecture using only the leaf-ID MLP prediction objective. XGB multi-window mean and max are non-text controls that aggregate XGBoost probabilities over candidate endpoints and window sizes by mean or max, respectively, without a selector or LM reader. †Reused-CES freezes the selector policy learned by full TreeText-CTS and trains only the diagnostic MLP. 5 10 15 20 25 30 35                              
+
+> Evidence budget K
+> 0.35
+> 0.40
+> 0.45
+> 0.50
+> Test AUPRC
+> K = 30
+> P2012 budget sweep (AUPRC)
+> g(e) = 1
+> g(e) = 0
+> 1.27 1.11 0.52
+> 0.78 0.92 1.14
+> Clinical gloss
+> Recent ≥0.9
+> Mid 0.6-0.9
+> Old < 0.6
+> 2.81 3.24 2.31
+> 0.84 0.72 0.71
+> 0.34 0.45 0.22
+> Recency
+> P2012 MIMIC-III P2019
+> 1h
+> 2h
+> 4h
+> 8h
+> 16h
+> 32h
+> 48h
+> 0.25 0.16 0.28
+> 0.50 0.37 0.39
+> 0.76 0.82 0.97
+> 1.59 2.29 2.12
+> 4.12 6.78 3.12
+> 7.02 11.2 3.75
+> 7.18 11.2 3.99
+> Window size
+> −3
+> −2
+> −1
+> 0
+> 1
+> 2
+> 3
+> log 2 enrichment
+> Learned CES selection profile
+> CES-margin top-K
+> CES bottom-K diagnostic
+> Leaf-score top-K
+> Recency top-K
+> Random top-K
+
+Figure 2: Selector behavior and evidence efficiency. Left: P2012 AUPRC at matched evidence budgets, comparing CES-margin top-K against leaf-score, recency, random, and bottom-K selectors with the same LM classifier. Right: enrichment of selected evidence relative to the candidate pool. further supports this interpretation, as selecting the lowest-margin evidence units from CES leads to weaker and more variable performance than selecting the highest-margin units. The right panel profiles the final evidence units selected by the trained CES relative to the candidate pool, using the enrichment statistic defined in Appendix B.3. CES tends to select more recent evidence while suppressing old evidence, although this behavior is not reducible to a recency-only shortcut, since the explicit recency top-K selector underperforms CES in the fixed-count sweep. The selected evidence is also concentrated in longer look-back windows, especially 16–48 hours, indicating that CES tends to select recent prediction times with summaries that capture sustained abnormalities rather than isolated short-window fluctuations. Gloss availability is not the dominant selection signal either. Glossed evidence is mildly enriched on PhysioNet 2012 and MIMIC-III, but depleted on PhysioNet 2019, where TreeText-CTS still achieves the strongest text-based AUPRC. Together, these results suggest that CES is neither a gloss detector nor a simple recency rule. Instead, it learns a task-dependent ranking over tree-path evidence units that combines temporal position, window scale, and path-level predictive utility. 8Table 4: Comparison with numerical baselines. Metrics are test mean ±std over three seeds.                                                               
+
+> Method P2012 MIMIC-III P2019 AUROC AUPRC AUROC AUPRC AUROC AUPRC LOCF LSTM 0.8192 ±0.0044 0.4548 ±0.0149 0.8240 ±0.0016 0.4811 ±0.0113 0.8514 ±0.0043 0.2392 ±0.0064 LOCF Transformer 0.8197 ±0.0036 0.4327 ±0.0037 0.8230 ±0.0004 0.4465 ±0.0081 0.8741 ±0.0043 0.3296 ±0.0100 GRU-D 0.8595 ±0.0028 0.5383 ±0.0082 0.8541 ±0.0015 0.5008 ±0.0098 0.9134 ±0.0025 0.4637 ±0.0160 STraTS 0.8702 ±0.0041 0.5543 ±0.0088 0.8459 ±0.0081 0.4705 ±0.0218 0.9174 ±0.0004 0.4579 ±0.0031 mTAND 0.8397 ±0.0031 0.5100 ±0.0036 0.8399 ±0.0021 0.4603 ±0.0067 0.8381 ±0.0069 0.2629 ±0.0097 SEFT 0.8278 ±0.0069 0.4646 ±0.0092 0.8146 ±0.0075 0.4034 ±0.0116 0.9041 ±0.0024 0.3969 ±0.0095 KEDGN 0.8661 ±0.0037 0.5374 ±0.0071 0.8425 ±0.0085 0.4734 ±0.0116 0.9084 ±0.0047 0.3906 ±0.0039 DuETT 0.8672 ±0.0021 0.5420 ±0.0057 0.8460 ±0.0042 0.4576 ±0.0073 0.9033 ±0.0033 0.4368 ±0.0296
+> TreeText-CTS (Ours) 0.8571 ±0.0038 0.5239 ±0.0004 0.8579 ±0.0015 0.5011 ±0.0090 0.9066 ±0.0045 0.4757 ±0.0248
+
+Positioning against numerical time-series models. Table 4 positions TreeText-CTS against numerical time-series models. These models remain strong, with STraTS leading on PhysioNet 2012 and STraTS/GRU-D leading on PhysioNet 2019 AUROC. TreeText-CTS nevertheless obtains the best point estimates on MIMIC-III AUROC/AUPRC and PhysioNet 2019 AUPRC, while exposing a sequence of human-readable, source-traceable tree-path evidence units as the classifier input. We therefore do not claim uniform statistical superiority over numerical models, but rather a competitive operating point combining accuracy with readable, traceable evidence. 
+
+Construction-level auditability. TreeText-CTS provides construction-level auditability by making the selected evidence units the LM input itself. Each unit indexes its source time, look-back window, tree and leaf identifiers, deterministic path predicates, and any cached clinical gloss, allowing predictions to be inspected through human-readable, source-traceable evidence. Appendix C.1 details these guarantees and provides a held-out evidence-card case study. 
+
+Takeaway. The results support three claims. First, tree-path evidence units provide a stronger text-based interface than evaluated raw-serialization, generated, or per-event patient-text interfaces for the irregular EHR tasks. Second, the final operating point depends on the combination of tree-grounded local evidence, learned selection, optional gloss hints, and LM classifier composition. Third, TreeText-CTS narrows the accuracy gap to numerical time-series models while exposing compact human-readable, source-traceable evidence-unit classifier inputs. The central empirical message is that language models can support clinical time-series prediction by composing compact, deterministic tree evidence, rather than parsing raw irregular trajectories or generating patient-level narratives. 
+
+6 Limitations 
+
+TreeText-CTS exposes compact, human-readable, source-traceable classifier inputs, but such construction-level auditability does not guarantee clinical correctness, causality, fairness, or cal-ibration. Clinical glosses are auxiliary offline hints; they may be incomplete or unsupported, and the canonical deterministic predicates remain the recoverable evidence anchors. The method is limited by its tree ensemble, summary bank, and candidate retrieval, so patterns absent from these components cannot be selected by CES. Our retrospective evaluation on three public ICU benchmarks supports the proposed text interface, not clinical deployment. The exposed evidence is for inspection, not a replacement for clinical judgment. 
+
+7 Conclusion 
+
+We introduced TreeText-CTS, a framework that converts irregular clinical time series into human-readable, source-traceable tree-path evidence, uses CES to select a compact subset, and applies a clinical LM classifier for prediction. Across three ICU benchmarks, TreeText-CTS achieves the strongest point estimates among evaluated text-based EHR time-series interfaces while remaining competitive with numerical time-series models. Ablations show that tree-path evidence, learned budgeted selection, optional clinical glosses, and LM composition contribute to performance. Overall, TreeText-CTS supports LM-based clinical time-series prediction through a deterministic, source-traceable evidence interface while maintaining competitive performance. 9References 
+
+[1] Elham Asgari, Nina Montaña-Brown, Magda Dubois, Saleh Khalil, Jasmine Balloch, Joshua Au Yeung, et al. A framework to assess clinical safety and hallucination rates of llms for medical text summarisation. npj Digital Medicine , 8:274, 2025. doi: 10.1038/s41746-025-01670-7. [2] Zhengping Che, Sanjay Purushotham, Kyunghyun Cho, David Sontag, and Yan Liu. Recurrent neural networks for multivariate time series with missing values. Scientific Reports , 8(1):6085, 2018. [3] Daniel Fadlon, David Dov, Aviya Bennett, Daphna Heller-Miron, Gad Levy, Kfir Bar, and Ahuva Weiss-Meilik. Decode like a clinician: Enhancing llm fine-tuning with temporal structured data representation. In Proceedings of the 14th International Joint Conference on Natural Language Processing and the 4th Conference of the Asia-Pacific Chapter of the Association for Computational Linguistics , pages 1906–1922. The Asian Federation of Natural Language Processing and The Association for Computational Linguistics, 2025. [4] Yanjun Gao, Skatje Myers, Shan Chen, Dmitriy Dligach, Timothy A. Miller, Danielle Bitterman, Matthew Churpek, and Majid Afshar. When raw data prevails: Are large language model em-beddings effective in numerical data representation for medical machine learning applications? In Findings of the Association for Computational Linguistics: EMNLP 2024 , pages 5414–5428. Association for Computational Linguistics, 2024. [5] Sepp Hochreiter and Jürgen Schmidhuber. Long short-term memory. Neural Computation , 9 (8):1735–1780, 1997. [6] Max Horn, Michael Moor, Christian Bock, Bastian Rieck, and Karsten Borgwardt. Set functions for time series. In International Conference on Machine Learning , pages 4353–4363. PMLR, 2020. [7] Zongliang Ji, Yifei Sun, Andre Carlos Kajdacsy-Balla Amaral, Anna Goldenberg, and Rahul G. Krishnan. Can we generate portable representations for clinical time series data using LLMs? In The Fourteenth International Conference on Learning Representations , 2026. URL https: //openreview.net/forum?id=pXw0uRTSKT . Poster. [8] Pengcheng Jiang, Cao Xiao, Adam Richard Cross, and Jimeng Sun. GraphCare: Enhancing healthcare predictions with personalized knowledge graphs. In International Conference on Learning Representations , 2024. [9] Pengcheng Jiang, Cao Xiao, Minhao Jiang, Parminder Bhatia, Taha Kass-Hout, Jimeng Sun, and Jiawei Han. Reasoning-enhanced healthcare predictions with knowledge graph community retrieval. In International Conference on Learning Representations , 2025. [10] Alistair E. W. Johnson, Tom J. Pollard, Lu Shen, Li-wei H. Lehman, Mengling Feng, Moham-mad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G. Mark. Mimic-iii, a freely accessible critical care database. Scientific Data , 3:160035, 2016. [11] Jitendra Jonnagaddala and Zoie Shui-Yee Wong. Privacy preserving strategies for electronic health records in the era of large language models. npj Digital Medicine , 8(34), 2025. doi: 10.1038/s41746-025-01429-0. [12] Alex Labach, Aslesha Pokhrel, Xiao Shi Huang, Saba Zuberi, Seung Eun Yi, Maksims Volkovs, Tomi Poutanen, and Rahul G. Krishnan. Duett: Dual event time transformer for electronic health records. In Proceedings of the 8th Machine Learning for Healthcare Conference , volume 219 of Proceedings of Machine Learning Research , pages 403–422. PMLR, 2023. [13] Geon Lee, Wenchao Yu, Kijung Shin, Wei Cheng, and Haifeng Chen. TimeCAP: Learning to contextualize, augment, and predict time series events with large language model agents. In 
+
+Proceedings of the Thirty-Ninth AAAI Conference on Artificial Intelligence , pages 18082–18090. AAAI Press, 2025. doi: 10.1609/AAAI.V39I17.33989. URL https://doi.org/10.1609/ aaai.v39i17.33989 .10 [14] Yicheng Luo, Zhen Liu, Linghao Wang, Junhao Zheng, Binquan Wu, and Qianli Ma. Knowledge-empowered dynamic graph network for irregularly sampled medical time series. In Advances in Neural Information Processing Systems , 2024. [15] Jaehyun Nam, Kyuyoung Kim, Seunghyuk Oh, Jihoon Tack, Jaehyung Kim, and Jinwoo Shin. Optimized feature generation for tabular data via llms with decision tree reasoning. In Advances in Neural Information Processing Systems , 2024. [16] Qwen Team. Qwen3.5: Towards native multimodal agents, February 2026. URL https: //qwen.ai/blog?id=qwen3.5 .[17] Steven J. Rennie, Etienne Marcheret, Youssef Mroueh, Jarret Ross, and Vaibhava Goel. Self-critical sequence training for image captioning. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 2017. [18] Matthew A. Reyna, Christopher Josef, Russell Jeter, Supreeth P. Shashikumar, M. Brandon Westover, Shamim Nemati, Gari D. Clifford, and Ashish Sharma. Early prediction of sepsis from clinical data: The physionet/computing in cardiology challenge 2019. Critical Care Medicine , 48(2):210–217, 2020. [19] Satya Narayan Shukla and Benjamin M. Marlin. Multi-time attention networks for irregularly sampled time series. In International Conference on Learning Representations , 2021. [20] Ikaro Silva, George Moody, Daniel J. Scott, Leo Anthony Celi, and Roger G. Mark. Predicting in-hospital mortality of icu patients: The physionet/computing in cardiology challenge 2012. In 
+
+Computing in Cardiology , pages 245–248, 2012. [21] Thomas Sounack, Joshua Davis, Brigitte Durieux, Antoine Chaffin, Tom J. Pollard, Eric Lehman, Alistair E. W. Johnson, Matthew McDermott, Tristan Naumann, and Charlotta Lindvall. Bioclinical modernbert: A state-of-the-art long-context encoder for biomedical and clinical nlp. 
+
+arXiv preprint arXiv:2506.10896 , 2025. [22] Sindhu Tipirneni and Chandan K. Reddy. Self-supervised transformer for sparse and irregularly sampled multivariate clinical time-series. ACM Transactions on Knowledge Discovery from Data , 16(6):1–17, 2022. [23] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Advances in Neural Informa-tion Processing Systems , volume 30, 2017. [24] Prathiksha Rumale Vishwanath, Simran Tiwari, Tejas Ganesh Naik, Sahil Gupta, Dung Ngoc Thai, Wenlong Zhao, Sunjae Kwon, Victor Ardulov, Karim Tarabishy, Andrew McCallum, and Wael Salloum. Faithfulness hallucination detection in healthcare AI. In KDD-AIDSH Workshop ,2024. [25] Michael Wornow, Suhana Bedi, Miguel Angel Fuentes Hernandez, Ethan Steinberg, Jason Alan Fries, Christopher Ré, Sanmi Koyejo, and Nigam Shah. Context clues: Evaluating long context models for clinical prediction tasks on ehr data. In International Conference on Learning Representations , 2025. [26] Zhenbang Wu, Anant Dadu, Michael Nalls, Faraz Faghri, and Jimeng Sun. Instruction tun-ing large language models to understand electronic health records. In Advances in Neural Information Processing Systems, Datasets and Benchmarks Track , 2024. [27] Hangting Ye, Jinmeng Li, He Zhao, Dandan Guo, and Yi Chang. LLM meeting decision trees on tabular data. In Advances in Neural Information Processing Systems , 2025. URL 
+
+https://openreview.net/forum?id=SRDF3RV0KP . Spotlight. [28] Xiang Zhang, Marko Zeman, Theodoros Tsiligkaridis, and Marinka Zitnik. Graph-guided network for irregularly sampled multivariate time series. In International Conference on Learning Representations , 2022. [29] Yanzhao Zhang, Mingxin Li, Dingkun Long, Xin Zhang, Huan Lin, Baosong Yang, Pengjun Xie, An Yang, Dayiheng Liu, Junyang Lin, Fei Huang, and Jingren Zhou. Qwen3 embed-ding: Advancing text embedding and reranking through foundation models. arXiv preprint arXiv:2506.05176 , 2025. 11 Appendix organization. The appendix is organized into four sections. Appendix A gives dataset, baseline, and full benchmark details. Appendix B collects component ablations, budget sweeps, selector analyses, LM classifier ablations, and retrieval sensitivity. Appendix C states the construction-level auditability guarantees and documents verbalization, predicate canonicalization, and clinical glossing. Appendix D reports implementation details, latency measurement, reproducibility, code and data access, compute resources, and licenses. Unless otherwise stated, reported values are test-set mean ± standard deviation over three independent random seeds. AUROC and AUPRC are the primary metrics; F1 is included for completeness. 
+
+A Additional experimental setup and full benchmark results 
+
+A.1 Datasets and uniform cohort filters Source preprocessing. We use established sparse clinical time-series preprocessing conventions before applying our uniform cohort filters. PhysioNet 2012 and MIMIC-III mortality follow the SeFT preprocessing convention [ 6], and PhysioNet 2019 follows the Raindrop preprocessing convention [ 28 ]. After this source preprocessing step, all raw-text baselines, numerical ISMTS baselines, and tree-evidence methods are evaluated on the same post-filter patient cohorts. Table A.1: Source preprocessing conventions used before applying uniform cohort filters.     
+
+> Dataset Source preprocessing convention PhysioNet 2012 SeFT preprocessing pipeline [6] MIMIC-III mortality SeFT preprocessing pipeline [6] PhysioNet 2019 Raindrop preprocessing pipeline [28]
+
+Task protocol. Table A.2 summarizes the prediction protocol and leakage-prevention convention for each benchmark. For mortality prediction on PhysioNet 2012 and MIMIC-III, inputs are restricted to observations within the first 48 hours. For PhysioNet 2019 sepsis forecasting, we follow the Raindrop preprocessing convention, which constructs one patient-level prediction example per encounter using observations up to Tmax = 60 h. We apply the same cohort-level exclusions and sparsity filter across all representation pipelines. Table A.2: Task-specific prediction protocol.             
+
+> Dataset Input horizon Target Leakage prevention PhysioNet 2012 first 48h in-hospital mortality no observations after 48h MIMIC-III mortality first 48h in-hospital mortality no observations after 48h PhysioNet 2019 first 60h patient-level sepsis prediction Raindrop preprocessing convention
+
+Uniform exclusions. After source preprocessing, we apply the same exclusion rules to every representation pipeline before constructing raw-text, numerical, or tree-evidence inputs. These filters remove samples for which at least one pipeline cannot construct a valid input, such as samples with too few non-missing measurements for stable window summaries or no measurements in the first 60h PhysioNet 2019 input window. Table A.3 reports the resulting exclusions, aggregated over all splits and affected datasets. Table A.3: Uniform exclusion rules applied after source preprocessing and before constructing raw-text, numerical, and tree-evidence representations. Counts are aggregated over all train/validation/test splits and affected datasets.          
+
+> Criterion Removed samples Positives removed Affected datasets Fewer than five measurements in the 48h input window 52 4PhysioNet 2012, MIMIC-III No measurements in the first 60h input window 31PhysioNet 2019
+
+Post-filter split statistics. Table A.4 reports the final patient-level splits after source preprocessing and uniform exclusions. Positive rates are computed after all cohort filters. 12 Table A.4: Post-filter split statistics. One sample is one patient-level prediction example. Positive rate is computed after all cohort filters.                                         
+
+> Dataset / split Total Positive Negative Positive rate PhysioNet 2012 train 7,670 1,093 6,577 14.25% PhysioNet 2012 val 1,916 273 1,643 14.25% PhysioNet 2012 test 2,400 341 2,059 14.21% MIMIC-III train 14,632 1,978 12,654 13.52% MIMIC-III val 3,208 435 2,773 13.56% MIMIC-III test 3,217 374 2,843 11.63% PhysioNet 2019 train 24,817 1,014 23,803 4.09% PhysioNet 2019 val 6,217 254 5,963 4.09% PhysioNet 2019 test 7,766 325 7,441 4.18%
+
+Why identical cohorts matter. Raw text, numerical ISMTS inputs, and tree evidence are con-structed by different preprocessing pipelines. Using identical post-filter patient cohorts ensures that reported differences are attributable to representation and model interface rather than to different underlying patient splits. 
+
+Faithful versus adapted interfaces. Table A.5 summarizes how each text baseline is instantiated. Faithful variants preserve the baseline’s original-style prediction interface. Adapted variants keep the same patient text representation but replace the final predictor with BioClinical ModernBERT, matching TreeText-CTS’s reader. This separates representation quality from downstream classifier choice. Table A.5: Text-representation baseline interfaces. Faithful variants preserve the original-style prediction interface; adapted variants keep the same patient text representation but use the same language model as TreeText-CTS.                  
+
+> Baseline family Text representation Faithful predictor Adapted predictor WRDP WRDP-Style narrative Llama-3-8B frozen mean pool + XGBoost BioClinical ModernBERT fine-tune Record2Vec Qwen3.5-27B patient summary Qwen3-Embedding + PatchTSMixer BioClinical ModernBERT fine-tune Decode Exact per-event text with 6h bins Llama-3-8B LoRA first-token P(Yes )BioClinical ModernBERT fine-tune TimeCP Qwen3.5-27B contextualized patient text Qwen3.5-27B answer-prediction log-probability BioClinical ModernBERT fine-tune
+
+Shared static-prefix protocol. All text-based methods are evaluated on the same filtered cohorts and receive the same deterministic static-covariate prefix, e.g., Age is ..., Gender is ... . For adapted encoder-based variants and TreeText-CTS, this prefix is prepended to the string read by BioClinical ModernBERT. For embedding-based variants, it is included in the text passed to Qwen3-Embedding-8B. For faithful decoder, scoring, or summarization variants, it is included immediately before the Llama-3-8B or Qwen3.5-27B call. Thus, differences among text approaches are not attributable to differential access to age or gender. 
+
+Generation and embedding backbones. Generation and embedding models follow the corre-sponding representation family rather than a single universal generator. We use Qwen3.5-27B for Qwen-based patient-summary or contextualization generation and for TreeText-CTS’s offline leaf-level clinical glosses. We use Qwen3-Embedding-8B for Qwen embedding components, including Record2Vec-style embedding and TreeText-CTS’s leaf embeddings. Llama-based faithful interfaces retain their Llama-3-8B reader, embedding, or label-scoring model. 
+
+TimeCP versus TimeCAP naming. The TimeCAP paper introduces both T IME CP, a text-only Contextualize–Predict interface, and full T IME CAP, which additionally uses a time-series encoder, retrieval, and prediction fusion. We therefore report T IME CP in our text-representation benchmark to avoid mixing patient-text baselines with extra numerical modeling components, while citing the source paper as TimeCAP. 
+
+Full metrics. Table A.6 gives the full AUROC/AUPRC/F1 companion to the main text-baseline table. 13 Table A.6: Full text-baseline results. Each metric is mean ± standard deviation. TreeText-CTS (Ours) is placed below the horizontal rule. 
+
+Method PhysioNet 2012 MIMIC-III PhysioNet 2019 AUROC AUPRC F1 AUROC AUPRC F1 AUROC AUPRC F1 WRDP-Faithful 0.7715 
+
+±0.0019 0.3528 
+
+±0.0001 0.4102 
+
+±0.0042 0.7543 
+
+±0.0028 0.2958 
+
+±0.0035 0.3579 
+
+±0.0078 0.8509 
+
+±0.0012 0.3038 
+
+±0.0096 0.3615 
+
+±0.0077 WRDP-Adapted 0.8236 
+
+±0.0008 0.4636 
+
+±0.0181 0.4884 
+
+±0.0005 0.7843 
+
+±0.0017 0.3580 
+
+±0.0089 0.4046 
+
+±0.0028 0.8853 
+
+±0.0042 0.3792 
+
+±0.0025 0.4138 
+
+±0.0009 Record2Vec-Faithful 0.7720 
+
+±0.0006 0.4033 
+
+±0.0020 0.4288 
+
+±0.0046 0.7839 
+
+±0.0028 0.3738 
+
+±0.0009 0.4040 
+
+±0.0026 0.7450 
+
+±0.0024 0.1151 
+
+±0.0029 0.1912 
+
+±0.0039 Record2Vec-Adapted 0.7675 
+
+±0.0109 0.3788 
+
+±0.0273 0.4207 
+
+±0.0191 0.8040 
+
+±0.0005 0.3692 
+
+±0.0014 0.4167 
+
+±0.0093 0.7894 
+
+±0.0025 0.1636 
+
+±0.0065 0.2387 
+
+±0.0000 Decode-Faithful 0.7821 
+
+±0.0217 0.4376 
+
+±0.0310 0.3701 
+
+±0.1213 0.8394 
+
+±0.0126 0.4292 
+
+±0.0041 0.2077 
+
+±0.0000 0.7913 
+
+±0.0236 0.3266 
+
+±0.0072 0.3839 
+
+±0.0075 Decode-Adapted 0.7854 
+
+±0.0031 0.3598 
+
+±0.0001 0.4194 
+
+±0.0002 0.7933 
+
+±0.0026 0.3629 
+
+±0.0060 0.4223 
+
+±0.0004 0.8118 
+
+±0.0041 0.2448 
+
+±0.0011 0.2810 
+
+±0.0054 TimeCP-Faithful 0.5663 
+
+±0.0037 0.1579 
+
+±0.0149 0.2895 
+
+±0.0098 0.6120 
+
+±0.0020 0.1453 
+
+±0.0051 0.2641 
+
+±0.0035 0.5266 
+
+±0.0117 0.0457 
+
+±0.0276 0.0891 
+
+±0.0252 TimeCP-Adapted 0.7999 
+
+±0.0213 0.4156 
+
+±0.0142 0.4623 
+
+±0.0000 0.8065 
+
+±0.0086 0.4110 
+
+±0.0090 0.4442 
+
+±0.0000 0.7949 
+
+±0.0006 0.1520 
+
+±0.0040 0.2304 
+
+±0.0027 
+
+TreeText-CTS (Ours) 0.8571 
+
+±0.0038 0.5239 
+
+±0.0004 0.5264 
+
+±0.0023 0.8579 
+
+±0.0015 0.5011 
+
+±0.0090 0.4958 
+
+±0.0029 0.9066 
+
+±0.0045 0.4757 
+
+±0.0248 0.4994 
+
+±0.0383 
+
+Interpretation. The adapted rows show that simply replacing a predictor with BioClinical Modern-BERT is not sufficient. Adapted WRDP and adapted TimeCP improve over some faithful variants, but they remain below TreeText-CTS because their representations are not source-traceable tree-path evidence. TimeCP-Faithful is a failure case on the 6-hour PhysioNet 2019 sepsis forecast: its AUPRC is close to the test positive rate, indicating near-random precision ranking under this highly imbalanced short-horizon prompting setup. We include both the faithful and adapted TimeCP rows to separate this answer-scoring failure from the quality of the contextualized text representation. 
+
+A.2 Numerical irregular-time-series baselines and full results Full numerical comparison. Table A.7 reports AUROC/AUPRC/F1 against numerical irregular-time-series models. This is a positioning comparison: TreeText-CTS is not intended to dominate numerical models on every metric, but to provide competitive accuracy together with source-traceable textual evidence. Table A.7: Full numerical ISMTS comparison. Each metric is mean ± standard deviation. TreeText-CTS (Ours) is placed below the horizontal rule. 
+
+Method PhysioNet 2012 MIMIC-III PhysioNet 2019 AUROC AUPRC F1 AUROC AUPRC F1 AUROC AUPRC F1 LOCF LSTM 0.8192 
+
+±0.0044 0.4548 
+
+±0.0149 0.4751 
+
+±0.0083 0.8240 
+
+±0.0016 0.4811 
+
+±0.0113 0.4706 
+
+±0.0081 0.8514 
+
+±0.0043 0.2392 
+
+±0.0064 0.3220 
+
+±0.0043 LOCF Transformer 0.8197 
+
+±0.0036 0.4327 
+
+±0.0037 0.4688 
+
+±0.0078 0.8230 
+
+±0.0004 0.4465 
+
+±0.0081 0.4641 
+
+±0.0066 0.8741 
+
+±0.0043 0.3296 
+
+±0.0100 0.3727 
+
+±0.0014 GRU-D 0.8595 
+
+±0.0028 0.5383 
+
+±0.0082 0.5402 
+
+±0.0107 0.8541 
+
+±0.0015 0.5008 
+
+±0.0098 0.4884 
+
+±0.0022 0.9134 
+
+±0.0025 0.4637 
+
+±0.0160 0.4734 
+
+±0.0138 STraTS 0.8702 
+
+±0.0041 0.5543 
+
+±0.0088 0.5489 
+
+±0.0089 0.8459 
+
+±0.0081 0.4705 
+
+±0.0218 0.4716 
+
+±0.0137 0.9174 
+
+±0.0004 0.4579 
+
+±0.0031 0.4645 
+
+±0.0050 mTAND Transformer 0.8397 
+
+±0.0031 0.5100 
+
+±0.0036 0.5130 
+
+±0.0051 0.8399 
+
+±0.0021 0.4603 
+
+±0.0067 0.4753 
+
+±0.0014 0.8381 
+
+±0.0069 0.2629 
+
+±0.0097 0.3401 
+
+±0.0150 SEFT 0.8278 
+
+±0.0069 0.4646 
+
+±0.0092 0.4733 
+
+±0.0103 0.8146 
+
+±0.0075 0.4034 
+
+±0.0116 0.4384 
+
+±0.0090 0.9041 
+
+±0.0024 0.3969 
+
+±0.0095 0.4451 
+
+±0.0113 KEDGN 0.8661 
+
+±0.0037 0.5374 
+
+±0.0071 0.5372 
+
+±0.0066 0.8425 
+
+±0.0085 0.4734 
+
+±0.0116 0.4819 
+
+±0.0163 0.9084 
+
+±0.0047 0.3906 
+
+±0.0039 0.4206 
+
+±0.0143 DuETT 0.8672 
+
+±0.0021 0.5420 
+
+±0.0057 0.5455 
+
+±0.0039 0.8460 
+
+±0.0042 0.4576 
+
+±0.0073 0.4820 
+
+±0.0078 0.9033 
+
+±0.0033 0.4368 
+
+±0.0296 0.4648 
+
+±0.0237 
+
+TreeText-CTS (Ours) 0.8571 
+
+±0.0038 0.5239 
+
+±0.0004 0.5264 
+
+±0.0023 0.8579 
+
+±0.0015 0.5011 
+
+±0.0090 0.4958 
+
+±0.0029 0.9066 
+
+±0.0045 0.4757 
+
+±0.0248 0.4994 
+
+±0.0383 
+
+Selected learning rates. Table A.8 reports the validation-selected learning rate for each numerical model and dataset. The sweep grid range is 10 −3 to 10 −5.14 Table A.8: Validation-selected learning rates for numerical ISMTS baselines.                            
+
+> Method PhysioNet 2012 MIMIC-III PhysioNet 2019 LOCF LSTM 10 −410 −410 −5
+> LOCF Transformer 10 −410 −410 −5
+> GRU-D 10 −410 −410 −4
+> STraTS 10 −510 −410 −4
+> mTAND Transformer 10 −310 −410 −4
+> SEFT 10 −310 −310 −3
+> KEDGN 10 −310 −310 −3
+> DuETT 10 −310 −410 −4
+
+Unified numerical training protocol. For all LOCF LSTM, LOCF Transformer, GRU-D, mTAND, SeFT, KEDGN, DuETT, and STraTS, we use the same patient cohorts and splits as TreeText-CTS. All models are trained with AdamW, weight decay 10 −4, early stopping on validation AUROC, and three random seeds. Inputs are normalized using training-split statistics only for each variable. Table A.9: Shared numerical-baseline training protocol unless a model-specific paper-faithful imple-mentation requires otherwise.             
+
+> Item Setting Optimizer AdamW Learning-rate sweep 10 −3to 10 −5
+> Epochs 30 maximum Early stopping validation AUROC, patience 10 Batch size 64 train / 128 validation and test Seeds 3 independent seeds Loss binary cross-entropy with logits Evaluation best-validation-AUROC checkpoint, single held-out test pass Normalization per-variable z-transform from training split only
+
+B Additional ablations and selector analyses 
+
+B.1 Full component ablations Purpose of the ablations. The ablations separate four questions: whether gloss-gated clinical glosses help beyond deterministic predicates, whether learned hard evidence selection improves over fixed leaf-score top-K selection, whether selected leaf identities alone are sufficient without a language reader, and whether XGB-only aggregation can replace the local-to-global tree-evidence pipeline. These ablations evaluate the contribution of learned budgeted selection; they do not compare all possible optimization methods for training a selector. 
+
+Text versus leaf identity. The leaf-ID controls separate predictive selection from language compo-sition. A leaf-ID MLP receives only sparse identifiers of selected leaves and therefore tests whether selected tree identities are sufficient for prediction. These rows are strong, confirming that selected leaves are predictive. However, they do not provide readable classifier inputs and underperform the full model in AUPRC on all three datasets. The largest gap appears on PhysioNet 2019, where TreeText-CTS improves AUPRC by 0.0677 over the reused-CES leaf-ID MLP. 
+
+B.2 Budget sweeps and final selection enrichment Budget sweep. Tables A.10 and A.11 report the PhysioNet 2012 budget sweep used for Figure 2. This is a matched fixed-budget analysis: every selector exposes exactly K evidence units to the same LM classifier under maximum input length 3072. The CES top-K row ranks candidates by the trained gate margin rij , while heuristic rows rank candidates by leaf score, recency, or random order. The CES bottom-K row selects the lowest-margin evidence and is included only as a diagnostic negative control. This analysis isolates evidence-ranking quality from the adaptive accept/reject behavior of the learned gate. The main paper plots AUPRC because the clinical tasks are imbalanced; Figure A.1 provides the AUROC companion. 15 Interpretation. CES top-K is the strongest selector across the practical budget range. At K = 15 ,it already exceeds every heuristic selector evaluated up to K = 35 in both AUROC and AUPRC. In contrast, CES bottom-K is both weaker and higher-variance, especially at small and middle budgets. This indicates that low learned margins correspond to unstable and weak classifier inputs, while high learned margins define a useful evidence-utility ordering. Table A.10: PhysioNet 2012 AUROC budget sweep. Every row exposes exactly K evidence units to the same LM classifier. CES bottom-K selects the lowest learned-margin evidence and is included only as a diagnostic negative control.                                                           
+
+> Selector K= 2 K= 5 K= 10 K= 15 K= 20 K= 25 K= 30 K= 35
+> Leaf-score top-K0.7963 ±0.0006 0.8030 ±0.0070 0.8118 ±0.0064 0.8187 ±0.0009 0.8246 ±0.0064 0.8356 ±0.0022 0.8404 ±0.0074 0.8415 ±0.0032
+> Random top-K0.7409 ±0.0076 0.7559 ±0.0022 0.7980 ±0.0018 0.8097 ±0.0011 0.8156 ±0.0011 0.8169 ±0.0054 0.8162 ±0.0041 0.8150 ±0.0040
+> Recency top-K0.8063 ±0.0056 0.8160 ±0.0002 0.8127 ±0.0021 0.8249 ±0.0011 0.8237 ±0.0027 0.8207 ±0.0028 0.8239 ±0.0017 0.8253 ±0.0007
+> CES top-K(ours) 0.8167 ±0.0035 0.8388 ±0.0036 0.8446 ±0.0007 0.8488 ±0.0030 0.8502 ±0.0029 0.8519 ±0.0014 0.8571 ±0.0038 0.8561 ±0.0010
+> CES bottom-Kdiagnostic 0.7745 ±0.0015 0.7884 ±0.0021 0.7921 ±0.0010 0.8017 ±0.0138 0.7758 ±0.0351 0.8110 ±0.0215 0.8232 ±0.0261 0.8167 ±0.0005
+
+Table A.11: PhysioNet 2012 AUPRC budget sweep. These values are plotted in Figure 2. Every row exposes exactly K evidence units to the same LM classifier. CES bottom-K is a low-margin diagnostic negative control.                                                           
+
+> Selector K= 2 K= 5 K= 10 K= 15 K= 20 K= 25 K= 30 K= 35
+> Leaf-score top-K0.4190 ±0.0014 0.4323 ±0.0145 0.4506 ±0.0031 0.4662 ±0.0114 0.4657 ±0.0270 0.4648 ±0.0037 0.4915 ±0.0112 0.4907 ±0.0053
+> Random top-K0.3263 ±0.0169 0.3469 ±0.0052 0.3898 ±0.0170 0.4082 ±0.0021 0.4255 ±0.0031 0.4311 ±0.0166 0.4202 ±0.0031 0.4133 ±0.0122
+> Recency top-K0.4143 ±0.0057 0.4278 ±0.0108 0.4319 ±0.0028 0.4568 ±0.0002 0.4573 ±0.0010 0.4479 ±0.0090 0.4517 ±0.0101 0.4601 ±0.0018
+> CES top-K(ours) 0.4099 ±0.0070 0.4693 ±0.0030 0.4889 ±0.0039 0.4980 ±0.0151 0.4974 ±0.0039 0.5076 ±0.0020 0.5239 ±0.0004 0.5094 ±0.0013
+> CES bottom-Kdiagnostic 0.3427 ±0.0441 0.3746 ±0.0527 0.3902 ±0.0253 0.3563 ±0.0741 0.3866 ±0.0309 0.4362 ±0.0684 0.4419 ±0.0076 0.4384 ±0.0133
+
+5 10 15 20 25 30 35 
+
+Evidence budget K 
+
+0.75 
+
+0.80 
+
+0.85 
+
+> Test AUROC
+> K=30
+
+P2012 budget sweep (AUROC) 
+
+BES top-K (ours) 
+
+BES bottom-K 
+
+XGB-score top-K 
+
+Recency top-K 
+
+Random top-K 
+
+Figure A.1: PhysioNet 2012 AUROC budget sweep. The learned CES remains above fixed leaf-score, recency, and random top-K selectors across the practical budget range. We keep AUPRC as the main-paper Figure 2 metric because the clinical tasks are imbalanced. 
+
+Final selection enrichment. Table A.12 reports selected-to-candidate enrichment ratios. Values above 1 indicate selection preference relative to the candidate pool. 
+
+Interpretation. The selector consistently enriches recent and long-window evidence. Glossability behavior is task-dependent: PhysioNet 2012 and MIMIC-III mildly enrich glossable evidence, whereas PhysioNet 2019 strongly depletes glossable evidence. This indicates that CES is not mechanically selecting every clinically glossed leaf. 
+
+B.3 Minimum-selection floor and selector-side input ablations Minimum-selection floor. The Compact Evidence Selector uses a minimum-selection floor Kmin =5 before the final budget cap K = 30 . This floor is not an additional evidence budget; it prevents all-reject collapse, where the selector rejects nearly all candidates and the reader receives an empty or uninformative text. Table A.13 ablates this floor on PhysioNet 2012. 16 Table A.12: Final selection enrichment ratio. Values above 1 indicate preference relative to the candidate pool. 
+
+Category Bucket PhysioNet 2012 MIMIC-III PhysioNet 2019 Glossability Glossable, g(e) = 1 1.27 1.11 0.52 Glossability Non-glossable, g(e) = 0 0.78 0.92 1.14 Recency recent ≥ 0.9 2.81 3.24 2.31 Recency mid 0.6–0.9 0.84 0.72 0.71 Recency old < 0.6 0.34 0.45 0.22 Window 1h 0.25 0.16 0.28 Window 2h 0.50 0.37 0.39 Window 4h 0.76 0.82 0.97 Window 8h 1.59 2.29 2.12 Window 16h 4.12 6.78 3.12 Window 32h 7.02 11.23 3.75 Window 48h 7.18 11.25 3.99 
+
+Table A.13: Minimum-selection floor ablation on PhysioNet 2012. All rows use Predicate+gloss evidence, BioClinical ModernBERT, top-M = 5 candidate retrieval, final selected-evidence budget 
+
+K = 30 . Without the floor, one of three seeds collapses; with Kmin = 5 , the main setting remains stable.                                       
+
+> Setting Seeds Collapsed seeds Test AUROC Test AUPRC Test F1 No minimum-selection floor, Kmin = 0 31/3 0.7322 ±0.1640 0.3852 ±0.1691 0.4236 ±0.1238
+> Collapsed seed under Kmin = 0 11/1 0.5004 0.1466 0.2488
+> With minimum-selection floor, Kmin = 5 30/3 0.8571 ±0.0038 0.5239 ±0.0004 0.5264 ±0.0023
+
+Selector-side inputs. The selector receives a projected leaf embedding and eight scalar metadata features. Table A.14 masks one selector-side input group at a time. The text fed to the reader remains unchanged. Table A.14: Selector-side input masking. Text fed to the reader is unchanged; only CES inputs are masked. Each dataset cell is AUROC/AUPRC. 
+
+Removed selector input PhysioNet 2012 MIMIC-III PhysioNet 2019 AUROC AUPRC AUROC AUPRC AUROC AUPRC None 0.8571 
+
+> ±0.0038
+
+0.5239 
+
+> ±0.0004
+
+0.8579 
+
+> ±0.0015
+
+0.5011 
+
+> ±0.0090
+
+0.9066 
+
+> ±0.0045
+
+0.4757 
+
+> ±0.0248
+
+Glossable scalar 0.8534 
+
+> ±0.0047
+
+0.5086 
+
+> ±0.0017
+
+0.8461 
+
+> ±0.0039
+
+0.4416 
+
+> ±0.0202
+
+0.9116 
+
+> ±0.0026
+
+0.4517 
+
+> ±0.0060
+
+XGB statistics bundle 0.8312 
+
+> ±0.0119
+
+0.4548 
+
+> ±0.0160
+
+0.8268 
+
+> ±0.0088
+
+0.4362 
+
+> ±0.0017
+
+0.9040 
+
+> ±0.0018
+
+0.4464 
+
+> ±0.0356
+
+Leaf embedding 0.8550 
+
+> ±0.0010
+
+0.5173 
+
+> ±0.0051
+
+0.8479 
+
+> ±0.0016
+
+0.4798 
+
+> ±0.0137
+
+0.9094 
+
+> ±0.0028
+
+0.4467 
+
+> ±0.0193
+
+Interpretation. Removing the minimum-selection floor makes selector training brittle: one seed collapses to near-random AUROC and very low AUPRC. The floor prevents this failure mode while preserving the final selected-evidence budget K = 30 . For selector-side inputs, masking XGB statistics causes the largest drop on PhysioNet 2012 and MIMIC-III, showing that tree-side predictive metadata is important. Masking the leaf embedding reduces AUPRC on all three datasets, with the largest AUPRC drop on PhysioNet 2019, although P2019 AUROC slightly increases when the embedding is removed. We therefore interpret the leaf embedding as improving selected-evidence ranking for precision-recall behavior rather than uniformly improving every discrimination metric. The glossability scalar is useful but task dependent, consistent with the enrichment analysis above. 
+
+Selection enrichment statistic. For the selector-profile analysis in Figure 2, we measure how often a category appears among the final selected evidence units relative to how often it appears in the candidate pool available to CES. Let Ci denote the candidate tree-path evidence pool for patient i,and let Si ⊆ Ci denote the final evidence units selected by CES after the minimum-count floor and 17 top-K budget cap. For any categorical attribute a(e), such as recency bin, look-back window, or gloss availability, the candidate-pool frequency and selected-evidence frequency of category c are computed as 
+
+ppool (c) = 
+
+P
+
+> i
+
+P 
+
+> e∈Ci
+
+1[a(e) = c]
+
+P 
+
+> i
+
+|Ci| , psel (c) = 
+
+P
+
+> i
+
+P 
+
+> e∈Si
+
+1[a(e) = c]
+
+P 
+
+> i
+
+|Si| .
+
+We define enrichment as the ratio 
+
+Enrich( c) = psel (c)
+
+ppool (c) .
+
+Thus, Enrich( c) > 1 means that category c is over-represented in the selected evidence relative to its availability in the candidate pool, whereas Enrich( c) < 1 means that it is under-represented. This normalization is important because some categories, such as particular look-back windows or glossed evidence units, may already be more common in the candidate pool before selection. 
+
+B.4 LM classifier and candidate-retrieval sensitivity LM classifier ablation. This ablation swaps the final reader while keeping Predicate+gloss evidence, top-M = 5 candidate retrieval, CES, and budget K = 30 fixed. It tests whether the gain comes from the selected evidence representation alone, from generic language pretraining, or from domain-aligned clinical pretraining. Table A.15: Language-reader ablation. BioClinical ModernBERT is the default reader in TreeText-CTS. Random-init ModernBERT uses the same architecture and tokenizer but initializes the encoder from configuration rather than pretrained weights.                                                                                               
+
+> Dataset LM backbone AUROC AUPRC F1 PhysioNet 2012 BioClinical ModernBERT 0.8571 ±0.0038 0.5239 ±0.0004 0.5264 ±0.0023
+> PhysioNet 2012 random-init ModernBERT 0.8497 ±0.0029 0.5054 ±0.0209 0.5144 ±0.0070
+> PhysioNet 2012 ModernBERT 0.8486 ±0.0026 0.4857 ±0.0021 0.5083 ±0.0064
+> MIMIC-III BioClinical ModernBERT 0.8579 ±0.0015 0.5011 ±0.0090 0.4958 ±0.0029
+> MIMIC-III random-init ModernBERT 0.8470 ±0.0009 0.4879 ±0.0001 0.4827 ±0.0009
+> MIMIC-III ModernBERT 0.8483 ±0.0014 0.4486 ±0.0011 0.4827 ±0.0053
+> PhysioNet 2019 BioClinical ModernBERT 0.9066 ±0.0045 0.4757 ±0.0248 0.4994 ±0.0383
+> PhysioNet 2019 random-init ModernBERT 0.8983 ±0.0051 0.4088 ±0.0323 0.4572 ±0.0053
+> PhysioNet 2019 ModernBERT 0.8936 ±0.0054 0.4007 ±0.0042 0.4571 ±0.0039
+
+Candidate retrieval sensitivity. Before CES applies the final selected-evidence budget K = 30 ,we retrieve a finite candidate pool of activated leaves for each patient-time-window tuple (i, t, W ).The main experiments use top-M = 5 retrieval. Increasing M gives the selector more input tokens, which increases peak GPU memory, but it does not improve AUPRC on PhysioNet 2012. Table A.16: Candidate pre-pruning sensitivity on PhysioNet 2012. All rows use Predicate+gloss evidence, BioClinical ModernBERT, final selected-evidence budget K = 30 , maximum input length 3072, 20 training epochs, and 3 random seeds. Main experiments use top-M = 5 . Peak memory is measured with nvidia-smi memory.used during one training epoch and therefore includes PyTorch caching allocator reserved blocks.                                                
+
+> Candidate retrieval P2012 AUROC P2012 AUPRC Leaves per (i, t, W )Train time / epoch Peak GPU memory top-M= 5 0.8571 ±0.0038 0.5239 ±0.0004 519.1 min 35,787 MiB ( ≈34.9 GB) top-M= 10 0.8584 ±0.0003 0.5069 ±0.0047 10 20.2 min 39,197 MiB ( ≈38.3 GB) top-M= 20 0.8551 ±0.0022 0.4999 ±0.0045 20 20.4 min 40,015 MiB ( ≈39.1 GB) top-M= 30 0.8483 ±0.0030 0.5002 ±0.0254 30 20.5 min 43,875 MiB ( ≈42.9 GB)
+
+Interpretation. BioClinical ModernBERT is the strongest reader on all three datasets. Random-init ModernBERT outperforms vanilla ModernBERT in AUPRC, suggesting that generic language pretraining is not automatically aligned with the structured evidence language produced by tree-path 18 Table A.17: Representation statistics for the P12-B held-out case. Lengths are reported in the native units logged by each representation pipeline and are not directly comparable tokenizer counts.                      
+
+> Interface Baseline family Logged size Source granularity TreeText-CTS TreeText-CTS 30 / 204 selected units; 1668 subwords source window + tree path Patient-level summary TimeCP contextual patient text 992 characters patient-level narrative Raw text serialization Decode per-event serialization 2689 characters 6h event/time-bin entries Raw text serialization WRDP hourly narrative serialization 13057 characters 48-hour feature rows Numerical matrix forward-fill imputation input 48 ×37 values feature-by-time matrix
+
+predicates. However, random-init does not match BioClinical ModernBERT, especially on PhysioNet 2019. The random-init reader is close to the reused-CES leaf-ID MLP control in AUPRC, which indicates that selected leaf identities already carry strong predictive information. The full BioClinical reader improves beyond both controls most strongly on PhysioNet 2019. For retrieval, top-M = 5 
+
+achieves the best AUPRC while using the smallest selector input and the lowest peak GPU memory. Larger candidate pools expose more leaves per patient-time-window context, but the additional candidates do not improve AUPRC on PhysioNet 2012. 
+
+B.5 Representation-level case example 
+
+This section shows one held-out PhysioNet 2012 test case to illustrate how different input interfaces expose the same ICU trajectory. The example is intended as a qualitative representation comparison rather than an additional performance claim. We replace the original record identifier with a case label and show shortened derived representations rather than the complete raw trajectory. 
+
+Case overview. The case, denoted P12-B, is a mortality-negative held-out PhysioNet 2012 example. The displayed trajectory contains early tachycardia, intermittent low urine output, declining oxygena-tion measurements, thrombocytopenia, and later stabilizing neurological and renal markers. The panels below compare: (i) selected tree-path evidence used by TreeText-CTS, (ii) a TimeCP-style patient-level contextual summary from our text-based baselines, (iii) raw textual serialization from Decode- and WRDP-style baselines, and (iv) a forward-filled numerical matrix used by common imputation-based numerical baselines. 
+
+TreeText-CTS selected tree-path evidence. Table A.18 shows representative selected evidence units from TreeText-CTS. Each unit is tied to a source time window and consists of deterministic threshold conditions. We include both glossed and predicate-only units; roughly four of the displayed units include a clinical gloss and six are predicate-only. The gloss is auxiliary and is never used to replace the deterministic conditions. Table A.18: Representative TreeText-CTS selected evidence units for P12-B. This table shows 10 selected units ordered by source-window end time. Source_window Selected tree-path evidence unit Gloss? 05:00–07:00 Urine mean is at most 46.6667, Urine last is higher than 0.0000, Urine mean is higher than 17.5000, and HR mean is higher than 105.5000. cg: Low but present urine output with reduced mean out-put accompanies tachycardia, suggesting a pattern of compromised perfusion and circulatory stress. yes 04:00–08:00 HR mean is higher than 110.0000, Urine max is at most 55.0000, Weight ts_gap is higher than 0.6500, RespRate min is at most 15.0000, and Weight last is at most 131.8000. cg: Tachycardia combined with markedly restricted urine output and a low respiratory rate minimum suggests haemodynamic stress with reduced renal output in a lower-weight patient; weight data is temporally sparse. yes 19 Source win-dow Selected tree-path evidence text Gloss? 07:00–15:00 FiO2 last is at most 0.5500, HR mean is higher than 110.0909, and NIMAP mean is at most 100.0000. cg: Sustained tachycardia with non-elevated non-invasive mean arterial pressure in patients receiving lower supplemental oxygen. yes 09:00–15:00 RespRate min is higher than 10.0000, NIMAP max is at most 75.0000, and Urine mean is higher than 61.6667. no 11:00–27:00 Creatinine mean is at most 1.4750, Urine mean is higher than 66.3636, and Temp min is higher than 34.4000. no 20:00–27:00 Urine mean is higher than 45.0000, RespRate min is higher than 8.0000, and RespRate mean is at most 25.0000. no 29:00–31:00 RespRate mean is higher than 9.0000, Urine mean is higher than 82.5000, RespRate mean is at most 21.0000, and Urine max is at most 340.0000. no 00:00–43:00 GCS mean is higher than 8.0526, Urine mean is higher than 57.7500, BUN mean is at most 17.5000, Bilirubin delta is at most 1.7000, and Lactate last is at most 4.9000. cg: Preserved consciousness, adequate urine output, low BUN suggesting absence of azotemia, stable biliru-bin, and lactate not reaching severe hyperlactatemia together indicate relatively stable metabolic and organ function status. yes 11:00–43:00 BUN last is at most 28.0000, and Platelets min is at most 366.0000. no 11:00–43:00 GCS last is higher than 14.0000, Temp mean is higher than 36.8429, Urine max is higher than 155.0000, and TroponinI min is at most 4.6000. no 
+
+Patient-level summary: TimeCP contextual patient text. The following excerpt comes from the TimeCP-style contextual patient-text baseline used in our text-based baseline group. This representation is compact and fluent, but the clinical narrative is patient-level and not explicitly tied to recoverable source windows. Boldface marks statements that are either not directly supported by the displayed source excerpts or appear clinically stronger than the underlying measurements shown here. 
+
+This 42-year-old patient presents with significant early hemodynamic instability charac-terized by severe hypertension (systolic peaks > 200 mmHg) and tachycardia, which gradually trended toward normotension but remained labile with persistent tachycardia throughout the 48-hour window. Respiratory status shows a concerning trajectory of wors-ening hypoxemia (PaO2 declining from 198 to 72 mmHg) accompanied by progressive tachypnea , suggesting deteriorating gas exchange despite maintained oxygen saturation. Concurrently, the patient exhibits signs of evolving multi-organ stress , including a sharp decline in hematocrit and platelets, persistent hyperbilirubinemia, and fluctuating oliguria that intermittently dropped below 40 mL/hr. Although acid-base status remained relatively compensated with only mild respiratory acidosis, the combination of sustained hemody-namic volatility, worsening respiratory mechanics, and declining hematologic parameters indicates a high-risk clinical course .
+
+Raw textual serialization: Decode and WRDP baselines. The raw-text panel excerpts two text-based baselines: Decode-style per-event serialization and WRDP-style hourly narrative serialization. These inputs retain source observations, but they are long and redundant. Repeated or slowly varying values are restated many times, and related clinical signals are distributed across many lines.        
+
+> WRDP-style hourly narrative serialization: Clinical prediction task: in-hospital mortality. Observation window: first 48 hours of ICU admission. Patient demographics: Age: 42.00, Gender: Male, ICUType: SICU.
+
+20 Table A.19: Forward-filled numerical matrix excerpt for P12-B. The full numerical input has 48 time steps and 37 variables; this table shows a subset of variables and 6-hour time columns. 
+
+Feature 0h 6h 12h 18h 24h 30h 36h 42h Weight 83.48 83.48 83.48 83.48 83.48 83.48 83.48 83.48 ALP 119.06 100.00 102.00 102.00 102.00 102.00 102.00 102.00 ALT 360.38 17.00 18.00 18.00 18.00 18.00 18.00 18.00 AST 500.89 43.00 47.00 47.00 47.00 47.00 47.00 47.00 BUN 27.03 11.00 12.00 12.00 12.00 11.00 11.00 11.00 Bilirubin 2.87 2.20 2.70 2.70 2.70 2.70 2.70 2.50 Creatinine 1.46 0.60 0.60 0.60 0.60 0.60 0.60 0.60 DiasABP 59.54 78.00 80.00 83.00 80.00 75.00 80.00 81.00 FiO2 0.54 0.54 0.54 0.54 0.54 0.54 0.54 0.54 GCS 11.38 14.00 14.00 14.00 15.00 15.00 15.00 15.00 Glucose 141.17 131.00 116.00 116.00 116.00 108.00 108.00 108.00 HCT 30.70 31.40 33.70 33.70 27.20 26.50 26.50 27.30 HR 86.51 122.00 107.00 106.00 99.00 96.00 89.00 88.00 Lactate 2.00 2.00 2.00 2.00 2.00 2.00 2.00 2.00 MAP 80.24 97.00 99.00 100.00 97.00 94.00 111.00 99.00 MechVent 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 NIMAP 77.50 128.30 128.30 128.30 128.30 128.30 128.30 86.00 NISysABP 119.97 175.00 175.00 175.00 175.00 175.00 175.00 110.00 PaO2 198.00 140.00 119.00 119.00 119.00 72.00 72.00 72.00 Platelets 190.57 102.00 106.00 106.00 106.00 80.00 80.00 80.00 RespRate 19.58 15.00 16.00 21.00 21.00 20.00 21.00 20.00 Temp 37.09 36.80 37.10 38.40 38.00 37.70 38.40 38.70 Urine 115.64 40.00 50.00 100.00 80.00 60.00 50.00 160.00 pH 7.47 7.37 7.37 7.37 7.37 7.44 7.44 7.44           
+
+> Weight: 83.48, 83.48, 83.48, 83.48, 83.48, 83.48, 83.48, 83.48, 83.48, 83.48, 83.48, 83.48, ... FiO2: 0.54, 0.54, 0.54, 0.54, 0.54, 0.54, 0.54, 0.54, 0.54, 0.54, 0.54, 0.54, ... MechVent: 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, ... Lactate: 2.00, 2.00, 2.00, 2.00, 2.00, 2.00, 2.00, 2.00, 2.00, 2.00, 2.00, 2.00, ... TroponinI: 8.29, 8.29, 8.29, 8.29, 8.29, 8.29, 8.29, 8.29, 8.29, 8.29, 8.29, 8.29, ... Decode-style 6h per-event serialization: at 0h: ALP = 100; ALT = 17; AST = 43; BUN = 11; Bilirubin = 2.20; Creatinine = 0.60; GCS = 14; HR = 109.25; PaO2 = 169; Platelets = 102; at 6h: ALP = 102; ALT = 18; AST = 47; BUN = 12; Bilirubin = 2.70; Creatinine = 0.60; HR = 117; PaO2 = 119; Platelets = 106; at 12h: DiasABP = 81.17; GCS = 14; HR = 107; MAP = 99.17; RespRate = 18.33; SysABP = 137.33; Temp = 38.05; Urine = 103; at 18h: DiasABP = 79.83; GCS = 14; HCT = 27.20; HR = 101.50; MAP = 98.17; RespRate = 20.17; SysABP = 134.67; Urine = 98; at 24h: BUN = 11; Creatinine = 0.60; GCS = 15; HCT = 26.50; PaO2 = 72; Platelets = 80; RespRate = 19.67; Urine = 60; at 36h: Albumin = 2.80; Bilirubin = 2.50; GCS = 15; HCT = 26.90; HR = 89.67; RespRate = 22.17; Urine = 102.50.
+
+Numerical matrix representation: forward-fill imputation input. The numerical panel shows a forward-filled hourly matrix, a common input format for imputation-based LSTM or Transformer baselines. This representation is compact for numerical computation, but it is not a readable classifier input. Columns are time points and rows are variables. 
+
+Takeaway. This case illustrates the interface trade-off. The numerical matrix is compact for numerical models but difficult to inspect as evidence. Raw serialization preserves source observations 21 but produces long, repetitive inputs in which the relevant trajectory patterns are scattered across many lines. Patient-level contextual summaries are concise and readable, but can introduce over-specific clinical claims that are not directly tied to recoverable source windows. In contrast, TreeText-CTS exposes a selected set of source-window-grounded tree-path evidence units. The LM classifier reads these selected units directly, and each unit remains traceable through its source window and deterministic tree-derived conditions. 
+
+C Traceability, verbalization, and clinical glossing 
+
+C.1 Construction-level auditability Source traceability. TreeText-CTS auditability is an input-construction property rather than a post-hoc explanation. Each selected evidence unit is assembled from a cached leaf-level evidence record that stores the source tuple (t, W, b, ℓ ) and the canonical deterministic predicate text Pred( e).Therefore, selected evidence can be traced back to the source-window endpoint, window size, tree, leaf, and path conditions. This guarantee is not a claim that raw-serialization baselines lack source provenance; rather, TreeText-CTS combines provenance with compact selected evidence units. It also does not imply a causal explanation or a clinically validated rationale. Table A.20: Auditability properties guaranteed by the evidence-construction pipeline.          
+
+> Property Guarantee Source tuple retained Every selected evidence unit stores (t, W, b, ℓ )
+> Predicate anchor retained Every selected evidence unit contains canonical deterministic predicate text Pred( e)
+> Full path recoverable The stored source tuple indexes the original XGBoost tree inventory Gloss gated by glossable flag Clinical gloss is appended only when g(e) = 1
+> No patient-level free-form generation Leaf verbalization and embedding are cached offline at the leaf level
+
+Interpretation. The clinical gloss is not the evidence anchor. Even for glossable leaves, the canonical deterministic predicate text remains in the selected evidence unit, and the original tree path remains recoverable through the source tuple and tree inventory. This is why the method exposes auditable classifier inputs rather than post-hoc saliency maps. 
+
+C.2 Source-grounded held-out case study 
+
+Figure A.2 shows an anonymized held-out PhysioNet 2012 mortality case. TreeText-CTS predicts the positive outcome with ˆp = 0 .83 , while Decode-Adapted, a controlled adapted text baseline using the same reader family, predicts ˆp = 0 .21 . The selected evidence cards expose the source time, window, tree, leaf, canonical deterministic predicates, and gloss-gated auxiliary clinical text used as classifier input. This example illustrates the construction-level auditability benefit of TreeText-CTS: the model exposes a compact set of source-grounded findings that can be inspected before the prediction is interpreted. 
+
+C.3 Tree-to-evidence inventory and predicate canonicalization Leaf inventory. Table A.21 reports the number of XGBoost leaves available for verbalization. Each leaf has canonical deterministic predicate text Pred( e). The glossable flag indicates whether the offline LLM judged that the path supports a named clinical-state gloss. Table A.21: Total XGBoost leaves per dataset and window. Each leaf can be mapped to a reusable evidence unit.                                         
+
+> Dataset 1h 2h 4h 8h 16h 32h 48h Total PhysioNet 2012 892 847 841 807 703 521 562 5,173 MIMIC-III 916 926 903 886 822 646 648 5,747 PhysioNet 2019 906 883 850 815 738 670 590 5,452 All datasets 2,714 2,656 2,594 2,508 2,263 1,837 1,800 16,372
+
+22 Held-out PhysioNet 2012 case Label: mortality positive TreeText-CTS: ˆp = 0 .83 ✓ Decode-Adapted: ˆp = 0 .21 ✗                                  
+
+> Case summary. For anonymized test case P12-test , TreeText-CTS selects 30 evidence units; 22 have g(e) = 1 , and the selected set spans all seven window sizes W∈ { 1,2,4,8,16 ,32 ,48 }h. Below are the three highest-logit selected evidence units, sorted by source time; they are shown to illustrate source traceability rather than to summarize the full multi-scale selection distribution.
+> Card 1. Source (t=33h , W =2h , b =25 , ℓ =57) ;g(e)=1 ; leaf score 2.22
+> Pred. non-invasive systolic BP minimum is at most 103; heart-rate mean is higher than 108.5; weight last value is at most 143.4.
+> Gloss patient with tachycardia and low non-invasive systolic pressure, suggesting possible hemodynamic instability.
+> Card 2. Source (t=40h , W =2h , b =1 , ℓ =33) ;g(e)=1 ; leaf score 2.37
+> Pred. Respiratory-rate mean is at most 10; GCS maximum is at most 10; GCS last value is higher than 3; GCS last value is at most 7.
+> Gloss Severely depressed level of consciousness across both peak and recent GCS values, combined with markedly reduced respiratory rate, consistent with a profound neurological impairment pattern.
+> Card 3. Source (t=44h , W =2h , b =17 , ℓ =44) ;g(e)=1 ; leaf score 3.64
+> Pred. Urine maximum is at most 80; FiO 2minimum is higher than 0.502; lactate minimum is higher than 6.1; PaCO 2
+> time-gap is higher than 0.1.
+> Gloss Markedly elevated minimum lactate indicates hyperlactatemia; combined with reduced urine output and high minimum inspired oxygen fraction, this pattern suggests concurrent tissue hypoperfusion and impaired oxygenation.
+> Note. The gloss is auxiliary. The deterministic predicate text and source tuple are retained for every selected evidence unit. Decode-Adapted reads the same patient’s serialized event stream but does not expose source-indexed selected evidence.
+
+Figure A.2: A source-grounded prediction case from the PhysioNet 2012 test set. TreeText-CTS correctly predicts in-hospital mortality, while Decode-Adapted assigns a low probability. Each selected evidence card is tied to a source time, window, tree, and leaf, and preserves thresholded predicate text. The case illustrates input-level auditability rather than a post-hoc explanation. Table A.22: Glossable and non-glossable leaf counts. g(e) = 1 means the leaf path supports a clinical gloss; g(e) = 0 means only canonical deterministic predicate text is used in Predicate+gloss. 
+
+Dataset Total leaves g(e) = 1 g(e) = 0 g(e) = 1 rate PhysioNet 2012 5,173 2,349 2,824 45.4% MIMIC-III 5,747 3,118 2,629 54.3% PhysioNet 2019 5,452 1,786 3,666 32.8% All datasets 16,372 7,253 9,119 44.3% 
+
+C.3.1 Predicate rendering and canonicalization Deterministic predicate rendering. For each activated root-to-leaf path, we recover the ordered split conditions from the fixed XGBoost tree inventory. Each raw split inequality is rendered by a deterministic template using the feature name and summary statistic. For example, x > 40 is rendered as “ x is higher than 40,” and x ≤ 40 is rendered as “ x is at most 40.” This rendering step uses no LLM: the same tree path always maps to the same predicate text after canonicalization. 
+
+Path canonicalization. Before caching Pred( e), we simplify the raw conjunction into a canonical predicate set. For each feature-summary key, multiple lower-bound constraints are replaced by the tightest lower bound, and multiple upper-bound constraints are replaced by the tightest upper bound. Thus, a path containing both SBP > 40 and SBP > 50 is rendered using only SBP > 50 . We also remove predicates that only restate known feasible feature ranges or glossary-defined boundary constraints, such as an upper-bound constraint at the maximum possible score or a lower-bound constraint at the minimum possible score. 
+
+Scope and verbalization rule. Canonicalization only removes redundant or range-bound predicate clauses; it does not add clinical interpretation. The final Pred( e) remains a deterministic rendering of tree-derived conditions. Clinical glossing is applied afterward and stored separately through 
+
+g(e) and Gloss( e). The original uncanonicalized path remains recoverable from the source tuple 
+
+(t, W, b, ℓ ) and the fixed tree inventory. The Predicate+gloss evidence text always contains the 23 canonical deterministic predicate text Pred( e). For glossable leaves, we append a clinical gloss: 
+
+text( e) = 
+
+Pred( e) cg: Gloss( e), g(e) = 1 ,
+
+Pred( e), g(e) = 0 .
+
+Thus, the gloss is an auxiliary semantic hint, while the canonical predicate text remains the auditable anchor. 
+
+Example. A glossable path such as GCS__last ≤ 9, Urine__mean ≤ 70.1667 , and 
+
+BUN__mean ≤ 21.6667 is rendered as canonical deterministic predicate text and may receive a clinical gloss describing impaired consciousness with reduced urine output. A non-glossable path is rendered as predicate text only, avoiding forced clinical labels where the tree path is predictive but not semantically specific. If a raw path contains redundant clauses such as SBP > 40 and SBP > 50 ,only the tighter condition is kept in Pred( e).
+
+C.4 Clinical gloss annotation prompt Clinical gloss annotation prompt. For each unique leaf predicate, we query a local LLM with the following prompt and cache the returned annotation.                          
+
+> SYSTEM
+> You are a clinical gloss annotator. You are given (i) a TASK description and (ii) a single decision-tree path rendered as deterministic predicate text Pred( e). Decide whether the predicate conjunction has a clinically meaningful interpretation for the given TASK. If so, set g(e) = 1 and write a short clinical gloss; otherwise, set g(e) = 0 and leave the gloss empty. Set g(e) = 1 only when the predicate conjunction has a recognizable clinical interpretation that is informative for the TASK, such as a known physiologic pattern, organ-system derangement, treatment response, or risk signal. Set g(e) = 0 when the path is only a generic threshold combination, weakly related to the TASK, or clinically speculative. Rules for Gloss( e)when g(e) = 1 :• Use one sentence, at most 30 words. • Describe the physiologic or clinical state; do not restate numeric thresholds. • Do not mention the tree, leaf, window index, model, or prediction label. • Do not add clinical facts unsupported by the predicates or feature glossary. • If unsure, set g(e) = 0 rather than writing a vague gloss. Output strict JSON with exactly these keys and nothing else: {"g": 0 or 1, "gloss": "<string, empty if g=0>"}
+> USER
+> TASK: {task_description} FEATURE GLOSSARY: {feature_glossary} PATH PREDICATES ( Pred( e)): {pred_text} Return the JSON object now.
+
+C.5 Representation-level case examples 
+
+We provide qualitative examples from three held-out PhysioNet 2012 cases to illustrate how different EHR time-series interfaces present the same underlying patient trajectory. These examples are intended to compare input representations rather than to establish additional quantitative claims. We replace record identifiers with case labels, coarsen static demographics in displayed excerpts, and do not reproduce complete raw patient trajectories. Outcome labels are shown only to orient the reader and are not part of the model input. 24 Table A.23: Held-out PhysioNet 2012 representation examples. TreeText-CTS exposes a fixed-budget set of selected tree-path evidence units. Summary methods produce compact patient-level narratives, raw-serialization methods enumerate observations as text, and numerical methods consume a forward-filled hourly matrix. Lengths are reported in the native units logged by each pipeline and are not directly comparable tokenizer counts. 
+
+Case Displayed demographics Outcome Ours selected units length Summary length Raw-text length P12-A older female, CSRU mortality positive 30 / 222 1617 subwords 906 chars 2198 / 12932 chars P12-B middle-aged male, SICU mortality negative 30 / 204 1668 subwords 992 chars 2689 / 13057 chars P12-C young female, SICU mortality positive 30 / 200 2479 subwords 947 chars 4592 / 12970 chars Raw-text length reports Decode-style per-event serialization / WRDP-style hourly narrative serialization. Numerical baselines consume a 48 × 37 forward-filled hourly matrix for these PhysioNet 2012 cases; only short matrix excerpts are displayed below. 
+
+D Implementation, latency, reproducibility, and resources 
+
+D.1 Implementation details Main hyperparameters. Table A.24 summarizes the main implementation settings. We use Predicate+gloss as shorthand for the main evidence style: canonical deterministic path predicates plus an optional cached clinical gloss. Table A.24: Main implementation settings for TreeText-CTS. 
+
+Item Setting Evidence style Predicate+gloss: canonical predicate text + optional clinical gloss Window sizes {1, 2, 4, 8, 16 , 32 , 48 } hours Window summary bank last value, mean, std, min, max, count, net change, time since last observation, missingness Tree model separate XGBoost model per window size Leaf embedding model Qwen3-Embedding-8B, projected to 64 dimensions Selector token 64-d leaf embedding + 8 scalar metadata features Selector architecture 2-layer Transformer, dmodel = 128 , 4 attention heads Evidence assembly learned gate margins + minimum-selection floor + budget cap LM Classifier BioClinical ModernBERT-base Max input length 3072 subword tokens Candidate retrieval top-M = 5 leaves per (i, t, W )
+
+Final evidence budget K = 30 
+
+Minimum selected evidence Kmin = 5 evidence units LM Classifier learning rate 10 −5
+
+Selector/projection learning rate 10 −4
+
+Optimizer AdamW Batch size 8Early stopping validation metric with patience 10 Trainable modules leaf projection, CES, reader, classification head Advantage normalization mini-batch mean/std of ∆i
+
+Selector metadata. Each candidate evidence unit is represented to CES by a cached leaf-text embedding and eight scalar metadata features: recency score, leaf score, absolute base-rate deviation 
+
+|pleaf − p0|, signed leaf-risk direction pleaf − p0, log leaf support, normalized window size, log subword count, and the glossability flag g(e).
+
+Optional subword budget. The implementation supports an optional one-sided subword-budget penalty when –subword_budget is specified. This option is disabled in the main experiments, where the selected-evidence count is controlled by the hard evidence budget K = 30 .
+
+XGBoost hyperparameters. Table A.26 reports the XGBoost hyperparameters used to train the fixed tree ensembles before TreeText-CTS. We fit each ensemble on the training split and use the validation split only for early stopping. XGBoost consumes the per-variable nine-dimensional window summaries. If a variable is unobserved within a look-back window, we set count =0, the missingness 25 Table A.25: Scalar metadata used by the Compact Evidence Selector. Each tree-path evidence unit is represented by a 64-dimensional projected evidence-unit embedding concatenated with the following eight scalar metadata features.                   
+
+> Index Feature Description 0recency Temporal recency of the evidence unit relative to the prediction time 1leaf_score XGBoost leaf score associated with the activated path 2abs_leaf_score Absolute magnitude of the leaf score 3leaf_direction Signed direction of the leaf score 4log_leaf_support Log-transformed number of training samples assigned to the leaf 5window_norm Normalized look-back window size 6log_predicate_count Text-length proxy based on the number of rendered path-predicate tokens 7has_clinical_gloss Binary indicator of whether a cached clinical gloss is available
+
+indicator to 1, delta =0, and ts_last_gap =W, while filling last , mean , std , min , and max with the fixed value −1.Table A.26: XGBoost hyperparameters configuration. 
+
+Hyperparameter Value 
+
+max_depth 5
+
+n_estimators 30 
+
+learning_rate 0.1 
+
+subsample 0.8 
+
+colsample_bytree 0.8 
+
+min_child_weight 5
+
+gamma 0
+
+scale_pos_weight Nneg /N pos (per dataset/window) 
+
+eval_metric logloss 
+
+early_stopping_rounds 10 (on validation) 
+
+random_state 42 
+
+Multi-scale routing 
+
+Window sizes W (h) {1, 2, 4, 8, 16 , 32 , 48 }
+
+Offline and online LLM use. Leaf clinical glosses are generated offline at the tree-leaf level, not at the patient level. At inference, the model retrieves cached evidence, applies CES, assembles selected evidence text, and runs the encoder. The final prediction-time model does not perform generative decoding. The exact gloss annotation prompt is reported in Appendix C.4. 
+
+D.2 Latency measurement protocol Measurement setup. Latency is measured as end-to-end online inference time per patient on the first 32 patients of the filtered PhysioNet 2019 test split, using batch size 1, fp16 weights and activations, one discarded warm-up sample, and torch.cuda.synchronize() barriers around GPU calls. We report mean ±std over 32 measured samples on NVIDIA RTX A6000 GPUs. All methods use one A6000 by default; Qwen3.5-27B-based baselines use 2 ×A6000 sharding because their fp16 weights do not fit on one 48GB card. Timing includes all online preprocessing and model calls required for prediction, while offline caches such as TreeText-CTS leaf verbalizations and leaf embeddings are excluded. 
+
+D.3 Reproducibility, code release, and data access Reproducibility scope. All main results use the same filtered patient splits reported in Ap-pendix A.1. The XGBoost models, leaf verbalization cache, and leaf embedding cache are created before patient-level training. During patient-level training, the leaf projection, CES, LM classifier, and classification head are optimized jointly from the first epoch. 26 Cached artifacts. Leaf verbalization and leaf embeddings are computed once per tree leaf, not through patient-level free-form generation. At inference, the model retrieves candidate evidence, applies CES under budget K = 30 , assembles selected evidence text, and runs the encoder classifier. 
+
+Planned training command after code release. The main TreeText-CTS training configuration is summarized by the following command-line arguments, which will be supported by the released implementation: 
+
+python train_treetext_cts.py \ --dataset {physionet2012,mimic3_mortality,physionet2019} \ --train_mode rl_selection \ --model_name bioclinicalmodernbert \ --max_length 3072 \ --rl_top_k 5 \ --vb_budget 30 \ --rl_min_sel_count 5 \ --rl_lr 1e-4 \ --lr 1e-5 \ --batch_size 8 \ --seed_num 3 
+
+D.4 Compute resources and licenses Hardware. All TreeText-CTS training and evaluation runs use a single NVIDIA RTX A6000 GPU with 48 GB memory on a host with an Intel Xeon Silver 4310 CPU and 503 GB system RAM. Latency measurements use the same A6000. The Qwen3.5-27B generative baselines require two A6000 GPUs sharded via HuggingFace device_map="auto" because the fp16 model does not fit on a single 48 GB device. 
+
+Per-run wall-clock cost. A single TreeText-CTS training run with the canonical configuration (BioClinical ModernBERT, maximum length 3072, batch size 8, K = 30 , Kmin = 5 , and top-M = 5 
+
+candidate retrieval) costs approximately 19–21 minutes per epoch on one A6000, dominated by the BioClinical ModernBERT forward/backward pass. End-to-end runtime per seed is approximately 6.4 hours on PhysioNet 2012, 8.4 hours on MIMIC-III, and 5.0 hours on PhysioNet 2019. The three-seed main TreeText-CTS results therefore consume approximately 60 GPU-hours. The XGBoost trees, leaf-verbalization cache, and leaf-embedding cache are computed once per dataset, requiring approximately 2 CPU-hours for trees and 3 GPU-hours for Qwen3-Embedding-8B leaf embeddings, and are reused across TreeText-CTS runs. 
+
+Total project budget. Including the main results, ablations, budget sweeps, candidate-retrieval sensitivity, reader-backbone swaps, selector-input masking, and exploratory configurations that did not enter the paper, the full project consumed approximately 2,800 A6000 GPU-hours. Numerical-baseline reimplementations across eight ISMTS models, three datasets, three seeds, and three learning rates account for an additional approximately 900 GPU-hours. Latency measurements add approximately 10 GPU-hours for the Qwen-summary baselines. 
+
+Dataset licenses and data-use terms. PhysioNet 2012 v1.0.0 is distributed through PhysioNet under the Open Data Commons Attribution License v1.0. MIMIC-III v1.4 is a PhysioNet restricted-access resource under the PhysioNet Credentialed Health Data License v1.5.0 and the PhysioNet Credentialed Health Data Use Agreement v1.5.0; access requires credentialing and CITI “Data or Specimens Only Research” training. PhysioNet 2019 v1.0.0 is distributed through the official PhysioNet Challenge repository with its included license file. We do not redistribute raw data from any benchmark. 
+
+Compliance. All clinical datasets are used only for the prediction tasks studied in the paper, with no attempt at patient re-identification, no linkage to external databases, and no redistribution of raw records. Leaf verbalizations and clinical glosses are cached at the tree-leaf level and are tied to anonymized tree/leaf indices rather than patient identifiers. Pretrained-model usage follows the corresponding model licenses and access terms. 27

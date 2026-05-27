@@ -1,0 +1,374 @@
+Title: Distilling Tabular Foundation Models for Structured Health Data
+
+URL Source: https://arxiv.org/pdf/2605.18702v1
+
+Published Time: Tue, 19 May 2026 02:56:09 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+## Aditya Tanna, Nassim Bouarour, Mohamed Bouadi, Vinay Kumar Sankarapu, Pratinav Seth 
+
+## Lexsi Labs 
+
+## Abstract 
+
+Tabular foundation models (TFMs) achieve strong performance on health datasets, but their inference cost and infrastructure requirements limit practical use. We study whether their predictive behavior can be transferred to lightweight tabular models through knowledge distillation. Since in-context TFMs condition on the training set at inference time, naive distillation can introduce context leakage; we address this with stratified out-of-fold teacher labeling. Across 19 healthcare datasets, 6 TFM teachers, 4 student families, and several multi-teacher ensembles, we find that distilled students retain at least 90% of teacher AUC, outperforming teachers in some cases, while running at least 26 × faster on CPU and preserving calibration and fairness critical for health applications. Moreover, multi-teacher averaging does not consistently improve over the best single teacher. Leakage-aware distillation is thus a viable route for bringing TFM-quality predictions into inference-constrained health settings. 
+
+Keywords: knowledge distillation, tabular foundation models, clinical AI, structured health data, model compression, calibration, fairness 
+
+# 1 Introduction 
+
+Structured data is central to health machine learning [ 1]. Tasks such as risk stratification, disease screening, readmission prediction, and mortality estimation are often defined over EHR, laboratory values, demographics, and other tabular variables [ 2 ]. These datasets are frequently small, heterogeneous, and sparse, making data-efficient prediction essential. Healthcare deployment also requires more than high accuracy. Hospital systems are often CPU-based, air-gapped, and constrained by data-residency policies, limiting the use of cloud-GPU inference. Models must produce calibrated probabilities that support clinical decisions [ 3 ] and avoid amplifying demographic disparities that can affect access to care [4, 5]. Tabular foundation models (TFMs) have recently emerged as a promising approach for such clinical datasets. Models such as TabPFNv2.5 [ 6 ], TabICLv2 [ 7], TabDPT [ 8], LimiX [ 9 ], and Orion-MSP [ 10 ] often match or outperform tuned gradient-boosted trees on datasets with fewer than ten thousand rows, without per-task tuning. However, the TFM inference paradigm conflicts with the practical constraints of clinical deployment. Predictions require conditioning on a task-specific context set and running large neural models on dedicated GPU hardware. Many hospital systems are CPU-based, air-gapped, or constrained by data-residency rules, and these requirements rule out direct deployment. Even where GPU inference is available, latency on the order of hundreds of milliseconds limits the use of TFMs in high-throughput batch scoring (whole-hospital risk surveillance, registry sweeps, retrospective audits) and in real-time alert pipelines that must integrate with existing monitoring and auditing infrastructure. 
+
+> arXiv:2605.18702v1 [cs.LG] 18 May 2026
+
+Distilling Tabular Foundation Models for Structured Health Data 
+
+We therefore ask whether TFMs’ predictive behavior, including accuracy, calibration, and fairness, can be transferred to standard ML models that are easier to deploy. We study this question through knowledge distillation [ 11 ] from TFMs into lightweight students. Since TFM teachers condition on labeled training examples at inference time, teacher outputs for examples included in the context can produce biased soft targets [ 12 ]. We mitigate this using stratified out-of-fold teacher labeling. We run extensive experiments across 19 health datasets ( 16 binary, 3 multiclass), using 6
+
+TFMs as teachers, 4 standard models—LightGBM [ 13 ], CatBoost [ 14 ], XGBoost [ 15 ], and an MLP—as students, and 
+
+4 multi-teacher ensembles. We find that: (i) distilled students retain more than 90 % of teacher AUC, outperforming teachers on some datasets; (ii) MLP students are 2× faster than LightGBM but are miscalibrated and amplify fairness gaps; (iii) Multi-teacher settings tend to be outperformed by the best single teacher. 
+
+Contributions. We summarize our contributions as follows: • We study knowledge distillation as a practical route for transferring TFM predictions into deployable healthcare tabular models. • We propose a stratified out-of-fold teacher-labeling scheme to prevent teacher identity leakage from ICL-based TFMs. • We benchmark TFM distillation across 19 healthcare datasets, 6 teachers, 4 student families, and multi-teacher ensembles. • We show that tree-based students provide the strongest accuracy–calibration–fairness tradeoff, while MLP distillation and naive multi-teacher averaging are less consistently beneficial. 
+
+# 2 Related Work 
+
+Tabular foundation models. TFMs pretrain on synthetic or curated real tables and then use in-context learning at inference time. TabPFN [ 16 ] and its v2.5/v2.6 update [ 6] are prior-fitted networks trained on synthetic Bayesian-style data. TabICLv2 [ 7] focuses on context length and inference throughput. TabDPT [ 8] pretrains on a large corpus of real tables. LimiX [ 9], Orion-Bix [ 17 ] and Orion-MSP [ 10 ] extend the approach with multi-scale or sparse attention. Despite the architectural variation, the deployment profile is essentially the same: a GPU forward pass conditioned on the labeled training set, with cost that scales with context size and memory in the tens to hundreds of megabytes on accelerator hardware. 
+
+Knowledge distillation. Distillation transfers a teacher’s predictive distribution to a student through softened probability targets [ 11 ]. Follow-up work has examined when soft labels actually help [ 18 , 19 ] and when ensemble averaging adds noise rather than signal [ 20 ]. The technique is widely used in vision, language, and speech, but the tabular setting has received much less attention. Two recent findings are directly relevant here: soft labels can carry held-out information from the teacher, including memorised training points [ 21 ], and benchmark scores can be inflated through indirect distillation chains [12]. 
+
+In-context teachers and leakage. Because TFM teachers condition on the training set at inference, scoring those same training points returns predictions on examples the model has effectively seen. We refer to this as teacher identity leakage . The standard remedy in stacking is K-fold out-of-fold prediction, and we adopt it here. To our knowledge, the only published TFM distillation pipeline is the closed-source engine packaged with TabPFNv2.5 [ 6]; we cannot benchmark directly against it. Our pipeline is open-source, model-agnostic across multiple TFM families, and supports multi-teacher ensembles. 
+
+Clinical tabular machine learning. Healthcare prediction tasks routinely operate on tabular inputs derived from EHR data [ 2, 1]. Two requirements distinguish this domain from generic tabular benchmarks. Probabilities need to be calibrated so they can be plugged into threshold-based decision rules [ 3 , 22 , 23 ]. Group fairness has to be evaluated alongside accuracy, since miscalibrated or biased models can affect care decisions [ 5 , 4]. Recent tabular fine-tuning work [ 24 ] and tabular ICL architectures [ 17 ] have begun adapting TFMs to such settings; our work is complementary, focused on what happens after a strong TFM is available and the bottleneck is deployment. The TabTune library [ 25 ]provides a unified evaluation surface for accuracy, calibration, and fairness, and is the basis for our experimental harness. 2Distilling Tabular Foundation Models for Structured Health Data                                                 
+
+> (a) Data
+> D, K =5
+> D1
+> D2
+> D3
+> D4
+> D5
+> (b) Teachers
+> f(1)
+> T:D\D 1→ D 1
+> f(2)
+> T:D\D 2→ D 2
+> f(3)
+> T:D\D 3→ D 3
+> f(4)
+> T:D\D 4→ D 4
+> f(5)
+> T:D\D 5→ D 5
+> (c) OOF labels
+> eY
+> eyD1
+> eyD2
+> eyD3
+> eyD4
+> eyD5
+> Leakage-aware: each eyicomes from f(k)
+> Tthat never observed yi
+> (d) Ensemble
+> TabPFNv2.6
+> TabICLv2
+> LimiX
+> TabDPT
+> epi=1
+> M
+> P
+> mep(m)
+> i
+> (MTFM families)
+> (e) Hinton loss
+> L=αX
+> i
+> wiT2
+> iKL( epTii∥qTii)+ (1 −α)X
+> i
+> wiℓCE (yi, q i)
+> adaptive Ti, weight wi
+> α=0 .7, T i∈[1 ,5]
+> wi∝e−(H−μ)2/2σ2
+> (f) Deploy
+> Student fS
+> LGBM, CatBoost, XGBoost, or MLP
+> CPU inference
+
+Figure 1 Leakage-aware out-of-fold distillation pipeline. (a) The training set D is partitioned into K=5 stratified folds 
+
+D1, . . . , D5. (b) For each fold k, a teacher TFM f (k) 
+
+> T
+
+is conditioned on D\D k and predicts only on Dk . (c) The fold-wise predictions are concatenated into the out-of-fold soft-label set eY, so no soft target eyi is generated by a teacher that conditioned on yi.(d) In the multi-teacher setting, OOF labels from M different TFM families (TabPFNv2.6, TabICLv2, LimiX, TabDPT, . . . ) are averaged with equal weights. (e) The student is trained with a Hinton mixed loss combining temperature-scaled KL on the soft targets and cross-entropy on the hard labels, with per-sample adaptive temperature Ti ∈ [1 , 5] and confidence weight wi peaking on moderate-entropy teacher predictions. (f) The trained student is deployed on CPU 
+
+10 PT 
+
+# 3 Methodology 
+
+Formalization. In this work, we consider a set of tabular datasets D = {(xi, y i)}ni=1 where xi ∈ Rli×ci and 
+
+yi ∈ Rli ; li is the sequence length and ci is the number of features for the i-th dataset. We also consider a Tabular Foundation Model (TFM) as a teacher fT that predicts the labels using a function fT (·) : Rl×c → Rl.Given a set of datasets D and a TFM fT , we aim to find a student fS : Rl×c → Rl that approximates fT without duplicating the teacher’s weights, gradients, or hidden states. 
+
+Distillation approach. To transfer the predictive behavior of fT to fS , we employ knowledge distillation [ 11 ], training fS to match the outputs of fT rather than hard ground-truth labels. This choice is motivated by recent empirical works showing that distillation leads to stronger student generalization [18, 19]. We define the student objective as the Hinton mixed loss: 
+
+L = α X
+
+> i
+
+wiT 2 
+
+> i
+
+KL(ˆ pTi 
+
+> i
+
+∥ qTi 
+
+> i
+
+) + (1 − α) X
+
+> i
+
+wi ℓCE (yi, q i), (1) with α=0 .7. For the three tree-based students, the soft loss reduces to a per-sample weighted MSE on soft-label logits. 
+
+Adaptive temperature. Per-sample Ti ∈ [Tmin , T max ] scales each ˜pi as a function of teacher entropy H(˜ pi):confident predictions get Ti ≈ Tmin =1 , ambiguous ones get Ti ≈ Tmax =5 , following [ 3]. Confidence weight 
+
+wi = exp( −(H(˜ pi) − μ)2/2σ2) peaks on moderate-entropy predictions ( (μ, σ )=(0 .7, 0.2) ). 
+
+Teacher soft labels. In our work, all teachers are TFMs. While all these models rely on in-context learning for predictions, the teachers condition on the training set as part of their input context. More formally, we denote the teacher as fT (· | C) where C = {xi, y i} is the context set. Predictions over the samples xi are therefore produced by a teacher that has already observed their targets yi, yielding soft labels that are overconfident compared to the predicted distribution on unseen data. To mitigate this, we apply k=5 stratified cross-validation, fitting each teacher f (k) 
+
+> T
+
+on D\D k and predicting only over 
+
+Dk, ensuring that no sample’s soft target is produced by a fT that conditioned on it. 
+
+Multi-teacher averaging. When more than one TFM family is available, we run the OOF labeling pipeline independently for each teacher and then average the resulting soft labels with equal weights: epi = 1
+
+> M
+
+PMm=1 ep(m) 
+
+> i
+
+, with the multi-teacher case shown in Figure 1(d). We did not learn ensemble weights or stack the teachers in a second-stage model. The goal here is the cleanest possible baseline for the question does the student get more accurate when you give it more teachers? Section 4 reports results for several subsets of {TabPFNv2.6, TabICLv2, LimiX, TabDPT, Orion-MSP }.We treat OOF prediction as a correctness requirement rather than a tunable hyperparameter: every standard distillation pipeline assumes labels generated on points the teacher has not seen. The choice of K=5 follows the stacking 3Distilling Tabular Foundation Models for Structured Health Data 
+
+convention. Pilot runs at K ∈ { 3, 10 } moved AUC by less than 0.005 at 0.6× and 2× the teacher cost, respectively, so we did not tune this further. 
+
+# 4 Experiments 
+
+## 4.1 Setup 
+
+Datasets. We use 19 health datasets, of which 16 are binary and 3 multiclass, covering cardiology, oncology, nephrology, dermatology, and critical care, with sample sizes from 299 to 9105 (bigger datasets were sampled from) and feature counts from 4 to 40 . Full details are in Table 6. 
+
+Teacher TFMs. We consider 6 TFMs: TabPFNv2.5 [ 16 ], TabPFNv2.6 [ 6], TabICLv2 [ 7 ], TabDPT [ 8], LimiX [ 9 ], and Orion-MSP v1.5 [ 10 ], each with its built-in missing-value handler. For multi-teacher ( M > 1) settings, we average per-fold soft labels with equal weights. 
+
+Students. We use LightGBM [ 13 ], CatBoost [ 14 ], XGBoost [ 15 ] (300 trees, depth 6, patience-30 early stopping) and an MLP (embedding min(8 d, 128) , cosine LR with warmup, label smoothing 0.05, SWA on final 20% of training, collapse-detector restart at higher dropout). 
+
+Baselines. We use LogisticRegression, XGBoost, and LightGBM with a fixed configuration on zero-imputed inputs. These baselines reflect how each model class is typically used out of the box. 
+
+Metrics. We report (i) average AUC; (ii) retention, defined as AUC( Student )AUC( Teacher ) × 100 ; (iii) model latency and memory consumption; (iv) calibration (ECE, Brier) and fairness (DP-diff, EO-diff). All reported results are aggregated over 5
+
+simulations. All models and runs use identical pre-processing and evaluation as implemented in TabTune [25]. 
+
+## 4.2 Empirical Results 
+
+Accuracy. Table 1 shows the average AUC and retention on LGBM and MLP on the 16 binary datasets. Results for the other student models are in Table 7, and the corresponding multiclass numbers are in Table 8. Distillation is strongly student-dependent . Tree-based students benefit most: LightGBM retains 98 .8–99 .6% of teacher AUC and improves over the default LightGBM baseline, while Table 7 shows that CatBoost and XGBoost can reach or exceed 100% retention. This suggests that distilled students can sometimes outperform their teachers, consistent with distillation acting as a regularizer through softened targets rather than only as compression . In contrast, MLP students retain only 89 .6–90 .8% and remain below the default baselines. The tree–MLP retention gap is consistent with what tabular ML has long observed: tree splits handle heterogeneous feature scales without preprocessing, while MLPs need careful regularization to compete. On our small-cohort benchmark, the MLP student is asked to regularize and distil at the same time; Section 5 discusses the specific failure modes we observed. Multi-teacher distillation also gives limited gains: except for CatBoost, the best multi-teacher student does not outperform the best single-teacher student, suggesting that uniform averaging can add noise when teachers disagree [20]. 
+
+Latency and memory. Table 2 reports latency on 6 datasets; full results are in Table 9. Students run on CPU, while TFM teachers run on GPU. Distilled LGBM and MLP students require about 7 ms and 3.8 ms, respectively, versus 
+
+187 .4 ms for the fastest teacher, yielding roughly 26 × and 49 × lower latency while staying under 1 MB. This makes distilled students suitable for CPU-only, high-throughput healthcare deployment: batch retrospective scoring across millions of records, or ICU streaming inference where every millisecond counts, become straightforward at 49 K– 80 Kpredictions per second per CPU core. 
+
+Calibration. Table 3 reports ECE and Brier scores on 12 binary datasets, with and without global temperature scaling (TS) [ 3, 22 ]. Distilled LGBM students preserve much of the teachers’ calibration, with ECE around .058 -.063 ,substantially better than default LightGBM and XGBoost. TS provides only small additional gains for LGBM students, suggesting that they are already reasonably calibrated. In contrast, MLP students are poorly calibrated before TS, with ECE above .12 , but improve markedly after scaling. Thus, calibration quality is strongly student-dependent: distilled trees are reliable without much post-hoc correction, whereas MLP students require calibration. Two further observations are worth noting. First, the default GBDT baselines (XGBoost, LightGBM) show the largest absolute ECE drop from temperature scaling ( 0.090 → 0.069 ), consistent with the well-known tendency of tree 4Distilling Tabular Foundation Models for Structured Health Data                                                                                                                         
+
+> Table 1 Avg AUC and retention on LGBM and MLP over the binary datasets.
+> Type Model AUC Ret. Baseline LogisticRegression .857 ±.108 –XGBoost .854 ±.133 –LightGBM .853 ±.134 –Teacher LimiX .875 ±.119 –TabICLv2 .873 ±.124 –TabPFNv2.6 .870 ±.125 –TabDPT .868 ±.126 –TabPFNv2.5 .868 ±.125 –Orion-MSP v1.5 .864 ±.124 –Distilled (LGBM) LimiX →LGBM .865 ±.119 98.8% TabICLv2 →LGBM .863 ±.122 98.9% TabPFNv2.6 →LGBM .862 ±.123 99.1% TabPFN →LGBM .862 ±.124 99.4% TabDPT →LGBM .861 ±.123 99.1% Orion-MSP →LGBM .860 ±.119 99.6% Distilled (LGBM, multi-teacher) [PFN+OrionMSP+Limix] →LGBM .864 ±.121 –[PFN+Limix] →LGBM .864 ±.121 –[PFN+ICL+Limix] →LGBM .863 ±.123 –[PFN+ICL+Limix+TabDPT] →LGBM .862 ±.123 –Distilled (MLP) LimiX →MLP .795 ±.173 90.8% TabPFN →MLP .787 ±.184 90.7% TabPFNv2.6 →MLP .782 ±.189 89.9% TabICLv2 →MLP .782 ±.190 89.6% TabDPT →MLP .781 ±.190 89.9% Orion-MSP →MLP .775 ±.182 89.7% Distilled (MLP, multi-teacher) [PFN+OrionMSP+Limix] →MLP .790 ±.181 –[PFN+Limix] →MLP .787 ±.180 –[PFN+ICL+Limix+TabDPT] →MLP .787 ±.182 –[PFN+ICL+Limix] →MLP .785 ±.182 –
+
+models to be overconfident at the leaves [ 26 ]. Any deployment that uses raw GBDT scores as risk probabilities will therefore need a calibration step. Second, the MLP miscalibration is dominated by overconfidence on the larger cohorts (support2 , sick ); on reliability diagrams the high-confidence bins consistently overshoot, which TS rescales globally but does not fix per-region. 
+
+Fairness. Table 4 reports DP- and EO-difference across 8 datasets and 4 sensitive attributes. Negative ∆ values mean the student has a smaller fairness gap than its teacher. Distilled LGBM students reduce DP gaps and EO gaps in most cases, with average ∆DP = −0.013 and ∆EO = −0.014 , consistent with soft-label smoothing in a smaller hypothesis class. MLP students reduce DP more strongly ( ∆DP = −0.034 ), but often increase EO gaps ( ∆EO = +0 .041 ). Thus, LGBM provides a more stable fairness tradeoff, while MLP can improve parity in prediction rates at the cost of subgroup error disparities. The pattern is consistent with a smaller hypothesis class plus soft-label smoothing acting as a fairness regularizer for the LGBM student. The MLP shifts in the opposite direction on EO: smaller prediction-rate gaps, but larger subgroup error disparities on pima_diabetes , sick , and a few of the larger cohorts. Practitioners should treat the EO regression as a real concern and audit it on the actual sensitive attributes of their deployment, not extrapolate from the table alone. 
+
+Component ablation. Table 5 ablates MLP distillation with TabPFNv2.6 on 5 datasets. Hard-label training outperforms the full setup by 0.034 AUC ( p=0 .004 ), while removing adaptive temperature, confidence weighting, or augmentation changes AUC by at most 0.02 . Thus, for MLPs, the soft-label machinery adds little on this benchmark; we leave tree-student ablations to future work. 
+
+# 5 Discussion and Limitations 
+
+In this section, we discuss the main limitations of our work and a few design decisions worth flagging for practitioners. 5Distilling Tabular Foundation Models for Structured Health Data 
+
+Table 2 Inference latency and throughput across datasets 
+
+Model Latency (ms) Throughput (predictions/s) 
+
+TFM teachers (GPU) 
+
+TabICLv2 187.4 3,221/s LimiX 433.8 1,450/s TabPFNv2.6 564.9 1,099/s Orion-MSP v1.5 1,911.9 323/s TabDPT 4,010.0 600/s 
+
+Distilled MLP students (CPU) 
+
+LimiX →MLP 3.7 172K/s TabPFNv2.6 →MLP 3.8 170K/s TabICLv2 →MLP 3.8 169K/s [PFNv2.6+Limix] →MLP 3.8 166K/s 
+
+Distilled LGBM students (CPU) 
+
+LimiX →LGBM 7.0 87K/s [PFNv2.6+ICL+Limix] →LGBM 7.1 92K/s TabPFNv2.6 →LGBM 7.3 82K/s [PFNv2.6+Limix] →LGBM 7.7 98K/s 
+
+Table 3 Avg ECE and Brier on 12 binary datasets w/o global temperature scaling (TS).                                                                     
+
+> Model ECE ↓ECE+TS ↓Brier ↓Brier+TS ↓
+> Baselines
+> LogisticRegression .062 .063 .101 .100 LightGBM .090 .069 .116 .106 XGBoost .092 .069 .116 .107
+> Teachers
+> TabPFNv2.6 .053 .053 .095 .094 TabDPT .056 .053 .094 .093 LimiX .056 .055 .093 .093 TabICLv2 .056 .053 .093 .093
+> Distilled LGBM students (single-teacher)
+> TabDPT →LGBM .060 .057 .100 .099 TabPFNv2.6 →LGBM .061 .060 .098 .098
+> Distilled LGBM students (multi-teacher)
+> [PFNv2.6+Limix] →LGBM .058 .061 .099 .099 [PFNv2.6+OrionMSP+Limix] →LGBM .063 .059 .099 .098
+> Distilled MLP students (single-teacher)
+> TabPFNv2.6 →MLP .123 .074 .148 .133 TabDPT →MLP .124 .072 .149 .133
+> Distilled MLP students (multi-teacher)
+> [PFNv2.6+Limix] →MLP .124 .076 .150 .133 [PFNv2.6+ICL+Limix+TabDPT] →MLP .125 .075 .149 .133
+
+MLP instability on small low-dimensional inputs. The MLP student is unstable on small low-dimensional inputs. On three datasets with under 750 samples and 4–8 features ( blood_transfusion , indian_liver_patient ,
+
+pima_diabetes ), it showed high seed-to-seed variance and occasionally collapsed to near-random predictions. The library has a collapse detector that restarts training with higher dropout, but the underlying issue is that a residual MLP is overparameterised for these inputs. The LGBM student does not have this problem. Recommendation: use LGBM by default and consider an MLP student only when inference latency under 2 ms is a hard requirement. 
+
+Multiclass distillation gap. TabPFNv2.5 scores 0.985 AUC on the kidney disease dataset ( 3 classes, 400 rows), while its distilled TabPFN →LGBM version scores only 0.749 . The reason is that the soft-label distillation breaks for problems in the 3+ class due to the LGBM regressor formulation we use. A multinomial-loss formulation would be the proper fix; until that lands, multiclass distillation should be treated as experimental. 6Distilling Tabular Foundation Models for Structured Health Data 
+
+Table 4 Group fairness across 8 datasets and 4 attributes. In multi-teacher settings, ∆ are computed with TabPFNv2.6.                                                                                                       
+
+> Model DP-diff ↓EO-diff ↓∆DP ∆EO
+> Baselines
+> LogisticRegression .131 .183 ––XGBoost .145 .165 ––LightGBM .145 .167 ––
+> Teachers
+> LimiX .134 .144 ––TabDPT .143 .156 ––TabPFNv2.6 .145 .144 ––TabICLv2 .154 .166 ––Orion-MSP v1.5 .153 .202 ––
+> Distilled LGBM students (single-teacher)
+> LimiX →LGBM .130 .125 −.005 −.018
+> OrionMSPv1.5 →LGBM .132 .173 −.021 −.029
+> TabPFNv2.6 →LGBM .131 .125 −.014 −.019
+> TabDPT →LGBM .136 .171 −.007 +.015
+> TabICLv2 →LGBM .139 .136 −.015 −.031
+> Distilled LGBM students (multi-teacher)
+> [PFNv2.6+OrionMSP+Limix] →LGBM .129 .130 −.016 −.014
+> [PFNv2.6+Limix] →LGBM .133 .126 −.012 −.017
+> [PFNv2.6+ICL+Limix] →LGBM .135 .120 −.010 −.024
+> Distilled MLP students (single-teacher)
+> OrionMSPv1.5 →MLP .104 .216 −.049 +.014
+> TabICLv2 →MLP .106 .165 −.048 −.001
+> LimiX →MLP .108 .187 −.026 +.043
+> TabPFNv2.6 →MLP .108 .162 −.036 +.019
+> TabDPT →MLP .117 .178 −.026 +.022
+> Distilled MLP students (multi-teacher)
+> [PFNv2.6+OrionMSP+Limix] →MLP .111 .193 −.034 +.049
+> [PFNv2.6+ICL+Limix] →MLP .114 .207 −.030 +.063
+> [PFNv2.6+Limix] →MLP .116 .219 −.029 +.075
+
+Table 5 Ablation on the MLP student with TabPFNv2.6 teacher on 5 datasets. ∆ is the paired difference vs. full ; p from a Wilcoxon signed-rank test on per-(dataset, simulation) deltas. Configuration AUC ∆ vs. full p
+
+Full (all components) .829 – –No adaptive temperature .809 −.020 .49 No confidence weighting .828 −.001 .93 No augmentation .818 −.011 .34 Hard labels only ( α=0 ) .863 +.034 .004 Soft labels only ( α=1 ) .814 −.014 .54 Low temperature ( T =1 ) .855 +.027 .06 High temperature ( T =5 ) .810 −.018 .19 
+
+Why uniform multi-teacher averaging did not help. Table 1 shows the best multi-teacher LGBM student tied, rather than beat, the best single-teacher student at three decimal places. Two factors are likely at work. The TFM teachers are themselves close in AUC ( 0.864 –0.875 ), so the headroom for ensemble gain on these datasets was small to begin with. And equal-weight averaging treats teacher disagreement as additional information even when the disagreement is closer to noise; [ 20 ] formalises this for distillation. A learned or accuracy-weighted scheme could plausibly close the gap, especially in regimes where one teacher is meaningfully stronger than the others. We leave that for follow-up work. 
+
+Hard-label ablation. Table 5 shows that hard-label training ( α=0 ) outperforms the full pipeline ( α=0 .7) by 0.034 
+
+AUC ( p=0 .004 , Wilcoxon) on the MLP. This does not affect the need for out-of-fold labeling: for ICL teachers, scoring examples that appear in the context can produce overconfident soft targets and leakage. Rather, the result suggests that, 7Distilling Tabular Foundation Models for Structured Health Data 
+
+on small relatively clean datasets, the added soft-label components do not improve MLP training. Soft targets may be more useful in noisier or higher-dimensional clinical settings, where hard labels are less reliable. The matching LGBM ablation is left to future work; on partial LGBM ablation runs we have completed, the components again contribute less than the per-dataset variance. 
+
+# 6 Conclusion 
+
+In this work, we argued that TFMs predict well on small health datasets but are costly to deploy in inference-constrained health settings. We proposed a methodology around knowledge distillation to transfer predictive behavior from TFMs to simpler standard models, and ran extensive experiments on 19 healthcare datasets. Our results show that distilled models run, on CPU, at least 26 × faster than the best TFMs on GPU. While knowledge transfer recovers at least 90 %of TFM accuracy, it also preserves calibration and fairness. As a practical recommendation: use an LGBM student by default, and consider an MLP student only when sub-2 ms latency is a hard requirement. More broadly, this paper argues that TFM inference cost reflects how TFMs do inference (context-conditioned GPU forward passes) rather than something intrinsic to their accuracy. Out-of-fold distillation moves that cost off the deployment surface without losing the accuracy. 
+
+# 7 Impact and Ethical Considerations 
+
+Lowering the deployment bar. The practical effect of this work is that TFM-quality predictions on small clinical datasets no longer require a GPU. A 7 ms LightGBM student that fits in under 1 MB can run inside hospital systems that today cannot host a TabPFN forward pass: CPU-only nodes, air-gapped environments, registry-scale batch jobs, embedded scoring at the point of care. This widens the set of settings where recent TFM accuracy is reachable, particularly in resource-limited deployments or those with data-residency constraints. 
+
+Bias inheritance. A distilled student inherits whatever bias the teacher carries. On the 8-dataset, 4-attribute fairness benchmark we report, distilled LGBM students stayed close to teacher DP- and EO-difference, with average ∆DP of 
+
+−0.013 and average ∆EO of −0.014 . MLP students cut DP-difference more strongly but increased EO-difference on several datasets, meaning prediction rates equalised at the cost of subgroup error rates. Any deployment should audit the specific student-teacher pair on the actual sensitive attributes that matter for the use case. Generalising from our table to a different cohort or attribute is not safe. 
+
+Calibration and decision support. A clinical model whose probabilities are off cannot be plugged into a threshold-based decision rule without a calibration step. Distilled LightGBM students preserve teacher calibration without much post-hoc correction; MLP students need temperature scaling before deployment. Practitioners should not skip this step. 8Distilling Tabular Foundation Models for Structured Health Data 
+
+# References 
+
+[1] Pranav Rajpurkar, Emma Chen, Oishi Banerjee, and Eric J. Topol. AI in health and medicine. Nature Medicine ,28(1):31–38, 2022. [2] Alistair E. W. Johnson, Tom J. Pollard, Lu Shen, Li-wei H. Lehman, Mengling Feng, Mohammad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G. Mark. MIMIC-III, a freely accessible critical care database. Scientific Data , 3:160035, 2016. [3] Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q. Weinberger. On calibration of modern neural networks. In 
+
+Proceedings of the 34th International Conference on Machine Learning , pages 1321–1330, 2017. [4] Ziad Obermeyer, Brian Powers, Christine Vogeli, and Sendhil Mullainathan. Dissecting racial bias in an algorithm used to manage the health of populations. Science , 366(6464):447–453, 2019. [5] Moritz Hardt, Eric Price, and Nathan Srebro. Equality of opportunity in supervised learning. In Advances in Neural Information Processing Systems , volume 29, 2016. [6] Léo Grinsztajn, Klemens Flöge, Oscar Key, Felix Birkel, Philipp Jund, Brendan Roof, Benjamin Jäger, Dominik Safaric, et al. TabPFN-2.5: Advancing the state of the art in tabular foundation models. arXiv preprint arXiv:2511.08667 , 2025. [7] Jingang Qu, David Holzmüller, Gaël Varoquaux, and Marine Le Morvan. Tabiclv2: A better, faster, scalable, and open tabular foundation model. arXiv preprint arXiv:2602.11139 , 2026. [8] Junwei Ma, Valentin Thomas, Rasa Hosseinzadeh, Alex Labach, Hamidreza Kamkari, Jesse C Cresswell, Keyvan Golestan, Guangwei Yu, Anthony L Caterini, and Maksims Volkovs. Tabdpt: Scaling tabular foundation models on real data. arXiv preprint arXiv:2410.18164 , 2024. [9] Xingxuan Zhang, Gang Ren, Han Yu, Hao Yuan, Hui Wang, Jiansheng Li, Jiayun Wu, Lang Mo, et al. LimiX: Unleashing structured-data modeling capability for generalist intelligence. arXiv preprint arXiv:2509.03505 ,2025. [10] Mohamed Bouadi, Pratinav Seth, Aditya Tanna, and Vinay Kumar Sankarapu. Orion-MSP: Multi-scale sparse attention for tabular in-context learning. arXiv preprint arXiv:2511.02818 , 2025. [11] Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. Distilling the knowledge in a neural network. In NIPS Deep Learning Workshop , 2015. [12] Jonibek Mansurov, Akhmed Sakip, and Alham Fikri Aji. Data laundering: Artificially boosting benchmark results through knowledge distillation. arXiv preprint arXiv:2412.15255 , 2024. [13] Guolin Ke, Qi Meng, Thomas Finley, Taifeng Wang, Wei Chen, Weidong Ma, Qiwei Ye, and Tie-Yan Liu. LightGBM: A highly efficient gradient boosting decision tree. In Advances in Neural Information Processing Systems , volume 30, 2017. [14] Liudmila Prokhorenkova, Gleb Gusev, Aleksandr Vorobev, Anna Veronika Dorogush, and Andrey Gulin. CatBoost: Unbiased boosting with categorical features. In Advances in Neural Information Processing Systems , volume 31, 2018. [15] Tianqi Chen and Carlos Guestrin. XGBoost: A scalable tree boosting system. In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining , pages 785–794, 2016. [16] Noah Hollmann, Samuel Müller, Lennart Purucker, Arjun Krishnakumar, Max Körfer, Shi Bin Hoo, Robin Tibor Schirrmeister, and Frank Hutter. Accurate predictions on small data with a tabular foundation model. Nature ,637:319–326, 2025. [17] Mohamed Bouadi, Pratinav Seth, Aditya Tanna, and Vinay Kumar Sankarapu. Orion-Bix: Bi-axial attention for tabular in-context learning. In Proceedings of the ACM Web Conference 2026 , pages 8673–8676, 2026. [18] Jiaxi Tang, Rakesh Shivanna, Zhe Zhao, Dong Lin, Anima Singh, Ed H Chi, and Sagar Jain. Understanding and improving knowledge distillation. arXiv preprint arXiv:2002.03532 , 2020. [19] Helong Zhou, Liangchen Song, Jiajie Chen, Ye Zhou, Guoli Wang, Junsong Yuan, and Qian Zhang. Rethinking soft labels for knowledge distillation: A bias-variance tradeoff perspective. arXiv preprint arXiv:2102.00650 ,2021. [20] Shangchen Du, Shan You, Xiaojie Li, Jianlong Wu, Fei Wang, Chen Qian, and Changshui Zhang. Agree to disagree: Adaptive ensemble knowledge distillation in gradient space. advances in neural information processing systems , 33:12345–12355, 2020. [21] Freya Behrens and Lenka Zdeborová. Dataset distillation for memorized data: Soft labels can leak held-out teacher knowledge. arXiv preprint arXiv:2506.14457 , 2025. [22] John Platt et al. Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods. Advances in large margin classifiers , 10(3):61–74, 1999. 9Distilling Tabular Foundation Models for Structured Health Data 
+
+[23] Mahdi Pakdaman Naeini, Gregory Cooper, and Milos Hauskrecht. Obtaining well calibrated probabilities using Bayesian binning into quantiles. In Proceedings of the AAAI Conference on Artificial Intelligence , 2015. [24] Aditya Tanna, Pratinav Seth, Mohamed Bouadi, and Vinay Kumar Sankarapu. Exploring fine-tuning for tabular foundation models. In Proceedings of the ACM Web Conference 2026 , pages 8613–8616, 2026. [25] Aditya Tanna, Pratinav Seth, Mohamed Bouadi, Utsav Avaiya, and Vinay Kumar Sankarapu. TabTune: A unified library for inference and fine-tuning tabular foundation models. arXiv preprint arXiv:2511.02802 , 2025. [26] Alexandru Niculescu-Mizil and Rich Caruana. Predicting good probabilities with supervised learning. In 
+
+Proceedings of the 22nd international conference on Machine learning , pages 625–632, 2005. 10 Distilling Tabular Foundation Models for Structured Health Data 
+
+# A Implementation details 
+
+Defaults: K=5 folds, Tmin =1 , Tmax =5 , α=0 .7, confidence-weight (μ, σ ) = (0 .7, 0.2) . LGBM students use 300 estimators with patience-30 early stopping. MLP students use embedding dimension min(8 d, 128) , hidden widths scaled to dataset size, warmup-plus-cosine LR, label smoothing 0.05, and SWA on the final 20% of training. A collapse detector monitors prediction entropy and restarts with higher dropout if degenerate predictions appear. Teachers run inference-only with no fine-tuning. Latency is measured on an Intel Xeon 8358 CPU for students and an NVIDIA A100 GPU for teachers, averaged over 50 runs (students) and 20 runs (teachers). 
+
+# B Dataset details  
+
+> Table 6 The 19 health datasets used. Modality codes: C = cardiology, O = oncology, N = nephrology, D = dermatology, E = endocrinology, ICU = intensive care, H = hepatology, OG = obstetrics-gynaecology, W = women’s health.
+
+Dataset Modality Samples Features Classes Use heart_cleveland C 303 13 2 accuracy, calibration, fairness heart_failure_clinical C 299 12 2 accuracy, calibration, fairness south_african_heart C 462 9 2 accuracy, calibration breast_cancer_wisconsin O 569 30 2 accuracy, calibration wdbc O 569 30 2 accuracy, calibration breast_w O 699 9 2 accuracy, calibration indian_liver_patient H 583 10 2 accuracy, calibration blood_transfusion — 748 4 2 accuracy, calibration pima_diabetes E 768 8 2 accuracy, calibration, fairness cervical_cancer W 858 35 2 accuracy mammographic_mass O 961 5 2 accuracy, calibration sick E 3,772 27 2 accuracy, calibration, fairness support2 ICU 9,105 21 2 accuracy, calibration, fairness framingham C 4,238 15 2 accuracy, fairness (sex) diabetes_130_us E 101,766 47 2 accuracy, fairness (race) mimic_iii_mortality ICU 58,976 23 2 accuracy, fairness (gender) chronic_kidney_disease N 400 24 3 accuracy dermatology D 366 34 6 accuracy analcatdata_dmft OG 797 4 6 accuracy 
+
+Table 6 lists all 19 datasets with sample size, feature count, class count, and the role each plays in the evaluation. Three of the binary cohorts are versions of the Wisconsin breast-cancer dataset ( breast_cancer_wisconsin , wdbc ,
+
+breast_w ); we kept all three for sanity checking. 11 Distilling Tabular Foundation Models for Structured Health Data 
+
+# C Additional Accuracy Results 
+
+Accuracy on CatBoost and XGBoost. Table 7 reports the avg AUC and retention on CatBoost and XGBoost over the 16 binary datasets. The results show that the strong retention observed for LightGBM extends to other tree-based students. CatBoost and XGBoost retain nearly all teacher AUC, with several settings exceeding 100% retention. The best CatBoost student reaches .877 AUC, slightly above the best teacher in Table 1, while the best XGBoost students reach .875 AUC. This supports the main-text conclusion that tree-based students are reliable distillation targets and that distillation can sometimes improve AUC rather than only compressing the teacher.    
+
+> Table 7 Avg AUC and retention on CatBoost and XGBoost over the 16 binary datasets.
+
+Type Model AUC Ret. Distilled (CatBoost) TabICLv2 →CB .876 ± .109 100.4% LimiX →CB .875 ± .111 100.0% TabPFNv2.6 →CB .875 ± .112 100.5% TabDPT →CB .872 ± .113 100.5% Orion-MSP →CB .870 ± .110 100.7% Distilled (CatBoost, multi-teacher) [PFNv2.6+ICL+Limix+TabDPT] →CB .877 ± .110 –[PFNv2.6+ICL+Limix] →CB .876 ± .110 –[PFNv2.6+Limix] →CB .876 ± .110 –[PFNv2.6+OrionMSP+Limix] →CB .875 ± .110 –Distilled (XGBoost) TabICLv2 →XGB .875 ± .109 100.3% TabPFNv2.6 →XGB .874 ± .112 100.5% LimiX →XGB .874 ± .110 99.9% TabDPT →XGB .869 ± .113 100.2% Orion-MSP →XGB .868 ± .109 100.4% Distilled (XGBoost, multi-teacher) [PFNv2.6+ICL+Limix] →XGB .875 ± .110 –[PFNv2.6+ICL+Limix+TabDPT] →XGB .875 ± .110 –[PFNv2.6+Limix] →XGB .875 ± .110 –[PFNv2.6+OrionMSP+Limix] →XGB .874 ± .110 –
+
+Accuracy on multi-class datasets. Table 8 reports the avg AUC and retention of all students over the 3 multi-class datasets. The results highlight that multiclass results are broadly consistent with the binary setting but with smaller differences between methods. Tree-based students retain high teacher performance, with LightGBM and XGBoost reaching up to .786 –.787 macro-AUC and retention near or above 100% for some teachers. MLP students remain slightly weaker, with retention between 96 .9% and 99 .9% . These results suggest that distillation transfers reasonably well to multiclass tasks, although the small number of datasets makes the trend less conclusive than in the binary benchmark. 
+
+# D Additional Latency Results 
+
+Figure 2 and Table 9 confirm that the latency gains hold across all distilled settings. All MLP students run between 3.7
+
+and 4.5 ms, and all LGBM students between 7.0 and 10 .7 ms on CPU, while the fastest GPU-based teacher, TabICLv2, requires 187 .4 ms. Even at P99, distilled students remain below 17 ms, whereas teachers range from 202 .6 ms to over 4 s. The figure therefore highlights a consistent deployment gap: distillation moves inference from hundreds or thousands of GPU milliseconds to single-digit CPU milliseconds, with MLP offering the lowest latency and LGBM remaining within a practical real-time range. 
+
+# E Multi-teacher analysis with full coverage 
+
+Table 10 reports multi-teacher LGBM distillation on the full 19-dataset benchmark. None of the four ensembles that ran on all datasets exceeds the best single-teacher student (TabICLv2 →LGBM at 0.906); they are tied at three decimal places. On the same subset, the best single teacher scores 0.916, so there is some real ensemble effect on those three. Whether it generalises requires running the ensemble on the remaining ten datasets, which we will do in a follow-up. 12 Distilling Tabular Foundation Models for Structured Health Data 
+
+Table 8 Multiclass panel results (3 datasets, macro-AUC). Per-dataset mean, ± std across datasets. Type Model AUC Ret. Baseline LogisticRegression .785 ± .303 –XGBoost .770 ± .323 –LightGBM .770 ± .323 –Teacher TabDPT .789 ± .297 –TabICLv2 .788 ± .299 –LimiX .784 ± .304 –TabPFNv2.6 .782 ± .307 –TabPFN (v2.5) .779 ± .312 –Orion-MSP v1.5 .773 ± .319 –Distilled (CatBoost) TabICLv2 →CB .782 ± .304 99.2% LimiX →CB .778 ± .312 99.2% Orion-MSP →CB .777 ± .313 100.5% TabDPT →CB .776 ± .314 98.4% TabPFNv2.6 →CB .774 ± .320 98.9% Distilled (XGBoost) TabICLv2 →XGB .787 ± .299 99.9% TabDPT →XGB .780 ± .309 98.8% LimiX →XGB .777 ± .313 99.1% TabPFNv2.6 →XGB .777 ± .315 99.3% Orion-MSP →XGB .776 ± .315 100.3% Distilled (LightGBM) TabICLv2 →LGBM .786 ± .299 99.8% TabDPT →LGBM .785 ± .302 99.5% Orion-MSP →LGBM .785 ± .301 101.5% LimiX →LGBM .784 ± .303 100.0% TabPFNv2.6 →LGBM .782 ± .305 100.0% TabPFN (v2.5) →LGBM .779 ± .310 100.1% Distilled (MLP) TabPFN →MLP .778 ± .311 99.9% LimiX →MLP .772 ± .319 98.5% TabPFNv2.6 →MLP .772 ± .320 98.7% TabDPT →MLP .769 ± .323 97.5% Orion-MSP →MLP .766 ± .328 99.0% TabICLv2 →MLP .763 ± .332 96.9% 
+
+Figure 2 Inference latency, log scale. Teachers (red) sit at 200–4000 ms on GPU. Distilled students sit at 4–11 ms on CPU; tree baselines below 4 ms. Distillation collapses the latency gap. 
+
+13 Distilling Tabular Foundation Models for Structured Health Data 
+
+Table 9 Inference latency and throughput, for all settings of distilled students, averaged across datasets ranging from 91 to 1821 test examples. All measurements on a single CPU core; teachers run on GPU. 
+
+Model Mean ms P99 ms Throughput 
+
+Baselines 
+
+LogisticRegression 0.3 0.3 2,249K/s XGBoost 1.7 2.7 353K/s LightGBM 3.6 4.1 162K/s 
+
+TFM teachers (GPU) 
+
+TabICLv2 187.4 202.6 3,221/s LimiX 433.8 457.1 1,450/s TabPFNv2.6 564.9 577.8 1,099/s Orion-MSP v1.5 1,911.9 1,941.1 323/s TabDPT 4,010.0 4,024.1 600/s 
+
+Distilled MLP students 
+
+LimiX →MLP 3.7 4.0 172K/s TabPFNv2.6 →MLP 3.8 4.1 170K/s TabICLv2 →MLP 3.8 4.4 169K/s [PFNv2.6+Limix] →MLP 3.8 4.8 166K/s [PFNv2.6+ICL+Limix] →MLP 3.8 4.3 166K/s Orion-MSP →MLP 3.8 4.5 164K/s [PFNv2.6+OrionMSP+Limix] →MLP 3.9 4.7 157K/s [PFNv2.6+ICL+Limix+TabDPT] →MLP 4.2 4.7 150K/s TabDPT →MLP 4.5 5.2 158K/s 
+
+Distilled LGBM students 
+
+LimiX →LGBM 7.0 14.2 87K/s [PFNv2.6+ICL+Limix] →LGBM 7.1 12.5 92K/s TabPFNv2.6 →LGBM 7.3 12.5 82K/s [PFNv2.6+Limix] →LGBM 7.7 13.1 98K/s TabDPT →LGBM 8.0 12.6 79K/s Orion-MSP →LGBM 8.0 10.0 86K/s [PFNv2.6+OrionMSP+Limix] →LGBM 8.1 15.7 78K/s TabICLv2 →LGBM 10.3 14.6 67K/s [PFNv2.6+ICL+Limix+TabDPT] →LGBM 10.7 16.1 64K/s 
+
+Table 10 Multi-teacher LGBM distillation across binary datasets. The first four rows ran on all 16 datasets; the last ran on 3. Teacher ensemble AUC (mean) Coverage (datasets) 
+
+[TabPFN + Limix ] .906 16 
+
+[TabPFN + TabICLv2 + Limix ] .906 16 
+
+[TabPFN + OrionMSP + Limix ] .906 16 
+
+[TabPFN + TabICLv2 + Limix + TabDPT ] .906 16 Best single-teacher LGBM (TabICLv2 →LGBM) .906 16 Best single teacher (TabICLv2) .918 16 
+
+14

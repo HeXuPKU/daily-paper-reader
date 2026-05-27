@@ -1,0 +1,1427 @@
+Title: Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport
+
+URL Source: https://arxiv.org/pdf/2605.20989v1
+
+Published Time: Thu, 21 May 2026 01:07:22 GMT
+
+Number of Pages: 34
+
+Markdown Content:
+# Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+Mehmet Yigit Balik 1 Harri L¨ ahdesm¨ aki 1
+
+## Abstract 
+
+Single-cell RNA sequencing provides insights into gene expression at single-cell resolution, yet inferring temporal processes from these static snapshot measurements remains a fundamental challenge. Current approaches utilizing neural differential equations and flows are sensitive to overfitting and lack careful considerations of bio-logical variability. In this work, we propose a gen-erative framework that models population trends using a latent heteroscedastic Gaussian process (GP) approximated by Hilbert space methods. To address the absence of genuine cell trajectories, we leverage an optimal transport (OT) objective that aligns generated and observed population dis-tributions. Our method explicitly captures biologi-cal heterogeneity by incorporating cell-specific la-tent time and cell type conditioning to disentangle temporal asynchrony and trajectories to different cell types. We demonstrate state-of-the-art perfor-mance on complex interpolation and extrapolation benchmarks and introduce a novel gradient-based strategy for inferring perturbation trajectories. 
+
+## 1. Introduction 
+
+Single-cell RNA sequencing (scRNA-seq) has revolution-ized our ability to resolve cellular heterogeneity by provid-ing a high-resolution view of the gene expression landscape. However, understanding biological systems requires capa-bilities to model temporal processes, such as differentiation and development. A fundamental limitation of scRNA-seq is its destructive nature: since cells are destroyed during an experiment, their temporal evolution cannot be directly ob-served. As a result, the data consist only of population-level snapshots at observation time points, making it impossible 
+
+> 1
+
+Department of Computer Science, Aalto University, Es-poo, Finland. Correspondence to: Mehmet Yigit Balik 
+
+<mehmet.balik@aalto.fi >.
+
+Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s). Decoder     
+
+> Latent Space z(t) = f(t) + (t)
+> ρ0
+> ˆρ0
+> ρ1
+> ˆρ1
+> ˆρ2
+> ρ3
+> ˆρ3
+> ˆρ4
+
+Figure 1. Overview of the proposed framework. A latent GP mod-els smooth population-level temporal dynamics with heteroscedas-tic noise, which are decoded into distributions of cells at each time point and matched to observed data via OT. 
+
+to observe individual cells across time. This challenge moti-vates the development of computational methods that can reconstruct continuous underlying cellular dynamics from such sparse and discrete population-level observations. While dynamical systems have been successfully employed to model biological processes, existing methods differ in how they represent the biological stochasticity. Determin-istic frameworks, such as neural ordinary differential equa-tions (ODEs) (Huguet et al., 2022; Zhang et al., 2024) and flow matching (Wang et al., 2025), effectively model tra-jectories but do not account for the variance inherent to biological processes. Conversely, stochastic differential equations (SDEs) offer an alternative for modeling biolog-ical stochasticity (Yeo et al., 2021; Jiang & Wan, 2024), though they necessitate a careful design of the diffusion to maintain stability (Oh et al., 2024). This requirement often restricts existing models to rigid assumptions. These consid-erations can lead to modeling choices that make it harder to capture time-varying uncertainty and to accommodate tem-poral asynchrony or multi-lineage structure within a single coherent and biologically plausible generative framework. 1
+
+> arXiv:2605.20989v1 [cs.LG] 20 May 2026 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport
+
+In this work, we propose Latent Gaussian Process with Op-timal Transport (LGP-OT), a deep generative model with a heteroscedastic GP prior in the latent space to robustly capture global temporal trends, as illustrated in Figure 1. Similar to previous work (Huguet et al., 2022; Zhang et al., 2024), our framework leverages an OT loss that matches the distribution of generated cells and the observed cells, thus ensuring that our generated population faithfully repro-duces the geometry and statistics of the biological popula-tion across time. Our approach models underlying dynamics while explicitly accounting for noise inherent to single-cell data. Moreover, we model temporal asynchrony via cell-specific latent time and incorporate categorical covariates into the kernel to account for multiple lineages. This en-ables learning of cell type-conditioned trajectories within a unified framework, which is not feasible with standard approaches. We use Hilbert space GP approximation (Solin & S ¨arkk ¨a, 2020), which scales linearly for large-scale, high-dimensional datasets (Balık et al., 2025). Finally, generative models are often valued for their ability to simulate arbitrary conditioning, or hypothetical pertur-bations. While ODE-based models often utilize recursive numerical simulation, we extend the gradient-based latent variable perturbation strategy of Bjerregaard et al. (2025) to the temporal domain by optimizing entire latent trajectories to satisfy gene expression constraints. This enables inferring perturbation effects on temporal processes when recursive simulation is not available for perturbation analysis. Our contributions are summarized as follows: • We introduce LGP-OT with a scalable latent GP prior that incorporates cell-specific latent time and cell type-informed trajectories to capture complex biological heterogeneity, achieving state-of-the-art performance on interpolation and extrapolation tasks on real data. • We employ an OT objective to learn GP-based popula-tion dynamics from a time series of scRNA-seq data. • We extend gradient-based perturbation to GP-based temporal models to infer perturbation effects. 
+
+## 2. Related Work 
+
+Variational autoencoders (VAEs) for scRNA-seq. VAEs (Kingma & Welling, 2014) have become instrumental in the analysis of high-dimensional single-cell transcriptomics. Popular tools include, e.g. scVI (Lopez et al., 2018) and scVAE (Grønbech et al., 2020) that are used to learn low-dimensional latent representations that capture the underly-ing biological variability while effectively handling the spar-sity, nuisance factors, and noise inherent in scRNA-seq data. However, capturing dynamic processes requires extending these methods to account for temporal dependencies. 
+
+GP prior VAEs. Combining the flexibility of GPs with the representational power of deep generative models has been a fruitful direction for time series analysis. GP prior VAEs (Casale et al., 2018) have been extensively developed to model time series data (Fortuin et al., 2020; Jazbec et al., 2021; Ramchandran et al., 2021; Tran et al., 2023; Balık et al., 2025; Shi et al., 2025), where the latent correlation structure is explicitly defined across time points and other covariates. While these methods excel at handling irregu-larly sampled high-dimensional time series, they assume that the samples are linked across time (i.e., tracking the same object). However, cells are destroyed in scRNA-seq experiments, yielding only a snapshot of the population at each time point. Consequently, standard GP prior VAE mod-els that rely on direct sample-to-sample correlations are not directly applicable to the unpaired nature of single-cell data. 
+
+Learning scRNA-seq dynamics. Several approaches have been proposed to infer temporal dynamics from static snapshots. GPfates (L ¨onnberg et al., 2017) reconstructs dif-ferentiation trajectories by projecting single-cell data into a low-dimensional space using a GPLVM, infers a continuous pseudotime variable to order cells along their developmental progression, and applies an overlapping mixture of GPs as a function of this pseudotime to model branching events. GPfates can probabilistically assign cells to specific lineages and trace dynamic gene expression changes across diverging fates. Other methods focus on predicting gene expression at unobserved timepoints. Waddington-OT (Schiebinger et al., 2019) utilizes OT to predict cell-cell couplings, while Trajec-toryNet (Tong et al., 2020) employs continuous normalizing flows to model paths between cell populations. However, both are limited to interpolation between observed endpoints and cannot extrapolate beyond the measured time range. To address extrapolation, PRESCIENT (Yeo et al., 2021) com-bines principal component analysis (PCA) with neural SDEs to model differentiation, though PCA-based representations may fail to capture complex cellular heterogeneity. Simi-larly, MIOFlow (Huguet et al., 2022) integrates a geodesic VAE with neural ODEs to retain cellular variations, but it fixes the encode-decode mappings prior to learning dynam-ics, which may limit its ability to generalize to unobserved time points with shifting distributions. scNODE (Zhang et al., 2024) integrates VAEs with neural ODEs and em-ploys a dynamic regularization term to ensure the latent space is robust to distribution shifts, thereby improving ex-trapolation to unobserved time points. PI-SDE (Jiang & Wan, 2024) extends these dynamic frameworks by incor-porating the least action principle into a physics-informed neural SDE model, allowing it to reconstruct an interpretable potential energy landscape governing cellular differentia-tion. Concurrently, simulation-free paradigms based on flow matching (Lipman et al., 2023; Tong et al., 2024a;b) have emerged to mitigate the computational burden of numeri-2Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+cal integration in high dimensions by directly constructing probability paths. Furthermore, addressing varying sizes of cell populations, where proliferation and apoptosis vi-olate mass conservation, unbalancedness-aware methods (Pariset et al., 2023; Sha et al., 2024; Zhang et al., 2025) have been developed to explicitly decouple mass variation from the state transport. Most recently, VGFM (Wang et al., 2025) unifies these concepts by jointly learning velocity and growth via flow matching, offering a scalable framework rooted in semi-relaxed OT for unbalanced populations. 
+
+## 3. Preliminaries 
+
+Problem formulation and notation. We consider a data distribution ρt at each time point t ∈ T ⊂ R. At time t we observe nt cells {xt,i ∼ ρt}nt
+
+> i=1
+
+, where x ∈ X = RG and 
+
+G is the number of genes. These samples form the gene expression matrix Xt ∈ Rnt×G at time t, with the total number of observed cells being N = P 
+
+> t∈T
+
+nt.We are interested in modeling temporal dynamics in L-dimensional latent space Z = RL with L ≪ G. The objec-tive is to learn a generative model with predicted distribution 
+
+ˆρt by matching that with the underlying distributions ρt for each t. To this end, we generate ˆnt cells {ˆxt,i ∼ ˆρt}ˆnt
+
+> i=1
+
+,where ˆx ∈ X , forming the predicted gene expression matrix 
+
+ˆXt ∈ Rˆnt×G. These generated cells originate from latent variables at time t, denoted as Zt ∈ Rˆnt×L.
+
+3.1. Optimal Transport 
+
+OT provides a powerful and geometrically-grounded frame-work for comparing two probability distributions, namely 
+
+ρ and ˆρ (Villani et al., 2008). The core idea is to find the minimal cost to transport the mass from one probability dis-tribution to another. A common choice for the cost function, 
+
+c : X × X → R+, is the pth power of the Euclidean dis-tance, c(x, ˆx) = d(x, ˆx)p = ∥x − ˆx∥p
+
+> 2
+
+. This cost function reduces the Kantorovich formulation of the OT distance between ρ and ˆρ to the p-Wasserstein distance 
+
+W pp (ρ, ˆρ) ≜ inf  
+
+> π∈Π( ρ, ˆρ)
+
+Z 
+
+> X2
+
+d(x, ˆx)p dπ, 
+
+where Π( ρ, ˆρ) is the set of all joint probability distributions (i.e. transport plans) π on X 2 with marginals ρ and ˆρ.Calculating the Wasserstein distance using only samples from distributions becomes a discrete OT problem, which can be formulated as a linear program. To overcome the cu-bical scaling of the discrete OT problem (Peyr ´e et al., 2019), it is common to add an entropic regularization to the OT objective (Cuturi, 2013), which makes the problem strongly convex and solvable in approximately linear time using the iterative Sinkhorn algorithm (Sinkhorn, 1964; Sinkhorn & Knopp, 1967). The resulting regularized OT objective is defined as follows, noting that for observed snapshots, the integral reduces to a discrete evaluation on empirical sam-ples drawn from population distributions at each time point: 
+
+W pp,γ (ρ, ˆρ) ≜ inf  
+
+> π∈Π( ρ, ˆρ)
+
+Z 
+
+> X2
+
+d(x, ˆx)p dπ + γ · KL( π∥ρ⊗ ˆρ).
+
+(1) 
+
+3.2. Gaussian Processes 
+
+A GP is a stochastic process that defines a distribution over functions, typically as a function of time t. GP is fully specified by a mean function μ(t), which is gener-ally considered as 0 (we also use this convention for the rest of the paper) and a kernel function k(t, t ′) (Rasmussen & Williams, 2006). The kernel encodes properties of the function, such as smoothness, by defining the covariance be-tween function values at different inputs. By definition, for any finite set of inputs t = [ t1, . . . , t N ]⊤ the output values 
+
+f (t) = [ f (t1), . . . , f (tN )] ⊤ have a joint Gaussian distri-bution f (t) ∼ N (0, Σ), where Σij = k(ti, t j ) is N × N
+
+covariance matrix. We write f (t) ∼ GP (μ(t), k (t, t ′)) .
+
+3.3. Gaussian Process Prior Variational Autoencoders 
+
+To effectively model complex temporal high-dimensional data, the standard VAE framework can be extended by re-placing the standard normal i.i.d. prior with a GP (Casale et al., 2018). Formally, we define a mapping from time 
+
+t ∈ R to the latent space Z, denoted f : R → Z , where 
+
+f (t) = [ f1(t), . . . , f L(t)] ⊤. This function is governed by a multi-output GP prior, f (t) ∼ GP (0, K(t, t ′)) , where 
+
+K(t, t ′) is cross-covariance function. GP prior VAE mod-els assume that this GP prior factorizes across the L latent dimensions (Casale et al., 2018; Fortuin et al., 2020) 
+
+p(f (t)) = 
+
+> L
+
+Y
+
+> l=1
+
+N (0, Σl), (2) where f (t) = [ f1(t), . . . , f L(t)] ⊤ ∈ RL×N , and Σl is the covariance matrix for the lth dimension, derived from kernel 
+
+kl. Compared to existing multi-output GP models, such as the linear model of coregionalization (Alvarez et al., 2012), this factorization assumption comes with no loss of general-ity because a neural network decoder has enough capacity to model dependencies between the latent dimensions. 
+
+3.4. Hilbert Space Methods for Gaussian Processes 
+
+Evaluating the exact GP prior scales as O(N 3), which ne-cessitates approximation techniques. While sparse GP meth-ods based on inducing points are commonly used (Titsias, 2009), our approach leverages a scalable approximation rooted in Hilbert space methods (Solin & S ¨arkk ¨a, 2020). The central idea is to project the non-parametric GP onto a finite-dimensional subspace defined by a set of M basis 3Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+functions ϕ(t) = [ ϕ1(t), . . . , ϕ M (t)] ⊤. This procedure ef-fectively recasts the GP into a tractable parametric form, which inherits a principled Bayesian prior over its weights. Specifically, for a stationary kernel k(t, t ′), the correspond-ing GP prior for function f (t) is approximated as a linear combination of these Hilbert space basis functions 
+
+f (t) ≈ ˜f (t) = a⊤ϕ(t) = 
+
+> M
+
+X
+
+> m=1
+
+amϕm(t). (3) We summarize the benefits of this approach below and pro-vide full details in Appendix A (see also (Solin & S ¨arkk ¨a, 2020)). Basis functions are derived from the eigendecom-position of the Laplace operator. Consequently, the GP prior placed on the function f is translated into a multi-variate Gaussian prior on the M random weights a ∈ RM ,expressed as a ∼ N (0, S). This formulation proves par-ticularly advantageous as the prior covariance matrix S is diagonal. The entries [S]mm are specified by the kernel’s spectral density s(·), the Fourier transform of k, evaluated at the square root of the Laplacian eigenvalues √λm cor-responding to each basis function ϕm. This provides an elegant and efficient link, allowing the original kernel’s hy-perparameters (such as lengthscale and variance) to directly parameterize the weight prior p(a). We can compactly de-note this diagonal covariance matrix, which depends on the hyperparameters and eigenvalues λ = {λm}Mm=1 , as 
+
+S(√λ). All ϕ(t), λ and s(·) have closed-form expressions. 
+
+## 4. Methods 
+
+4.1. Latent Hilbert Space Gaussian Process Prior 
+
+In LGP-OT, we model the temporal dynamics of high-dimensional gene expression at the population level us-ing a multi-output GP in a lower-dimensional latent space, where we denote the latent variables as a function of time, 
+
+z(t) ∈ Z . Since the level of biological variability in a tem-poral process is unlikely to be constant (e.g., it may increase during critical developmental state transitions), we adopt a heteroscedastic model, where the variability at the pop-ulation level can change over time. We model this latent trajectory for a latent dimension l as 
+
+zl(t) = fl(t) + ϵl(t), ϵl(t) ∼ N (0 , ς l(t)2),
+
+and assume a GP prior for the underlying signal fl(t) as well as for the log of the zero-mean noise standard deviation 
+
+log( ςl(t)) (to ensure positivity). We provide equations for 
+
+fl(t) for the remainder of this section, yet all provided equations are analogous for log( ςl(t)) .We resort to the Hilbert space methods for GP for scalabil-ity. While our framework is compatible with any stationary kernel amenable to Hilbert space approximation (Solin & S ¨arkk ¨a, 2020), we assume squared exponential (SE) covari-ance function kℓl,σ l (t, t ′) = σ2 
+
+> l
+
+exp( − ∥t−t′∥2
+
+> 2ℓ2
+> l
+
+) which has two hyperparameters: lengthscale ℓl, and signal variance σ2 
+
+> l
+
+.Regarding the priors for the hyperparameters, we assume that the time points are standardized to unit scale and assign 
+
+Lognormal(0 , 1) priors to both the ℓl (Timonen et al., 2021) and σl (Balık et al., 2025) for non-negativity. The signal function is represented as in Equation (3) with 
+
+Mf basis functions ϕf (t)˜fl(t) = a⊤
+
+> f,l
+
+ϕf (t), af,l ∼ N 
+
+
+
+0, Sℓf,l ,σ f,l 
+
+pλf
+
+ 
+
+.
+
+Adhering to the factorized prior in Equation (2) , the Hilbert space approximation for the L-dimensional latent space is obtained by applying the basis function approximation independently to each of the latent dimensions (assuming the same number of basis functions per latent dimension) 
+
+˜f (t) = Af ϕf (t), (4) where Af ∈ RL×Mf is the weight matrix for the L latent dimensions. The factorized prior in Equation (2) also im-plies to the prior of Af that is given in Equation (5) below. This formulation provides a computationally efficient, het-eroscedastic GP model for the latent trajectories, enabling us to simultaneously learn the smooth trajectories and their time-varying biological variability. 
+
+4.2. Generative Process and Optimization Objective 
+
+We denote the set of all global LGP-OT parameters as 
+
+Φ = {Af , Aς , ℓf , ℓς , σf , σς }, which fully defines the la-tent temporal functions. Letting j ∈ { f, ς }, the generative process for a predicted cell i at time t is defined as follows 
+
+ℓj , σj ∼
+
+> L
+
+Y
+
+> l=1
+
+Lognormal(0 , 1) ,
+
+Aj | ℓj , σj ∼
+
+> L
+
+Y
+
+> l=1
+
+N
+
+
+
+aj,l | 0, Sℓj,l ,σ j,l 
+
+pλj
+
+ 
+
+, (5) 
+
+ξi,t ∼ N (0, IL),
+
+zi(t; Φ) = Af ϕf (t) + exp( Aς ϕς (t)) ⊙ ξi,t , (6) 
+
+ˆxt,i = hθ (zi(t; Φ)) ,
+
+where exponentiation ( exp ) and product ( ⊙) are element-wise, and hθ : Z → X is a neural network decoder that maps latent states to the high-dimensional gene expression space. Unlike VAEs, which define an explicit likelihood model in the X domain, the function hθ operates as a push-forward mapping. The predicted distribution ˆρt is therefore the distribution provided by hθ (zi(t; Φ)) .Our objective function combines the geometric, OT-based population matching with variational regularization. We 4Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+utilize the entropy-regularized discrete Wasserstein distance 
+
+W pp,γ (ρt, ˆρt) to match the observed samples from ρt and generated samples from ˆρt. Simultaneously, we learn a variational distribution of Φ by regularizing the discrete OT objective with an additional KL divergence between the variational distribution and the prior. To achieve this joint optimization, we adopt a variational framework (Hoffman et al., 2013). We use a mean-field variational distribution 
+
+qΨ(Φ) , where we use Gaussians for Af , Aς and log-normal for the other parameters. Our objective function consists of the expectation of the OT cost w.r.t. qΨ(Φ) and the KL diver-gence of variational distribution qΨ(Φ) from the prior p(Φ) 
+
+L = EqΨ(Φ) 
+
+"X
+
+> t∈T
+
+W pp,γ (ρt, ˆρt)
+
+#| {z }
+
+> Expected transport cost
+
++ KL( qΨ(Φ) ∥p(Φ)) 
+
+| {z }
+
+> Regularization
+
+. (7) The predicted distribution ˆρt in the expected transport cost term depends on the latent temporal functions sampled from the variational distribution, Φ ∼ qΨ(Φ) , and the parameters of the push-forward mapping θ. The regularization term ensures that the learned temporal dynamics adhere to the smoothness and structural constraints imposed by the GP priors. Note that prior p(Φ) has a specific hierarchical struc-ture because the priors for Aj , j ∈ { f, ς }, are conditional on hyperparameters ℓj , σj via the spectral density of the ker-nel k. Details of computing the regularization term are given in Appendix B. Overall, this formulation is analogous to the Wasserstein autoencoder (WAE) framework (Tolstikhin et al., 2018), which establishes generative modeling in terms of minimizing the W2(ρ, ˆρ). While WAE typically relaxes the W2 distance into pairwise reconstruction costs with a latent penalty that matches the marginal distribution of la-tent representations with the prior distribution, we employ the Wasserstein distance directly in the observation space to overcome the lack of pairwise correspondence, while re-taining the KL divergence to regularize the latent temporal functions toward the GP prior. The full objective is optimized jointly with respect to the generator parameters θ and the variational parameters Ψ.In practice, we estimate expectation EqΨ(Φ) [·] using Monte Carlo sampling. We employ the reparameterization trick (Kingma & Welling, 2014) for the variational distribution 
+
+qΨ, enabling gradient-based optimization of Ψ. The regular-ized distance W pp,γ is computed between samples from ρt
+
+(i.e., minibatches of data Xt) and ˆρt (i.e., generated sam-ples ˆXt). This makes the entire objective differentiable and solvable using stochastic gradient descent. We provide the mathematical details in Appendix B. 
+
+Decoder-only design. LGP-OT intentionally omits an en-coder. Because scRNA-seq is destructive, the movement of any single cell through gene expression space over time is not observed. Gene expression information from observed cells enters the model through the OT objective, where gradients of the Wasserstein distance with respect to the variational parameters propagate the observed population structure back into the latent trajectory. Encoder-based ap-proaches couple two roles into the encoder: learning a low-dimensional representation and providing initial conditions for the dynamical system. However, an encoder trained on observed time points may not generalize to unobserved times with shifted distributions (Zhang et al., 2024). Our framework avoids this issue by construction, as the decoder only needs to map from a smoothly varying latent space whose structure is governed by the GP prior. Per-cell em-beddings can still be recovered if needed via non-amortized inference, by inverting the push-forward mapping for indi-vidual cells at any time point (see also Section 4.5). 
+
+4.3. Modeling Cell-Specific Time Variability 
+
+To account for the inherent temporal asynchrony across individual cells, we propose to estimate cell-specific time 
+
+τn ∈ R for each cell n. Following previous work (Reid & Wernisch, 2016; L ¨onnberg et al., 2017), the measurement time tn is treated as an informative prior mean for τn
+
+p(τn|tn) = N (τn|tn, δ 2),
+
+where δ is a fixed prior standard deviation. We then infer this latent time by treating τ = [ τ1, . . . , τ N ] as an additional set of latent variables included in Φ and extending Ψ to include their corresponding variational parameters. We introduce a factorized variational distribution qΨ(τ ) = QNn=1 qΨ(τn),where each qΨ(τn) is a Gaussian 
+
+qΨ(τn) = N (τn|μn, ν 2
+
+> n
+
+).
+
+In the generative process, the latent state zn is now gen-erated by first sampling the cell-specific time τn and then evaluating the functions in Equation (6) . Incorporating the variational distributions qΨ(τ ) and their priors p(τ ) into the optimization objective in Equation (7) modifies the first term to include an expectation also over qΨ(τ ) and adds a new KL divergence term, PNn=1 KL( qΨ(τn)∥p(τn|tn)) , to the objective’s regularization component. 
+
+Distinction from pseudotime. Classical pseudotime methods infer an ordering of cells along a developmental axis, typically from a single snapshot where real tempo-ral annotations are absent. In contrast, our cell-specific latent time operates in a time-series setting where each τn
+
+is anchored to the recorded measurement time tn via the informative prior, capturing small deviations that reflect within-snapshot temporal asynchrony rather than construct-ing an ordering. This reflects the biological reality that cells within the same snapshot may differ slightly, while remaining grounded in the experimentally recorded time. 5Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+4.4. Cell Type Conditioning 
+
+While our primary focus has been on continuous temporal dynamics, biological data often involves categorical covari-ates c ∈ C = {1, . . . , C }, such as cell types. We can utilize GPs to model those covariates (Qian et al., 2008) as well. It is possible to represent this GP as a linear model simi-lar to Equation (4) by utilizing eigendecomposition of the kernel matrix KC ∈ RC×C . Specifically, as KC is symmet-ric, it admits the spectral decomposition KC = U DU ⊤,where D = diag (d1, . . . , d C ) contains the eigenvalues and 
+
+U contains the eigenvectors. The categorical basis functions 
+
+u(c) ∈ RC are defined as the rows of U corresponding to category c. To capture the interplay between temporal dy-namics and categorical cell type covariates, we employ a product kernel structure k(( t, c ), (t′, c ′)) = k(t, t ′)[ KC ]c,c ′
+
+(Saves et al., 2023; Timonen et al., 2021; Balık et al., 2025). Leveraging the property that the eigenbasis of a product ker-nel corresponds to the Kronecker product of the individual bases, we can express the joint function approximation as 
+
+˜fl(t, c ) = a⊤
+
+> f,l
+
+ ϕf (t) ⊗ uf (c),
+
+where ⊗ denotes the Kronecker product. Consequently, the prior over the weights af,l ∈ RM ·C is determined by the Kronecker product of the individual spectral densities 
+
+af,l ∼ N 
+
+
+
+0, Sℓf,l ,σ f,l 
+
+√λ
+
+
+
+⊗ D
+
+
+
+.
+
+By utilizing the Kronecker product, we avoid constructing the full covariance matrix, maintaining the scalability bene-fits of the Hilbert space approximation while extending the model’s expressivity to discrete biological factors. 
+
+4.5. Simulating Gene Perturbations via Gradients 
+
+The push-forward function hθ learns a differentiable map-ping from latent variables to gene expression, implicitly capturing the underlying manifold of the cellular states. Bjerregaard et al. (2025) simulate perturbations by shift-ing latent coordinates z(t) along the gradient of a target gene g: zi+1 (t) := zi(t) + η · ∇ z h(g) 
+
+> θ
+
+(zi(t)) , where η
+
+scales the perturbation; negative and positive values simu-late knockout and overexpression, respectively. However, this pointwise update ignores temporal dependencies. To address this, we extend the strategy to the temporal domain by modifying the base variational distribution qΨ(Φ) that governs the latent trajectories, thereby updating the entire function z(t; Φ) . We define ρ(α,G) 
+
+> t
+
+to be the data distribu-tion at a time t, where a set of genes G is perturbed with a vector of scaling factors α. We drive the trajectories to-wards these perturbed states by minimizing the expected OT cost between ρ(α,G) 
+
+> t
+
+and ˆρt. This yields the update rule: 
+
+Ψi+1 := Ψ i − η · ∇ Ψi EqΨi (Φ) 
+
+h
+
+W pp,γ (ρ(α,G) 
+
+> t
+
+, ˆρt)
+
+i
+
+, where 
+
+η serves as the learning rate for the optimization. 
+
+## 5. Experiments 
+
+We utilize three publicly available scRNA-seq datasets cov-ering various species and tissues to demonstrate the perfor-mance of our model: Zebrafish embryo (ZB) (Farrell et al., 2018), Drosophila (DR) (Calderon et al., 2022), and iPSC reprogramming in mice (SC) (Schiebinger et al., 2019). The datasets vary in temporal resolution and size, presenting distinct challenges for modeling temporal dynamics. The ZB dataset consists of 38,731 cells across 12 time points, with cell types being available only at the last time point; the DR dataset contains 27,386 cells across 11 time points, along with cell types across all time points; and the SC dataset has 236,285 cells spanning 19 time points. The preprocessing pipeline is detailed in Appendix C.1. To ensure a comprehensive analysis, we evaluate five differ-ent versions of our model, LGP-OT, including variants for la-tent cell-time modeling (Section 4.3), cell type-conditioned trajectory modeling (Section 4.4), and a combination of those two, if the datasets provide complete cell type an-notations; additionally, we compare our methods against the homoscedastic version of our model and the following state-of-the-art baselines: scNODE (Zhang et al., 2024) inte-grates a VAE with neural ODEs via dynamic regularization. 
+
+MIOFlow (Huguet et al., 2022) combines geodesic autoen-coders with neural ODEs. PRESCIENT (Yeo et al., 2021) and PI-SDE (Jiang & Wan, 2024) utilize potential-driven and physics-informed SDEs, respectively. VGFM (Wang et al., 2025) uses flow matching based on semi-relaxed OT to jointly learn velocity fields and mass growth for unbal-anced populations. LGP-OT and scNODE train a non-linear mapping between the high-dimensional observation space and latent space simultaneously with training the dynamics model in the latent space, while other baselines pre-train a linear (PCA) or non-linear dimension reduction, train dynamics in the fixed latent space, and transform model pre-dictions back to the observation space using the pre-trained reverse mapping. We tuned all models to their optimal hyperparameters (Appendix C.2). We evaluate the models’ ability to predict gene expression distributions at unobserved time points. Following Zhang et al. (2024), we establish three distinct tasks of increas-ing difficulty for each dataset by withholding specific time points during training: (1) Easy (interpolation): Uniformly spaced time points within the measured range are removed to test the model’s ability to recover intermediate states. (2) Medium (extrapolation): The final few time points are withheld to evaluate the model’s capacity to forecast future cell population distributions beyond the training hori-zon. (3) Hard (combined): A combination of intermediate and final time points is removed, requiring the model to simultaneously interpolate and extrapolate under signifi-cant data sparsity. The specific hold-out time points for 6Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+Table 1. Performance comparison on the DR dataset across three tasks. Refer to Tables 7 and 8 for all datasets. 
+
+DR/Easy DR/Medium 
+
+Model t = 4 t = 6 t = 8 t = 8 t = 9 t = 10 
+
+LGP-OT 26 .35 ±0.06 28 .22 ±0.02 30 .74 ±0.03 32 .15 ±0.04 32 .52 ±0.08 36 .51 ±0.04 
+
+LGP-OT (w. type) 26 .46 ±0.08 28 .18 ±0.04 30 .59 ±0.05 31 .92 ±0.06 31 .79 ±0.10 36 .48 ±0.06 
+
+LGP-OT (w. time) 26 .25 ±0.13 28 .32 ±0.09 30 .82 ±0.05 32 .24 ±0.11 31 .54 ±0.04 36 .33 ±0.05 
+
+LGP-OT (w. time + type) 26 .09 ±0.03 28 .12 ±0.04 30 .59 ±0.06 31 .88 ±0.07 31 .63 ±0.09 36 .32 ±0.20 
+
+LGP-OT ( ς(t) = 0 .1) 26 .85 ±0.19 29 .16 ±0.25 31 .90 ±0.28 33 .24 ±0.17 33 .05 ±0.20 37 .41 ±0.22 
+
+VGFM 26 .09 ±0.19 28 .34 ±0.07 31 .29 ±0.13 33 .73 ±0.04 32 .88 ±0.26 37 .06 ±0.47 
+
+scNODE 26 .58 ±0.12 28 .65 ±0.11 31 .46 ±0.15 33 .24 ±0.16 33 .67 ±0.38 38 .04 ±0.35 
+
+MIOFlow 26 .44 ±0.12 28 .55 ±0.06 31 .65 ±0.13 33 .60 ±0.12 34 .49 ±0.24 38 .76 ±0.82 
+
+PI-SDE 26 .70 ±0.03 28 .76 ±0.04 31 .39 ±0.07 32 .80 ±0.09 33 .49 ±0.37 38 .27 ±0.57 
+
+PRESCIENT 30 .16 ±0.09 31 .16 ±0.08 32 .48 ±0.07 34 .66 ±0.24 33 .26 ±0.22 37 .64 ±0.34 
+
+DR/Hard 
+
+Model t = 2 t = 4 t = 6 t = 8 t = 9 t = 10 
+
+LGP-OT 29 .40 ±0.13 30 .61 ±0.07 32 .33 ±0.06 33 .78 ±0.02 33 .85 ±0.11 38 .17 ±0.20 
+
+LGP-OT (w. type) 28 .75 ±0.04 30 .39 ±0.06 32 .19 ±0.01 33 .75 ±0.07 33 .52 ±0.04 37 .82 ±0.23 
+
+LGP-OT (w. time) 29 .59 ±0.06 30 .48 ±0.06 32 .30 ±0.02 33 .83 ±0.11 33 .68 ±0.08 37 .71 ±0.08 
+
+LGP-OT (w. time + type) 28 .84 ±0.05 30 .48 ±0.07 32 .20 ±0.02 33 .77 ±0.08 33 .52 ±0.07 37 .88 ±0.30 
+
+LGP-OT ( ς(t) = 0 .1) 30 .14 ±0.21 31 .28 ±0.21 33 .29 ±0.10 34 .93 ±0.09 34 .88 ±0.14 38 .79 ±0.33 
+
+VGFM 30 .27 ±0.05 31 .30 ±0.06 33 .36 ±0.03 35 .62 ±0.06 35 .36 ±0.20 38 .47 ±0.23 
+
+scNODE 29 .95 ±0.29 30 .71 ±0.16 32 .88 ±0.12 34 .82 ±0.23 34 .63 ±0.41 38 .26 ±0.51 
+
+MIOFlow 29 .74 ±0.18 30 .97 ±0.07 32 .84 ±0.08 35 .25 ±0.17 36 .78 ±0.34 41 .43 ±1.07 
+
+PI-SDE 30 .34 ±0.14 30 .82 ±0.09 32 .71 ±0.05 34 .18 ±0.17 34 .55 ±0.27 38 .90 ±0.54 
+
+PRESCIENT 32 .68 ±0.13 32 .36 ±0.11 33 .08 ±0.11 35 .51 ±0.21 34 .19 ±0.14 38 .12 ±0.15 
+
+each task are provided in Table 3 (Appendix C.1). We evaluate predictions using the Wasserstein distance ( W2)against the entire held-out ground truth population. We re-port the mean and standard deviation across five iterations using 2000 generated samples from each model per test time point. The implementation of our model is provided at 
+
+https://github.com/YigitBalik/LGP-OT .
+
+5.1. Results 
+
+Table 1 presents results for the DR dataset, where similar trends were observed for other datasets (see Tables 7-8). 
+
+Interpolation and extrapolation performance. In the DR data, LGP-OT combines cell-time variability and cell type conditioning to achieve the lowest W2 across time points (Table 1). Similarly, in the ZB dataset, our model outperforms the strongest baseline at all time points (Table 7). Cell-time variability modeling notably reduces W2 dis-tance during extrapolation. Finally, in the large-scale SC dataset, LGP-OT demonstrates robust generalization capa-bilities (Table 7). Incorporating heteroscedasticity provides consistent performance gains over the homoscedastic base-line, underscoring the necessity of modeling time-varying noise. Figure 20 visualizes the learned latent temporal func-tions for the SC dataset, where the varying uncertainty bands across latent dimensions illustrate that the model learns non-constant noise structure rather than relying on a fixed noise assumption. Overall, across all three datasets, LGP-OT performs competitively in the easy and medium tasks. 
+
+Modeling under sparsity. This setting poses the most significant challenge, requiring models to reconstruct in-termediate states while simultaneously forecasting future dynamics. LGP-OT maintains its robustness, consistently outperforming baselines, which tend to degrade in perfor-mance at later time points (Tables 1 and 8). In the DR hard task, incorporating cell types consistently surpasses the base model, suggesting that conditioning on cell types helps sta-bilize predictions when data is sparse (Table 1). Notably, in the SC dataset, the performance gap widens significantly at 
+
+t = 17 and t = 18 , where LGP-OT (w. time) achieves W2
+
+of 15 .05 and 15 .53 , respectively, outperforming the most competitive baseline scNODE ( 17 .26 and 18 .14 ; Table 8). Models like PI-SDE and MIOFlow deteriorate to values ex-ceeding 19 .0. VGFM remains a competitive baseline across several time points, but its performance is less consistent and generally trails the strongest methods. Results show that LGP-OT effectively captures the underlying manifold even when substantial portions of the trajectory are withheld. 7Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport LGP-OT          
+
+> t= 10 t= 11 t= 2 t= 8 t= 11
+> VGFM scNODE PI-SDE
+
+ZB/Medium ZB/Hard    
+
+> ˆρ(Prediction) ρ(True)
+
+Figure 2. Visual comparison of predicted and observed cell distributions on the ZB dataset. 
+
+Qualitative Analysis. Figure 2 complements our quanti-tative results by visualizing predicted cell concentrations at selected time points for the ZB datasets (medium and hard tasks), where the gene expression space is projected onto the first two principal components and contours are generated using kernel density estimation. In the medium task, our model accurately captures the geometry of the ground truth. In contrast, baselines such as scNODE occasionally produce spatially misaligned contours, while PI-SDE tends to gener-ate fragmented distributions. In the hard task, our method maintains structural coherence more effectively than com-peting approaches. As shown in Figure 2 (right), baselines exhibit distinct failure modes under sparsity: PI-SDE pro-duces disjoint clusters that break the continuity, and VGFM yields distorted shapes. Detailed trajectory plots for all datasets and models for all time points are provided in Ap-pendix C.5 (Figures 8-19). These visualizations consistently corroborate that our model preserves the underlying mani-fold better than baselines, even under significant sparsity. 
+
+Perturbation analysis. To validate the model’s capacity to uncover key gene dependencies and investigate how the global temporal process adapts when genes are perturbed, we performed in silico perturbation experiments on the ZB dataset. We first trained LGP-OT on all time points and trained a multi-layer perceptron cell type classifier on the observed data at the terminal time point (evaluation of the classifier performance and detailed metrics provided in Ap-pendix C.4). We then identify differentially expressed (DE) 0.1
+
+0.2
+
+0.3
+
+0.4
+
+> Fraction of Cells
+> Perturbation Effect on PSM
+> non-DE gene 1 Gene 2 Gene(s) 3 Gene(s) Observed
+
+−2 −1 0 1 2
+
+> Perturbation (log 10 )
+
+0.2
+
+0.4
+
+0.6
+
+> Fraction of Cells
+> Perturbation Effect on Hindbrain
+> non-DE gene 1 Gene 2 Gene(s) 3 Gene(s) Observed
+
+Figure 3. Effect of perturbing different numbers of DE genes of PSM and Hindbrain cells on the predicted fraction of cells classified into each type at the last time point of the ZB dataset. The dashed horizontal line marks the observed cell type ratio. 
+
+8Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport Inferred Trajectories under Gene Perturbations 
+
+> Other cells Hindbrain cells PSM cells Original trajectory SOX19A pert. HES6 pert. Inferred Trajectories of Cell Types
+> Other cells Hindbrain cells PSM cells Original trajectory Hindbrain trajectory PSM trajectory
+
+Figure 4. Inferred trajectories under gene and cell type-specific perturbations. Left: Inferred trajectories resulting from perturbing only the most DE gene of PSM and Hindbrain cells. The original model’s mean trajectory steered toward the Hindbrain cluster by scaling up the SOX19A gene, or toward the PSM cluster by scaling up the HES6 gene. Right: Inferred trajectories where the optimization target is defined by the distribution of the specific cell types themselves, rather than scaling specific genes. 
+
+genes of Presomitic Mesoderm (PSM) and Hindbrain cells at the terminal time point, where the top three DE genes are presented in Figure 6. We perturbed an increasing number of these genes with varying scaling factors ( log 10 α from −2
+
+to 2). As illustrated in Figure 3, increasing the scaling factor for lineage-specific drivers progressively biased the terminal cell distribution toward the targeted cell type. This effect intensified as more genes were perturbed, although the boost in target cell proportion saturated at the highest perturbation magnitude. In contrast, perturbing non-DE genes yielded no significant shift, as expected. Furthermore, visualizing the trajectory in Figure 4 (left) confirms that these perturbations effectively steer the global trajectory toward the expected lineage clusters. Complementing these gene-level perturba-tions, we also investigated cell type-specific guidance where the target distribution is defined by the distribution of spe-cific cell types at the final time point (Figure 4, right). With the independent guidance for two cell types, the classifier identified 0.93 ±0.01 of the generated 2000 cells as Hind-brain and 0.92 ±0.02 as PSM. These results demonstrate that LGP-OT captures key gene dependencies, allowing it to predict changes in the trajectory of snapshots. 
+
+## 6. Conclusions 
+
+In this work, we presented a generative framework for re-constructing single-cell temporal dynamics by modeling global population trends via a scalable latent heteroscedastic GP prior. By leveraging OT, our method effectively learns smooth, continuous trajectories from unpaired snapshots and robustly handles biological complexities such as tempo-ral asynchrony and cell type-informed paths. Empirically, our approach establishes a new state-of-the-art on challeng-ing interpolation and extrapolation tasks, outperforming existing neural ODE, SDE, and flow baselines. Further-more, our gradient-based perturbation strategy for temporal models provides an alternative tool for perturbation anal-ysis. The decoder-only design also addresses a structural limitation shared by many VAE-based methods, as it avoids encoder generalization failures at unobserved time points by construction. Our approach offers a significant and robust alternative for modeling temporal scRNA-seq data. 
+
+Limitations and future work. While LGP-OT achieves strong performance, several limitations point to promising future directions. Although cell type conditioning and cell-specific latent time partially address multi-lineage structure and temporal asynchrony, the model is not designed to ex-plicitly capture branching events. Thus, integrating branch-ing GPs into the latent space would be a natural extension. Moreover, the SE kernel assumes smooth, non-oscillatory dynamics: replacing it with a periodic kernel, which admits a similar low-rank approximation, would extend LGP-OT to cyclic biological processes. Finally, LGP-OT is limited to transcriptomic readouts. Extending it to multi-modal or spatial single-cell data remains an open problem. 9Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+## Acknowledgements 
+
+We would like to acknowledge the computational resources provided by the Aalto Science-IT. We would like to thank the anonymous reviewers for their thoughtful comments that strengthened this work. This work was supported by the Research Council of Finland (Flagship programme: Finnish Center for Artificial Intelligence FCAI and decision #359135). 
+
+## Impact Statement 
+
+Addressing the limitation of sparse and expensive temporal single-cell sequencing, this work introduces a generative framework that reconstructs continuous cellular dynamics from discrete population snapshots. The model enables the generation of synthetic gene expression profiles at any unobserved time point. We anticipate no foreseeable adverse societal effects. 
+
+## References 
+
+Akhiezer, N. I. and Glazman, I. M. Theory of linear opera-tors in Hilbert space . Courier Corporation, 2013. Alvarez, M. A., Rosasco, L., Lawrence, N. D., et al. Kernels for vector-valued functions: A review. Foundations and Trends® in Machine Learning , 4(3):195–266, 2012. Balık, M. Y., Sinelnikov, M., Ong, P., and L ¨ahdesm ¨aki, H. Bayesian basis function approximation for scalable Gaussian process priors in deep generative models. In 
+
+Proceedings of the 42nd International Conference on Machine Learning , pp. 2673–2696. PMLR, 2025. Bjerregaard, A., Prada-Luengo, I., Das, V., and Krogh, A. What do single-cell models already know about perturba-tions? Genes , 16(12):1439, 2025. Calderon, D., Blecher-Gonen, R., Huang, X., Secchia, S., Kentro, J., Daza, R. M., Martin, B., Dulja, A., Schaub, C., Trapnell, C., et al. The continuum of drosophila embryonic development at single-cell resolution. Science ,377(6606):eabn5800, 2022. Casale, F. P., Dalca, A., Saglietti, L., Listgarten, J., and Fusi, N. Gaussian process prior variational autoencoders. 
+
+Advances in neural information processing systems , 31, 2018. Cuturi, M. Sinkhorn distances: Lightspeed computation of optimal transport. Advances in neural information processing systems , 26, 2013. Da Prato, G. and Zabczyk, J. Stochastic equations in infinite dimensions , volume 152. Cambridge university press, 2014. Farrell, J. A., Wang, Y., Riesenfeld, S. J., Shekhar, K., Regev, A., and Schier, A. F. Single-cell reconstruction of de-velopmental trajectories during zebrafish embryogenesis. 
+
+Science , 360(6392):eaar3131, 2018. Feydy, J., Roussillon, P., Trouv ´e, A., and Gori, P. Fast and scalable optimal transport for brain tractograms. In Inter-national Conference on Medical Image Computing and Computer-Assisted Intervention , pp. 636–644. Springer, 2019. Flamary, R., Courty, N., Gramfort, A., Alaya, M. Z., Bois-bunon, A., Chambon, S., Chapel, L., Corenflos, A., Fa-tras, K., Fournier, N., et al. Pot: Python optimal trans-port. Journal of Machine Learning Research , 22(78):1–8, 2021. Fortuin, V., Baranchuk, D., R ¨atsch, G., and Mandt, S. Gp-vae: Deep probabilistic time series imputation. In Interna-tional conference on artificial intelligence and statistics ,pp. 1651–1661. PMLR, 2020. Grønbech, C. H., Vording, M. F., Timshel, P. N., Sønderby, C. K., Pers, T. H., and Winther, O. scvae: variational auto-encoders for single-cell gene expression data. Bioin-formatics , 36(16):4415–4422, 2020. Hao, Y., Hao, S., Andersen-Nissen, E., Mauck, W. M., Zheng, S., Butler, A., Lee, M. J., Wilk, A. J., Darby, C., Zager, M., et al. Integrated analysis of multimodal single-cell data. Cell , 184(13):3573–3587, 2021. Hoffman, M. D., Blei, D. M., Wang, C., and Paisley, J. Stochastic variational inference. the Journal of machine Learning research , 14(1):1303–1347, 2013. Huguet, G., Magruder, D. S., Tong, A., Fasina, O., Kuchroo, M., Wolf, G., and Krishnaswamy, S. Manifold inter-polating optimal-transport flows for trajectory inference. 
+
+Advances in neural information processing systems , 35: 29705–29718, 2022. Jazbec, M., Ashman, M., Fortuin, V., Pearce, M., Mandt, S., and R ¨atsch, G. Scalable gaussian process variational autoencoders. In International Conference on Artificial Intelligence and Statistics , pp. 3511–3519. PMLR, 2021. Jiang, Q. and Wan, L. A physics-informed neural sde network for learning cellular dynamics from time-series scrna-seq data. Bioinformatics , 40(Supplement 2):ii120– ii127, 2024. Kingma, D. P. Adam: A method for stochastic optimization. 
+
+arXiv preprint arXiv:1412.6980 , 2014. Kingma, D. P. and Welling, M. Auto-encoding variational bayes. In 2nd International Conference on Learning Representations , 2014. 10 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+Lipman, Y., Chen, R. T. Q., Ben-Hamu, H., Nickel, M., and Le, M. Flow matching for generative modeling. In The Eleventh International Conference on Learning Represen-tations , 2023. URL https://openreview.net/ forum?id=PqvMRDCJT9t .L ¨onnberg, T., Svensson, V., James, K. R., Fernandez-Ruiz, D., Sebina, I., Montandon, R., Soon, M. S., Fogg, L. G., Nair, A. S., Liligeto, U. N., et al. Single-cell rna-seq and computational analysis using temporal mixture model-ing resolves th1/tfh fate bifurcation in malaria. Science immunology , 2(9):eaal2192, 2017. Lopez, R., Regier, J., Cole, M. B., Jordan, M. I., and Yosef, N. Deep generative modeling for single-cell transcrip-tomics. Nature methods , 15(12):1053–1058, 2018. Murphy, K. P. Probabilistic machine learning: Advanced topics . MIT press, 2023. Oh, Y., Lim, D., and Kim, S. Stable neural stochastic dif-ferential equations in analyzing irregular time series data. In The Twelfth International Conference on Learning Representations , 2024. Pariset, M., Hsieh, Y.-P., Bunne, C., Krause, A., and Bor-toli, V. D. Unbalanced diffusion schr ¨odinger bridge. In 
+
+ICML Workshop on New Frontiers in Learning, Con-trol, and Dynamical Systems , 2023. URL https: //openreview.net/forum?id=Vehxa7mBU9 .Paszke, A., Gross, S., Massa, F., Lerer, A., Bradbury, J., Chanan, G., Killeen, T., Lin, Z., Gimelshein, N., Antiga, L., et al. Pytorch: An imperative style, high-performance deep learning library. Advances in neural information processing systems , 32, 2019. Peyr ´e, G., Cuturi, M., et al. Computational optimal trans-port: With applications to data science. Foundations and Trends® in Machine Learning , 11(5-6):355–607, 2019. Qian, P. Z. G., Wu, H., and Wu, C. F. J. Gaussian process models for computer experiments with qualitative and quantitative factors. Technometrics , 50(3):383–396, 2008. doi: 10.1198/004017008000000262. Ramchandran, S., Tikhonov, G., Kujanp ¨a ¨a, K., Koskinen, M., and L ¨ahdesm ¨aki, H. Longitudinal variational autoen-coder. In International Conference on Artificial Intelli-gence and Statistics , pp. 3898–3906. PMLR, 2021. Rasmussen, C. E. and Williams, C. K. Gaussian processes for machine learning , volume 2. MIT press Cambridge, MA, 2006. Reid, J. E. and Wernisch, L. Pseudotime estimation: decon-founding single cell time series. Bioinformatics , 32(19): 2973–2980, 2016. Riutort-Mayol, G., B ¨urkner, P.-C., Andersen, M. R., Solin, A., and Vehtari, A. Practical hilbert space approximate bayesian gaussian processes for probabilistic program-ming. Statistics and Computing , 33(1):17, 2023. Saves, P., Diouane, Y., Bartoli, N., Lefebvre, T., and Morlier, J. A mixed-categorical correlation kernel for gaussian process. Neurocomputing , 550:126472, 2023. Schiebinger, G., Shu, J., Tabaka, M., Cleary, B., Subrama-nian, V., Solomon, A., Gould, J., Liu, S., Lin, S., Berube, P., et al. Optimal-transport analysis of single-cell gene expression identifies developmental trajectories in repro-gramming. Cell , 176(4):928–943, 2019. Sha, Y., Qiu, Y., Zhou, P., and Nie, Q. Reconstructing growth and dynamic trajectories from single-cell tran-scriptomics data. Nature Machine Intelligence , 6(1):25– 39, 2024. Shi, X., Jiang, X., and ´Alvarez, M. A. Neighbour-driven gaussian process variational autoencoders for scalable structured latent modelling. In Forty-second International Conference on Machine Learning , 2025. Sinkhorn, R. A relationship between arbitrary positive ma-trices and doubly stochastic matrices. The annals of mathematical statistics , 35(2):876–879, 1964. Sinkhorn, R. and Knopp, P. Concerning nonnegative ma-trices and doubly stochastic matrices. Pacific Journal of Mathematics , 21(2):343–348, 1967. Solin, A. and S ¨arkk ¨a, S. Hilbert space methods for reduced-rank gaussian process regression. Statistics and Comput-ing , 30(2):419–446, 2020. Timonen, J., Mannerstr ¨om, H., Vehtari, A., and L ¨ahdesm ¨aki, H. lgpr: an interpretable non-parametric method for in-ferring covariate effects from longitudinal data. Bioinfor-matics , 37(13):1860–1867, 2021. Titsias, M. Variational learning of inducing variables in sparse gaussian processes. In Artificial intelligence and statistics , pp. 567–574. PMLR, 2009. Tolstikhin, I., Bousquet, O., Gelly, S., and Schoelkopf, B. Wasserstein auto-encoders. In International Conference on Learning Representations , 2018. URL https:// openreview.net/forum?id=HkL7n1-0b .Tong, A., Huang, J., Wolf, G., Van Dijk, D., and Krish-naswamy, S. Trajectorynet: A dynamic optimal transport network for modeling cellular dynamics. In International conference on machine learning , pp. 9526–9536. PMLR, 2020. 11 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+Tong, A., FATRAS, K., Malkin, N., Huguet, G., Zhang, Y., Rector-Brooks, J., Wolf, G., and Bengio, Y. Improving and generalizing flow-based generative models with mini-batch optimal transport. Transactions on Machine Learn-ing Research , 2024a. ISSN 2835-8856. URL https:// openreview.net/forum?id=CD9Snc73AW . Ex-pert Certification. Tong, A. Y., Malkin, N., Fatras, K., Atanackovic, L., Zhang, Y., Huguet, G., Wolf, G., and Bengio, Y. Simulation-free Schr ¨odinger bridges via score and flow matching. In Das-gupta, S., Mandt, S., and Li, Y. (eds.), Proceedings of The 27th International Conference on Artificial Intelligence and Statistics , volume 238 of Proceedings of Machine Learning Research , pp. 1279–1287. PMLR, 02–04 May 2024b. Tran, B.-H., Shahbaba, B., Mandt, S., and Filippone, M. Fully bayesian autoencoders with latent sparse gaus-sian processes. In International Conference on Machine Learning , pp. 34409–34430. PMLR, 2023. Villani, C. et al. Optimal transport: old and new , volume 338. Springer, 2008. Wang, D., Jiang, Y., Zhang, Z., Gu, X., Zhou, P., and Sun, J. Joint velocity-growth flow matching for single-cell dynamics modeling. In The Thirty-ninth Annual Conference on Neural Information Processing Systems ,2025. URL https://openreview.net/forum? id=aXAkNlbnGa .Wolf, F. A., Angerer, P., and Theis, F. J. Scanpy: large-scale single-cell gene expression data analysis. Genome biology , 19(1):15, 2018. Yeo, G. H. T., Saksena, S. D., and Gifford, D. K. Generative modeling of single-cell time series with prescient enables prediction of cell trajectories with interventions. Nature communications , 12(1):3222, 2021. Zhang, J., Larschan, E., Bigness, J., and Singh, R. scnode: generative model for temporal single cell transcriptomic data prediction. Bioinformatics , 40(Supplement 2):ii146– ii154, 2024. Zhang, Z., Li, T., and Zhou, P. Learning stochastic dynamics from snapshots through regularized unbalanced optimal transport. In The Thirteenth International Conference on Learning Representations , 2025. URL https:// openreview.net/forum?id=gQlxd3Mtru .12 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+## A. Hilbert Space Methods for Reduced-Rank Gaussian Process Regression 
+
+Here, we present the mathematical foundations of Hilbert space methods for reduced-rank GP regression introduced by Solin & S ¨arkk ¨a (2020). We consider only the unidimensional case where a stationary continuous kernel of a GP depends on a single continuous covariate, denoted as t, in line with our notation. A stationary covariance function can be written as a function of r = t − t′. In such a case, the covariance function can be represented by the spectral density of the kernel, which is the Fourier transform of the kernel according to Bochner’s and Wiener-Khintchine theorems (Akhiezer & Glazman, 2013; Da Prato & Zabczyk, 2014; Rasmussen & Williams, 2006) as 
+
+kℓ,σ (r) = 12π
+
+Z ∞−∞ 
+
+sℓ,σ (ω)eiωr dω, sℓ,σ (ω) = 
+
+Z ∞−∞ 
+
+kℓ,σ (r)e−iωr dr. 
+
+For the SE kernel used in this work, the spectral density has a closed-form expression given by: 
+
+kℓ,σ (t, t ′) = σ2 exp 
+
+
+
+− ∥t − t′∥2
+
+2ℓ2
+
+
+
+sℓ,σ (ω) = σ2√2πℓ exp 
+
+
+
+− ℓ2ω2
+
+2
+
+
+
+.
+
+The core insight of the Hilbert space approximation is to interpret the spectral density sℓ,σ (·) as a transfer function of a pseudo-differential operator associated with the covariance function. Specifically, for isotropic kernels, the spectral density depends only on the magnitude of the frequency |ω|. Since the Fourier transform of the Laplace operator ∇2 is −| ω|2, the covariance operator can be approximated via the eigendecomposition of the Laplacian in a compact domain Ω ⊂ R subject to boundary conditions. We define the domain Ω = [ −J, J ] such that it contains the input domain, where J is a boundary parameter chosen to be slightly larger than the data range to mitigate boundary effects (Riutort-Mayol et al., 2023). The approximation utilizes the eigenfunctions ϕm(t) and eigenvalues λm of the negative Laplacian operator −∇ 2 subject to Dirichlet boundary conditions: 
+
+(
+
+−∇ 2ϕm(t) = λmϕm(t), t ∈ Ω
+
+ϕm(t) = 0 , t ∈ ∂Ω.
+
+The solutions to this eigenvalue problem in the unidimensional domain are known analytically: 
+
+λm =
+
+ πm 
+
+2J
+
+2
+
+, ϕm(t) = 1
+
+√J sin 
+
+p λm(t + J)
+
+
+
+, m = 1 , 2, . . . 
+
+By truncating the expansion at M terms, the kernel kℓ,σ (t, t ′) is approximated as: 
+
+kℓ,σ (t, t ′) ≈
+
+> M
+
+X
+
+> m=1
+
+sℓ,σ (pλm)ϕm(t)ϕm(t′).
+
+This series expansion allows us to approximate the GP f (t) ∼ GP (0 , k ℓ,σ (t, t ′)) as a finite-dimensional linear model: 
+
+f (t) ≈
+
+> M
+
+X
+
+> m=1
+
+amϕm(t) = a⊤ϕ(t),
+
+where the weights are independent Gaussian random variables am ∼ N (0 , s ℓ,σ (√λm)) or, equivalently, a ∼N
+
+
+
+0, Sℓ,σ 
+
+√λ
+
+ 
+
+, where Sℓ,σ 
+
+√λ
+
+
+
+= diag  sℓ,σ (√λ1), . . . , s ℓ,σ (√λM ).This approximation method is appealing, particularly because the eigendecomposition of the Laplacian subject to Dirichlet boundary conditions is available in closed form and is entirely independent of the covariance kernel. For stationary kernels, such as the SE kernel employed here, the approximation relies on the hyperparameters solely through the spectral density 
+
+sℓ,σ (·), the form of which is known analytically. Consequently, computationally expensive numerical eigendecompositions are circumvented. The analytical eigenfunctions and eigenvalues can be utilized directly, maintaining a computational cost of O(N M ) even as hyperparameters vary. 13 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+## B. Derivation of the Loss Function 
+
+In this section, we give additional details for the optimal transport-based objective presented in Equation (7) . We first start deriving ELBO by pretending there is a one-to-one correspondence between generated cells and actual cells and by assuming a probabilistic modeling setting with an explicit likelihood model denoted as pθ (X|Φ) rather than using the push-forward mapping. The ELBO derivation serves to derive the KL regularization terms used in the main objective (Equation (7)). 
+
+B.1. Derivation of the Evidence Lower Bound 
+
+We start by assuming the standard variational inference (Hoffman et al., 2013) setting, where we possess a dataset 
+
+X = {Xt}t∈T , Xt ∈ Rnt×G, and a set of latent variables. In our specific context, the latent variables are hierarchical. They consist of the global GP parameters Φ = {Af , Aς , ℓf , ℓς , σf , σς }, and potentially cell-specific times τ , though we omit τ here for brevity as it follows the same construction. We define a variational posterior qΨ(Φ) to approximate the intractable true posterior p(Φ |X). The marginal log-likelihood of the data can be bounded using Jensen’s inequality: 
+
+log p(X) = log 
+
+Z
+
+pθ (X|Φ) p(Φ)dΦ = log 
+
+Z pθ (X|Φ) p(Φ) 
+
+qΨ(Φ) qΨ(Φ)dΦ 
+
+≥ EqΨ(Φ) [log pθ (X|Φ)] − KL( qΨ(Φ) ∥p(Φ)) = EqΨ(Φ) 
+
+"X
+
+> t∈T
+
+log pθ (Xt|Φ) 
+
+#
+
+− KL( qΨ(Φ) ∥p(Φ)) . (8) The term log pθ (Xt|Φ) represents the reconstruction likelihood. If there were a one-to-one correspondence where the ith 
+
+observed cell xt,i corresponds to the ith generated cell ˆxt,i (derived from Φ and time t). To make the objective function explicit, we expand the regularization term KL( qΨ(Φ) ∥p(Φ)) . Based on the mean-field assumption for qΨ(Φ) , the variational posterior factorizes across the signal f and noise ς components, and further across the 
+
+L latent dimensions. We define the variational posterior distributions for the Hilbert coefficients (weights) as multivariate Gaussians with diagonal covariances, and for the kernel hyperparameters as log-normal distributions: 
+
+qΨ(af,l ) = N (af,l |μf,l , diag (ν2
+
+> f,l
+
+)) 
+
+qΨ(ℓf,l ) = Lognormal( ℓf,l |μℓ,f,l , ν 2
+
+> ℓ,f,l
+
+)
+
+qΨ(σf,l ) = Lognormal( σf,l |μσ,f,l , ν 2
+
+> σ,f,l
+
+).
+
+The variational distributions for ς parameters ( Aς , ℓς , σς ) are defined analogously. The joint prior for (Af , ℓf , σf ) is 
+
+p(Af , ℓf , σf ) = 
+
+> L
+
+Y
+
+> l=1
+
+p(af,l , ℓ f,l , σ f,l )=
+
+> L
+
+Y
+
+> l=1
+
+p(af,l |ℓf,l , σ f,l )p(ℓf,l )p(σf,l ).
+
+The joint prior for (Aς , ℓς , σς ) is defined analogously. Because the priors and the variational posteriors for (Af , ℓf , σf ) and 
+
+(Aς , ℓς , σς ) are independent, the total regularization term is the sum of the KL divergences for the signal and heteroscedastic noise components: 
+
+KL( qΨ(Φ) ∥p(Φ)) = Rf + Rς .
+
+Next, we expand the signal component Rf (the noise component Rς is identical in form). Due to the hierarchical nature of the model, the prior for the weights p(af,l |ℓf,l , σ f,l ) is conditional on the hyperparameters via the spectral density of the kernel k as described above. Consequently, using the chain rule for the KL divergence (Murphy, 2023), the KL divergence for the weights af,l is computed as an expectation over the variational distribution of the hyperparameters: 
+
+Rf =
+
+> L
+
+X
+
+> l=1
+
+
+
+EqΨ(ℓf,l ,σ f,l )
+
+h
+
+KL  qΨ(af,l )∥p(af,l |ℓf,l , σ f,l )i| {z }
+
+> weights regularization
+
++ KL( qΨ(ℓf,l )∥p(ℓf,l )) 
+
+| {z }
+
+> lengthscale regularization
+
++ KL( qΨ(σf,l )∥p(σf,l )) 
+
+| {z }
+
+> variance regularization
+
+
+
+, (9) 14 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+where we have used the chain rule for the KL divergence for the first term. We can now write the explicit analytical forms for these terms. 
+
+Hyperparameter KL. Since both the priors and variational distributions for hyperparameters are log-normal, the KL divergence corresponds to that of the underlying normal distributions on the log-scale. For kernel hyperparameters ℓ and σ
+
+with prior Lognormal(0 , 1) :
+
+KL( qΨ(ℓ)∥p(ℓ)) = 12
+
+ ν2 
+
+> ℓ
+
++ μ2 
+
+> ℓ
+
+− 1 − log( ν2 
+
+> ℓ
+
+) ,
+
+KL( qΨ(σ)∥p(σ)) = 12
+
+ ν2 
+
+> σ
+
++ μ2 
+
+> σ
+
+− 1 − log( ν2 
+
+> σ
+
+) .
+
+Weights KL. The KL divergence between the variational Gaussian qΨ(a) = N (μ, diag (ν2)) and the prior p(a) = 
+
+N (0, Sℓ,σ ) (where Sℓ,σ is the diagonal spectral density matrix depending on sampled ℓ, σ ) is given by: 
+
+KL( qΨ(a)∥p(a)) = 12
+
+> M
+
+X
+
+> m=1
+
+ ν2 
+
+> m
+
++ μ2
+
+> m
+
+[Sℓ,σ ]mm 
+
+− 1 + log[ Sℓ,σ ]mm − log ν2
+
+> m
+
+
+
+.
+
+In practice, we estimate the expectation w.r.t qΨ(ℓ, σ ) in Equation (9) using Monte Carlo sampling via the reparameterization trick. 
+
+Explicit ELBO. Substituting these expanded terms into Equation (8) , the fully explicit ELBO (before substituting the Wasserstein proxy) is: ELBO = EqΨ(Af ,A ς )
+
+X
+
+> t∈T
+> nt
+
+X
+
+> i=1
+
+Eξt,i ∼N (0,I)
+
+log pθ
+
+xt,i zi(t) = Af ϕ(t)
+
+| {z } 
+
+> ˜f(t)
+
++ exp( Aς ϕ(t)
+
+| {z }
+
+> ˜ς(t)
+
+) ⊙ ξt,i 
+
+
+
+− X
+
+> j∈{ f,ς }
+> L
+
+X
+
+> l=1
+
+"
+
+EqΨ(ℓj,l ,σ j,l )
+
+"
+
+12
+
+> M
+
+X
+
+> m=1
+
+ν2 
+
+> j,l,m
+
++ μ2
+
+> j,l,m
+
+sj,l,m 
+
++ log sj,l,m − log ν2 
+
+> j,l,m
+
+− 1
+
+!# 
+
++ 12 (ν2 
+
+> ℓ,j,l
+
++ μ2 
+
+> ℓ,j,l
+
+− log ν2 
+
+> ℓ,j,l
+
+− 1) + 12 (ν2 
+
+> σ,j,l
+
++ μ2 
+
+> σ,j,l
+
+− log ν2 
+
+> σ,j,l
+
+− 1) 
+
+#
+
+,
+
+(10) where sj,l,m = [ Sℓj,l ,σ j,l ]mm represents the spectral density of the mth basis function for dimension l for j ∈ { f, ς }.
+
+B.2. Combining Optimal Transport with KL Regularization 
+
+Equation (10) relies on the assumption that the ith generated sample ˆxt,i corresponds directly to the ith observed sample 
+
+xt,i . However, due to the destructive nature of scRNA-seq technology, transcriptional profiles of individual cells cannot be followed over time because each cell can be measured only once. Therefore, methods for analyzing temporal scRNA-seq data are restricted to modeling temporal population dynamics over time t, rather than encoding specific cell identities. Consequently, there is no inherent one-to-one mapping between the generated cells and the actual observed cells at any given time point t. The generated set ˆXt and observed set Xt represent samples from the predicted distribution ˆρt and the data distribution ρt, respectively, but they are unordered relative to one another and may contain different numbers of samples. Due to this lack of correspondence, we cannot evaluate the reconstruction quality using the standard element-wise log-likelihood P 
+
+> i
+
+log pθ (xt,i |zt,i ). Instead, we require a loss function that assesses the discrepancy between the two population distributions, ρt and ˆρt.Optimal transport offers a geometrically grounded framework to address this challenge. It generalizes the notion of reconstruction error from individual points to full probability distributions. The Wasserstein distance effectively finds the minimum cost required to transform one probability distribution into another: 
+
+W 22 (ρt, ˆρt) = inf  
+
+> π∈Π( ρt,ˆρt)
+
+Z 
+
+> X2
+
+∥x − ˆx∥22 dπ(x, ˆx).
+
+15 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+Therefore, we opt to utilize an optimal transport-based objective instead of element-wise log-likelihood-based ELBO to match the population generated by the model with the observed population. To ensure computational efficiency and differentiability during training, we employ the entropic regularization discussed in Section 3. We incorporate KL regularization terms implied by the GP prior under the Hilbert space parameterization into the optimal transport framework, yielding the final objective function presented in Equation (7): 
+
+L(θ, Ψ) = EqΨ(Φ) 
+
+"X
+
+> t∈T
+
+W pp,γ (ρt, ˆρt)
+
+#| {z }
+
+> Expected transport cost
+
++ KL( qΨ(Φ) ∥p(Φ)) 
+
+| {z }
+
+> Regularization
+
+.
+
+This formulation allows us to learn the global temporal dynamics by minimizing the transport cost between the predicted and observed cell populations at every time point, regularized by the Hilbert space GP prior. The justification for using optimal transport loss with KL regularization is twofold. First, the transport cost is computed in expectation over the variational distribution of the GP parameters, so the transport cost remains internally consistent with the uncertainty and smoothness of the latent GP structure. Second, this objective can be understood through the lens of the WAE (Tolstikhin et al., 2018), which establishes that minimizing a transport cost in observation space combined with a latent regularization term constitutes a valid approach to generative modeling. 
+
+## C. Experimental Details 
+
+C.1. Preprocessing 
+
+We use the preprocessing pipeline provided by Zhang et al. (2024). First, batch effects are removed across different time points to ensure temporal consistency. Dimensionality is subsequently reduced by selecting the top 2,000 highly variable genes (HVGs) detected by Scanpy (Wolf et al., 2018) and Seurat (Hao et al., 2021). To strictly avoid data leakage, these HVGs are identified using only the cells belonging to the training time points. To mitigate technical variations in sequencing depth and remove cell-specific biases, the raw gene expression counts are first normalized by the total library size. For a cell 
+
+i, the raw count vector xraw  
+
+> i
+
+is divided by its total counts and scaled to a fixed sum of 10 4:
+
+xnormalized  
+
+> i
+
+= xraw 
+
+> i
+
+PGg=1 xraw 
+
+> i,g
+
+× 10 4. (11) Subsequently, a log-transformation is applied to these normalized values to stabilize variance. A pseudo-count of 1 is included to preserve zero entries, resulting in the final processed expression vector: 
+
+xi = log( xnormalized  
+
+> i
+
++ 1) . (12) 
+
+Table 2. Number of observed cells at each time point for the ZB, DR, and SC datasets. Time points are indexed starting from t = 0 .Dashes ( −) indicate that the dataset does not contain measurements for that specific time point index.                                                                             
+
+> Dataset 012345678910 11 12 13 14 15 16 17 18 ZB 311 200 1,158 1,467 5,716 1,026 4,101 6,178 5,442 7,114 1,614 4,404 −−−−−−−
+> DR 3,944 2,801 947 3,139 2,074 2,147 3,311 1,692 1,856 1,491 3,984 −−−−−−−−
+> SC 800 560 1,371 1,413 1,608 1,377 1,153 1,156 2,420 886 732 712 747 708 1,444 2,061 2,106 1,622 743
+
+Table 3. Dataset details and leave-out time points for the three evaluation tasks. 
+
+Dataset # TPs Leave-Out Time Points Raw Data Preprocessed Data Easy Task Medium Task Hard Task ZB 12 4, 6, 8 10, 11 2, 4, 6, 8, 10, 11 SCP162 Figshare (Zhang et al., 2024) DR 11 4, 6, 8 8, 9, 10 2, 4, 6, 8, 9, 10 GSE190149 
+
+SC 19 5, 10, 15 16, 17, 18 5, 7, 9, 11, 15, 16, 17, 18 WOT Tutorial 
+
+16 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+C.2. Hyperparameters, Training and Evaluation Implementation and Evaluation. The framework was implemented using PyTorch (Paszke et al., 2019). During the training phase, the objective function was computed using the Sinkhorn algorithm provided by the GeomLoss package (Feydy et al., 2019), with the blur and scaling parameters set to 0.05 (γ = 0 .05 2 in Equation (1) ) and 0.5, respectively. Conversely, for quantitative evaluation, 2-Wasserstein distance ( W2) was calculated using the POT (”emd2” function) package (Flamary et al., 2021) on X to ensure a precise metric devoid of entropic regularization bias. 
+
+LGP-OT. The hyperparameter search space for LGP-OT was defined as follows: the latent dimensionality L ∈ { 32 , 50 };
+
+hθ network architecture ∈ { None , [50] , [50 , 50] } with ReLU activation function; the number of Hilbert space basis functions 
+
+M ∈ { 5, 6, 7, 8, 9, 10 }; and the boundary factor J  
+
+> max( Tstandardized )
+
+∈ { 1.5, 2.0, 2.5, 3.0}. We used the same number of basis functions and the boundary factor for both signal and noise models. The optimal configuration was identified via 3-fold cross-validation on the training data, adhering to the same protocol used for the baselines. We fix the standard deviation δ of the model variant with latent cell-time modeling (Section 4.3) to 0.1. We specify the categorical kernel used in the model variant defined in Section 4.4 as a diagonal kernel with unit entries. Following hyperparameter selection, the final model was trained for a maximum of 10 , 000 iterations using the Adam optimizer (Kingma, 2014) with an initial learning rate of 0.001 and a batch size of 256 samples per training time point. During this final training phase, a validation subset comprising 5% of the data from three randomly sampled training time points was reserved solely for monitoring convergence. An adaptive scheduler decayed the learning rate by a factor of 0.5 if this validation loss did not improve for 200 iterations, and early stopping was applied to prevent overfitting. The final model weights were selected from the checkpoint achieving the lowest loss on this 5% validation subset. 
+
+Baselines. To ensure a rigorous and unbiased evaluation, hyperparameter search for all baseline models was performed using the same 3-fold cross-validation protocol applied to LGP-OT. While the specific search spaces and architectural choices were adopted from established benchmarks (Zhang et al., 2024) and original publications, all models were trained until convergence using their recommended optimization protocols (optimizers, learning rates, and schedulers). Consistent with their original implementations, PRESCIENT (Yeo et al., 2021), PI-SDE (Jiang & Wan, 2024), and VGFM (Wang et al., 2025) train a dynamics model in a 50 -dimensional PCA space. Whereas, MIOFlow (Huguet et al., 2022) combines PCA and the geodesic autoencoder to model the high-dimensional data in a pre-trained latent space. For these models, all predicted distributions were projected back to the original observation space ( X ) before evaluation. 
+
+scNODE. The latent dimensionality was fixed at 50 , as suggested in (Zhang et al., 2024). The network architecture was optimized by varying the configuration of the encoder, decoder, and drift networks across the set {None , [50] , [50 , 50] }. The dynamic regularization coefficient was tuned within the range [0 .0, 10 .0] .
+
+PRESCIENT. Hyperparameter tuning focused on the standard deviation of Gaussian noise ( [0 .0, 1.0] ), the regularization strength ( [0 .0, 0.1] ), and the gradient clipping threshold ( [0 .0, 1.0] ). Additionally, the depth of the hidden layers was selected from the set {1, 2, 3}.
+
+MIOFlow. The hyperparameter search space included geodesic autoencoder embedding dimensions of {10 , 50 , 100 }. The partition encoder architecture was selected from {[50 , 100] , [50 , 100 , 100] }, while the ODE solver network layers were varied across {[16] , [16 , 16] , [16 , 32 , 16] }. The regularization coefficient for the density loss was tuned within the range 
+
+[1 .0, 100 .0] .
+
+PI-SDE. We followed the hyperparameter configuration detailed in the original publication (Jiang & Wan, 2024). Specifically, the potential function was parameterized by a fully connected 2-layer network with 400 units and softplus activation. The diffusion coefficient was selected among three options: modeled by a separate neural network with the same architecture as the potential function, a constant value of 0.1, or a vector parameter to be optimized. 
+
+VGFM. We followed the hyperparameter selection strategy presented in the original publication (Wang et al., 2025). Both the velocity field and growth function are parameterized by a fully connected 5-layer network with 256 units and LeakyReLU activation. To select the entropy regularization parameter, the relaxation coefficient is first set to a constant value of 50 , then a grid search is applied by increasing the entropy regularization parameter from 0.01 up until numerical stability is achieved. After that, the relaxation coefficient is determined similarly to the elbow method used in clustering by gradually increasing in the range of [0 .001 , 10] . The optimal value is selected according to the stabilization point of the curve. While VGFM demonstrated to work with high-dimensional inputs (Wang et al., 2025), we utilized 50 -dimensional PCA as it yielded better 17 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 16 17 18 
+
+> 15.0
+> 16.0
+> 17.0
+> 18.0
+> 19.0
+> W2
+
+Sensitivity to M  
+
+> M
+> 5678910
+> 16 17 18
+
+Sensitivity to J    
+
+> max( Tstandardized )
+> J
+> max( Tstandardized )
+> 1.5 2.0 2.5 3.0
+> 16 17 18
+> Medium task
+
+Sensitivity to L                      
+
+> L
+> 32 50
+> 57911 15 16 17 18
+> 10.0
+> 12.0
+> 14.0
+> 16.0
+> 18.0
+> 20.0
+> W2
+> M
+> 5678910
+> 57911 15 16 17 18
+> Test Time Points
+> J
+> max( Tstandardized )
+> 1.5 2.0 2.5 3.0
+> 57911 15 16 17 18
+> Hard task
+> L
+> 32 50
+
+Figure 5. Sensitivity analysis to key hyperparameters on the SC dataset. Results are shown for medium (top) and hard (bottom) tasks using the validation splits from hyperparameter tuning. 
+
+results for this baseline. 
+
+Homoscedastic ablations. Finally, to evaluate the impact of time-varying noise, we tested two homoscedastic versions of our model: we either fixed the noise standard deviation to 0.1 for all latent dimensions ( ςl(t) = 0 .1) or treated it as a vector of optimizable parameters ( ς(t) = ς ∈ RL
+
+> +
+
+). All training was performed on a single NVIDIA Tesla V100 GPU with 32GB of memory. 
+
+C.3. Sensitivity of LGP-OT 
+
+To assess the robustness of our approach to key hyperparameters of the latent GP model, we conducted sensitivity analyses with respect to the number of basis functions M , the boundary factor J  
+
+> max( Tstandardized )
+
+, and the latent dimensionality. These experiments were performed using the same cross-validation splits employed during hyperparameter tuning, where each model is trained on approximately 2/3 of the available training data. For each hyperparameter value, the reported results aggregate performance across all corresponding configurations during hyperparameter tuning. As shown in Figure 5, performance exhibits smooth and consistent behavior across a broad range of hyperparameter values in both medium and hard extrapolation settings, suggesting that the proposed framework is not overly sensitive to these design choices. Importantly, this analysis is intended to assess qualitative stability trends rather than absolute performance. All results reported in the main experiments are obtained by retraining the model on the full training set using the selected hyperparameters. 
+
+C.4. Perturbation Analysis 
+
+We update the original variational parameters Ψ with respect to perturbed genes using different levels of perturbation, as denoted in Section 5.1. We fix the η parameter to 0.001 for all perturbations. We perform the optimization for 100 iterations. The neural network architecture and hyperparameters of the cell type classifier are presented in Table 4, which is trained using the Adam optimizer with a learning rate of 0.001 for 500 epochs on the terminal point observed data with class labels. To validate the external classifier used in the perturbation evaluation, we report its performance under 5-fold stratified 18 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+cross-validation using pooled out-of-fold predictions. Overall performance of the classifier is provided in Table 5. Table 6 and the row-normalized confusion matrix in Figure 7 further show the strong performance of the classifier for the primary lineages targeted (PSM and Hindbrain) in the perturbation experiment. To classify the generated cells by LGP-OT, the classifier is trained on all available cells at the terminal time point. HES6 MSGN1 TBX16  
+
+> 0246Expression Level
+> PSM Key Genes
+
+SOX19A MDKB SOX3  
+
+> 0246Expression Level
+> Hindbrain Key Genes
+
+Figure 6. PCA visualization of the most DE genes of PSM and Hindbrain cells identified from the final time point of the ZB dataset. 
+
+Table 4. Classifier neural network architecture used in perturbation analysis. Hyperparameter Value Hidden layer sizes 64, 32 Hidden layer activation ReLU Output layer activation Softmax L2 regularization 0.0001 
+
+Table 5. Overall performance of the classifier from pooled out-of-fold predictions under 5-fold stratified cross-validation. Accuracy Balanced Accuracy Macro-Precision Macro-Recall Macro-F1 0.8610 ± 0.0039 0.7875 ± 0.0126 0.8441 ± 0.0347 0.7875 ± 0.0126 0.8020 ± 0.0155 
+
+C.5. Full Results 
+
+19 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+Table 6. Precision, recall and F1 for each cell type from pooled out-of-fold predictions under 5-fold stratified cross-validation. Support denotes the number of test cells aggregated across folds. Cell type Support Precision Recall F1 PSM 540 0.9019 0.9537 0.9271 Hindbrain 511 0.7871 0.8611 0.8224 Optic Cup 302 0.9003 0.9570 0.9278 Neural 300 0.9070 0.9100 0.9085 Spinal 265 0.8132 0.8377 0.8253 NAN 262 0.5181 0.3817 0.4396 Placode 249 0.9044 0.9116 0.9080 Somites 241 0.9360 0.9710 0.9532 Midbrain 220 0.8609 0.9000 0.8800 Epidermis 199 0.8190 0.9095 0.8619 Tailbud 166 0.8075 0.7831 0.7951 Dorsal Diencephalon 157 0.8790 0.8790 0.8790 Heart Primordium 156 0.9423 0.9423 0.9423 Endoderm 148 0.9583 0.9324 0.9452 Telencephalon 96 0.8646 0.8646 0.8646 Cephalic Mesoderm 93 0.9789 1.0000 0.9894 Diencephalon Ventral 92 0.9412 0.8696 0.9040 Adaxial Cells 91 0.9333 0.7692 0.8434 Notochord 78 0.9459 0.8974 0.9211 Hematopoeitic 61 0.8033 0.8033 0.8033 Prechordal Plate 45 1.0000 0.9778 0.9888 Floor Plate 40 0.7241 0.5250 0.6087 Pronephros 33 0.8621 0.7576 0.8065 Integument 25 0.8824 0.6000 0.7143 EVL/Periderm 16 1.0000 0.4375 0.6087 YSL 14 0.5000 0.0714 0.1250 Primordial Germ Cells 4 1.0000 0.5000 0.6667 
+
+20 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport Adaxial Cells Cephalic Mesoderm Diencephalon Ventral Dorsal Diencephalon EVL/Periderm Endoderm Epidermis Floor Plate Heart Primordium Hematopoeitic Hindbrain Integument Midbrain NAN Neural Notochord Optic Cup PSM Placode Prechordal Plate Primordial Germ Cells Pronephros Somites Spinal Tailbud Telencephalon YSL 
+
+Predicted label Adaxial Cells Cephalic Mesoderm Diencephalon Ventral Dorsal Diencephalon EVL/Periderm Endoderm Epidermis Floor Plate Heart Primordium Hematopoeitic Hindbrain Integument Midbrain NAN Neural Notochord Optic Cup PSM Placode Prechordal Plate Primordial Germ Cells Pronephros Somites Spinal Tailbud Telencephalon YSL              
+
+> True label
+> 0.77 0.19 1.00 0.87 0.88 0.44 0.12 0.19 0.93 0.91 0.53 0.12 0.12 0.94 0.80 0.13 0.86 0.24 0.60 0.90 0.19 0.38 0.91 0.90 0.96 0.95 0.91 0.98 0.50 0.50 0.12 0.76 0.97 0.84 0.78 0.86 0.14 0.21 0.21 0.07
+
+0.00.20.40.60.81.0
+
+Figure 7. Normalized confusion matrix of the classifier from pooled out-of-fold predictions under 5-fold stratified cross-validation. 
+
+21 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+Table 7. Performance comparison on easy (interpolation) and medium (extrapolation) tasks across three datasets. 
+
+## ZB/Easy ZB/Medium 
+
+## Model t = 4 t = 6 t = 8 t = 10 t = 11 
+
+## LGP-OT 29 .69 ±0.11 27 .07 ±0.05 29 .59 ±0.07 33 .74 ±0.02 36 .35 ±0.44 
+
+## LGP-OT (w. time) 29 .39 ±0.07 27 .33 ±0.08 29 .96 ±0.18 33 .88 ±0.06 35 .36 ±0.04 
+
+## LGP-OT ( ς(t) = 0 .1) 31 .07 ±0.17 28 .69 ±0.26 31 .17 ±0.23 34 .64 ±0.20 36 .27 ±0.40 
+
+## LGP-OT ( ς(t) = ς) 31 .44 ±0.20 29 .38 ±0.16 32 .06 ±0.08 35 .70 ±0.31 38 .47 ±0.53 
+
+## VGFM 30 .02 ±0.28 27 .57 ±0.18 30 .27 ±0.27 34 .39 ±0.40 36 .42 ±0.62 
+
+## scNODE 29 .58 ±0.12 28 .23 ±0.14 30 .93 ±0.11 35 .31 ±0.15 37 .66 ±0.18 
+
+## PI-SDE 29 .67 ±0.21 28 .75 ±0.12 31 .50 ±0.14 36 .89 ±0.52 39 .48 ±0.76 
+
+## MIOFlow 29 .71 ±0.10 29 .05 ±0.17 31 .76 ±0.18 36 .19 ±0.64 38 .22 ±0.92 
+
+## PRESCIENT 40 .97 ±0.40 36 .73 ±0.55 36 .99 ±0.75 47 .13 ±2.17 48 .28 ±2.12 
+
+DR/Easy DR/Medium 
+
+Model t = 4 t = 6 t = 8 t = 8 t = 9 t = 10 
+
+LGP-OT 26 .35 ±0.06 28 .22 ±0.02 30 .74 ±0.03 32 .15 ±0.04 32 .52 ±0.08 36 .51 ±0.04 
+
+LGP-OT (w. type) 26 .46 ±0.08 28 .18 ±0.04 30 .59 ±0.05 31 .92 ±0.06 31 .79 ±0.10 36 .48 ±0.06 
+
+LGP-OT (w. time) 26 .25 ±0.13 28 .32 ±0.09 30 .82 ±0.05 32 .24 ±0.11 31 .54 ±0.04 36 .33 ±0.05 
+
+LGP-OT (w. time + type) 26 .09 ±0.03 28 .12 ±0.04 30 .59 ±0.06 31 .88 ±0.07 31 .63 ±0.09 36 .32 ±0.20 
+
+LGP-OT ( ς(t) = 0 .1) 26 .85 ±0.19 29 .16 ±0.25 31 .90 ±0.28 33 .24 ±0.17 33 .05 ±0.20 37 .41 ±0.22 
+
+LGP-OT ( ς(t) = ς) 27 .96 ±0.29 29 .85 ±0.10 32 .92 ±0.10 34 .73 ±0.29 35 .49 ±0.37 37 .90 ±0.22 
+
+VGFM 26 .09 ±0.19 28 .34 ±0.07 31 .29 ±0.13 33 .73 ±0.04 32 .88 ±0.26 37 .06 ±0.47 
+
+scNODE 26 .58 ±0.12 28 .65 ±0.11 31 .46 ±0.15 33 .24 ±0.16 33 .67 ±0.38 38 .04 ±0.35 
+
+MIOFlow 26 .44 ±0.12 28 .55 ±0.06 31 .65 ±0.13 33 .60 ±0.12 34 .49 ±0.24 38 .76 ±0.82 
+
+PI-SDE 26 .70 ±0.03 28 .76 ±0.04 31 .39 ±0.07 32 .80 ±0.09 33 .49 ±0.37 38 .27 ±0.57 
+
+PRESCIENT 30 .16 ±0.09 31 .16 ±0.08 32 .48 ±0.07 34 .66 ±0.24 33 .26 ±0.22 37 .64 ±0.34 
+
+SC/Easy SC/Medium 
+
+Model t = 5 t = 10 t = 15 t = 16 t = 17 t = 18 
+
+LGP-OT 10 .19 ±0.05 15 .95 ±0.04 14 .32 ±0.04 15 .24 ±0.04 15 .95 ±0.31 16 .17 ±0.36 
+
+LGP-OT (w. time) 10 .24 ±0.08 15 .88 ±0.06 14 .49 ±0.10 15 .70 ±0.26 16 .03 ±0.32 16 .20 ±0.28 
+
+LGP-OT ( ς(t) = 0 .1) 10 .90 ±0.34 16 .81 ±0.36 15 .63 ±0.41 16 .69 ±0.37 16 .86 ±0.49 17 .17 ±0.54 
+
+LGP-OT ( ς(t) = ς) 11 .02 ±0.08 18 .22 ±0.29 18 .46 ±0.19 18 .17 ±0.07 18 .70 ±0.16 18 .21 ±0.30 
+
+VGFM 10 .35 ±0.20 16 .72 ±0.51 16 .59 ±1.21 18 .14 ±1.00 17 .79 ±0.78 18 .54 ±0.77 
+
+scNODE 11 .09 ±0.23 16 .99 ±0.39 16 .15 ±0.52 16 .30 ±0.30 15 .94 ±0.20 16 .44 ±0.17 
+
+MIOFlow 10 .70 ±0.12 17 .03 ±0.38 17 .36 ±0.61 17 .58 ±0.27 17 .06 ±0.24 17 .26 ±0.38 
+
+PI-SDE 10 .68 ±0.11 17 .07 ±0.33 14 .91 ±0.34 18 .44 ±0.87 17 .88 ±0.98 18 .89 ±1.03 
+
+PRESCIENT 14 .48 ±0.10 16 .77 ±0.09 17 .88 ±0.20 18 .59 ±0.65 17 .80 ±0.62 17 .98 ±0.64 
+
+22 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport 
+
+Table 8. Performance comparison on hard tasks (interpolation + extrapolation) across three datasets. 
+
+ZB/Hard 
+
+Model t = 2 t = 4 t = 6 t = 8 t = 10 t = 11 
+
+LGP-OT 34 .01 ±0.04 31 .98 ±0.12 28 .70 ±0.03 30 .85 ±0.01 34 .90 ±0.02 36 .79 ±0.03 
+
+LGP-OT (w. time) 34 .13 ±0.11 31 .52 ±0.08 28 .96 ±0.10 31 .20 ±0.16 35 .01 ±0.11 36 .47 ±0.15 
+
+LGP-OT ( ς(t) = 0 .1) 35 .87 ±0.28 33 .33 ±0.29 30 .36 ±0.37 32 .52 ±0.38 35 .73 ±0.15 37 .37 ±0.10 
+
+LGP-OT ( ς(t) = ς) 34 .79 ±0.05 33 .83 ±0.21 31 .25 ±0.08 33 .50 ±0.06 36 .66 ±0.12 38 .60 ±0.47 
+
+VGFM 34 .03 ±0.08 32 .17 ±0.06 29 .11 ±0.15 31 .10 ±0.20 35 .64 ±0.25 40 .19 ±0.54 
+
+scNODE 34 .08 ±0.16 32 .04 ±0.18 29 .98 ±0.13 32 .50 ±0.24 36 .57 ±0.26 38 .00 ±0.25 
+
+PI-SDE 34 .04 ±0.02 31 .76 ±0.20 30 .51 ±0.14 32 .99 ±0.37 37 .34 ±0.54 39 .31 ±0.80 
+
+MIOFlow 34 .34 ±0.31 31 .73 ±0.13 30 .47 ±0.12 33 .17 ±0.43 36 .53 ±0.21 37 .99 ±0.15 
+
+PRESCIENT 52 .71 ±0.34 45 .53 ±0.74 39 .98 ±1.65 40 .46 ±2.68 46 .44 ±3.16 47 .69 ±3.16 
+
+DR/Hard 
+
+Model t = 2 t = 4 t = 6 t = 8 t = 9 t = 10 
+
+LGP-OT 29 .40 ±0.13 30 .61 ±0.07 32 .33 ±0.06 33 .78 ±0.02 33 .85 ±0.11 38 .17 ±0.20 
+
+LGP-OT (w. type) 28 .75 ±0.04 30 .39 ±0.06 32 .19 ±0.01 33 .75 ±0.07 33 .52 ±0.04 37 .82 ±0.23 
+
+LGP-OT (w. time) 29 .59 ±0.06 30 .48 ±0.06 32 .30 ±0.02 33 .83 ±0.11 33 .68 ±0.08 37 .71 ±0.08 
+
+LGP-OT (w. time + type) 28 .84 ±0.05 30 .48 ±0.07 32 .20 ±0.02 33 .77 ±0.08 33 .52 ±0.07 37 .88 ±0.30 
+
+LGP-OT ( ς(t) = 0 .1) 30 .14 ±0.21 31 .28 ±0.21 33 .29 ±0.10 34 .93 ±0.09 34 .88 ±0.14 38 .79 ±0.33 
+
+LGP-OT ( ς(t) = ς) 30 .77 ±0.15 32 .15 ±0.08 34 .14 ±0.03 35 .66 ±0.11 36 .77 ±0.21 39 .21 ±0.18 
+
+VGFM 30 .27 ±0.05 31 .30 ±0.06 33 .36 ±0.03 35 .62 ±0.06 35 .36 ±0.20 38 .47 ±0.23 
+
+scNODE 29 .95 ±0.29 30 .71 ±0.16 32 .88 ±0.12 34 .82 ±0.23 34 .63 ±0.41 38 .26 ±0.51 
+
+MIOFlow 29 .74 ±0.18 30 .97 ±0.07 32 .84 ±0.08 35 .25 ±0.17 36 .78 ±0.34 41 .43 ±1.07 
+
+PI-SDE 30 .34 ±0.14 30 .82 ±0.09 32 .71 ±0.05 34 .18 ±0.17 34 .55 ±0.27 38 .90 ±0.54 
+
+PRESCIENT 32 .68 ±0.13 32 .36 ±0.11 33 .08 ±0.11 35 .51 ±0.21 34 .19 ±0.14 38 .12 ±0.15 
+
+SC/Hard 
+
+Model t = 5 t = 7 t = 9 t = 11 t = 15 t = 16 t = 17 t = 18 
+
+LGP-OT 9.92 ±0.02 10 .27 ±0.01 13 .84 ±0.01 16 .12 ±0.01 14 .97 ±0.01 15 .46 ±0.02 15 .44 ±0.05 16 .29 ±0.04 
+
+LGP-OT (w. time) 9.92 ±0.08 10 .33 ±0.08 14 .11 ±0.06 16 .20 ±0.08 15 .48 ±0.06 15 .74 ±0.10 15 .05 ±0.13 15 .53 ±0.08 
+
+LGP-OT ( ς(t) = 0 .1) 11 .31 ±0.38 11 .60 ±0.34 15 .10 ±0.36 17 .69 ±0.31 16 .49 ±0.40 17 .44 ±0.34 19 .03 ±0.31 19 .68 ±0.20 
+
+LGP-OT ( ς(t) = ς) 11 .07 ±0.37 11 .38 ±0.37 15 .71 ±0.29 18 .77 ±0.33 18 .25 ±0.22 18 .28 ±0.21 18 .66 ±0.13 18 .60 ±0.23 
+
+VGFM 10 .80 ±0.08 11 .00 ±0.13 14 .75 ±0.13 18 .15 ±0.36 17 .06 ±0.51 17 .81 ±0.78 17 .54 ±0.70 18 .67 ±0.88 
+
+scNODE 10 .44 ±0.05 10 .90 ±0.05 14 .45 ±0.04 17 .54 ±0.22 16 .76 ±0.21 17 .90 ±0.24 17 .26 ±0.28 18 .14 ±0.34 
+
+MIOFlow 10 .52 ±0.21 11 .19 ±0.25 15 .10 ±0.21 18 .52 ±0.82 18 .01 ±0.43 18 .99 ±0.74 18 .93 ±1.08 19 .82 ±1.48 
+
+PI-SDE 10 .40 ±0.10 10 .73 ±0.15 14 .12 ±0.10 17 .01 ±0.25 18 .34 ±0.66 20 .20 ±0.67 19 .92 ±0.73 21 .32 ±0.72 
+
+PRESCIENT 13 .66 ±0.18 13 .81 ±0.21 15 .55 ±0.18 17 .05 ±0.20 18 .24 ±0.33 18 .86 ±0.36 18 .06 ±0.35 18 .44 ±0.37 
+
+23 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport LGP-OT 
+
+t = 4 t = 6 t = 8  
+
+> VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> ˆρρ
+
+Figure 8. Comparison of predicted and observed distributions across models on test time points of the ZB easy task. The black contours, 
+
+ˆρ, represent the predicted cell density distributions generated by each dynamical model, while the grey shaded regions, ρ, depict the observed cell density. 
+
+24 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport LGP-OT 
+
+t = 10 t = 11  
+
+> VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> ˆρρ
+
+Figure 9. Comparison of predicted and observed distributions across models on test time points of the ZB medium task. The black contours, ˆρ, represent the predicted cell density distributions generated by each dynamical model, while the grey shaded regions, ρ, depict the observed cell density. 
+
+25 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport LGP-OT 
+
+t = 2 t = 4 t = 6 t = 8 t = 10 t = 11  
+
+> VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> ˆρρ
+
+Figure 10. Comparison of predicted and observed distributions across models on test time points of the ZB hard task. The black contours, 
+
+ˆρ, represent the predicted cell density distributions generated by each dynamical model, while the grey shaded regions, ρ, depict the observed cell density. 
+
+26 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport LGP-OT (w. time + type)  t = 4 t = 6 t = 8  
+
+> VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> ˆρρ
+
+Figure 11. Comparison of predicted and observed distributions across models on test time points of the DR easy task. The black contours, 
+
+ˆρ, represent the predicted cell density distributions generated by each dynamical model, while the grey shaded regions, ρ, depict the observed cell density. 
+
+27 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport LGP-OT (w. time + type)  t = 8 t = 9 t = 10  
+
+> VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> ˆρρ
+
+Figure 12. Comparison of predicted and observed distributions across models on test time points of the DR medium task. The black contours, ˆρ, represent the predicted cell density distributions generated by each dynamical model, while the grey shaded regions, ρ, depict the observed cell density. 
+
+28 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport LGP-OT (w. type) 
+
+t = 2 t = 4 t = 6 t = 8 t = 9 t = 10  
+
+> VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> ˆρρ
+
+Figure 13. Comparison of predicted and observed distributions across models on test time points of the DR hard task. The black contours, 
+
+ˆρ, represent the predicted cell density distributions generated by each dynamical model, while the grey shaded regions, ρ, depict the observed cell density. 
+
+29 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport LGP-OT 
+
+t = 5 t = 10 t = 15  
+
+> VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> ˆρρ
+
+Figure 14. Comparison of predicted and observed distributions across models on test time points of the SC easy task. The black contours, 
+
+ˆρ, represent the predicted cell density distributions generated by each dynamical model, while the grey shaded regions, ρ, depict the observed cell density. 
+
+30 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport LGP-OT 
+
+t = 16 t = 17 t = 18  
+
+> VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> ˆρρ
+
+Figure 15. Comparison of predicted and observed distributions across models on test time points of the SC medium task. The black contours, ˆρ, represent the predicted cell density distributions generated by each dynamical model, while the grey shaded regions, ρ, depict the observed cell density. 
+
+31 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport LGP-OT 
+
+t = 5 t = 7 t = 9 t = 11 t = 15 t = 16 t = 17 t = 18  
+
+> VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> ˆρρ
+
+Figure 16. Comparison of predicted and observed distributions across models on test time points of the SC hard task. The black contours, 
+
+ˆρ, represent the predicted cell density distributions generated by each dynamical model, while the grey shaded regions, ρ, depict the observed cell density. 
+
+32 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport True Data LGP-OT VGFM scNODE PI-SDE MIOFlow PRESCIENT             
+
+> Test TPs 468True Data LGP-OT VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> Test TPs 10 11 True Data LGP-OT VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> Test TPs 246810 11
+
+Figure 17. PCA visualization of the ground truth samples and model predictions on ZB data for easy (top row), medium (middle row), and hard (bottom row) tasks. The gray points represent the training data. True Data LGP-OT (w. type) VGFM scNODE PI-SDE MIOFlow PRESCIENT             
+
+> Test TPs 468True Data LGP-OT (w. type) VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> Test TPs 8910 True Data LGP-OT (w. type) VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> Test TPs 2468910
+
+Figure 18. PCA visualization of the ground truth samples and model predictions on DR data for easy (top row), medium (middle row), and hard (bottom row) tasks. The gray points represent the training data. 
+
+33 Modeling Temporal scRNA-seq Data with Latent Gaussian Process and Optimal Transport True Data LGP-OT VGFM scNODE PI-SDE MIOFlow PRESCIENT             
+
+> Test TPs 510 15 True Data LGP-OT VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> Test TPs 16 17 18 True Data LGP-OT VGFM scNODE PI-SDE MIOFlow PRESCIENT
+> Test TPs 57911 15 16 17 18
+
+Figure 19. PCA visualization of the ground truth samples and model predictions on SC data for easy (top row), medium (middle row), and hard (bottom row) tasks. The gray points represent the training data. z1 z2 z3 z4 z5 z6 z7 z8
+
+z9 z10 z11 z12 z13 z14 z15 z16 
+
+z17 z18 z19 z20 z21 z22 z23 z24 
+
+z25 z26 z27 z28 z29 z30 z31 z32     
+
+> ˜f(t)±2ς(t)Test TPs
+
+Figure 20. Learned latent temporal functions for the SC dataset under the medium task. The smooth trajectories and varying uncertainty bands illustrate the model’s ability to capture both the population-level trends and the time-varying noise across latent dimensions. 
+
+34

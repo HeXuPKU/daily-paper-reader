@@ -1,0 +1,687 @@
+Title: From Snapshots to Trajectories: Learning Single-Cell Gene Expression Dynamics via Conditional Flow Matching
+
+URL Source: https://arxiv.org/pdf/2605.22340v1
+
+Published Time: Fri, 22 May 2026 01:16:48 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# From Snapshots to Trajectories: Learning Single-Cell Gene Expression Dynamics via Conditional Flow Matching 
+
+# Siyu Pu 1, Qingqing Long 1, Xiaohan Huang 1, Haotian Chen 1, Jiajia Wang 1,Meng Xiao 1, Xiao Luo 2, Hengshu Zhu 1, Yuanchun Zhou 1, Xuezhi Wang 1
+
+1Computer Network Information Center, Chinese Academy of Sciences 
+
+2University of California, Los Angeles 
+
+## Abstract 
+
+Single-cell RNA sequencing (scRNA-seq) provides high-dimensional profiles of cellular states, enabling data-driven modeling of cellu-lar dynamics over time. In practice, time-resolved scRNA-seq is collected at only a few discrete time points as unpaired snapshot populations, leaving substantial temporal gaps. This motivates tra-jectory inference at unmeasured time points. Existing methods mainly follow two directions, optimal-transport (OT) alignment provides distribution-level matching between observed snapshots, while continuous-time generative models support forecasting via learned dynamics. However, two challenges remain: (i) unpaired snapshots render local transitions between adjacent time points am-biguous, leading to unstable supervision; and (ii) long-horizon pre-diction relies on repeated integration, where small modeling errors compound and cause distribution drift. To address these challenges, we propose single-cell Flow Matching ( scFM ), a latent generative framework based on coupling-conditioned flow matching. First, we compute entropically regularized OT couplings between adjacent snapshots and use them to construct soft, weighted flow-matching targets for learning time-dependent velocity fields. Second, we learn bidirectional velocity fields and leverage their consistency to refine couplings and improve temporal coherence under sparse supervi-sion. Third, we introduce distribution-level alignment and latent dynamic regularization to anchor long rollouts and mitigate drift. Experiments on real-world time-series scRNA-seq datasets show that scFMconsistently improves distributional prediction perfor-mance for both temporal interpolation and extrapolation. Moreover, scFMyields more accurate trajectory reconstruction and temporally coherent visualizations where intermediate time points are absent, indicating a more faithful recovery of underlying temporal gene expression dynamics. 
+
+## Keywords 
+
+Single-Cell, Gene Expression, Single-Cell Trajectory, Flow Matching 
+
+ACM Reference Format: 
+
+Siyu Pu 1, Qingqing Long 1, Xiaohan Huang 1, Haotian Chen 1, Jiajia Wang 1,, Meng Xiao 1, Xiao Luo 2, Hengshu Zhu 1, Yuanchun Zhou 1, Xuezhi Wang 1.2026. From Snapshots to Trajectories: Learning Single-Cell Gene Expression  
+
+> Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference acronym ’XX, xx
+> ©2026 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-x-xxxx-xxxx-x/YYYY/MM https://doi.org/XX
+
+Dynamics via Conditional Flow Matching. In Proceedings of xx (Conference acronym ’XX). ACM, New York, NY, USA, 9 pages. https://doi.org/XX 
+
+## 1 Introduction 
+
+Single-cell RNA sequencing (scRNA-seq) has transformed the study of complex biological systems by profiling gene expression at single-cell resolution, thereby revealing cellular heterogeneity and state transitions that are invisible to bulk measurements [ 16 , 18 , 28 , 33 ]. Modeling the resulting continuous gene-expression dynamics is essential for understanding time-varying cellular programs and critical transition phases. However, time-resolved scRNA-seq in vivo 
+
+remains challenging: sequencing is destructive and thus provides 
+
+unpaired snapshot distributions across time rather than longitudinal trajectories, while dense sampling is often infeasible, leaving large temporal gaps and missing intermediate states [ 7 , 8, 14 , 34 , 42 , 44 ,45 ]. Consequently, a core computational goal is to generate in silico 
+
+cells at unobserved time points to recover continuous dynamics from sparsely sampled snapshots [16, 23, 35]. 
+
+Figure 1: Given sparsely sampled scRNA-seq snapshots, scFM integrates OT-informed alignment and simulation-free flow matching to learn time-conditioned single-cell dynamics and generate in silico cells at unobserved time points. 
+
+A spectrum of computational approaches has been explored in recent years [ 1, 20 , 35 , 38 , 41 , 43 ]. Trajectory inference and pseudo-time methods recover putative developmental orderings but do not directly model physical time or provide a generative mechanism for predicting future snapshots [ 17 , 32 , 36 , 39 ]. RNA-velocity-based methods estimate local directions of state changes, yet rely on addi-tional assumptions and typically provide local, short-horizon guid-ance rather than distribution-level long-range prediction [ 1 , 13 , 24 ]. Optimal-transport (OT) approaches align snapshot distributions across time and have shown strong performance in reconstructing  
+
+> arXiv:2605.22340v1 [cs.LG] 21 May 2026 Conference acronym ’XX, 2026, xx Siyu Pu et al.
+
+ancestor-descendant relations [ 22 , 34 ], while extensions further in-corporate population growth or unbalanced mass transport [ 35 ]. In parallel, continuous-time generative dynamics models (e.g., neural ODE/flow-based models) attempt to learn time-conditioned vector fields from snapshots for interpolation or forecasting [ 20 , 38 , 41 , 43 ]. However, existing methods still face several limitations for em-bryonic scRNA-seq: 
+
+(1) Ambiguous cell-level temporal dependencies under un-paired supervision. Snapshot measurements provide unordered populations at each time, so the learning signal is inherently set-valued : there is no ground-truth correspondence that specifies which micro-transitions between adjacent snapshots are plausible. Many existing objectives therefore default to coarse distribution matching or one-directional constraints, which can leave the local transition structure underdetermined. This ambiguity is especially problematic when time gaps are large or trajectories branch/merge, where multiple distinct cell-level transports can explain the same marginal snapshots, yielding weakly identifiable dynamics and temporally incoherent rollouts. 
+
+(2) Loose coupling between snapshot alignment and vector-field learning. OT-based alignment provides strong distribution-level matching, while dynamics models aim to learn a time-conditioned vector field whose integration reproduces snapshot marginals. However, in many pipelines these two components are only weakly connected: OT is used as a post-hoc alignment, and the vector field is optimized with objectives that do not directly inherit the OT-induced correspondence structure. As a result, the supervi-sion provided to the vector field can be unstable or noisy, especially when snapshots are far apart-because the model must simultane-ously infer pairings and fit dynamics without a coupling-aware training target. 
+
+(3) Compounding drift in long-horizon generation without global anchors. Continuous-time models typically generate cells at future times by repeatedly integrating a learned vector field. Even small local regression errors can accumulate over time, causing the predicted population to gradually drift away from the true snapshot manifold and violate observed marginals. Local supervision alone is often insufficient to prevent such error compounding, because it does not explicitly penalize distribution mismatch at distant time points. To address these issues, we propose Single-Cell Flow Match-ing ( scFM ), a single-cell generative framework for developmental dynamics modeling from sparse scRNA-seq snapshots. At a high level, scFM combines OT-informed alignment with simulation-free flow matching [ 27 , 30 ] to learn time-conditioned vector fields that can generate realistic single-cell distributions at unmeasured time points. Crucially, scFM explicitly leverages directional temporal dependencies between successive snapshots and integrates infor-mation from both preceding and subsequent states, providing more constrained and informative supervision for learning developmen-tal dynamics. To further stabilize long-horizon generation, scFM incorporates a global distribution-level anchoring mechanism that regularizes the learned dynamics to reduce drift away from ob-served snapshot distributions. By operating at the cell level, scFM preserves cellular heterogeneity and supports fine-grained trajec-tory reconstruction in embryogenesis. We summarize the main contributions of this work as follows: 
+
+• We learn forward and backward time-conditioned velocity fields and enforce their consistency, enabling the model to exploit infor-mation from both preceding and subsequent snapshots to better constrain local transitions under unpaired supervision. 
+
+• We tightly couple snapshot alignment and vector-field learn-ing by integrating entropically regularized OT couplings into simulation-free flow matching, converting distribution-level alignment into soft, weighted cell-level supervision for time-series prediction. 
+
+• We introduce distribution-level regularization that anchors long rollouts to observed snapshot marginals, reducing compounding drift and improving robustness in long-horizon extrapolation. 
+
+• We conduct extensive experiments on scRNA-seq datasets, demonstrating consistent improvements over SOTA baselines in dynamics learning. 
+
+## 2 Related Work 
+
+We organize prior work on modeling time-resolved scRNA-seq snap-shots into three paths: OT-based couplings for aligning unpaired populations, continuous-time generative dynamics, and simulation-free regression objectives. 
+
+## 2.1 OT for Snapshot Alignment 
+
+Optimal transport (OT) offers a principled mechanism for aligning cell populations across time by estimating couplings that mini-mize a transportation cost [ 2, 34 ]. Practical OT pipelines frequently rely on entropic regularization and Sinkhorn-type objectives for scalability, and Sinkhorn divergences provide a statistically better-behaved alternative for comparing distributions [ 6, 11 ]. For devel-opmental systems with proliferation/death, unbalanced OT and entropy-transport formulations (e.g., Hellinger-Kantorovich) pro-vide a natural way to relax mass conservation [ 5 , 25 ], and the computational OT literature supplies the algorithmic foundations [ 29 ]. In the context of temporal prediction, OT-based methods are often used as baselines or auxiliary supervision: couplings between observed time points can guide interpolation, while genuine fore-casting beyond the last observation is more challenging because no target marginal is available to anchor the coupling.Overall, OT-based alignment can recover distribution-level correspondences and support short-range interpolation, but by itself it lacks an explicit time-conditioned dynamics model and provides limited guidance for long-horizon generation under sparse observations. 
+
+## 2.2 Continuous-Time Generative Dynamics 
+
+A complementary line of work learns continuous-time generative dynamics that transport an initial distribution to later snapshot marginals by integrating a learned vector field [ 9, 15 ]. TrajectoryNet [38 ] connects continuous normalizing flows with dynamic OT regu-larization to control paths between snapshot distributions, enabling non-linear transport trajectories in continuous time. MIOFlow[ 20 ]further incorporates manifold-aware geometry by operating in an autoencoder latent space and penalizing OT discrepancies with manifold-sensitive ground costs, improving interpolation fidelity when data lie on complex manifolds. PRESCIENT[ 41 ] models differ-entiation using an energy landscape and enables simulation under From Snapshots to Trajectories: Learning Single-Cell Gene Expression Dynamics via Conditional Flow Matching Conference acronym ’XX, 2026, xx 
+
+interventions, emphasizing mechanistic structure alongside predic-tion. Closer to the explicit forecasting objective, scNODE couples a VAE with latent neural ODE [ 4 ] dynamics and regularization to im-prove robustness when generating cells at unobserved time points, making it a strong and widely used baseline for time-point predic-tion.In summary, continuous-time models can represent smooth time-conditioned transport and enable forecasting via ODE inte-gration, but learning accurate vector fields from unpaired snap-shots often requires strong and stable supervision; without careful coupling between alignment and dynamics, local ambiguity and long-horizon drift can still degrade predictions. 
+
+## 2.3 Simulation-Free Flow Objectives 
+
+Recent advances in generative modeling have introduced simulation-free regression-style objectives for learning continuous-time flows [ 19 ]. Flow matching[ 27 ] trains a vector field by regressing to analytically defined probability paths, and conditional/OT-informed variants improve stability and gener-alization by leveraging coupling-aware paths, including mini-batch OT constructions[ 37 ]. These objectives have motivated time-series imputation and missing-time-point modeling beyond bi-ology, e.g., multi-marginal flow matching formulations for dy-namics across time and conditions[ 31 ]. In the single-cell domain, DeepRUOT[ 45 ] focuses on recovering snapshot-consistent stochas-tic dynamics under its transport-based formulation. CellStream[ 26 ]learns dynamics-informed embeddings that better represent tempo-ral structure and improve robustness in downstream trajectory re-construction. VGFM [ 40 ] applies flow matching to snapshot dynam-ics and is often reported under hold-one-out evaluation protocols. Importantly, this protocol reflects an evaluation choice rather than a hard modeling constraint: VGFM learns a continuous-time dynam-ics that can be queried at arbitrary times after training, and thus can be used to generate predictions for multiple held-out timepoints within a single trained model under our multi-holdout setting. Over-all, these works provide valuable inductive biases for temporal struc-ture; in contrast, our emphasis is on improving distribution-level time-point prediction accuracy under multi-timepoint holdout pro-tocols that more closely reflect realistic experimental gaps. Overall, simulation-free objectives can provide stable and scalable velocity-field learning, but existing single-cell methods may still rely on one-directional or loosely coupled alignment signals, leaving cell-level temporal dependencies underconstrained and long-horizon rollouts susceptible to drift. Building on this line, our scFM tightly couples OT-derived soft correspondences with flow-matching regression (yielding coupling-conditioned supervision), further strengthens identifiability via bidirectional velocity fields, and introduces global distribution-level anchoring to stabilize long-horizon generation. 
+
+## 3 Preliminaries 
+
+Problem Definition. We observe temporally resolved single-cell transcriptomic snapshots. Let 𝑡 ∈ T denote a physical time index. At each observed time 𝑡 , we are given an unordered cell set X𝑡 =
+
+{𝑥 𝑡 𝑖 }𝑛 𝑡  
+
+> 𝑖 =1
+
+⊂ R𝐺 , where 𝐺 is the number of genes and each 𝑥 𝑡 𝑖 is a vec-tor of normalized expression values. We write 𝑝 𝑡 for the unknown data distribution that generates X𝑡 . Let Ttr = {𝑡 0 < 𝑡 1 < · · · < 𝑡 𝑀 }
+
+be the training timepoints. Our goal is to learn a continuous-time generative dynamics model that, given cells at the earliest time 𝑡 0,can generate cell populations at any 𝑡 ∈ [ 𝑡 0, 𝑡 𝑀 ], and can extrapolate beyond 𝑡 𝑀 when the learned dynamics generalizes. 
+
+Latent representation via a shared VAE. Direct modeling in gene space is challenging due to high dimensionality and sparsity. Fol-lowed by exist work [ 43 ], we first train a VAE [ 21 ] which can capture complex cellular relationships and variations in single-cell data. We then model cellular development as a continuous-time dynamical flow in the latent space. The encoder Enc 𝜙 maps gene expression to a Gaussian latent distribution. For each cell 𝑥 ∈ R𝐺 ,
+
+(𝜇 𝜙 (𝑥 ), 𝜎 𝜙 (𝑥 )) = Enc 𝜙 (𝑥 ),𝑞 𝜙 (𝑧 | 𝑥 ) = N  𝑧 | 𝜇 𝜙 (𝑥 ), diag  𝜎 𝜙 (𝑥 )2  . (1) We draw a reparameterized sample 
+
+𝑧 = 𝜇 𝜙 (𝑥 ) + 𝜎 𝜙 (𝑥 ) ⊙ 𝜀, 𝜀 ∼ N ( 0, 𝐼 𝑑 ). (2) The decoder Dec 𝜃 maps latents back to gene space, 
+
+ˆ𝑥 = Dec 𝜃 (𝑧 ). (3) Then we train the VAE using a reconstruction loss and a KL regu-larizer. For a mini-batch {𝑥 𝑏 }𝐵 𝑏 =1,
+
+LVAE (𝜙, 𝜃 ) = 1
+
+𝐵 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑏 =1
+
+𝑥 𝑏 − Dec 𝜃 (𝑧 𝑏 ) 22
+
++ 𝜆 KL 
+
+1
+
+𝐵 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑏 =1
+
+KL  𝑞 𝜙 (𝑧 | 𝑥 𝑏 ) ∥ N ( 0, 𝐼 𝑑 ) .
+
+(4) 
+
+## 4 Model: scFM 
+
+In this paper, we propose single-cell Flow Matching (scFM), a latent generative framework based on coupling-conditioned flow match-ing. The framework of scFM is shown in Fig.2. First, we compute entropically regularized OT couplings between adjacent snapshots and use them to construct soft, weighted flow-matching targets for learning time-dependent velocity fields. Second, we learn bidi-rectional velocity fields and leverage their consistency to refine couplings and improve temporal coherence under sparse supervi-sion. Third, we introduce distribution-level alignment and latent dynamic regularization to anchor long rollouts and mitigate drift. 
+
+## 4.1 Continuous-time latent dynamics with two velocity fields 
+
+Single-cell data are observed as unpaired snapshots across time, where cell-wise correspondences are unknown. Inspired by entropic OT for matching distributions across snapshots [ 6 , 29 ], we estimate a soft coupling between adjacent time points and use it to supervise latent dynamics. While a single forward model can generate future trajectories, the lack of correspondence makes the coupling and velocity supervision highly ambiguous and prone to error accu-mulation; we therefore learn bidirectional time-dependent velocity fields (forward and backward) to impose a symmetric constraint that stabilizes coupling construction and velocity learning. We introduce a forward field 𝑣 f 
+
+> 𝜓
+
+: [𝑡 0, 𝑡 𝑀 ] × R𝑑 → R𝑑 and a backward field 𝑣 b 
+
+> 𝜓
+
+: [𝑡 0, 𝑡 𝑀 ] × R𝑑 → R𝑑 . The forward latent Conference acronym ’XX, 2026, xx Siyu Pu et al. 
+
+Figure 2: scFM models continuous-time single-cell dynamics in a VAE latent space using a two-stage training framework. (1) A shared VAE is first pretrained to learn compact gene-expression representations. (2) Local OT-conditioned flow matching learns time-dependent velocity fields between adjacent snapshots using entropic optimal transport with a bidirectional fused cost and symmetric supervision. (3) During global trajectory anchoring, representation regularization and periodic global OT anchoring enforce reconstruction fidelity and long-horizon dynamic consistency. 
+
+trajectory 𝑧 f (𝑡 ) solves 
+
+𝑑𝑧 f (𝑡 )
+
+𝑑𝑡 = 𝑣 f
+
+> 𝜓
+
+ 𝑡, 𝑧 f (𝑡 ), 𝑧 f (𝑡 0) = 𝑧 0. (5) The backward latent trajectory 𝑧 b (𝑡 ) solves 
+
+𝑑𝑧 b (𝑡 )
+
+𝑑𝑡 = 𝑣 b
+
+> 𝜓
+
+ 𝑡, 𝑧 b (𝑡 ), 𝑧 b (𝑡 1) = 𝑧 1. (6) At inference time, we sample 𝑧 0 ∼ 𝑞 𝜙 (𝑧 | 𝑥 𝑡 0 ) from observed cells at 𝑡 0, integrate Eq. (5) to obtain 𝑧 f (𝑡 ) at desired times, then decode 
+
+ˆ𝑥 (𝑡 ) = Dec 𝜃 (𝑧 f (𝑡 )) . The backward field is used during training to refine coupling construction and to provide symmetric supervision. 
+
+## 4.2 OT-conditioned flow matching for local supervision 
+
+A key difficulty is that snapshots are unordered. There is no ground-truth correspondence between individual cells at adjacent time-points. We therefore construct a soft coupling between mini-batches at adjacent times using optimal transport, and we use that coupling as a supervision distribution for flow matching. This choice avoids committing to hard matchings and yields a principled distribution-level pairing that is robust to sampling noise. Let Etr = {( 𝑡 𝑘 , 𝑡 𝑘 +1)} 𝑀 −1 
+
+> 𝑘 =0
+
+denote the set of adjacent intervals. First, we choose adjacent times (𝑡 𝑎 , 𝑡 𝑏 ) ∈ E tr with 𝑡 𝑏 > 𝑡 𝑎 and sample two mini-batches {𝑥 𝑎 𝑖 }𝐵 𝑖 =1 ⊂ X 𝑡 𝑎 and {𝑥 𝑏 𝑗 }𝐵 𝑗 =1 ⊂ X 𝑡 𝑏 . After encoding them into latents, 𝑧 𝑎 𝑖 ∼ 𝑞 𝜙 (𝑧 | 𝑥 𝑎 𝑖 ) and 𝑧 𝑏 𝑗 ∼ 𝑞 𝜙 (𝑧 | 𝑥 𝑏 𝑗 ),we define a pairwise cost matrix 𝐶 ∈ R𝐵 ×𝐵 for OT. During an initial warmup stage, we adopt a geometric (squared Euclidean) cost: 
+
+𝐶 euc  
+
+> 𝑖 𝑗
+
+= 𝑧 𝑎 𝑖 − 𝑧 𝑏 𝑗 
+
+> 22
+
+. (7) After warmup we use a bidirectional fused cost that incorpo-rates both velocity fields. Let Δ𝑡 = 𝑡 𝑏 − 𝑡 𝑎 . Using one-step Euler predictions, 
+
+˜𝑧 𝑏 𝑖 = 𝑧 𝑎 𝑖 + 𝑣 f 
+
+> 𝜓
+
+(𝑡 𝑎 , 𝑧 𝑎 𝑖 ) · Δ𝑡, ˜𝑧 𝑎 𝑗 = 𝑧 𝑏 𝑗 + 𝑣 b 
+
+> 𝜓
+
+(𝑡 𝑏 , 𝑧 𝑏 𝑗 ) · ( 𝑡 𝑎 − 𝑡 𝑏 ). (8) We define the fused cost 
+
+𝐶 bi  
+
+> 𝑖 𝑗
+
+= 12 ˜𝑧 𝑏 𝑖 − 𝑧 𝑏 𝑗  
+
+> 22
+
++ 12 𝑧 𝑎 𝑖 − ˜𝑧 𝑎 𝑗 
+
+> 22
+
+. (9) This cost encourages consistency: a candidate pair is favored when forward dynamics maps 𝑧 𝑎 𝑖 close to 𝑧 𝑏 𝑗 and backward dynamics maps 𝑧 𝑏 𝑗 close to 𝑧 𝑎 𝑖 .
+
+Entropic OT coupling. Let 𝑢 = 1 
+
+> 𝐵
+
+1 be the uniform marginal. We compute an entropic OT plan 
+
+𝜋 = arg min     
+
+> 𝛾 ∈Π(𝑢,𝑢 )
+
+⟨𝛾, 𝐶 ⟩ + 𝜀 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑖 =1
+> 𝐵
+
+∑︁ 
+
+> 𝑗 =1
+
+𝛾 𝑖 𝑗 
+
+ log 𝛾 𝑖 𝑗 − 1, (10) where Π(𝑢, 𝑢 ) is the set of couplings with row and column sums equal to 𝑢 . We solve Eq. (10) using Sinkhorn iterations [ 12 ]. The resulting 𝜋 𝑖 𝑗 defines a soft pairing distribution between the two unordered mini-batches. 
+
+OT-conditioned flow matching objective. Given a paired endpoint sample (𝑧 𝑎 𝑖 , 𝑧 𝑏 𝑗 ) drawn according to 𝜋 , we define a linear bridge trajectory between them. Sample 𝛼 ∼ Unif [0, 1] and set 
+
+𝑡 𝛼 = (1 − 𝛼 )𝑡 𝑎 + 𝛼𝑡 𝑏 , 𝑧 𝛼 = (1 − 𝛼 )𝑧 𝑎 𝑖 + 𝛼𝑧 𝑏 𝑗 . (11) The target constant velocity along this bridge is 
+
+𝑢 𝑖 𝑗 = 𝑧 𝑏 𝑗 − 𝑧 𝑎 𝑖 
+
+𝑡 𝑏 − 𝑡 𝑎 
+
+. (12) From Snapshots to Trajectories: Learning Single-Cell Gene Expression Dynamics via Conditional Flow Matching Conference acronym ’XX, 2026, xx 
+
+We train the forward velocity field by regression to this target velocity, averaged over the OT coupling, 
+
+LfFM (𝜓 ) = E(𝑖,𝑗 )∼ 𝜋 E𝛼 ∼Unif [0,1] 𝑣 f 
+
+> 𝜓
+
+(𝑡 𝛼 , 𝑧 𝛼 ) − 𝑢 𝑖 𝑗 22. (13) We analogously define the backward flow matching loss by swap-ping endpoints, 
+
+LbFM (𝜓 ) = E(𝑖,𝑗 )∼ 𝜋 E𝛼 ∼Unif [0,1] 𝑣 b 
+
+> 𝜓
+
+(𝑡 𝛼 , 𝑧 𝛼 ) − 𝑧 𝑎 𝑖 − 𝑧 𝑏 𝑗 
+
+𝑡 𝑎 − 𝑡 𝑏 
+
+> 22
+
+. (14) The bidirectional local supervision is 
+
+LFM (𝜓 ) = LfFM (𝜓 ) + L bFM (𝜓 ). (15) Eq. (13)-(15) define the population objective averaging over all 𝐵 2 pairs under 𝜋 . In practice, we use a Top-𝐾 approximation 
+
+by retaining only the 𝐾 largest coupling weights per row. For each 𝑖 , let 𝑁 𝐾 (𝑖 ) = TopK (𝜋 𝑖, · ), 𝑤 𝑖 𝑗 = 𝜋 𝑖 𝑗 1{ 𝑗 ∈ 𝑁 𝐾 (𝑖 )} , and 
+
+𝑚 = Í𝐵 𝑖 =1
+
+Í𝑗 ∈𝑁 𝐾 (𝑖 ) 𝑤 𝑖 𝑗 . We approximate the forward loss as 
+
+L (𝐾 ),𝑓  
+
+> FM
+
+(𝜓 ) = 1
+
+𝑚 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑖 =1
+
+∑︁ 𝑗 ∈𝑁 𝐾 (𝑖 )
+
+𝑤 𝑖 𝑗 E𝛼 ∼Unif [0,1]
+
+∥𝑣 𝑓 𝜓 (𝑡 𝛼 , 𝑧 𝑖 𝑗 𝛼 ) − 𝑢 𝑖 𝑗 ∥22
+
+,
+
+(16) and define L (𝐾 ),𝑏  
+
+> FM
+
+analogously, with L (𝐾 ) 
+
+> FM
+
+= L (𝐾 ),𝑓  
+
+> FM
+
++ L (𝐾 ),𝑏  
+
+> FM
+
+. This reduces the pairwise regression evaluations from 𝑂 (𝐵 2) to 𝑂 (𝐵𝐾 )
+
+(the Sinkhorn coupling still uses the 𝐵 ×𝐵 cost matrix). When 𝐾 → 𝐵 
+
+or the truncated mass 𝑚 is close to 1, the approximation becomes tight; for simplicity we denote L (𝐾 ) 
+
+> FM
+
+by LFM unless otherwise stated. 
+
+## 4.3 Global distribution matching and latent dynamic regularization 
+
+Local OT-conditioned flow matching provides informative supervi-sion between adjacent snapshots, but it does not directly constrain long-horizon rollouts. We add global, distribution-level losses to (i) match predicted populations to observed snapshots and (ii) regular-ize latent dynamics to stay consistent with the encoder geometry. 
+
+Global Wasserstein distribution matching. Let ˆX𝑡 𝑘 be predicted cells at time 𝑡 𝑘 obtained by encoding cells at 𝑡 0, rolling out Eq. (5) to 𝑡 𝑘 , and decoding. We measure the discrepancy between X𝑡 𝑘 and 
+
+ˆX𝑡 𝑘 via an entropic OT cost 
+
+OT  X𝑡 𝑘 , ˆX𝑡 𝑘 
+
+ = min      
+
+> Γ∈Π(𝑢 𝑘 ,ˆ𝑢 𝑘 )
+
+⟨Γ, 𝐷 𝑘 ⟩ + 𝜀 𝑘 𝐵 ∑︁ 
+
+> 𝑖 =1
+> 𝐵
+
+∑︁ 
+
+> 𝑗 =1
+
+Γ𝑖 𝑗 
+
+ log Γ𝑖 𝑗 − 1.
+
+(17) where 𝐷 𝑘 is a squared Euclidean cost matrix in gene space and 
+
+Π(𝑢 𝑘 , ˆ𝑢 𝑘 ) enforces marginal constraints. We average this discrep-ancy over all training time points: 
+
+LOT (𝜙, 𝜃,𝜓 ) = 1
+
+𝑀 + 1
+
+> 𝑀
+
+∑︁ 
+
+> 𝑘 =0
+
+OT  X𝑡 𝑘 , ˆX𝑡 𝑘 
+
+. (18) 
+
+Latent dynamic regularization. To prevent the learned dynamics from drifting away from the VAE latent geometry, we align ODE-generated latents with encoder latents at each time point. Let Zenc 
+
+> 𝑡 𝑘
+
+be a mini-batch of latents encoded from X𝑡 𝑘 , and let Zode  
+
+> 𝑡 𝑘
+
+be the 
+
+Algorithm 1: scFM 
+
+Input: 𝑇 tr ; snapshots {𝑋 𝑡 }𝑡 ∈𝑇 tr ; 𝜀 , 𝐸 warm , 𝐾 𝑂𝑇 , and loss weights in Eq. (20); 𝐸𝑛𝑐 𝜙 , 𝐷𝑒𝑐 𝜃 , 𝑣 f 
+
+> 𝜓
+
+, 𝑣 b 
+
+> 𝜓
+
+.
+
+Output: Trained parameters (𝜙, 𝜃,𝜓 ).
+
+// Phase I: VAE pretraining  
+
+> 1
+
+Optimize (𝜙, 𝜃 ) on CONCAT ({ 𝑋 𝑡 }) to minimize LVAE (Eq. (4)) 
+
+// Phase II: dynamics learning  
+
+> 2
+
+for 𝑠 = 1, 2, . . . do // each training step 𝑠  
+
+> 3
+
+Sample adjacent (𝑡 𝑎 , 𝑡 𝑏 ) and mini-batches from 𝑋 𝑡 𝑎 , 𝑋 𝑡 𝑏 ;encode to 𝑍 𝑎 , 𝑍 𝑏  
+
+> 4
+
+Compute LVAE on the sampled mini-batches  
+
+> 5
+
+if 𝑠 ≤ 𝐸 warm then  
+
+> 6
+
+𝐶 ← 𝐶 euc (𝑍 𝑎 , 𝑍 𝑏 ) (Eq. (7))  
+
+> 7
+
+else  
+
+> 8
+
+Compute one-step Euler predictions ˜𝑍 𝑏 , ˜𝑍 𝑎 using 
+
+𝑣 f 
+
+> 𝜓
+
+, 𝑣 b  
+
+> 𝜓 (Eq. (8))
+> 9
+
+𝐶 ← 𝐶 bi (𝑍 𝑎 , 𝑍 𝑏 , ˜𝑍 𝑎 , ˜𝑍 𝑏 )(Eq. (9))  
+
+> 10
+
+Compute entropic OT coupling 𝜋 ← Sinkhorn (𝐶 ) (Eq. (10) ) 
+
+> 11
+
+Compute local LFM (Top-𝐾 OT approximation) (Eq. (13) –(16) ) 
+
+> 12
+
+𝐿 ← L VAE + 𝜆 FM LFM (Eq. (20))  
+
+> 13
+
+if 𝑠 mod 𝐾 𝑂𝑇 = 0 then  
+
+> 14
+
+Compute LOT , Ldyn (Eq. (18), Eq. (19))  
+
+> 15
+
+𝐿 ← 𝐿 + 𝜆 OT LOT + 𝜆 dyn Ldyn (Eq. (20))  
+
+> 16
+
+Update (𝜙, 𝜃,𝜓 ) by minimizing 𝐿  
+
+> 17
+
+if converged then  
+
+> 18
+
+break  
+
+> 19
+
+return (𝜙, 𝜃,𝜓 )
+
+corresponding ODE-predicted latent set. We define 
+
+Ldyn (𝜙,𝜓 ) = 1
+
+𝑀 + 1
+
+> 𝑀
+
+∑︁ 
+
+> 𝑘 =0
+
+OT  Zenc  
+
+> 𝑡 𝑘
+
+, Zode 
+
+> 𝑡 𝑘
+
+, (19) where the OT cost is computed in latent space. Finally, the overall joint learning objective combines repre-sentation learning, local flow matching, and the global constraints: 
+
+min  
+
+> 𝜙,𝜃,𝜓
+
+LVAE (𝜙, 𝜃 ) + 𝜆 FM LFM (𝜓 )+ 𝜆 OT LOT (𝜙, 𝜃,𝜓 ) + 𝜆 dyn Ldyn (𝜙,𝜓 ). (20) Computing LOT and Ldyn requires a long-horizon ODE rollout from 𝑡 0 to all 𝑡 𝑘 ∈ T tr , which is substantially more expensive than the local per-pair objective. We therefore use a simple schedule controlled by 𝐾 OT : LFM is optimized on adjacent pairs (𝑡 𝑎 , 𝑡 𝑏 ) ∈ E tr 
+
+every iteration, while LOT and Ldyn are evaluated and backpropa-gated only once every 𝐾 OT iterations. 
+
+## 4.4 Theoretical Analysis 
+
+We provide a theoretical analysis for our OT-conditioned flow matching dynamics learner in the latent space. Specifically, we establish well-posedness of the induced ODE flow under standard regularity assumptions, prove Wasserstein stability bounds that translate velocity-field regression error into endpoint distribution error, characterize expressivity and finite-sample generalization of Conference acronym ’XX, 2026, xx Siyu Pu et al. 
+
+neural velocity fields via standard approximation and complexity arguments, and provide a nonconvex optimization guarantee show-ing stochastic gradient methods converge to stationary points. Full statements and proofs are provided in Appendix. 
+
+## 5 Experiment 5.1 Experimental Setup 
+
+Datasets. We evaluate on three widely used time-series scRNA-seq benchmarks that cover diverse biological regimes, from rapid embryogenesis to long-horizon reprogramming: ZB (zebrafish embryo) [ 10 ], DR (drosophila) [ 3], and SC (Schiebinger2019) [ 34 ]. These datasets are challenging due to strong distribution shift across timepoints, asynchronous sampling, and the absence of cell-wise correspondences. 
+
+Baselines. We compare with representative methods spanning the major paradigms for time-series scRNA-seq: (1) Optimal-transport-based population matching: WOT . (2) Continuous-time latent dynamics models: scNODE and PRESCIENT . (3) Flow-matching / OT-regularized continuous dynamics: VGFM . (4) Non-learning sanity check: Naive replicates the last observed timepoint for future prediction. 
+
+Evaluation metrics. At each held-out timepoint 𝑡 , we compare the predicted cell set b𝑋 (𝑡 ) ∈ R𝑛 2 ×𝐺 against the true cell set 
+
+𝑋 (𝑡 ) ∈ R𝑛 1 ×𝐺 using: (i) 2-Wasserstein distance (approximated by Sinkhorn), and (ii) average pairwise ℓ2 distance 
+
+ℓ2 (𝑋 (𝑡 ), b𝑋 (𝑡 )) = 1
+
+𝑛 1𝑛 2
+
+> 𝑛 1
+
+∑︁ 
+
+> 𝑖 =1
+> 𝑛 2
+
+∑︁ 
+
+> 𝑗 =1
+
+𝑋 𝑖 (𝑡 ) − b𝑋 𝑗 (𝑡 ) 2 . (21) We report metrics per held-out timepoint and summarize by aver-aging across all held-out timepoints. 
+
+Implemention Details. For each dataset, we library-size normal-ize counts, apply log (1 + 𝑥 ), and retain the top 2,000 HVGs. All methods use the same preprocessed matrices for fair comparison. We use a VAE with latent dimension 50 and a continuous-time velocity field parameterized by a residual network (hidden size 256) conditioned on sinusoidal time embeddings (dimension 64). We integrate the learned ODE with RK4 (step size 0.1). Training consists of (1) VAE pretraining and (2) flow-matching dynamics learning. To stabilize minibatch couplings in early training, we warm up with Euclidean-cost couplings and then switch to the full bidirectional fused-cost couplings. We periodically apply OT-and dynamics-related regularizers during training. We compute Sinkhorn-based OT objectives with blur=0.05 and scaling=0.5. OT-only matching methods are only applicable to interpolation, and we exclude baselines that require training a separate model for each held-out timepoint in the multi-holdout extrapolation setting. 
+
+## 5.2 Unmeasured Timepoints Prediction 
+
+We adopt the common multi-holdout protocol, where several time-points are held out during training and are predicted from remain-ing observed snapshots. Interpolation targets missing intermediate 
+
+timepoints bracketed by observed neighbors, whereas extrapola-tion targets future timepoints beyond the latest training snapshot. 
+
+Table 1: Summary of datasets used in our experiments. We follow a consistent preprocessing protocol and select 2,000 HVGs for all datasets. The timepoint index for interpolation and extrapolation tasks in each dataset starts with 0. Data # Cells # Genes(HVG) # Timepoints Testing Timepoints                 
+
+> Interpolating Extrapolating
+> ZB 38,731 2,000 12 4, 6, 8 10, 11
+> DR 27,386 2,000 11 4, 6, 8 8, 9, 10
+> SC 236,285 2,000 19 5, 10, 15 16, 17, 18
+
+The exact splits for ZB, DR, and SC are summarized in Table 1. Notably, in all settings we train a single model per dataset and query it at arbitrary held-out times, which directly tests temporal gener-alization under distribution shift. Fig. 3 reports the performance on unmeasured timepoints using both wasserstein distance and 
+
+ℓ2 distance. Across all three datasets, scFM consistently achieves lower distances than prior continuous-time latent-dynamics base-lines, indicating more accurate snapshot distribution prediction at held-out times. Importantly, the ranking induced by Wasserstein and ℓ2 is largely consistent, suggesting that scFM improves both global distribution matching and pointwise feature-space proximity rather than optimizing a single metric in isolation. For interpolation , OT-based matching is applicable and often serves as a strong reference. In this regime, scFM remains com-petitive with the strongest OT-style baseline while outperforming neural ODE baselines, demonstrating that learning continuous-time dynamics does not come at the cost of intermediate-time recon-struction quality. For extrapolation , OT-only methods are not applicable (NA) since they require bracketing observed snapshots. In contrast, scFM maintains robust long-horizon predictive accu-racy and exhibits markedly smaller degradation as the prediction horizon increases, highlighting stronger temporal extrapolation and better handling of progressive distribution shift. ZB DR SC 
+
+> 0
+> 200
+> 400
+> 600
+> Wasserstein distance
+> (↓ better)
+
+A Interpolation     
+
+> ZB DR SC
+> 0
+> 10
+> 20
+> 30
+> 40
+> ℓ2 distance
+> (↓ better)
+> Interpolation
+> ZB DR SC
+> 0
+> 250
+> 500
+> 750
+> 1000
+> Wasserstein distance
+> (↓ better)
+
+B Extrapolation        
+
+> ZB DR SC
+> 0
+> 20
+> 40
+> ℓ2 distance
+> (↓ better)
+> Extrapolation
+> scFM VGFM scNODE PRESCIENT WOT Naive
+
+Figure 3: Averaged Wasserstein and ℓ2 distance between true and predicted expressions on unmeasured timepoints. From Snapshots to Trajectories: Learning Single-Cell Gene Expression Dynamics via Conditional Flow Matching Conference acronym ’XX, 2026, xx 
+
+Table 2: Wasserstein distance (denoted as 𝑊 ) and ℓ2 distance between left out timepoints and model predictions. For each dataset block, the first row indicates the left-out timepoints for interpolation and extrapolation. Bold numbers denote the best prediction. “NA” indicates the model is inapplicable. “-” indicates the timepoint is not present for that dataset. 
+
+Dataset Model Interpolation Extrapolation 
+
+𝑊 ℓ2 𝑊 ℓ2 𝑊 ℓ2 𝑊 ℓ2 𝑊 ℓ2 𝑊 ℓ2
+
+ZB 
+
+Left-out 𝑡 𝑡 = 4 𝑡 = 6 𝑡 = 8 𝑡 = 10 𝑡 = 11 -
+
+scFM 426.58 31.52 375.51 30.70 458.99 33.92 599.98 37.93 653.19 39.38 - -VGFM 720.27 41.04 688.72 40.24 764.56 42.76 890.42 45.85 1056.08 49.59 - -scNODE 434.28 32.35 390.50 31.15 468.41 34.57 607.87 38.78 685.47 40.78 - -PRESCIENT 830.88 43.03 662.15 39.17 669.46 40.32 1063.63 49.09 1112.12 49.97 - -WOT 575.11 38.17 492.84 37.01 565.70 40.64 NA NA NA NA - -Naive 775.63 43.88 695.72 42.28 720.77 44.68 887.69 49.06 943.98 50.08 - -
+
+DR 
+
+Left-out 𝑡 𝑡 = 4 𝑡 = 6 𝑡 = 8 𝑡 = 8 𝑡 = 9 𝑡 = 10 
+
+scFM 352.94 28.95 403.01 30.95 493.99 34.61 527.01 36.07 529.69 35.77 682.66 39.74 
+
+VGFM 509.33 34.62 568.96 36.32 701.13 39.64 766.84 43.58 934.79 48.18 1431.02 58.41 scNODE 354.10 29.25 412.94 31.76 486.53 34.99 547.91 36.93 554.60 37.21 691.96 40.47 PRESCIENT 447.31 32.09 474.97 33.22 519.20 35.24 583.07 37.20 536.83 36.16 692.53 39.80 WOT 426.70 34.35 508.96 37.06 592.67 40.52 NA NA NA NA NA NA Naive 529.27 38.54 607.85 41.14 760.64 45.58 824.57 47.40 824.57 46.90 969.15 49.50 
+
+SC 
+
+Left-out 𝑡 𝑡 = 5 𝑡 = 10 𝑡 = 15 𝑡 = 16 𝑡 = 17 𝑡 = 18 
+
+scFM 56.72 12.05 125.34 19.57 101.52 19.68 112.14 19.44 112.76 19.32 121.42 19.62 VGFM 110.43 16.08 203.09 21.97 197.53 22.84 218.92 22.49 224.14 22.69 225.65 22.68 scNODE 61.15 12.46 139.39 20.09 116.07 20.63 122.58 19.88 123.66 19.73 126.45 19.18 
+
+PRESCIENT 106.14 16.37 129.83 18.60 143.94 20.91 134.32 20.38 142.13 20.99 140.70 20.60 WOT 71.36 14.68 115.90 18.79 143.06 23.66 NA NA NA NA NA NA Naive 83.53 16.24 148.45 21.41 192.04 26.74 161.35 25.13 169.72 25.89 167.25 26.45 
+
+## 5.3 Trajectory Recovery 
+
+We further evaluate whether model-predicted cells can recover tra-jectory structure when intermediate timepoints are missing. Fol-lowing the standard remove-recovery protocol, we first build the PAGA connectivity graph using all observed timepoints. We then remove a subset of timepoints and rebuild the graph on the re-maining data, which often introduces discontinuities and topology distortions due to missing transitional populations. Finally, we add model-predicted cells at the removed timepoints and rebuild the PAGA graph. We quantify divergence using the Ipsen–Mikhailov (IM) distance to the full graph; lower IM indicates closer agreement. Fig. 4 shows an example on ZB: compared to the reduced graph, adding predicted cells restores transitional regions and yields a connectivity pattern closer to the reference. Across datasets, scFM consistently reduces IM distance, indicating better preservation of global connectivity after removing intermediate timepoints. 
+
+## 5.4 Visualization 
+
+To provide an intuitive, distribution-level comparison, we further project both the ground-truth cells and the model predictions into a shared two-dimensional UMAP embedding. We focus on the in-terpolation setting on the ZB dataset and color each cell by its timepoint index to highlight temporal progression. As shown in Original After Removal w/ Prediction 
+
+> TPs
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> 8
+> 9
+> 10
+> 11
+
+Figure 4: Trajectory recovery on Zebrafish under the remove-recovery setting. Left: PAGA graph built from the full dataset. Middle: graph after removing target timepoints.Right: graph augmented with scFM-predicted cells at the removed time-points. 
+
+Figure 5, the predicted trajectories largely preserve the global man-ifold geometry and exhibit a temporal gradient consistent with the ground truth, indicating that the model captures the underlying developmental dynamics in the interpolated regime. 
+
+## 6 Conclusion 
+
+This paper proposes scFM, a latent generative framework based on coupling-conditioned flow matching. First, we compute entropi-cally regularized OT couplings between adjacent snapshots and use Conference acronym ’XX, 2026, xx Siyu Pu et al. 
+
+Figure 5: 2D UMAP visualization of true and predicted ex-pression of interpolation task on ZB dataset 
+
+them to construct soft, weighted flow-matching targets for learn-ing time-dependent velocity fields. Second, we learn bidirectional velocity fields and leverage their consistency to refine couplings and improve temporal coherence under sparse supervision. Third, we introduce distribution-level alignment and latent dynamic regu-larization to anchor long rollouts and mitigate drift. Experiments on real-world time-series scRNA-seq datasets show that scFM con-sistently improves distributional prediction performance for both temporal interpolation and extrapolation. Moreover, scFM yields more accurate trajectory reconstruction and temporally coherent visualizations where intermediate time points are absent, indicating a more faithful recovery of underlying temporal gene expression dynamics. 
+
+## References 
+
+[1] Volker Bergen, Marius Lange, Stefan Peidli, F Alexander Wolf, and Fabian J Theis. 2020. Generalizing RNA velocity to transient cell states through dynamical modeling. Nature biotechnology 38, 12 (2020), 1408–1414. [2] Charlotte Bunne, Geoffrey Schiebinger, Andreas Krause, Aviv Regev, and Marco Cuturi. 2024. Optimal transport for single-cell and spatial omics. Nature Reviews Methods Primers 4, 1 (2024), 58. [3] Diego Calderon, Ronnie Blecher-Gonen, Xingfan Huang, Stefano Secchia, James Kentro, Riza M Daza, Beth Martin, Alessandro Dulja, Christoph Schaub, Cole Trapnell, et al . 2022. The continuum of Drosophila embryonic development at single-cell resolution. Science 377, 6606 (2022), eabn5800. [4] Ricky TQ Chen, Yulia Rubanova, Jesse Bettencourt, and David K Duvenaud. 2018. Neural ordinary differential equations. Advances in neural information processing systems 31 (2018). [5] Lenaic Chizat, Gabriel Peyré, Bernhard Schmitzer, and François-Xavier Vialard. 2018. Unbalanced optimal transport: Dynamic and Kantorovich formulations. 
+
+Journal of Functional Analysis 274, 11 (2018), 3090–3123. [6] Marco Cuturi. 2013. Sinkhorn distances: Lightspeed computation of optimal transport. Advances in neural information processing systems 26 (2013). [7] Jun Ding, Nadav Sharon, and Ziv Bar-Joseph. 2022. Temporal modelling using single-cell transcriptomics. Nature Reviews Genetics 23, 6 (2022), 355–368. [8] Florian Erhard, Antoine-Emmanuel Saliba, Alexandra Lusser, Christophe Tous-saint, Thomas Hennig, Bhupesh K Prusty, Daniel Kirschenbaum, Kathleen Abadie, Eric A Miska, Caroline C Friedel, et al . 2022. Time-resolved single-cell RNA-seq using metabolic RNA labelling. Nature Reviews Methods Primers 2, 1 (2022), 77. [9] Zheng Fang, Qingqing Long, Guojie Song, and Kunqing Xie. 2021. Spatial-temporal graph ode networks for traffic flow forecasting. In Proceedings of the 27th ACM SIGKDD conference on knowledge discovery & data mining . 364–373. [10] Jeffrey A Farrell, Yiqun Wang, Samantha J Riesenfeld, Karthik Shekhar, Aviv Regev, and Alexander F Schier. 2018. Single-cell reconstruction of developmental trajectories during zebrafish embryogenesis. Science 360, 6392 (2018), eaar3131. [11] Jean Feydy, Thibault Séjourné, François-Xavier Vialard, Shun-ichi Amari, Alain Trouvé, and Gabriel Peyré. 2019. Interpolating between optimal transport and mmd using sinkhorn divergences. In The 22nd international conference on artificial intelligence and statistics . PMLR, 2681–2690. [12] Rémi Flamary, Nicolas Courty, Alexandre Gramfort, Mokhtar Z Alaya, Aurélie Boisbunon, Stanislas Chambon, Laetitia Chapel, Adrien Corenflos, Kilian Fatras, Nemo Fournier, et al . 2021. Pot: Python optimal transport. Journal of Machine Learning Research 22, 78 (2021), 1–8. [13] Adam Gayoso, Philipp Weiler, Mohammad Lotfollahi, Dominik Klein, Justin Hong, Aaron M Streets, Fabian J Theis, and Nir Yosef. 2022. Deep generative modeling of transcriptional dynamics for rna velocity analysis in single cells. bioRxiv. Published online January 1 (2022), 2022–08. [14] Monica Golumbeanu, Sara Cristinelli, Sylvie Rato, Miguel Munoz, Matthias Cavassini, Niko Beerenwinkel, and Angela Ciuffi. 2018. Single-cell RNA-Seq reveals transcriptional heterogeneity in latent and reactivated HIV-infected cells. 
+
+Cell reports 23, 4 (2018), 942–950. [15] Will Grathwohl, Ricky TQ Chen, Jesse Bettencourt, Ilya Sutskever, and David Duvenaud. 2018. Ffjord: Free-form continuous dynamics for scalable reversible generative models. arXiv preprint arXiv:1810.01367 (2018). [16] Wenbo Guo, Zeyu Chen, and Jin Gu. 2025. Computational modeling of single-cell dynamics data. Briefings in Bioinformatics 26, 3 (2025), bbaf305. [17] Laleh Haghverdi, Maren Büttner, F Alexander Wolf, Florian Buettner, and Fabian J Theis. 2016. Diffusion pseudotime robustly reconstructs lineage branching. Na-ture methods 13, 10 (2016), 845–848. [18] Ashraful Haque, Jessica Engel, Sarah A Teichmann, and Tapio Lönnberg. 2017. A practical guide to single-cell RNA-sequencing for biomedical research and clinical applications. Genome medicine 9, 1 (2017), 75. [19] Jonathan Ho, Ajay Jain, and Pieter Abbeel. 2020. Denoising diffusion probabilistic models. Advances in neural information processing systems 33 (2020), 6840–6851. [20] Guillaume Huguet, Daniel Sumner Magruder, Alexander Tong, Oluwadamilola Fasina, Manik Kuchroo, Guy Wolf, and Smita Krishnaswamy. 2022. Manifold interpolating optimal-transport flows for trajectory inference. Advances in neural information processing systems 35 (2022), 29705–29718. [21] Diederik P Kingma and Max Welling. 2013. Auto-encoding variational bayes. 
+
+arXiv preprint arXiv:1312.6114 (2013). [22] Dominik Klein, Giovanni Palla, Marius Lange, Michal Klein, Zoe Piran, Manuel Gander, Laetitia Meng-Papaxanthos, Michael Sterr, Lama Saber, Changying Jing, et al . 2025. Mapping cells through time and space with moscot. Nature 638, 8052 (2025), 1065–1075. [23] Gioele La Manno, Ruslan Soldatov, Amit Zeisel, Emelie Braun, Hannah Hochgerner, Viktor Petukhov, Katja Lidschreiber, Maria E Kastriti, Peter Lönner-berg, Alessandro Furlan, et al . 2018. RNA velocity of single cells. Nature 560, 7719 (2018), 494–498. [24] Marius Lange, Volker Bergen, Michal Klein, Manu Setty, Bernhard Reuter, Mostafa Bakhti, Heiko Lickert, Meshal Ansari, Janine Schniering, Herbert B Schiller, et al .2022. CellRank for directed single-cell fate mapping. Nature methods 19, 2 (2022), 159–170. [25] Matthias Liero, Alexander Mielke, and Giuseppe Savaré. 2018. Optimal entropy-transport problems and a new Hellinger–Kantorovich distance between positive measures. Inventiones mathematicae 211, 3 (2018), 969–1117. [26] Yue Ling, Peiqi Zhang, Zhenyi Zhang, and Peijie Zhou. 2025. CellStream: Dy-namical Optimal Transport Informed Embeddings for Reconstructing Cellular Trajectories from Snapshots Data. arXiv preprint arXiv:2511.13786 (2025). [27] Yaron Lipman, Ricky TQ Chen, Heli Ben-Hamu, Maximilian Nickel, and Matt Le. 2022. Flow matching for generative modeling. arXiv preprint arXiv:2210.02747 
+
+(2022). [28] Vivien Marx. 2024. scRNA-seq: oh, the joys. Nature Methods 21, 5 (2024), 750–753. [29] Gabriel Peyré, Marco Cuturi, et al . 2019. Computational optimal transport: With applications to data science. Foundations and Trends ® in Machine Learning 11, 5-6 (2019), 355–607. [30] Aram-Alexandre Pooladian, Heli Ben-Hamu, Carles Domingo-Enrich, Brandon Amos, Yaron Lipman, and Ricky TQ Chen. 2023. Multisample flow matching: Straightening flows with minibatch couplings. arXiv preprint arXiv:2304.14772 
+
+(2023). [31] Martin Rohbeck, Edward De Brouwer, Charlotte Bunne, Jan-Christian Huetter, Anne Biton, Kelvin Y Chen, Aviv Regev, and Romain Lopez. 2025. Modeling complex system dynamics with flow matching across time and conditions. In 
+
+The Thirteenth International Conference on Learning Representations .[32] Wouter Saelens, Robrecht Cannoodt, Helena Todorov, and Yvan Saeys. 2019. A comparison of single-cell trajectory inference methods. Nature biotechnology 37, 5 (2019), 547–554. [33] Antoine-Emmanuel Saliba, Alexander J Westermann, Stanislaw A Gorski, and Jörg Vogel. 2014. Single-cell RNA-seq: advances and future challenges. Nucleic acids research 42, 14 (2014), 8845–8860. [34] Geoffrey Schiebinger, Jian Shu, Marcin Tabaka, Brian Cleary, Vidya Subramanian, Aryeh Solomon, Joshua Gould, Siyan Liu, Stacie Lin, Peter Berube, et al . 2019. Optimal-transport analysis of single-cell gene expression identifies developmen-tal trajectories in reprogramming. Cell 176, 4 (2019), 928–943. [35] Yutong Sha, Yuchi Qiu, Peijie Zhou, and Qing Nie. 2024. Reconstructing growth and dynamic trajectories from single-cell transcriptomics data. Nature Machine Intelligence 6, 1 (2024), 25–39. [36] K Street, D Risso, RB Fletcher, D Das, J Ngai, N Yosef, E Purdom, and SS Dudoit. 2018. Cell lineage and pseudotime inference for single-cell transcriptomics. BMC genomics 19 (2018), 477. [37] Alexander Tong, Kilian Fatras, Nikolay Malkin, Guillaume Huguet, Yanlei Zhang, Jarrid Rector-Brooks, Guy Wolf, and Yoshua Bengio. 2023. Improving and gener-alizing flow-based generative models with minibatch optimal transport. arXiv preprint arXiv:2302.00482 (2023). From Snapshots to Trajectories: Learning Single-Cell Gene Expression Dynamics via Conditional Flow Matching Conference acronym ’XX, 2026, xx 
+
+[38] Alexander Tong, Jessie Huang, Guy Wolf, David Van Dijk, and Smita Krish-naswamy. 2020. Trajectorynet: A dynamic optimal transport network for mod-eling cellular dynamics. In International conference on machine learning . PMLR, 9526–9536. [39] Cole Trapnell, Davide Cacchiarelli, Jonna Grimsby, Prapti Pokharel, Shuqiang Li, Michael Morse, Niall J Lennon, Kenneth J Livak, Tarjei S Mikkelsen, and John L Rinn. 2014. The dynamics and regulators of cell fate decisions are revealed by pseudotemporal ordering of single cells. Nature biotechnology 32, 4 (2014), 381–386. [40] Dongyi Wang, Yuanwei Jiang, Zhenyi Zhang, Xiang Gu, Peijie Zhou, and Jian Sun. 2025. Joint Velocity-Growth Flow Matching for Single-Cell Dynamics Modeling. 
+
+arXiv preprint arXiv:2505.13413 (2025). [41] Grace Hui Ting Yeo, Sachit D Saksena, and David K Gifford. 2021. Generative modeling of single-cell time series with PRESCIENT enables prediction of cell trajectories with interventions. Nature communications 12, 1 (2021), 3222. [42] Kun Yin, Yiling Xu, Ye Guo, Zhong Zheng, Xinrui Lin, Meijuan Zhao, He Dong, Dianyi Liang, Zhi Zhu, Junhua Zheng, et al . 2024. Dyna-vivo-seq unveils cellular RNA dynamics during acute kidney injury via in vivo metabolic RNA labeling-based scRNA-seq. Nature Communications 15, 1 (2024), 9866. [43] Jiaqi Zhang, Erica Larschan, Jeremy Bigness, and Ritambhara Singh. 2024. scN-ODE: generative model for temporal single cell transcriptomic data prediction. 
+
+Bioinformatics 40, Supplement_2 (2024), ii146–ii154. [44] Xiaowen Zhang, Mingjian Peng, Jianghao Zhu, Xue Zhai, Chaoguang Wei, He Jiao, Zhichao Wu, Songqian Huang, Mingli Liu, Wenhao Li, et al . 2025. Bench-marking metabolic RNA labeling techniques for high-throughput single-cell RNA sequencing. Nature Communications 16, 1 (2025), 5952. [45] Zhenyi Zhang, Tiejun Li, and Peijie Zhou. 2024. Learning stochastic dynamics from snapshots through regularized unbalanced optimal transport. arXiv preprint arXiv:2410.00844 (2024).
