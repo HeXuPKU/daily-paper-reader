@@ -6,71 +6,68 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-27
-- 运行时间：2026-05-27 21:26:42 UTC
+- 最新运行日期：2026-05-28
+- 运行时间：2026-05-28 21:54:12 UTC
 - 运行状态：成功
-- 本次总论文数：17
+- 本次总论文数：16
 - 精读区：6
-- 速读区：11
+- 速读区：10
 
 ### 今日简报（AI）
-今日精选6篇精读与速读，聚焦遗传风险组间差异与单倍型发现两大高分研究。最值得关注的是两项9.0分工作：如何审慎解读遗传风险的群体差异，以及利用局部基因组估计高效发现单倍型。建议普通读者优先精读这两篇，理解遗传分析中的方法学陷阱与实用突破。
-- 详情：[/202605/27/README](/202605/27/README)
+今日共推荐16篇论文，其中精读6篇、速读10篇，重点关注人类基因组重组图谱与复杂疾病遗传架构解析。最值得精读的是两篇9.0分工作：T2T-CHM13参考面板显著提升分型与插补准确率，以及张量框架PRISMA成功解构糖尿病视网膜病变遗传基础。建议普通读者关注这些方法如何为跨人群精准医学与多组学疾病风险预测提供新工具。
+- 详情：[/202605/28/README](/202605/28/README)
 
 ### 精读区论文标签
-1. [Tread lightly interpreting group differences in genetic risk](/202605/27/2605.23164v1-tread-lightly-interpreting-group-differences-in-genetic-risk)  
+1. [A T2T-CHM13 recombination map and globally diverse haplotype reference panel improves phasing and imputation](/202605/28/biorxiv-10-1101-2025-02-24-639687-v2-a-t2t-chm13-recombination-map-and-globally-diverse-haplotype-reference-panel-improves-phasing-and-imputation)  
    标签：评分：9.0/10、query:gwas
-   evidence：讨论跨群体多基因风险评分比较的局限性
-2. [Local genomic estimates provide a powerful framework for haplotype discovery](/202605/27/biorxiv-10-1101-2025-08-28-672830-v3-local-genomic-estimates-provide-a-powerful-framework-for-haplotype-discovery)  
+   evidence：参考重组图和单倍型面板用于分型和填补，直接提升GWAS准确性
+2. [PRISMA: A tensor-based framework for deconstructing the genetic architecture of complex diseases, with application to diabetic retinopathy](/202605/28/biorxiv-10-64898-2026-05-25-727382-v1-prisma-a-tensor-based-framework-for-deconstructing-the-genetic-architecture-of-complex-diseases-with-application-to-diabetic-retinopathy)  
    标签：评分：9.0/10、query:gwas
-   evidence：直接使用GWAS估计标记效应，提出localGEBV方法进行单倍型发现
-3. [Parallel Contributions of Externalizing Polygenic Liability and Brain Imaging Phenotypes to Adolescent Substance Use Initiation Timing: A Multistage Analysis in the ABCD Study](/202605/27/biorxiv-10-64898-2026-04-08-717299-v2-parallel-contributions-of-externalizing-polygenic-liability-and-brain-imaging-phenotypes-to-adolescent-substance-use-initiation-timing-a-multistage-analysis-in-the-abcd-study)  
+   evidence：基于张量的多基因风险评分整合框架，利用汇总统计和多组织分解
+3. [Comparing bulk and single-cell methodologies and models to profile gene expression, chromatin accessibility and regulatory links in endothelial cells treated with TNFα](/202605/28/biorxiv-10-64898-2026-03-13-711357-v2-comparing-bulk-and-single-cell-methodologies-and-models-to-profile-gene-expression-chromatin-accessibility-and-regulatory-links-in-endothelial-cells-treated-with-tnf)  
    标签：评分：8.0/10、query:gwas
-   evidence：使用多基因风险评分预测物质使用起始，直接对应PRS预测建模
-4. [Interpreting Omics Data Analysis with Large Language Models for Disease Target and Drug Discovery](/202605/27/biorxiv-10-64898-2026-04-30-721768-v2-interpreting-omics-data-analysis-with-large-language-models-for-disease-target-and-drug-discovery)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：LLM框架用于解读组学数据，匹配医学大语言模型和组学信号
-5. [DistPCA: Tera-Scale Genomic PCA via Out-of-Core Distributed Parallelism](/202605/27/biorxiv-10-64898-2026-05-15-725487-v1-distpca-tera-scale-genomic-pca-via-out-of-core-distributed-parallelism)  
+   evidence：比较bulk与单细胞方法连接非编码GWAS变异与基因
+4. [Mapping Genetic Risk Associations to Cellular Contexts via Deep Learning and Biological Ontologies](/202605/28/biorxiv-10-64898-2026-05-25-726449-v1-mapping-genetic-risk-associations-to-cellular-contexts-via-deep-learning-and-biological-ontologies)  
    标签：评分：8.0/10、query:gwas
-   evidence：用于基因组群体结构的太字节级分布式PCA方法
-6. [Genetic Risk and Resilience for Schizophrenia Stratified by Perinatal Gene Expression Predict Adult Cognitive Performance](/202605/27/biorxiv-10-64898-2026-05-19-726222-v1-genetic-risk-and-resilience-for-schizophrenia-stratified-by-perinatal-gene-expression-predict-adult-cognitive-performance)  
+   evidence：利用深度学习与生物本体论将GWAS关联映射到细胞环境的框架
+5. [Sequence-Based Prioritization of Promoter Regulatory Variants in Colorectal Cancer Using a DNA Foundation Model](/202605/28/biorxiv-10-64898-2026-05-25-727528-v1-sequence-based-prioritization-of-promoter-regulatory-variants-in-colorectal-cancer-using-a-dna-foundation-model)  
    标签：评分：8.0/10、query:gwas
-   evidence：通过共表达网络过滤的多基因评分改善认知表现预测
+   evidence：利用DNA基础模型Evo2对启动子调控变异进行优先级排序，辅助非编码GWAS变异功能解读
+6. [Leveraging cis- and trans-variants to improve protein expression level prediction for proteome-wide association studies](/202605/28/biorxiv-10-64898-2026-05-28-728201-v1-leveraging-cis--and-trans-variants-to-improve-protein-expression-level-prediction-for-proteome-wide-association-studies)  
+   标签：评分：8.0/10、query:gwas
+   evidence：开发TransCisPredict用于蛋白质组关联研究，使用类似GWAS的方法（BayesR、弹性网络、LASSO、SuSiE）
 
 ### 速读区论文标签
-1. [Substantive-Model-Compatible Multiple Imputation for Cox Regression with a Diverging Number of Covariates](/202605/27/2605.21757v1-substantive-model-compatible-multiple-imputation-for-cox-regression-with-a-diverging-number-of-covariates)  
+1. [The Modified Egger Intercept Tests for Detecting Horizontal Pleiotropy in Two-Sample Summary-Data Mendelian Randomization](/202605/28/2605.28471v1-the-modified-egger-intercept-tests-for-detecting-horizontal-pleiotropy-in-two-sample-summary-data-mendelian-randomization)  
    标签：评分：7.0/10、query:gwas
-   evidence：处理高维基因组预测变量中的缺失协变量问题
-2. [AnnotateMissense: a genome-wide annotation and benchmarking framework for missense pathogenicity prediction](/202605/27/2605.24520v1-annotatemissense-a-genome-wide-annotation-and-benchmarking-framework-for-missense-pathogenicity-prediction)  
+   evidence：孟德尔随机化中检测水平多效性的方法，与GWAS精细定位相关
+2. [Data Representation Bias and Conditional Distribution Shift Drive Predictive Performance Disparities in Multi-Population Machine Learning](/202605/28/biorxiv-10-1101-2025-06-18-658431-v2-data-representation-bias-and-conditional-distribution-shift-drive-predictive-performance-disparities-in-multi-population-machine-learning)  
    标签：评分：7.0/10、query:gwas
-   evidence：全基因组错义突变致病性预测，与因果变异精细定位相关
-3. [Nonparametric Regression via Tree-Guided Feature Aggregation](/202605/27/2605.26653v1-nonparametric-regression-via-tree-guided-feature-aggregation)  
+   evidence：针对跨群体多基因预测的性能差异问题
+3. [GAE-Δ: A Graph-Learning Framework for Gene Network Rewiring and Clinical Outcome Prediction from Multi-Omics Data](/202605/28/biorxiv-10-64898-2026-05-21-726880-v1-gae--a-graph-learning-framework-for-gene-network-rewiring-and-clinical-outcome-prediction-from-multi-omics-data)  
    标签：评分：7.0/10、query:gwas
-   evidence：新型非参数回归方法，利用树结构引导特征聚合，适用于高维基因组数据
-4. [Genome-Wide Annotation of Promoter-Enhancer Interactions via Chromatin Loops in the Hybrid Rat Diversity Panel](/202605/27/biorxiv-10-1101-2025-09-10-675455-v4-genome-wide-annotation-of-promoter-enhancer-interactions-via-chromatin-loops-in-the-hybrid-rat-diversity-panel)  
+   evidence：多组学整合框架用于表型特异性基因网络重连
+4. [gRely: Relyability for genome trained sequence-to-expression models](/202605/28/biorxiv-10-64898-2026-05-23-727431-v1-grely-relyability-for-genome-trained-sequence-to-expression-models)  
    标签：评分：7.0/10、query:gwas
-   evidence：全基因组调控环注释，可用于将功能基因组学与GWAS整合
-5. [Benchmarking of local ancestry inference with different assays and parameters](/202605/27/biorxiv-10-64898-2026-05-18-726085-v1-benchmarking-of-local-ancestry-inference-with-different-assays-and-parameters)  
-   标签：评分：7.0/10、query:gwas
-   evidence：局部祖先推断方法基准测试，对GWAS群体分层控制至关重要
-6. [Population-Specific Genetic and Non-Genetic Influences on Sleep Traits and Health Outcomes](/202605/27/2605.23521v1-population-specific-genetic-and-non-genetic-influences-on-sleep-traits-and-health-outcomes)  
+   evidence：评估序列-功能模型变异效应预测可靠性的方法，促进功能基因组学与GWAS精细定位的整合
+5. [GEESE: Genotype-aware End-to-End Spatio-temporal Embedding for Behavioral Phenotyping](/202605/28/2605.24370v1-geese-genotype-aware-end-to-end-spatio-temporal-embedding-for-behavioral-phenotyping)  
    标签：评分：6.0/10、query:gwas
-   evidence：利用GWAS结果研究睡眠性状的遗传和环境影响因素，展示最新GWAS方法应用
-7. [Disentangled Double Machine Learning for Accurate Causal Effect Estimation](/202605/27/2605.24808v1-disentangled-double-machine-learning-for-accurate-causal-effect-estimation)  
+   evidence：利用行为数据进行基因型预测的深度学习框架
+6. [Synthetic Heterogeneous-Effects LASSO: A Fixed-effects Estimation Approach for High-dimensional Mixed-effects Models](/202605/28/2605.24587v1-synthetic-heterogeneous-effects-lasso-a-fixed-effects-estimation-approach-for-high-dimensional-mixed-effects-models)  
    标签：评分：6.0/10、query:gwas
-   evidence：因果效应估计方法可应用于GWAS统计分析
-8. [Stein-Encoder: A White-Box Supervised Encoder via Stein Identities in Multi-Modal Studies](/202605/27/2605.25734v1-stein-encoder-a-white-box-supervised-encoder-via-stein-identities-in-multi-modal-studies)  
+   evidence：高维聚类数据变量选择方法，可用于GWAS群体分层校正
+7. [Pathway redistribution across cellular states reveals a shared signaling backbone and context-dependent regulatory modules in RNA-binding protein networks](/202605/28/biorxiv-10-1101-2025-03-03-641203-v12-pathway-redistribution-across-cellular-states-reveals-a-shared-signaling-backbone-and-context-dependent-regulatory-modules-in-rna-binding-protein-networks)  
    标签：评分：6.0/10、query:gwas
-   evidence：整合基因组数据与临床基线，实现可解释的遗传信号分离
-9. [scDeepVariant: A population-informed deep learning framework for germline variant calling in scRNA-seq](/202605/27/biorxiv-10-64898-2025-12-31-696877-v2-scdeepvariant-a-population-informed-deep-learning-framework-for-germline-variant-calling-in-scrna-seq)  
+   evidence：整合深度学习与共表达分析研究功能基因组学中的通路重分布
+8. [Robust Random Forests for Genomic Prediction: Challenges and Remedies](/202605/28/biorxiv-10-64898-2026-03-30-715203-v2-robust-random-forests-for-genomic-prediction-challenges-and-remedies)  
    标签：评分：6.0/10、query:gwas
-   evidence：基于深度学习的scRNA-seq变异调用框架，可应用于GWAS分析
-10. [Novel 4D tensor decomposition-based approach integrating tri-omics profiling data can identify functionally relevant gene clusters](/202605/27/biorxiv-10-64898-2026-03-19-712900-v2-novel-4d-tensor-decomposition-based-approach-integrating-tri-omics-profiling-data-can-identify-functionally-relevant-gene-clusters)  
+   evidence：鲁棒随机森林用于基因组预测，可改进PRS预测准确性
+9. [Gene-Specific Analysis of Clonal Hematopoiesis Identifies ASXL1 as a Risk Factor for Lung Cancer](/202605/28/biorxiv-10-64898-2026-05-21-726910-v1-gene-specific-analysis-of-clonal-hematopoiesis-identifies-asxl1-as-a-risk-factor-for-lung-cancer)  
    标签：评分：6.0/10、query:gwas
-   evidence：整合转录组、翻译组和蛋白质组的功能基因组学方法，与需求9的整合功能基因组与GWAS相关
-11. [Robust Random Forests for Genomic Prediction: Challenges and Remedies](/202605/27/biorxiv-10-64898-2026-03-30-715203-v2-robust-random-forests-for-genomic-prediction-challenges-and-remedies)  
+   evidence：基于GWAS的克隆造血队列分析
+10. [Molecular Characterization of T-Lineage Acute Lymphoblastic Leukemia by an Optimal-Transport Based Multi-Omics Integration Framework](/202605/28/biorxiv-10-64898-2026-05-22-727257-v1-molecular-characterization-of-t-lineage-acute-lymphoblastic-leukemia-by-an-optimal-transport-based-multi-omics-integration-framework)  
    标签：评分：6.0/10、query:gwas
-   evidence：鲁棒随机森林用于基因组预测，与GWAS/PRS方法学相关
+   evidence：基于最优传输的多组学整合框架用于分子表征
 
 
 <div class="dpr-home-promo-card">
