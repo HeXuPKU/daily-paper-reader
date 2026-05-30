@@ -1,0 +1,23 @@
+---
+title: Mapping disease critical spatially variable gene programs by integrating spatial transcriptomics with human genetics
+title_zh: 通过整合空间转录组学与人类遗传学绘制疾病关键空间可变基因程序
+authors: "Lee, H., Sun, H., Cao, X., Karaahmet, B., Li, Z., Klein, H.-U., Taga, M., Wang, G., De Jager, P. L., Bennett, D. A., Pinello, L., Jin, X., Mazumder, R., Dey, K. K."
+date: 2026-05-29
+pdf: "https://www.biorxiv.org/content/10.1101/2025.09.24.678397v2.full.pdf"
+tags: ["query:gwas"]
+score: 7.0
+evidence: 整合空间转录组与人类遗传学以发现疾病相关基因程序
+tldr: 空间转录组学缺乏灵活检测空间变异基因并整合遗传数据的方法。Spacelink通过自适应混合空间核模型和有效空间变异度量，在34种模拟设置中检测能力提升3.2倍，FDR控制更优。应用于健康人组织发现SVGs对113种复杂性状高度信息，疾病信息量高达2.2倍。在阿尔茨海默病病理中识别数百个空间变异递减的基因，并发现PKM等风险基因的保守空间变异降低。
+source: biorxiv
+selection_source: fresh_fetch
+motivation: 现有空间变异基因检测方法缺乏多尺度灵活性、跨平台鲁棒性，且无法整合遗传数据评估疾病相关性。
+method: 提出Spacelink框架，通过自适应混合数据驱动空间核建模全组织与细胞类型分辨率下的基因空间变异，并用有效空间变异度量量化。
+result: Spacelink在34种模拟设置中检测能力提升3.2倍，FDR控制更优；跨平台一致性高；疾病信息量达2.2倍；在阿尔茨海默病中识别数百个空间变异递减基因。
+conclusion: Spacelink有效解码空间变异基因程序，连接组织结构与疾病遗传学，为疾病机制研究提供新工具。
+---
+
+## 摘要
+空间基因表达模式是组织结构、发育和疾病的基础，但目前检测空间可变基因（SVG）的方法缺乏捕获多尺度结构的灵活性，无法确保跨平台的稳健性，且难以整合遗传数据以评估疾病相关性。我们提出Spacelink，一个统一框架，通过数据驱动空间核的自适应混合模型，在全组织和细胞类型分辨率上建模基因的空间变异性，并使用有效空间变异性（ESV）指标进行总结。Spacelink在八种现有全局SVG和细胞类型SVG方法上实现了高达3.2倍的检测能力提升，同时在34种不同模拟设置中表现出持续优越的FDR控制，并在匹配组织Visium和CosMx数据集中显示出卓越的跨平台一致性。应用于三种健康CosMx人体组织（大脑皮层、淋巴结、肝脏），Spacelink揭示SVG对113种复杂性状和疾病（平均GWAS样本量=340,406）具有高度信息性。在组织相关复杂疾病和性状中，条件于假定的非空间表达水平混杂因素，Spacelink的疾病信息性比竞争方法高出2.2倍。应用于小鼠器官发生Stereo-seq图谱（8个发育阶段），Spacelink在大脑中识别出145个与阶段相关的ESV基因（独立于平均表达），这些基因富集于Wnt信号通路和Rap1信号通路，分别表征早期和晚期发育。与靶向35个新生ASD风险基因的体内Perturb-seq整合揭示，兴奋性神经元和星形胶质细胞的扰动优先改变空间结构化的下游基因程序（跨阶段平均ESV比其他细胞类型高1.7-2.2倍），其中许多富集于多基因自闭症GWAS位点。在神经退行性疾病中，对跨越阿尔茨海默病（AD）病理阶段的32个Visium背外侧前额叶皮层样本的分析，识别出334个沿淀粉样蛋白负荷ESV递减的基因（富集于糖酵解）和216个沿tau蛋白缠结积累ESV递减的基因（富集于凋亡通路）。多个AD风险基因（PKM、CLU、GPI）在人类和5xFAD小鼠中均显示随AD病理的空间变异性保守性降低，其中PKM与共定位的剪接QTL和淀粉样蛋白负荷QTL变异相关。这些结果突显了Spacelink在解码连接组织结构与疾病遗传学的空间可变基因程序中的效用。
+
+## Abstract
+Spatial gene expression patterns underlie tissue organization, development, and disease, yet current methods for detecting spatially variable genes (SVGs) lack the flexibility to capture multi-scale structure, ensure robustness across platforms, and integrate with genetic data to assess disease relevance. We present Spacelink, a unified framework that models spatial variability of a gene at both whole-tissue and cell-type resolution using an adaptive mixture of data-driven spatial kernels and summarizes it using an Effective Spatial Variability (ESV) metric. Spacelink achieved up to 3.2x higher detection power over eight existing global SVG and cell-type SVG methods while showing consistently superior FDR control across 34 different simulation settings and also showed superior cross-platform concordance in matched tissue Visium and CosMx datasets. Applied to 3 healthy CosMx human tissues (brain cortex, lymph node, liver), Spacelink revealed that SVGs are highly informative for 113 complex traits and diseases (average GWAS sample size = 340,406). Spacelink showed up to 2.2x higher disease informativeness over competing methods in tissue-relevant complex diseases and traits, conditional on putative non-spatial expression-level confounders. Applied to a mouse organogenesis Stereo-seq atlas (8 developmental stages), Spacelink identified 145 genes with stage-associated ESV within brain independent of mean expression, that are enriched in pathways like Wnt signaling and Rap1 signaling characterizing early and late development, respectively. Integration with in vivo Perturb-seq targeting 35 de novo ASD risk genes revealed that perturbations in excitatory neurons and astrocytes preferentially altered spatially structured downstream gene programs (1.7-2.2x higher average ESV across stages than other cell types), many of which were enriched for polygenic autism GWAS loci. In neurodegeneration, analysis of 32 Visium dorsolateral prefrontal cortex samples spanning Alzheimer's disease (AD) pathology stages identified 334 genes with decreasing ESV along amyloid burden (enriched for glycolysis) and 216 genes with decreasing ESV along tau tangle accumulation (enriched for apoptotic pathways). Several AD risk genes (PKM, CLU, GPI) showed conserved reductions in spatial variability with AD pathology in both human and 5xFAD mouse, with PKM linking to a colocalized splicing QTL and amyloid burden QTL variant. These results highlight the utility of Spacelink in decoding spatially variable gene programs that connect tissue architecture to disease genetics.
