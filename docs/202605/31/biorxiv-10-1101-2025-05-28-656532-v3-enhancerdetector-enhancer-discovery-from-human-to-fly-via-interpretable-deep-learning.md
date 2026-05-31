@@ -1,0 +1,23 @@
+---
+title: "EnhancerDetector: Enhancer Discovery from Human to Fly via Interpretable Deep Learning"
+title_zh: EnhancerDetector：通过可解释深度学习实现从人类到果蝇的增强子发现
+authors: "Solis, L. M., Sterling-Lentsch, G., Halfon, M. S., Girgis, H. Z."
+date: 2026-05-28
+pdf: "https://www.biorxiv.org/content/10.1101/2025.05.28.656532v3.full.pdf"
+tags: ["query:gwas"]
+score: 7.0
+evidence: 可解释深度学习用于增强子发现，可应用于GWAS功能注释
+tldr: 增强子功能注释因测序进展而严重滞后，是否所有增强子共享内在的序列“增强子性”是关键生物学问题。提出EnhancerDetector模型，基于卷积神经网络直接从DNA序列预测增强子概率，无需染色质特征。在人类、小鼠、果蝇跨物种测试中，F1和精度均优于现有方法；集成策略降低假阳性，小样本微调仍有效。利用类激活图识别关键序列区域，果蝇转基因验证5/6候选有活性。该框架验证了增强子序列特征的可学习性与跨物种迁移性，为缺乏实验数据的新基因组提供高效初步注释工具。
+source: biorxiv
+selection_source: fresh_fetch
+motivation: 探索增强子是否具有跨物种、跨细胞类型的固有序列“增强子性”，并开发可解释的序列基预测模型以加速基因组注释。
+method: 提出EnhancerDetector，基于卷积神经网络直接从短序列窗口输出增强子概率，支持微调与集成策略，并用类激活图实现可解释性。
+result: 在人类、小鼠、果蝇数据集上性能优于现有方法，果蝇转基因实验5/6候选增强子驱动表达，仅需两万条序列即可微调适应新物种。
+conclusion: 验证增强子具有可学习的序列特征并可跨物种迁移，EnhancerDetector作为序列基、可解释的框架，为基因组注释提供实用第一步工具。
+---
+
+## 摘要
+背景：破译增强子如何在DNA中编码调控信息仍然是基因组学的核心挑战，因为测序速度超过了功能注释。一个关键问题是增强子是否具有内在的、基于序列的“增强子特性”，使其区别于其他区域，且独立于物种、细胞类型或实验方法。确认其存在性和可学习性既具有生物学基础意义，也对可扩展的基因组注释至关重要。结果：我们提出了EnhancerDetector，一种基于卷积神经网络的跨物种增强子预测框架，兼具高准确性和生物学可解释性。在人类数据上训练后，EnhancerDetector在人类、小鼠和果蝇数据集上均表现出色，在精确率和F1分数上持续优于现有方法。它能够泛化到使用不同实验方法生成的数据集。与需要复杂事后阈值设定的染色质特征预测器不同，EnhancerDetector直接从短序列窗口输出增强子概率分数，简化了增强子发现流程。集成策略通过减少假阳性进一步提高了预测可靠性。EnhancerDetector支持在新物种上进行微调，即使仅使用少至20,000个增强子序列进行适配，也能保持强劲性能，因此非常适合实验数据有限的新测序基因组。为了可解释性和可视化，我们应用类激活图来识别预测增强子活性的序列区域。转基因果蝇的实验验证确认了EnhancerDetector的预测能力：六个测试候选中有五个驱动了报告基因表达，其中四个的表达模式得到先前文献支持。这些分析凸显了赋予所谓“增强子特性”的独特序列和上下文特征：增强子序列具有特征性的可识别标志。结论：EnhancerDetector为跨物种和跨实验背景的增强子发现提供了一个基于序列且可解释的框架。我们的结果支持存在重复出现的增强子相关序列特征，这些特征可以从DNA序列中学习并在基因组间转移。通过结合跨物种预测、微调、模型解释和实验验证，EnhancerDetector为在充分研究的基因组中优先筛选候选增强子提供了一种实用方法。这些特点使EnhancerDetector成为在新测序基因组中识别假定增强子的有用的一级注释工具，尤其适用于实验数据有限的情况。
+
+## Abstract
+Background: Deciphering how enhancers encode regulatory information in DNA remains a central genomics challenge, as sequencing outpaces functional annotation. A key question is whether enhancers possess an intrinsic, sequence-based "enhancerness" distinguishing them from other regions, independent of species, cell type, or assay. Confirming its existence and learnability is both biologically fundamental and essential for scalable genome annotation. Results: We introduce EnhancerDetector, a convolutional neural network-based framework for cross-species enhancer prediction that combines high accuracy with biological interpretability. Trained on human data, EnhancerDetector achieves strong performance across human, mouse, and fly datasets, consistently outperforming existing methods in precision and F1. It generalizes to datasets generated using diverse experimental assays. Unlike chromatin feature-based predictors requiring complex post hoc thresholding, EnhancerDetector directly outputs enhancer probability scores from short sequence windows, simplifying enhancer discovery workflows. An ensemble strategy further improves prediction reliability by reducing false positives. EnhancerDetector supports fine-tuning on new species and retains strong performance even when adapted with as few as 20,000 enhancer sequences, making it ideal for newly sequenced genomes with limited experimental data. For interpretability and visualization, we apply class activation maps to identify sequence regions predictive of enhancer activity. Experimental validation in transgenic flies confirms the predictive power of EnhancerDetector : five of six tested candidates drove reporter expression, and four exhibited expression patterns supported by prior literature. These analyses highlight distinct sequence and contextual features that confer what we term "enhancerness:" enhancer sequences possess a characteristic, identifiable signature. Conclusions: EnhancerDetector provides a sequence-based and interpretable framework for enhancer discovery across species and experimental contexts. Our results support the presence of recurring enhancer-associated sequence features that can be learned from DNA sequence and transferred across genomes. By combining cross-species prediction, fine-tuning, model interpretation, and experimental validation, EnhancerDetector offers a practical approach for prioritizing candidate enhancers in well-studied genomes. These features position EnhancerDetector as a useful first-stage annotation tool for identifying putative enhancers in newly sequenced genomes with limited experimental data.

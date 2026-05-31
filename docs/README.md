@@ -6,44 +6,49 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-30
-- 运行时间：2026-05-30 19:57:00 UTC
+- 最新运行日期：2026-05-31
+- 运行时间：2026-05-31 20:50:39 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：2
-- 速读区：6
+- 本次总论文数：9
+- 精读区：4
+- 速读区：5
 
 ### 今日简报（AI）
-今天精读2篇、速读6篇，重点挖掘复杂疾病与性状的遗传架构。最值得关注的是PRISMA框架解构糖尿病视网膜病变（9.0分），以及远端多基因如何主导人类性状共变（8.0分）。建议关注基于张量的遗传分析新工具与因果推断方法在分子标志物构建中的应用。
-- 详情：[/202605/30/README](/202605/30/README)
+1) 今日精读2篇速读3篇，聚焦人类性状共变基因架构与多模态RNA甲基化表达学习。  
+2) 最值得关注的是基因远端多基因架构主导人类性状共变主轴（9.0分），以及可解释深度学习增强子检测方法的跨物种应用（7.0分）。  
+3) 建议优先精读高分论文的方法论设计，速读部分可关注高维数据测量误差处理与有向无环图异方差学习。
+- 详情：[/202605/31/README](/202605/31/README)
 
 ### 精读区论文标签
-1. [PRISMA: A tensor-based framework for deconstructing the genetic architecture of complex diseases, with application to diabetic retinopathy](/202605/30/biorxiv-10-64898-2026-05-25-727382-v2-prisma-a-tensor-based-framework-for-deconstructing-the-genetic-architecture-of-complex-diseases-with-application-to-diabetic-retinopathy)  
+1. [A gene-distal polygenic architecture underlies the dominant axis of human trait covariation](/202605/31/biorxiv-10-64898-2026-05-26-728050-v1-a-gene-distal-polygenic-architecture-underlies-the-dominant-axis-of-human-trait-covariation)  
    标签：评分：9.0/10、query:gwas
-   evidence：基于张量的GWAS汇总统计框架用于多基因风险分解
-2. [A gene-distal polygenic architecture underlies the dominant axis of human trait covariation](/202605/30/biorxiv-10-64898-2026-05-26-728050-v1-a-gene-distal-polygenic-architecture-underlies-the-dominant-axis-of-human-trait-covariation)  
+   evidence：GWAS汇总统计的多基因结构分析
+2. [Bimodal masked language modeling for bulk RNA-seq and DNA methylation representation learning](/202605/31/biorxiv-10-1101-2025-06-25-661237-v2-bimodal-masked-language-modeling-for-bulk-rna-seq-and-dna-methylation-representation-learning)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：大规模基因组模型使用掩码语言建模
+3. [Genotype and methylation interact to reconfigure transcriptional regulation in colorectal cancer](/202605/31/biorxiv-10-64898-2026-05-27-728350-v1-genotype-and-methylation-interact-to-reconfigure-transcriptional-regulation-in-colorectal-cancer)  
    标签：评分：8.0/10、query:gwas
-   evidence：使用GWAS汇总统计研究多基因架构与跨性状分析
+   evidence：整合基因型和甲基化数据研究eQTL和mQTL，揭示癌症中调控重构
+4. [Mapping genetic risk mechanisms for immune-mediated diseases across human dendritic cell differentiation](/202605/31/biorxiv-10-64898-2026-05-28-728586-v1-mapping-genetic-risk-mechanisms-for-immune-mediated-diseases-across-human-dendritic-cell-differentiation)  
+   标签：评分：8.0/10、query:gwas
+   evidence：整合精细映射的GWAS变异与单细胞多组学图谱
 
 ### 速读区论文标签
-1. [Considering causality in the construction of molecular signatures of lifestyle exposures](/202605/30/2605.26023v1-considering-causality-in-the-construction-of-molecular-signatures-of-lifestyle-exposures)  
+1. [High-Dimensional Data with Measurement Error](/202605/31/2605.30158v1-high-dimensional-data-with-measurement-error)  
    标签：评分：7.0/10、query:gwas
-   evidence：分子特征的因果考虑，与整合功能性基因组学和GWAS相关
-2. [Mapping disease critical spatially variable gene programs by integrating spatial transcriptomics with human genetics](/202605/30/biorxiv-10-1101-2025-09-24-678397-v2-mapping-disease-critical-spatially-variable-gene-programs-by-integrating-spatial-transcriptomics-with-human-genetics)  
+   evidence：高维回归方法适用于GWAS分析
+2. [EnhancerDetector: Enhancer Discovery from Human to Fly via Interpretable Deep Learning](/202605/31/biorxiv-10-1101-2025-05-28-656532-v3-enhancerdetector-enhancer-discovery-from-human-to-fly-via-interpretable-deep-learning)  
    标签：评分：7.0/10、query:gwas
-   evidence：整合空间转录组与人类遗传学以发现疾病相关基因程序
-3. [Discovering genetic loci associated with rate of vegetative index gain using UAV-based phenomics in spring wheat](/202605/30/biorxiv-10-64898-2026-05-22-727186-v1-discovering-genetic-loci-associated-with-rate-of-vegetative-index-gain-using-uav-based-phenomics-in-spring-wheat)  
-   标签：评分：7.0/10、query:gwas
-   evidence：对小麦植被指数增益率进行全基因组关联分析
-4. [High-Dimensional Sensitivity Analysis for Genomic Studies: An Adversarial Framework for Learning Worst-Case Latent Confounders](/202605/30/biorxiv-10-64898-2026-05-27-728283-v1-high-dimensional-sensitivity-analysis-for-genomic-studies-an-adversarial-framework-for-learning-worst-case-latent-confounders)  
-   标签：评分：7.0/10、query:gwas
-   evidence：基因组研究中的对抗敏感性分析框架，与GWAS混淆因子相关
-5. [Knowledge Graph Modulated Deep Learning for Limited-Sample Clinical Data Analysis](/202605/30/2605.24162v1-knowledge-graph-modulated-deep-learning-for-limited-sample-clinical-data-analysis)  
+   evidence：可解释深度学习用于增强子发现，可应用于GWAS功能注释
+3. [Learning a directed acyclic graph with additive heteroscedastic errors](/202605/31/2605.26515v1-learning-a-directed-acyclic-graph-with-additive-heteroscedastic-errors)  
    标签：评分：6.0/10、query:gwas
-   evidence：知识图谱调制的深度学习方法，可应用于GWAS分析
-6. [Vision-Based Genomic Model for Copy Number Variant Pathogenicity Prediction](/202605/30/biorxiv-10-64898-2026-05-21-726953-v1-vision-based-genomic-model-for-copy-number-variant-pathogenicity-prediction)  
+   evidence：可用于因果变异精细定位的因果发现方法
+4. [Individual-Specific Gaussian Graphical Models for Heterogeneous Populations with Application to Epigenetic Gene Regulation in Lung Adenocarcinoma](/202605/31/biorxiv-10-64898-2026-05-25-727641-v1-individual-specific-gaussian-graphical-models-for-heterogeneous-populations-with-application-to-epigenetic-gene-regulation-in-lung-adenocarcinoma)  
    标签：评分：6.0/10、query:gwas
-   evidence：用于CNV致病性预测的深度学习基因组模型，可应用于GWAS分析
+   evidence：个体特异性网络方法用于多组学与遗传整合
+5. [Integrated Transcriptomic and Functional Analysis Reveals Tissue-Specific Molecular Pathology in Adolescent Idiopathic Scoliosis](/202605/31/biorxiv-10-64898-2026-05-27-727643-v1-integrated-transcriptomic-and-functional-analysis-reveals-tissue-specific-molecular-pathology-in-adolescent-idiopathic-scoliosis)  
+   标签：评分：6.0/10、query:gwas
+   evidence：整合GWAS风险位点与多组织转录组分析
 
 
 <div class="dpr-home-promo-card">
