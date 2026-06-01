@@ -1,0 +1,23 @@
+---
+title: "Cell-CLIP: Multi-algorithm causal discovery of directed cell program interaction networks from single-cell transcriptomics"
+title_zh: Cell-CLIP：从单细胞转录组学进行有向细胞程序相互作用网络的多算法因果发现
+authors: "Al-Tal, M. K. F., Liu, X., Zhou, J."
+date: 2026-05-28
+pdf: "https://www.biorxiv.org/content/10.64898/2025.12.01.691666v3.full.pdf"
+tags: ["query:gwas"]
+score: 6.0
+evidence: 单细胞转录组因果发现框架，使用多种因果算法推断有向网络，与因果变异精细定位相关
+tldr: "现有单细胞转录组细胞间通信推断依赖静态配体受体库或相关性分析，无法区分直接因果与混杂关联。Cell-CLIP提出模块化框架，集成五种因果发现算法、方向保持的bootstrap聚合、联合因果推断及残差独立方向审计。在611例多表型肺图谱中，跨队列联合因果推断图实现了100%可评估金标准边召回、75%方向准确率及零禁忌方向违规，优于所有消融配置。该框架为从患者级scRNA-seq推断定向细胞程序网络提供了假设生成工具。"
+source: biorxiv
+selection_source: fresh_fetch
+motivation: 现有工具无法从单细胞转录组数据中区分细胞间直接因果关系与混杂关联。
+method: Cell-CLIP结合掩膜感知JASMINE打分、五种因果发现算法、方向保持bootstrap聚合及联合因果推断。
+result: "跨队列联合因果推断图实现100%金标准边召回、75%方向准确率及零禁忌方向违规。"
+conclusion: Cell-CLIP为推断定向细胞程序网络提供了可扩展的假设生成框架，但所有关系需实验验证。
+---
+
+## 摘要
+细胞间通讯网络调控健康和疾病中的组织功能，然而现有计算工具依赖于静态配体-受体数据库或基于相关性的分析，无法区分直接的因果关系与混杂或间接的关联。我们提出Cell-CLIP（细胞因果学习与推理流程），这是一个模块化框架，结合了(i)基于掩码的患者水平JAS-MINE活性评分与原始活性空间中的低百分位插补，(ii)五种互补的因果发现算法——PC、GES、FCI、DirectLiNGAM和GRaSP——每种算法输入同一掩码JASMINE矩阵的算法匹配的逐列变换，(iii)方向保持的bootstrap聚合与加权两阶段共识，(iv)联合因果推理（JCI）通过上下文指标实现患者队列的原则性合并，以及(v)残差独立性（RESIT）方向审计，所有这些均在系统化的三乘三乘三超参数扫描下评估。应用于包含611名患者的多表型肺图谱（涵盖正常组织、COVID-19肺炎和肺癌），通过将患者分层为正常、COVID-19和肿瘤情境后再合并构建的跨队列联合因果推理图，恢复了100%（8/8）的可评估精选真实边，方向准确率为75.0%，且未违反三个独立精心挑选的禁止方向——这是在涵盖7个队列/合并配置、27个超参数设置和3种共识类型的全面消融系列中唯一同时达到所有三个最优帕累托边角的配置。单队列通用跨表型图（基于完整611名患者图谱的12个跨表型程序）在相同系统化超参数扫描和低百分位插补下，同样实现了100%的可评估召回率，方向准确率为62.5%，且无禁止方向违反，优于该流程早期零插补基线配置的所有指标（敏感性分析部分）。我们进一步表明，对疾病扩展合并队列（将COVID-19和癌症扩展程序集应用于所有611名患者）进行的单队列因果推理恢复了较强的骨架召回率（可评估率为35.0%-55.2%），但遭受结构方向崩溃（方向准确率降至14.3%，并集禁止率高达60%），这是由正常加疾病患者群体的异质性在队列内平均化引起的；患者分层的联合因果推理合并解决了这一崩溃，且未改变底层算法。Cell-CLIP为从患者水平scRNA-seq图谱推断有向细胞程序网络提供了一个假设生成框架，由于观察数据的局限性，所有报告的关系均需实验验证。
+
+## Abstract
+Cell-cell communication networks govern tissue function in health and disease, yet existing computational tools rely on static ligand-receptor databases or correlation-based analyses that cannot distinguish direct causal relationships from confounded or indirect associations. We introduce Cell-CLIP (Cellular Causal Learning and Inference Pipeline), a modular framework that combines (i) mask-aware patient-level JAS-MINE activity scoring with low-percentile imputation in raw activity space, (ii) five complementary causal-discovery algorithms -- PC, GES, FCI, DirectLiNGAM, and GRaSP -- each fed an algorithm-matched per-column transform of the same masked JASMINE matrix, (iii) direction-preserving bootstrap aggregation with a weighted two-phase consensus, (iv) Joint Causal Inference (JCI) for principled pooling of patient cohorts via context indicators, and (v) a residual-independence (RESIT) direction audit, all evaluated under a systematic three-by-three-by-three hyperparameter sweep. Applied to a 611-patient multi-phenotype lung atlas spanning normal tissue, COVID-19 pneumonia, and lung cancer, the cross-cohort joint-causal-inference graph constructed by stratifying patients into normal, COVID-19, and tumour contexts before pooling recovers 100% (8 of 8) of evaluable curated ground-truth edges with 75.0% direction accuracy and zero forbidden-orientation violations against three independently curated forbidden orientations -- the only configuration in a comprehensive ablation series spanning 7 cohort/pool configurations, 27 hyperparameter settings, and 3 consensus types to simultaneously reach all three optimal Pareto corners. The single-cohort universal cross-phenotype graph (12 cross-phenotype programs over the full 611-patient atlas) similarly achieves 100% evaluable recall with 62.5% direction accuracy and zero forbidden violations under the same systematic hy-perparameter sweep with low-percentile imputation, exceeding an earlier zero-imputation baseline configuration of the pipeline on every metric (the Sensitivity analysis section). We further show that single-cohort causal inference on the disease-extended pooled cohorts (which apply the COVID- and cancer-extended pro-gram sets to all 611 patients) recovers strong skeleton recall (35.0%-55.2% evaluable) but suffers a structural direction collapse (down to 14.3% direction accuracy and 60% forbidden rate at union) caused by within-cohort averaging over heterogeneous normal-plus-disease patient populations; the patient-stratified joint-causal-inference pool dissolves this collapse without altering the underlying algorithms. Cell-CLIP provides a hypothesis-generating framework for inferring directed cell-program networks from patient-level scRNA-seq atlases, with all reported relationships requiring experimental validation due to observational data limitations.
