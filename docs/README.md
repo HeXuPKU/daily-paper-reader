@@ -6,35 +6,30 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-02
-- 运行时间：2026-06-02 21:54:47 UTC
+- 最新运行日期：2026-06-03
+- 运行时间：2026-06-03 22:22:18 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：2
-- 速读区：3
+- 本次总论文数：3
+- 精读区：3
+- 速读区：0
 
 ### 今日简报（AI）
-今日精读2篇高分论文，速读3篇方法论论文，重点聚焦顺式表达预测与复杂性状遗传架构。最值得关注：基因型-表型稳定性与不确定的适应性遗传架构，以及注释信息的块稀疏贝叶斯建模。建议优先精读两篇8分论文，学习贝叶斯、高分辨率作图在基因组学中的应用。
-- 详情：[/202606/02/README](/202606/02/README)
+今日精读两篇基因组基础模型论文。最值得关注《Bridging Ancestry Gaps in Genomic Risk Prediction》与《MAGI: Mechanistic Consequences of Genetic Variants》。建议后续关注如何利用这些模型改善跨人群的疾病风险预测与变异注释。
+- 详情：[/202606/03/README](/202606/03/README)
 
 ### 精读区论文标签
-1. [Annotation-Informed Block-Sparse Bayesian Modeling for cis-Expression Prediction](/202606/02/2606.00483v1-annotation-informed-block-sparse-bayesian-modeling-for-cis-expression-prediction)  
+1. [Bridging Ancestry Gaps in Genomic Risk Prediction with Tabular Foundation Models](/202606/03/biorxiv-10-64898-2026-05-29-728877-v1-bridging-ancestry-gaps-in-genomic-risk-prediction-with-tabular-foundation-models)  
+   标签：评分：9.0/10、query:gwas
+   evidence：采用上下文学习的表格基础模型改进跨祖先基因组风险预测
+2. [MAGI: Mechanistic Consequences of Genetic Variants via Genomic Foundation Models](/202606/03/biorxiv-10-64898-2026-05-31-729117-v1-magi-mechanistic-consequences-of-genetic-variants-via-genomic-foundation-models)  
    标签：评分：8.0/10、query:gwas
-   evidence：注释信息的贝叶斯顺式表达预测模型
-2. [High-resolution mapping of a rapidly evolving complex trait reveals genotype-phenotype stability and an unpredictable genetic architecture of adaptation](/202606/02/biorxiv-10-1101-2025-11-04-686622-v3-high-resolution-mapping-of-a-rapidly-evolving-complex-trait-reveals-genotype-phenotype-stability-and-an-unpredictable-genetic-architecture-of-adaptation)  
+   evidence：基因组基础模型用于变异效应量化，助力GWAS变异解读
+3. [Cell-specific regulatory circuits connect genetic variation to disease susceptibility](/202606/03/biorxiv-10-64898-2026-06-01-729215-v1-cell-specific-regulatory-circuits-connect-genetic-variation-to-disease-susceptibility)  
    标签：评分：8.0/10、query:gwas
-   evidence：利用纵向设计对复杂性状进行全基因组定位，直接相关于GWAS方法
+   evidence：单细胞多组学整合GWAS变异解释
 
 ### 速读区论文标签
-1. [Addressing errors in multiple variables using generalized raking and cumulative probability models](/202606/02/2605.31567v1-addressing-errors-in-multiple-variables-using-generalized-raking-and-cumulative-probability-models)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：使用广义抹刀校正电子健康记录中的多重变量错误，与电子健康记录和GWAS集成相关
-2. [RobustModelMaker: Coupling Bootstrap Stability Selection with Leakage-Safe Nested Cross-Validation for Scientific Machine Learning](/202606/02/2606.01566v1-robustmodelmaker-coupling-bootstrap-stability-selection-with-leakage-safe-nested-cross-validation-for-scientific-machine-learning)  
-   标签：评分：6.0/10、query:gwas
-   evidence：适用于GWAS统计分析的稳健特征选择与交叉验证框架
-3. [PliableBVS: A flexible Bayesian variable selection method for modeling interactions with mandatory modifying variables](/202606/02/2606.02017v1-pliablebvs-a-flexible-bayesian-variable-selection-method-for-modeling-interactions-with-mandatory-modifying-variables)  
-   标签：评分：6.0/10、query:gwas
-   evidence：灵活的贝叶斯变量选择方法，可应用于GWAS基因-环境交互分析
+- 本次无速读推荐。
 
 
 <div class="dpr-home-promo-card">
