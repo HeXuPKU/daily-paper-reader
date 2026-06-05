@@ -6,35 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-04
-- 运行时间：2026-06-04 21:27:01 UTC
+- 最新运行日期：2026-06-05
+- 运行时间：2026-06-05 21:11:29 UTC
 - 运行状态：成功
 - 本次总论文数：5
 - 精读区：1
 - 速读区：4
 
 ### 今日简报（AI）
-今日精读8.0分论文，聚焦高维强相关线性模型的方差分解；速读含基因组基础模型MAGI（7.0分）及风险异质性、高维筛选方法。最值得看主成分分解如何应对强相关场景，以及MAGI预测遗传变异机制后果。建议优先精读论文把握核心思路，再按兴趣选读速读中的基因组或稳健推断方向。
-- 详情：[/202606/04/README](/202606/04/README)
+今日推荐涵盖高效GWAS方法、多重变量误差校正及细胞通讯遗传基础等前沿方向。最值得精读的是《Ultra-Fast Implementation of Multivariate GWAS in Genomic SEM Using Flexible Analytic Estimation》，其快速实现多变量GWAS的方法对遗传关联分析极具实用价值；速读中《Intercellular communication is a heritable dimension of human tissue architecture》揭示了细胞通讯作为组织可遗传维度的新视角。普通读者可优先关注前者，以提升基因组关联研究的效率与精度。
+- 详情：[/202606/05/README](/202606/05/README)
 
 ### 精读区论文标签
-1. [Principal Components Decomposition of Fraction of Variance Explained in High Dimensional Linear Models with Strong Correlation](/202606/04/2606.03880v1-principal-components-decomposition-of-fraction-of-variance-explained-in-high-dimensional-linear-models-with-strong-correlation)  
-   标签：评分：8.0/10、query:gwas
-   evidence：针对强相关高维线性模型提出FVE分解框架，适用于GWAS场景
+1. [Ultra-Fast Implementation of Multivariate GWAS in Genomic SEM Using Flexible Analytic Estimation](/202606/05/biorxiv-10-64898-2026-06-03-729606-v1-ultra-fast-implementation-of-multivariate-gwas-in-genomic-sem-using-flexible-analytic-estimation)  
+   标签：评分：9.0/10、query:gwas
+   evidence：多变量GWAS方法，使用基因组结构方程模型
 
 ### 速读区论文标签
-1. [MAGI: Mechanistic Consequences of Genetic Variants via Genomic Foundation Models](/202606/04/biorxiv-10-64898-2026-05-31-729117-v1-magi-mechanistic-consequences-of-genetic-variants-via-genomic-foundation-models)  
+1. [Addressing errors in multiple variables using generalized raking and cumulative probability models](/202606/05/2605.31567v1-addressing-errors-in-multiple-variables-using-generalized-raking-and-cumulative-probability-models)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：利用广义驾驶方法处理电子健康记录数据中的测量误差，与EHR-GWAS整合相关
+2. [Intercellular communication is a heritable dimension of human tissue architecture](/202606/05/biorxiv-10-64898-2026-03-29-715138-v2-intercellular-communication-is-a-heritable-dimension-of-human-tissue-architecture)  
    标签：评分：7.0/10、query:gwas
-   evidence：使用基因组基础模型（transformer）量化变异效应，属于GWAS分析的机器学习方法
-2. [Robust inference for risk heterogeneity under group imbalance](/202606/04/2606.00797v1-robust-inference-for-risk-heterogeneity-under-group-imbalance)  
-   标签：评分：6.0/10、query:gwas
-   evidence：使用Neyman正交性进行风险异质性稳健推断；可应用于GWAS群体分层
-3. [A Fast Screening Approach for High-dimensional Outcomes and High-dimensional Predictors](/202606/04/2606.03018v1-a-fast-screening-approach-for-high-dimensional-outcomes-and-high-dimensional-predictors)  
-   标签：评分：6.0/10、query:gwas
-   evidence：提出高维结果和预测变量的筛选方法，可应用于GWAS变量选择
-4. [GENEB: Why Genomic Models Are Hard to Compare](/202606/04/2606.04525v1-geneb-why-genomic-models-are-hard-to-compare)  
+   evidence：提出EdgeMap整合空间转录组与GWAS进行遗传力分解
+3. [GENEB: Why Genomic Models Are Hard to Compare](/202606/05/2606.04525v1-geneb-why-genomic-models-are-hard-to-compare)  
    标签：评分：6.0/10、query:med-ai
-   evidence：基因组基础模型的基准测试，支持跨模型比较
+   evidence：提供基因组基础模型的基准，与大规模基因组模型相关
+4. [GOTabPFN: From Feature Ordering to Compact Tokenization for Tabular Foundation Models on High-Dimensional Data](/202606/05/2606.05441v1-gotabpfn-from-feature-ordering-to-compact-tokenization-for-tabular-foundation-models-on-high-dimensional-data)  
+   标签：评分：6.0/10、query:gwas
+   evidence：面向高维小样本的表格基础模型，可应用于基因组预测
 
 
 <div class="dpr-home-promo-card">
