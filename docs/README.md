@@ -6,46 +6,52 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-08
-- 运行时间：2026-06-08 20:46:22 UTC
+- 最新运行日期：2026-06-09
+- 运行时间：2026-06-09 22:10:00 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：2
-- 速读区：6
+- 本次总论文数：10
+- 精读区：6
+- 速读区：4
 
 ### 今日简报（AI）
-1) 今日精读《GENEB》剖析基因组模型难以比较的根源，速读覆盖标记相关性、DNA甲基化及通路分析工具三篇论文。
-2) 最值得关注：基因组模型评估缺乏统一基准与标记物相关性的隐藏影响；建议优先精读《GENEB》理解比较陷阱。
-3) 下一步可探索《Melody》中组织特异性甲基化序列规则，或试用《PAG-Agent》简化通路解读。
-- 详情：[/202606/08/README](/202606/08/README)
+今日精读两篇高分论文：知识图谱+LLM用于转录组扰动预测，以及考虑残差异方差改进SuSiE模型校准。
+最值得关注：知识图谱推理结合LLM寻找简单有效的转录组扰动预测因子，以及小样本下通过残差异方差不确定性校正提升SuSiE模型表现。
+建议深入阅读这两篇精读论文，尤其关注知识图谱与LLM在生物信息学中的应用，以及统计模型中不确定性的量化方法。
+- 详情：[/202606/09/README](/202606/09/README)
 
 ### 精读区论文标签
-1. [GENEB: Why Genomic Models Are Hard to Compare](/202606/08/2606.04525v1-geneb-why-genomic-models-are-hard-to-compare)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：基因组基础模型诊断基准，直接关联大规模基因组模型
-2. [GENEB: Why Genomic Models Are Hard to Compare](/202606/08/2606.04525v2-geneb-why-genomic-models-are-hard-to-compare)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：基因组基础模型诊断基准，直接关联大规模基因组模型
+1. [Knowledge Graphs and Reasoning LLMs for Finding Simple Yet Effective Transcriptomic Perturbation Predictors](/202606/09/2606.08816v1-knowledge-graphs-and-reasoning-llms-for-finding-simple-yet-effective-transcriptomic-perturbation-predictors)  
+   标签：评分：9.0/10、query:med-ai
+   evidence：强化学习优化的LLM和知识图谱用于转录组扰动预测，虚拟细胞模型
+2. [Accounting for uncertainty in residual variances improves calibration of the Sum of Single Effects model for small sample sizes](/202606/09/biorxiv-10-1101-2025-05-16-654543-v4-accounting-for-uncertainty-in-residual-variances-improves-calibration-of-the-sum-of-single-effects-model-for-small-sample-sizes)  
+   标签：评分：9.0/10、query:gwas
+   evidence：通过考虑残差方差不确定性改进SuSiE精细定位模型
+3. [fSuSiE enables fine-mapping of QTLs from genome-scale molecular profiles](/202606/09/biorxiv-10-1101-2025-08-17-670732-v2-fsusie-enables-fine-mapping-of-qtls-from-genome-scale-molecular-profiles)  
+   标签：评分：9.0/10、query:gwas
+   evidence：分子QTL精细定位方法fSuSiE，建模空间结构
+4. [Partitioning Fraction of Variance Explained into Strong Localized Effects and Weak Diffuse Effects](/202606/09/biorxiv-10-64898-2026-01-06-697735-v3-partitioning-fraction-of-variance-explained-into-strong-localized-effects-and-weak-diffuse-effects)  
+   标签：评分：9.0/10、query:gwas
+   evidence：提出分解SNP遗传力的新方法，解决重尾效应问题
+5. [Quantifying annotation-stratified pleiotropy and co-polygenicity between complex traits](/202606/09/biorxiv-10-64898-2026-06-04-730246-v1-quantifying-annotation-stratified-pleiotropy-and-co-polygenicity-between-complex-traits)  
+   标签：评分：9.0/10、query:gwas
+   evidence：整合GWAS汇总统计与功能注释估计多效性
+6. [Single-cell multiomics of neuron activation reveals context-specific genetics of brain disorders](/202606/09/biorxiv-10-1101-2025-02-17-638682-v2-single-cell-multiomics-of-neuron-activation-reveals-context-specific-genetics-of-brain-disorders)  
+   标签：评分：8.0/10、query:gwas
+   evidence：整合单细胞多组学与GWAS研究脑疾病
 
 ### 速读区论文标签
-1. [Evaluating the role of correlation among markers in prediction models](/202606/08/2606.02062v1-evaluating-the-role-of-correlation-among-markers-in-prediction-models)  
-   标签：评分：7.0/10、query:gwas
-   evidence：分析标记相关性对预测模型AUC的影响，对PRS建模有指导意义
-2. [Melody: Decoding the Sequence Determinants of Locus-Specific DNA Methylation Across Human Tissues](/202606/08/biorxiv-10-1101-2025-11-23-689975-v2-melody-decoding-the-sequence-determinants-of-locus-specific-dna-methylation-across-human-tissues)  
-   标签：评分：7.0/10、query:gwas
-   evidence：深度学习模型从序列预测DNA甲基化，可与GWAS整合注释功能性非编码变异
-3. [PAG-Agent: a biologist-oriented research assistant for context-aware pathway-level analysis and interpretation](/202606/08/biorxiv-10-64898-2026-06-02-729674-v1-pag-agent-a-biologist-oriented-research-assistant-for-context-aware-pathway-level-analysis-and-interpretation)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：面向生物学家的AI研究助手，集成大语言模型推理的上下文感知通路分析
-4. [KDM: embedding DNA/RNA motifs and sequences in a shared k-mer space for unified discovery, analysis and binding prediction](/202606/08/biorxiv-10-64898-2026-06-05-730329-v1-kdm-embedding-dnarna-motifs-and-sequences-in-a-shared-k-mer-space-for-unified-discovery-analysis-and-binding-prediction)  
-   标签：评分：7.0/10、query:gwas
-   evidence：提供k-mer嵌入框架，可用于GWAS变异的功能注释
-5. [Hierarchical refinements of cis-regulatory inputs improve scalable gene expression prediction](/202606/08/biorxiv-10-64898-2026-05-31-729151-v1-hierarchical-refinements-of-cis-regulatory-inputs-improve-scalable-gene-expression-prediction)  
+1. [GENEB: Why Genomic Models Are Hard to Compare](/202606/09/2606.04525v1-geneb-why-genomic-models-are-hard-to-compare)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：基因组基础模型的综合基准，直接对应复合需求中的大规模基因组模型
+2. [Refining bias correction in genome-wide association analyses of case-control studies](/202606/09/biorxiv-10-1101-2025-09-01-673522-v3-refining-bias-correction-in-genome-wide-association-analyses-of-case-control-studies)  
+   标签：评分：8.0/10、query:gwas
+   evidence：GWAS病例对照研究偏差校正框架
+3. [GENEB: Why Genomic Models Are Hard to Compare](/202606/09/2606.04525v2-geneb-why-genomic-models-are-hard-to-compare)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：基因组基础模型基准
+4. [LongAllele: a joint inference framework for allele-specific analysis on long-read bulk and single-cell RNA sequencing](/202606/09/biorxiv-10-64898-2026-05-05-722992-v2-longallele-a-joint-inference-framework-for-allele-specific-analysis-on-long-read-bulk-and-single-cell-rna-sequencing)  
    标签：评分：6.0/10、query:gwas
-   evidence：两阶段选择框架用于从顺式调控元件预测基因表达，适用于GWAS功能基因组学
-6. [inGSEA: An Improved Method for Gene Set Enrichment Analysis Using a Weighted Integral Statistic](/202606/08/biorxiv-10-64898-2026-06-02-729106-v1-ingsea-an-improved-method-for-gene-set-enrichment-analysis-using-a-weighted-integral-statistic)  
-   标签：评分：6.0/10、query:gwas
-   evidence：改进的基因集富集分析方法，可用于GWAS下游功能解读
+   evidence：等位基因特异性分析的联合推断框架，改进单倍型推断和检验，可用于因果变异识别
 
 
 <div class="dpr-home-promo-card">
