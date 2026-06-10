@@ -6,52 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-09
-- 运行时间：2026-06-09 22:10:00 UTC
+- 最新运行日期：2026-06-10
+- 运行时间：2026-06-10 22:27:17 UTC
 - 运行状态：成功
-- 本次总论文数：10
-- 精读区：6
-- 速读区：4
+- 本次总论文数：6
+- 精读区：1
+- 速读区：5
 
 ### 今日简报（AI）
-今日精读两篇高分论文：知识图谱+LLM用于转录组扰动预测，以及考虑残差异方差改进SuSiE模型校准。
-最值得关注：知识图谱推理结合LLM寻找简单有效的转录组扰动预测因子，以及小样本下通过残差异方差不确定性校正提升SuSiE模型表现。
-建议深入阅读这两篇精读论文，尤其关注知识图谱与LLM在生物信息学中的应用，以及统计模型中不确定性的量化方法。
-- 详情：[/202606/09/README](/202606/09/README)
+今日推荐6篇基因组与遗传学相关论文，其中1篇精读解析细胞特异性调控回路与疾病易感性的关联。  
+精读论文揭示细胞特异性调控网络如何连接遗传变异与疾病风险；速读中知识图谱与LLM用于转录组扰动预测、以及个体化治疗效果推断也值得关注。  
+建议优先阅读精读论文，并速读知识图谱和孟德尔随机化研究以拓展思路。
+- 详情：[/202606/10/README](/202606/10/README)
 
 ### 精读区论文标签
-1. [Knowledge Graphs and Reasoning LLMs for Finding Simple Yet Effective Transcriptomic Perturbation Predictors](/202606/09/2606.08816v1-knowledge-graphs-and-reasoning-llms-for-finding-simple-yet-effective-transcriptomic-perturbation-predictors)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：强化学习优化的LLM和知识图谱用于转录组扰动预测，虚拟细胞模型
-2. [Accounting for uncertainty in residual variances improves calibration of the Sum of Single Effects model for small sample sizes](/202606/09/biorxiv-10-1101-2025-05-16-654543-v4-accounting-for-uncertainty-in-residual-variances-improves-calibration-of-the-sum-of-single-effects-model-for-small-sample-sizes)  
+1. [Cell-specific regulatory circuits connect genetic variation to disease susceptibility](/202606/10/biorxiv-10-64898-2026-06-01-729215-v2-cell-specific-regulatory-circuits-connect-genetic-variation-to-disease-susceptibility)  
    标签：评分：9.0/10、query:gwas
-   evidence：通过考虑残差方差不确定性改进SuSiE精细定位模型
-3. [fSuSiE enables fine-mapping of QTLs from genome-scale molecular profiles](/202606/09/biorxiv-10-1101-2025-08-17-670732-v2-fsusie-enables-fine-mapping-of-qtls-from-genome-scale-molecular-profiles)  
-   标签：评分：9.0/10、query:gwas
-   evidence：分子QTL精细定位方法fSuSiE，建模空间结构
-4. [Partitioning Fraction of Variance Explained into Strong Localized Effects and Weak Diffuse Effects](/202606/09/biorxiv-10-64898-2026-01-06-697735-v3-partitioning-fraction-of-variance-explained-into-strong-localized-effects-and-weak-diffuse-effects)  
-   标签：评分：9.0/10、query:gwas
-   evidence：提出分解SNP遗传力的新方法，解决重尾效应问题
-5. [Quantifying annotation-stratified pleiotropy and co-polygenicity between complex traits](/202606/09/biorxiv-10-64898-2026-06-04-730246-v1-quantifying-annotation-stratified-pleiotropy-and-co-polygenicity-between-complex-traits)  
-   标签：评分：9.0/10、query:gwas
-   evidence：整合GWAS汇总统计与功能注释估计多效性
-6. [Single-cell multiomics of neuron activation reveals context-specific genetics of brain disorders](/202606/09/biorxiv-10-1101-2025-02-17-638682-v2-single-cell-multiomics-of-neuron-activation-reveals-context-specific-genetics-of-brain-disorders)  
-   标签：评分：8.0/10、query:gwas
-   evidence：整合单细胞多组学与GWAS研究脑疾病
+   evidence：整合单细胞多组学数据与eQTL/caQTL分析来解释GWAS变异，直接针对功能整合框架。
 
 ### 速读区论文标签
-1. [GENEB: Why Genomic Models Are Hard to Compare](/202606/09/2606.04525v1-geneb-why-genomic-models-are-hard-to-compare)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：基因组基础模型的综合基准，直接对应复合需求中的大规模基因组模型
-2. [Refining bias correction in genome-wide association analyses of case-control studies](/202606/09/biorxiv-10-1101-2025-09-01-673522-v3-refining-bias-correction-in-genome-wide-association-analyses-of-case-control-studies)  
-   标签：评分：8.0/10、query:gwas
-   evidence：GWAS病例对照研究偏差校正框架
-3. [GENEB: Why Genomic Models Are Hard to Compare](/202606/09/2606.04525v2-geneb-why-genomic-models-are-hard-to-compare)  
+1. [Knowledge Graphs and Reasoning LLMs for Finding Simple Yet Effective Transcriptomic Perturbation Predictors](/202606/10/2606.08816v1-knowledge-graphs-and-reasoning-llms-for-finding-simple-yet-effective-transcriptomic-perturbation-predictors)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：利用大语言模型和强化学习预测转录组扰动，与虚拟细胞模型和医疗中的强化学习相关
+2. [Robust Inference of Individualized Treatment Effect in Mendelian Randomization](/202606/10/biorxiv-10-64898-2026-05-08-723855-v2-robust-inference-of-individualized-treatment-effect-in-mendelian-randomization)  
+   标签：评分：7.0/10、query:gwas
+   evidence：孟德尔随机化中个体化治疗效应的稳健推断方法
+3. [GENEB: Why Genomic Models Are Hard to Compare](/202606/10/2606.04525v1-geneb-why-genomic-models-are-hard-to-compare)  
    标签：评分：6.0/10、query:med-ai
-   evidence：基因组基础模型基准
-4. [LongAllele: a joint inference framework for allele-specific analysis on long-read bulk and single-cell RNA sequencing](/202606/09/biorxiv-10-64898-2026-05-05-722992-v2-longallele-a-joint-inference-framework-for-allele-specific-analysis-on-long-read-bulk-and-single-cell-rna-sequencing)  
+   evidence：提供基因组基础模型的统一基准，支持医疗AI中大规模基因组模型评估
+4. [GENEB: Why Genomic Models Are Hard to Compare](/202606/10/2606.04525v2-geneb-why-genomic-models-are-hard-to-compare)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：基因组基础模型基准，与大规模基因组模型相关
+5. [BSTabDiff: Block-Subunit Diffusion Priors for High-Dimensional Tabular Data Generation](/202606/10/2606.09257v1-bstabdiff-block-subunit-diffusion-priors-for-high-dimensional-tabular-data-generation)  
    标签：评分：6.0/10、query:gwas
-   evidence：等位基因特异性分析的联合推断框架，改进单倍型推断和检验，可用于因果变异识别
+   evidence：适用于GWAS分析的高维表格数据生成框架
 
 
 <div class="dpr-home-promo-card">
