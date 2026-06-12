@@ -6,58 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-11
-- 运行时间：2026-06-11 22:19:46 UTC
+- 最新运行日期：2026-06-12
+- 运行时间：2026-06-12 21:41:47 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：6
-- 速读区：6
+- 本次总论文数：6
+- 精读区：1
+- 速读区：5
 
 ### 今日简报（AI）
-1) 今日12篇文献精读聚焦帕金森病遗传机制与基因组隐私安全，BMP通路调控运动恢复及多基因预测重识别风险成亮点。
-2) 最值得关注两个方向：Bone Morphogenetic Protein通路如何调节帕金森病遗传风险并促进运动恢复；基因组匿名化后多基因预测重识别风险对数据隐私的威胁。
-3) 建议普通读者优先阅读精读中两篇高分论文，理解遗传因素与运动康复的关联，并警惕基因组数据共享中的隐私泄露。
-- 详情：[/202606/11/README](/202606/11/README)
+今天共整理了6篇论文，聚焦转录组扰动预测、风险通路解耦、电子健康记录嵌入及单细胞RNA测序分析等方向。
+最值得关注精读论文：利用知识图谱与推理LLM寻找简单有效的转录组扰动预测因子；速读中贝叶斯超图推断解耦潜在风险通路也具启发。
+建议深入知识图谱+LLM在生物医学预测的应用，并留意单细胞长读RNA测序新工具ANCHOR的实用价值。
+- 详情：[/202606/12/README](/202606/12/README)
 
 ### 精读区论文标签
-1. [Bone Morphogenetic Protein Pathway Modulates Parkinson's Disease Genetic Risk and Promotes Motor Recovery](/202606/11/biorxiv-10-64898-2026-06-08-730818-v1-bone-morphogenetic-protein-pathway-modulates-parkinsons-disease-genetic-risk-and-promotes-motor-recovery)  
-   标签：评分：9.0/10、query:gwas
-   evidence：BMP通路多基因风险评分与帕金森病关联
-2. [Evaluating anonymized genome re-identification using polygenic predictions and its implications for data privacy](/202606/11/biorxiv-10-64898-2026-06-10-731306-v1-evaluating-anonymized-genome-re-identification-using-polygenic-predictions-and-its-implications-for-data-privacy)  
-   标签：评分：9.0/10、query:gwas
-   evidence：多基因风险评分预测用于重识别
-3. [GENEB: Why Genomic Models Are Hard to Compare](/202606/11/2606.04525v1-geneb-why-genomic-models-are-hard-to-compare)  
+1. [Knowledge Graphs and Reasoning LLMs for Finding Simple Yet Effective Transcriptomic Perturbation Predictors](/202606/12/2606.08816v1-knowledge-graphs-and-reasoning-llms-for-finding-simple-yet-effective-transcriptomic-perturbation-predictors)  
    标签：评分：8.0/10、query:med-ai
-   evidence：提出GENEB基准用于比较基因组基础模型，直接服务大规模基因组模型评估
-4. [Knowledge Graphs and Reasoning LLMs for Finding Simple Yet Effective Transcriptomic Perturbation Predictors](/202606/11/2606.08816v1-knowledge-graphs-and-reasoning-llms-for-finding-simple-yet-effective-transcriptomic-perturbation-predictors)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：强化学习和知识图谱用于虚拟细胞模型扰动预测
-5. [Covariate-aware genomic prediction of blood metabolite profiles using multi-task neural networks](/202606/11/biorxiv-10-64898-2026-06-08-728708-v1-covariate-aware-genomic-prediction-of-blood-metabolite-profiles-using-multi-task-neural-networks)  
-   标签：评分：8.0/10、query:gwas
-   evidence：使用多任务神经网络基于GWAS鉴定的变异进行代谢物谱基因组预测
-6. [POISE: Spectral Inference of Parent-of-Origin Effects in Unlabeled Genomic Data](/202606/11/biorxiv-10-64898-2026-06-10-731310-v1-poise-spectral-inference-of-parent-of-origin-effects-in-unlabeled-genomic-data)  
-   标签：评分：8.0/10、query:gwas
-   evidence：开发基于机器学习的方法POISE，在无家系数据下推断GWAS中的亲本起源效应
+   evidence：使用强化学习和大型语言模型进行转录组扰动预测，应用于虚拟细胞模型
 
 ### 速读区论文标签
-1. [GENEB: Why Genomic Models Are Hard to Compare](/202606/11/2606.04525v2-geneb-why-genomic-models-are-hard-to-compare)  
+1. [Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference](/202606/12/2606.07677v1-disentangling-latent-risk-pathways-via-bayesian-hypergraph-inference)  
    标签：评分：7.0/10、query:med-ai
-   evidence：基因组基础模型基准
-2. [jsPCA: fast, scalable, and interpretable identification of spatial domains and variable genes across multi-slice and multi-sample spatial transcriptomics data](/202606/11/biorxiv-10-1101-2025-09-16-676466-v2-jspca-fast-scalable-and-interpretable-identification-of-spatial-domains-and-variable-genes-across-multi-slice-and-multi-sample-spatial-transcriptomics-data)  
+   evidence：贝叶斯超图推断应用于电子健康记录疾病通路建模，与EHR-GWAS整合相关
+2. [Enhancing Spectral Embedding through Robust and Flexible Knowledge Transfer in Electronic Health Records](/202606/12/2606.11570v1-enhancing-spectral-embedding-through-robust-and-flexible-knowledge-transfer-in-electronic-health-records)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：面向EHR的无监督表示学习，具有灵活的知识迁移
+3. [ANCHOR: haplotype-aware allelic and isoform inference from single-cell long-read RNA sequencing with de novo variant calling](/202606/12/biorxiv-10-64898-2026-06-08-730656-v1-anchor-haplotype-aware-allelic-and-isoform-inference-from-single-cell-long-read-rna-sequencing-with-de-novo-variant-calling)  
    标签：评分：7.0/10、query:gwas
-   evidence：空间转录组学方法可用于与GWAS整合进行功能解释
-3. [High-Dimensional Sensitivity Analysis for Genomic Studies: An Adversarial Framework for Learning Worst-Case Latent Confounders](/202606/11/biorxiv-10-64898-2026-05-27-728283-v2-high-dimensional-sensitivity-analysis-for-genomic-studies-an-adversarial-framework-for-learning-worst-case-latent-confounders)  
+   evidence：长读长RNA测序的单倍型感知变异检测和等位基因推断，整合功能基因组学与GWAS
+4. [Bone Morphogenetic Protein Pathway Modulates Parkinson's Disease Genetic Risk and Promotes Motor Recovery](/202606/12/biorxiv-10-64898-2026-06-08-730818-v1-bone-morphogenetic-protein-pathway-modulates-parkinsons-disease-genetic-risk-and-promotes-motor-recovery)  
    标签：评分：7.0/10、query:gwas
-   evidence：用于基因组混杂分析的深度学习对抗框架
-4. [Local SNP-explained methylation variation reveals genetically anchored and exposure-associated methylation architecture in the human brain](/202606/11/biorxiv-10-64898-2026-06-05-730443-v1-local-snp-explained-methylation-variation-reveals-genetically-anchored-and-exposure-associated-methylation-architecture-in-the-human-brain)  
-   标签：评分：7.0/10、query:gwas
-   evidence：利用SNP弹性网络模型将遗传变异与甲基化关联；整合功能基因组学与GWAS
-5. [eQTM (expression quantitative trait methylation) Atlas: a comprehensive resource of over 11 million DNA methylation-gene expression associations through across 11 tissues and 4 diseases](/202606/11/biorxiv-10-64898-2026-06-07-730721-v1-eqtm-expression-quantitative-trait-methylation-atlas-a-comprehensive-resource-of-over-11-million-dna-methylation-gene-expression-associations-through-across-11-tissues-and-4-diseases)  
-   标签：评分：7.0/10、query:gwas
-   evidence：eQTM资源连接DNA甲基化与基因表达，可用于整合功能基因组学与GWAS
-6. [Uncovering Pseudotime-Varying Genetic Causal Effects Along Single-Cell Trajectories for Pulmonary Disease Trait](/202606/11/biorxiv-10-64898-2026-06-08-730759-v1-uncovering-pseudotime-varying-genetic-causal-effects-along-single-cell-trajectories-for-pulmonary-disease-trait)  
-   标签：评分：6.0/10、query:gwas
-   evidence：将遗传因果效应与单细胞轨迹整合
+   evidence：计算BMP多基因风险评分并与帕金森病风险关联，展示了PRS预测建模
+5. [TifBERT: a self-supervised foundation model for normalization-robust bulk RNA-seq representation learning](/202606/12/biorxiv-10-64898-2026-06-08-728683-v1-tifbert-a-self-supervised-foundation-model-for-normalization-robust-bulk-rna-seq-representation-learning)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：用于bulk RNA-seq的自监督基础模型，属于大规模基因组模型方向
 
 
 <div class="dpr-home-promo-card">

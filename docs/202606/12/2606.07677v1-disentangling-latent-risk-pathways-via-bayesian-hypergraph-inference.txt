@@ -1,0 +1,2286 @@
+Title: Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference
+
+URL Source: https://arxiv.org/pdf/2606.07677v1
+
+Published Time: Tue, 09 Jun 2026 00:15:26 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+Shengxian Ding 1 Haonan Gao 1 Pangpang Liu 1 Xinyuan Tian 1 Yize Zhao 1
+
+# Abstract 
+
+Electronic health records (EHR) pose large-scale multi-disease modeling problems in which many outcomes are rare and strongly influenced by shared risk factors. While modern approaches achieve strong predictive performance, they often treat diseases independently or rely on black-box architectures, offering limited insight into how risk factors organize disease risk and little prin-cipled uncertainty quantification. We introduce a Bayesian hypergraph inference framework that reframes multi-disease modeling around latent, risk-factor-modulated disease pathways . Risk factors act on hyperedges, latent disease subsets with shared risk patterns, allowing diseases to par-ticipate in multiple distinct pathways and enabling interpretable, higher-order structure beyond pair-wise associations. A repulsion prior encourages parsimonious and identifiable structure, while pos-terior inference provides calibrated uncertainty over both disease groupings and risk-factor influ-ence. To enable scalable inference on large EHR datasets, we develop a structured variational infer-ence algorithm that preserves logical dependen-cies among hyperedge existence, disease member-ship, and pathway-level effects. Experiments on simulated data and the UK Biobank demonstrate stable and interpretable disease pathway structure, well-calibrated uncertainty, improved estimation for rare diseases, and competitive predictive per-formance. 
+
+# 1. Introduction 
+
+Electronic health records (EHR) enable large-scale model-ing of disease risk across populations and many outcomes simultaneously. In this regime, individuals are often sus-ceptible to multiple conditions, disease prevalence varies 
+
+> 1
+
+Department of Biostatistics, Yale University, New Haven, USA. Correspondence to: Yize Zhao <yize.zhao@yale.edu >.
+
+Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s). 
+
+widely from common chronic disorders to rare diseases with few observed cases, and shared biological pathways, behav-ioral exposures, and social determinants induce complex dependencies across diseases (Goh et al., 2007; Skou et al., 2022). Understanding how disease risk is organized across populations is therefore central to epidemiology, precision medicine, and population health. Crucially, these dependencies among diseases are not uni-form across risk factors : different risk drivers organize diseases in different ways. For example, age may jointly in-crease risk for cardiovascular and metabolic diseases, while smoking predominantly affects respiratory and oncological conditions (Murray et al., 2020). These disease groupings are overlapping, inherently uncertain, and specific to the risk factor under consideration, reflecting distinct etiological pat-terns through which different exposures are associated with disease risk (Menche et al., 2015). Modeling disease risk in this multi-disease setting poses two fundamental challenges. First, disease prevalence exhibits a pronounced long-tail structure: while some chronic condi-tions are common, most diseases are rare, providing insuffi-cient data for stable independent estimation. Second, latent etiological structure is complex and higher-order: diseases can participate in multiple, risk-factor-specific pathways, re-quiring models to share information across outcomes with-out collapsing distinct latent mechanisms. A successful solution must therefore balance statistical efficiency with structured inductive bias, enabling interpretability through the attribution of risk while explicitly representing uncer-tainty arising from limited and heterogeneous data. The core challenge is not merely prediction, but learning risk-factor–specific, overlapping latent structure over disease outcomes with uncertainty .Existing approaches address aspects of multi-disease mod-eling, but each falls short of this goal in critical ways. In-dependent disease-specific models, such as logistic regres-sion, are transparent but treat diseases in isolation, ignoring shared structure and yielding poorly calibrated uncertainty for rare outcomes (King & Zeng, 2001; Heinze & Schemper, 2002). Conversely, multitask learning and joint modeling approaches improve robustness through information shar-ing (Caruana, 1997; Zhang & Yang, 2022), but typically rely on black-box architectures that entangle all risk fac-1
+
+> arXiv:2606.07677v1 [stat.ML] 4 Jun 2026 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference
+
+tors into a single latent space. This obscures the specific pathways through which different risk drivers exert their effects and provides limited insight into uncertainty over the learned structure. Finally, more structured probabilistic models capture outcome-level dependence (Blumm et al., 2009; Menche et al., 2015), but often focus on marginal correlations aggregated across all factors rather than disen-tangling risk-factor-specific disease organization, and can be difficult to scale to modern EHR datasets. As a result, existing methods cannot answer a central epidemiological question: through which shared disease pathways does a given risk factor exert its effects, and how uncertain are we about that structure? 
+
+To address this gap, we introduce a Bayesian Hypergraph Pathway Inference (BHPI) framework that reframes multi-disease modeling as the discovery of latent, risk-factor-modulated disease pathways (Figure 1). Our key insight is representational: while standard graphs and multitask models capture pairwise correlations or entangled shared effects, etiological pathways are inherently higher-order, in-volving groups of diseases rather than isolated pairs. We therefore model disease pathways as hyperedges in a la-tent hypergraph, where nodes represent diseases, and each hyperedge captures a shared pattern of risk-factor influ-ence. Risk factors act directly on hyperedges to induce structured effects across groups of diseases. This decouples risk-factor influence from individual outcomes and naturally supports overlapping, factor-specific disease organization. Structurally, we introduce a repulsion prior that promotes parsimonious pathway discovery by discouraging redundant or highly overlapping hyperedges associated with the same risk factor. This prior mitigates latent structure collapse and plays a critical role in stabilizing inference in the long-tail regime, where weak signals from rare diseases would oth-erwise lead to degenerate solutions. Posterior inference in this model is challenging due to strong logical dependen-cies among hyperedge existence, disease membership, and hyperedge-level effects. Standard mean-field variational inference (VI) breaks these dependencies, leading to poorly calibrated uncertainty. We therefore develop a scalable struc-tured VI algorithm that explicitly preserves these couplings, enabling uncertainty-aware learning of disease pathways and risk propagation in large EHR datasets. We summarize our contributions as follows: • We introduce a Bayesian hypergraph pathway infer-ence framework with a repulsion prior, enabling parsi-monious learning of risk-factor-specific, higher-order disease structure. • We develop a scalable structured VI algorithm that preserves the logical dependencies (existence → mem-bership → effect), overcoming known limitations of standard mean-field approximations. • We validate the framework on synthetic data and the UK Biobank, demonstrating stable and interpretable pathway recovery, improved rare-disease risk estima-tion, and well-calibrated uncertainty. 
+
+# 2. Related Work 
+
+Independent Multi-Disease Models A common baseline for multi-disease risk modeling is to train separate models for each outcome, typically using regularized logistic re-gression (Hoerl & Kennard, 1970; Tibshirani, 1996; Zou & Hastie, 2005). Specific penalized (Firth, 1993; King & Zeng, 2001; Heinze & Schemper, 2002) and Bayesian (Gelman et al., 2008) extensions further improve numerical stability in low-prevalence settings. But these approaches fundamen-tally treat diseases as independent prediction tasks, therefore failing to borrow statistical strength for rare outcomes. 
+
+Multi-task Learning and Representation-based Models 
+
+Multi-task learning (MTL) methods share information via common representations across related disease prediction tasks, using shared latent factors (Caruana, 1997; Evgeniou & Pontil, 2004; Argyriou et al., 2008; Standley et al., 2020), hierarchical priors (Bonilla et al., 2007), or neural network architectures (Miotto et al., 2016; Choi et al., 2016; Rajko-mar et al., 2018; Harutyunyan et al., 2019; Rasmy et al., 2021) to jointly model multiple disease risks. While these approaches can implicitly capture commonalities across out-comes, the learned representations are typically implicit and black-box, obscuring the specific grouping of diseases and offering limited uncertainty quantification over the structure itself. 
+
+Structured Outcome Learning A complementary line of work focuses on modeling statistical dependence among diseases through disease networks or comorbidity structures. Such models characterize patterns of disease co-occurrence in EHR data and have been used for descriptive analysis, risk stratification, and hypothesis generation (Blumm et al., 2009; Barab ´asi et al., 2011; Jensen et al., 2014; Menche et al., 2015). However, these static networks aggregate all risk factors into a single correlation structure, failing to disentangle how different inputs drive different depen-dencies. Probabilistic approaches like multi-label learning (Tsoumakas & Vlahavas, 2007; Read et al., 2011) or cor-related topic models (Lafferty & Blei, 2005; Li & McCal-lum, 2006) capture outcome dependence but often lack the feature-specific modulation required to understand etiology. 
+
+Hypergraph Representation Learning Hypergraphs have emerged as a powerful tool for modeling higher-order correlations in data (Zhou et al., 2006; Feng et al., 2019; Yadati et al., 2019; Antelmi et al., 2023). Recent work in biomedical ML has applied hypergraphs to patient-concept 2Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference  
+
+> Figure 1. Bayesian Hypergraph Pathway Inference Workflow. (a) Input data consist of patient covariates and multiple disease outcomes. (b) A latent disease hypergraph models higher-order structure via hyperedges, allowing diseases to participate in multiple pathways with uncertain existence and membership. (c) Risk factors act on hyperedges to induce structured effects across diseases, yielding disentangled attribution. Shaded regions denote posterior uncertainty. Bottom panels: Structured Variational Inference (left) preserves logical dependencies to learn the latent topology including hyperedge existence and membership (middle), while a repulsion prior (right) discourages redundant pathways to ensure a parsimonious and interpretable latent structure.
+
+interactions (Xu et al., 2023; Zhang et al., 2024). However, existing hypergraph neural networks generally assume the hypergraph structure is observed or inferred via heuristic similarity metrics. Our work differs by treating the hyper-graph topology as a latent random variable to be inferred within a fully Bayesian generative framework, specifically designed to disentangle risk-factor modulation. 
+
+# 3. Bayesian Hypergraph Pathway Model 
+
+We propose a Bayesian hypergraph pathway model for learning latent, higher-order output structure in multi-disease prediction. The core object is a latent disease hyper-graph whose hyperedges encode overlapping disease path-ways, each selectively modulated by input features. Rather than modeling outcomes independently or through a sin-gle shared representation, our model learns which diseases are linked through which pathways, and which inputs acti-vate each pathway, with calibrated uncertainty over both the latent structure and its effect propagation on outcomes. 
+
+3.1. Problem Setup 
+
+For each subject i = 1 , . . . , N , we observe a feature vector 
+
+xi ∈ RP and binary outcome Yi,v ∈ { 0, 1} over a fixed set of V diseases. Outcomes are defined only when the subject is at risk for disease v, indicated by Ri,v = 1 , and all modeling and inference are restricted to valid subject-disease pairs. Our objectives are twofold: (i) to predict disease risk across many correlated outcomes, including low-prevalence conditions; and (ii) to recover latent, overlapping disease pathways that explain how input features jointly influence multiple outcomes. 
+
+3.2. Observation Model 
+
+We link latent pathway structure to observed outcomes through a multivariate logistic observation model: 
+
+yi,v | ˜ηi,v ∼ Bernoulli (σ (˜ ηi,v )) , ˜ηi,v = αv +x⊤ 
+
+> i
+
+βv , (1) where αv ∼ N (0 , ϱ 2 
+
+> v
+
+) is a disease-specific baseline risk and βv ∈ RP captures risk-factor influences. Equation (1) serves as a measurement model linking latent structure to observed outcomes. Rather than estimating disease-specific effects βv independently, we impose structured sharing of feature effects across diseases via a latent hypergraph, enabling information borrowing and interpretable higher-order representation over the output space. 
+
+3.3. Latent Hypergraph Representation 
+
+We represent latent disease pathways using a hypergraph 
+
+G = ( V, E), where nodes V = {1, . . . , V } correspond to diseases and each hyperedge e ∈ E represents shared response patterns to input features across subsets of out-comes. Hyperedges may overlap, allowing diseases to participate in multiple pathways. The hypergraph is en-coded by an incidence matrix H ∈ { 0, 1}V ×E , where 
+
+Hv,e = I{disease v belongs to pathway e}, and E is a fixed upper bound on the number of hyperedges. This rep-resentation captures a higher-order output structure that 3Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+cannot be expressed using pairwise graphs or global shared representations. 
+
+3.4. Hypergraph-Induced Feature Effects 
+
+Disease-specific feature effects are induced by hyperedge-level effects: 
+
+βj,v = d−1 
+
+> v
+
+·
+
+> E
+
+X
+
+> e=1
+
+Hv,e μj,e , (2) where μj,e denotes the effect of risk factor j on hyperedge 
+
+e. The normalizing constant dv = E1/2 stabilizes the vari-ance of induced effects and ensures risk magnitudes remain consistent as E increases. This construction induces input-modulated, higher-order dependencies among outputs: a disease may be influenced by different features through dis-tinct pathways, while a single feature may act on multiple disease subsets. 
+
+3.5. Hypergraph Structure Learning 
+
+Learning the hypergraph requires a combinatorial search over both pathway existence and disease membership. We adopt a hierarchical sparsity model in which each hyperedge 
+
+e has a binary existence indicator ze, and conditional on ex-istence, disease-level membership indicators mv,e . The inci-dence matrix is defined as Hv,e = ze · mv,e , with structured priors: 
+
+ze | re ∼ Bernoulli (re), re ∼ Beta (ar , b r ),mv,e | ze, ρ v,e ∼ (1 − ze) · δ0 + ze · Bernoulli (ρv,e ),ρv,e ∼ Beta (aρ, b ρ).
+
+This hierarchy separates global hyperedge discovery from within-hyperedge disease composition, yielding parsimo-nious and interpretable latent structure. 
+
+3.6. Sparse Features-Modulated Hyperedge Effects 
+
+Not all features act on all hyperedges. For each feature j,we introduce a spike-and-slab prior over hyperedge-level effects: 
+
+μj,e | γj,e , σ 2 
+
+> μ
+
+∼ (1 − γj,e )δ0 + γj,e · N (0 , σ 2
+
+> μ
+
+),σ2 
+
+> μ
+
+∼ Inv-Gamma (aμ, b μ),
+
+where γj,e selects whether feature j influences hyperedge e.To avoid degenerate solutions in which multiple hyperedges provide redundant explanations for the same feature, we introduce a repulsion prior that penalizes selecting highly overlapping hyperedges for a given feature j:
+
+Rrep (γj | H) ∝ exp 
+
+(
+
+−λ X
+
+> e1<e 2
+
+O(Se1 , S e2 ) · γj,e 1 γj,e 2
+
+)
+
+,O(Se1 , S e2 ) = |Se1
+
+T Se2 |
+
+min ( |Se1 |, |Se2 |) ,
+
+where Se = {v : Hv,e = 1 }, λ controls repulsion strength, and O(Se1 , S e2 ) ∈ [0 , 1] is the overlap coefficient between hyperedges e1 and e2, in which O(Se1 , S e2 ) = 1 means complete overlaps. This encourages a disentangled and identifiable pathway structure within a single feature while allowing overlap hyperedges across different features. More-over, we enforce the hierarchy γj,e = 0 whenever ze = 0 ,ensuring that risk factors only select globally active hyper-edges. Together, the joint prior on the risk-factor-modulated hyperedge effect selector is: 
+
+γj | νj , H ∼
+
+> E
+
+Y
+
+> e=1
+
+n
+
+ze · Bernoulli (γj,e ; νj,e ) · R rep (γj | H)+ (1 − ze)δ0(γj,e )
+
+o
+
+,νj,e ∼ Beta (aν , b ν ).
+
+This hierarchy enforces the logical constraints: ze = 0 ⇒
+
+mv,e = γj,e = μj,e = 0 , and γj,e = 0 ⇒ μj,e = 0 , ensur-ing coherent structure learning and improving identifiability without sacrificing predictive performance. 
+
+# 4. Scalable Structured Variational Inference 
+
+Posterior inference is challenging due to the combination of a non-conjugate likelihood and a combinatorial latent hypergraph with hard logical constraints linking discrete structure variables and continuous effects. To handle the non-conjugate logistic likelihood, we utilize P ´olya–Gamma (PG) augmentation (Polson et al., 2013), introducing vari-ables ωi,v that render the likelihood conditionally Gaus-sian. Specifically, ωi,v ∼ PG(1 , ˜ηi,v ) yields a conditional log-likelihood quadratic in ˜ηi,v , which enables closed-form CAVI updates (Appendix A). The hypergraph’s logical con-straints, however, induce strong posterior dependencies that violate the independence assumptions underlying stan-dard mean-field factorization (e.g., q(ze) QVv=1 q(mv,e )), which assigns non-zero probability to configurations like 
+
+{ze = 0 , m v,e = 1 }, a logical impossibility in our genera-tive process. Preserving these dependencies is essential not only for uncertainty calibration but also for enforcing the repulsion-based identifiability constraints during inference. 
+
+4.1. Structured Variational Family 
+
+We propose a structured VI scheme that explicitly preserves the logical hierarchy while retaining computational tractabil-ity. We define the variational family as: 
+
+Q = Y
+
+> v
+
+q(αv ) Y
+
+> e
+
+q(ze)q(re) Y
+
+> v,e
+
+q(mv,e | ze)q(ρv,e )
+
+Y
+
+> j,e
+
+q(μj,e | γj,e )q(γj,e | ze)q(νj,e ) Y
+
+> i,v
+
+q(ωi,v )q(σ2
+
+> μ
+
+).
+
+4Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+Key structural properties: (1) Conditional Dependence: 
+
+the posteriors for disease membership mv,e and feature ef-fects γj,e , μ j,e are conditioned on the hyperedge existence 
+
+ze; (2) Zero-Preservation: if q(ze) concentrates on 0, the conditional factors q(mv,e |ze = 0) , q(γj,e | ze = 0) and 
+
+q(μj,e |ze = 0) collapse to Dirac deltas at 0, correctly remov-ing inactive pathways consistently from the model. Overall, this structured variational formulation respects the hierarchi-cal design of the generative model while remaining scalable to large EHR cohorts. 
+
+4.2. Optimization via Latent Variable Augmentation 
+
+We approximate the posterior by minimizing the Kullback-Leibler (KL) divergence between the variational family and the true posterior, equivalently maximizing the evidence lower bound (ELBO). Given the structural dependencies in BHPI, we employ Coordinate Ascent Variational Inference (CAVI, (Bishop & Nasrabadi, 2006)). While the variational family admits a product form, the optimal update for a factor 
+
+qj (θj ) must preserve conditional dependencies within the prior. The general update rule is: 
+
+q∗(θj ) ∝ exp Eq(Θ\θj ) {log p(Θ, Y)} .
+
+For factors with internal logical dependencies, we use struc-tured updates that account for the conditional entropy within the variational family; see Section A.3 for the full derivation. The variational posterior factors for BHPI take the following forms: 
+
+q(ze) = Bernoulli (r∗ 
+
+> e
+
+),q(mv,e | ze) = (1 − ze)δ0(mv,e ) + zeBernoulli (ρ∗
+
+> v,e
+
+),q(γj,e | ze) = (1 − ze)δ0(γj,e ) + zeBernoulli  ν∗
+
+> j,e
+
+ ,q(μj,e | γj,e ) = (1 − γj,e )δ0(μj,e ) + γj,e N (μ∗
+
+> j,e
+
+, σ 2∗
+
+> j,e
+
+),q(αv ) = N (α∗ 
+
+> v
+
+, ϱ 2∗ 
+
+> v
+
+), q(ωi,v ) = PG (1 , ˜η∗ 
+
+> i,v
+
+),q(re) = Beta (a∗(r) 
+
+> e
+
+, b ∗(r) 
+
+> e
+
+), q(ρv,e ) = Beta (a∗(ρ) 
+
+> v,e
+
+, b ∗(ρ) 
+
+> v,e
+
+),q(νj,e ) = Beta (a∗(ν) 
+
+> j,e
+
+, b ∗(ν) 
+
+> j,e
+
+), q(σ2
+
+> μ
+
+) = Inv-Gamma (a∗
+
+> μ
+
+, b ∗
+
+> μ
+
+).
+
+The quantities r∗ 
+
+> e
+
+, ρ ∗
+
+> v,e
+
+, ν ∗
+
+> j,e
+
+, μ ∗
+
+> j,e
+
+, σ 2∗
+
+> j,e
+
+, α ∗ 
+
+> v
+
+, ϱ 2∗ 
+
+> v
+
+, ˜η∗ 
+
+> i,v
+
+, a ∗(r) 
+
+> e
+
+,
+
+b∗(r) 
+
+> e
+
+, a ∗(ρ) 
+
+> v,e
+
+, b ∗(ρ) 
+
+> v,e
+
+, a ∗(ν) 
+
+> j,e
+
+, b ∗(ν) 
+
+> j,e
+
+, a ∗
+
+> μ
+
+, b ∗ 
+
+> μ
+
+are the variational pa-rameters optimized to approximate the true posterior dis-tribution. The optimized variational parameters aggregate evidence across the hierarchy. For instance, the update for 
+
+q(ze) serves as a “global switch” that prunes redundant hyperedges by consolidating evidence from downstream disease-membership and feature-sparsity terms. 
+
+Repulsion-Aware Variational Updates A unique chal-lenge arises in updating the feature–hyperedge activation variables {γj,e }. Although q(γj,e | ze) is Bernoulli, its pa-rameter ν∗ 
+
+> j,e
+
+is coupled across hyperedges by the repulsion 
+
+Algorithm 1 Repulsion-Aware Coordinate Ascent (BHPI) 
+
+Input: Data Y, max hyperedges E, repulsion strength λ.
+
+Initialize: Variational parameters. 
+
+while ELBO not converged do // 1. Augmentation & Baseline Updates 
+
+Update P ´olya–Gamma variables ˜η∗ 
+
+> i,v
+
+and baseline in-tercepts α∗ 
+
+> v
+
+, ϱ2∗ 
+
+> v
+
+(Equations (9) and (10)) 
+
+// 2. Update Latent Risk-Hypergraph Structure for each hyperedge e = 1 , . . . , E do 
+
+Update risk-factor effects μ∗
+
+> j,e
+
+, σ2∗ 
+
+> j,e
+
+when γj,e = 1 
+
+(Equations (11) and (12)) Compute expected overlap Eq [O(Se, S e′ ]
+
+Update effect activation ν∗ 
+
+> j,e
+
+(Equation (13)) Update disease memberships ρ∗ 
+
+> v,e
+
+(Equation (14)) Update hyperedge existence r∗ 
+
+> e
+
+(Equation (15)) 
+
+end for // 3. Hyperparameter Update 
+
+Update a∗(r) 
+
+> e
+
+, b∗(r) 
+
+> e
+
+, a ∗(ρ) 
+
+> v,e
+
+, b ∗(ρ) 
+
+> v,e
+
+, a ∗(ν) 
+
+> j,e
+
+, b ∗(ν) 
+
+> j,e
+
+, a ∗
+
+> μ
+
+, b ∗
+
+> μ
+
+end while return Optimized variational posterior distributions. 
+
+prior Rrep (γj | H). This transforms the update into a com-petitive selection process where hyperedges associated with the same risk factor j compete for activation. Under CAVI, the optimal log-odds for ν∗ 
+
+> j,e
+
+incorporates the expected log-prior contribution from all competing hyperedges {e′̸ = e}.Concretely, we replace the discrete combinatorial overlap with its variational expectation Eq [O(Se, S e′ )] . This term acts as a repulsive penalty, suppressing the simultaneous ac-tivation of multiple hyperedges that cover redundant disease pathways for the same feature, which ensures the discovery of a parsimonious and identifiable latent structure. The com-plete coordinate ascent procedure is summarized in Algo-rithm 1, with full mathematical derivations for each update rule provided in Section A.4. The per-iteration complexity of BHPI is approximately O(N · E · (P + V )) , ensuring that the computational cost scales linearly with the number of samples and the dimensions of the latent hypergraph. 
+
+# 5. Experiments 
+
+We evaluate the proposed BHPI framework to assess its ability to recover latent disease hypergraph structure mod-ulated by shared risk factors, while maintaining accurate disease risk prediction. While predictive performance can be evaluated on held-out outcomes, assessment of latent hypergraph structure requires access to ground truth, which is unavailable in real-world EHR data. We therefore rely on simulations to evaluate both predictive accuracy and structural recovery under controlled conditions. 1
+
+> 1
+
+Our implementation is publicly available at https:// github.com/Naomi-Ding/BHPI .
+
+5Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference                                          
+
+> Table 1. Predictive performance on simulated data. Mean (standard deviation) AUC on held-out test sets ( ×100). BHPI achieves competitive disease risk prediction while simultaneously inferring latent disease pathways. MODEL N= 2000 N= 5000
+> BHPI 75.00 (0.83) 74.63 (0.46)
+> OPTIMAL LOGISTIC 73.86 (0.83) 74.15 (0.49) LGBM 68.50 (0.94) 69.68 (0.56) BINARY RELEVANCE 71.50 (0.94) 72.61 (0.64) CLASSIFIER CHAIN 71.25 (1.03) 72.63 (0.63) RA KEL D70.99 (0.95) 72.50 (0.60)
+> Table 2. Recovery of latent risk structure on simulated data (N= 2000 ). Metrics include agreement between true and inferred disease-level risk contributions β, AUC for recovering hypergraph structure H, and risk-factor-hyperedge associations γ(×100). MODEL COR (β, ˆβ)H-AUC γ-AUC BHPI 97.85 96.96 97.85 OPTIMAL LOGISTIC 295.65 --
+
+5.1. Simulation Design and Baselines 
+
+We generate a latent disease hypergraph with V = 30 
+
+diseases and E = 5 hyperedges, where each hyperedge corresponds to a latent disease pathway driven by shared risk-factor influences. Diseases may participate in mul-tiple hyperedges, reflecting overlapping risk mechanisms. Risk-factor influences on latent hypergraphs γ ∈ RP ×E
+
+are sparse: the first predictor affects multiple hyperedges, while each remaining predictor influences a single hyper-edge. Nonzero influences are drawn from N (μ, 0.52),with μ ∈ { 1, 1.5, 2}. Risk factors are independently sam-pled from a standard normal distribution. Disease out-comes are generated from the hypergraph-induced logistic model (Equations (1) and (2)). We evaluate sample sizes 
+
+N = 2000 and N = 5000 . For each setting, we perform 50 independent replicates using a 60/20/20 split for training, validation, and testing. Hyperparameters are selected on the validation set, and all reported predictive metrics are computed on held-out test data. We compare BHPI against (1) optimally tuned logistic regression (ridge, lasso, elastic-net), (2) LightGBM (LGBM), and (3) standard multi-label learning baselines: Binary Relevance, Classifier Chains, and RAkELd. These baselines represent independent, au-toregressive, and higher-order label-interaction modeling strategies, respectively. While they are strong predictive competitors, they do not infer latent disease pathways or quantify uncertainty over shared mechanisms. 
+
+5.2. Predictive Performance and Structural Recovery                      
+
+> 2Hand γrecovery are not defined for logistic regression.
+> Table 3. Role of the repulsion prior in hypergraph identifiabil-ity ( N= 2000 ). Predictive performance remains stable, while repulsion reduces redundancy and improves stability of inferred hyperedges, as measured by Jaccard similarity (Jacc.), overlap coefficients (Ov.) across replicates, effective hyperedge (Eff.#/RF) per risk factor (RF), and hyperedge overlap per RF (Ov./RF).
+> λAUC JACC .OV.EFF .#/RF OV./RF
+> = 0 74.69 0.542 0.800 1.992 0.097
+> >075.00 0.565 0.812 1.874 0.082
+
+Table 1 shows that BHPI achieves predictive performance comparable to optimally tuned logistic regression and con-sistently outperforms tree-based and multi-label baselines. Despite its structured inductive bias, BHPI does not sacrifice predictive accuracy. The inferred disease-level risk contri-butions closely match the ground truth, with correlations ex-ceeding 97%. Beyond prediction, BHPI accurately recovers latent hypergraph structure. The inferred disease–hyperedge incidence matrices closely match the ground truth, with AUCs exceeding 95% (Table 2). Risk-factor–hyperedge associations are also recovered with high fidelity, indicating that BHPI disentangles overlapping disease pathways rather than collapsing them into pairwise associations. In contrast, independent logistic regression cannot recover latent hyper-graph structure by construction. A visualization of the true and inferred incidence matrices for a representative replicate is provided in Section B.1. This comparison demonstrates that the inferred hypergraph closely matches the true block structure with limited redundancy, identifying risk-factor-modulated disease pathways rather than collapsing them into pairwise associations. 
+
+5.3. Ablation of the Repulsion Prior 
+
+We examine the role of the repulsion prior by setting λ = 0 ,which allows a single risk factor to select highly overlapping hyperedges. Removing the repulsion prior has negligible impact on predictive accuracy, indicating that repulsion is not required for strong prediction. However, it substantially increases redundancy and instability in the inferred hyper-graph, as reflected by reduced Jaccard similarity across replicates, greater hyperedge overlap, and a larger effective number of active hyperedges per risk factor (Table 3). These results demonstrate that the repulsion prior primarily im-proves identifiability and interpretability of latent disease pathways, rather than acting as a predictive regularizer. 
+
+5.4. Sensitivity Analysis 
+
+We evaluate the robustness of BHPI to the repulsion strength 
+
+λ, and the assumed maximum number of latent hyperedges 
+
+E. Across a wide range of λ values, predictive performance remains stable, indicating that BHPI does not rely on fine-tuned regularization. Increasing λ sharpens posterior inclu-6Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference   
+
+> Figure 2. Predictive stability via structured information sharing. Distribution of per-disease ∆AUC scores (relative to tuned Logis-tic Regression) stratified by disease prevalence. While baselines like LGBM and Classifier Chains exhibit high variance and insta-bility for rare diseases, BHPI maintains robust performance by borrowing strength across shared latent pathways.
+
+sion probabilities (PIPs) and reduces redundancy between inferred hyperedges, leading to more stable latent structures across random splits. We further examine robustness to over-specification of model capacity by varying E, which shows that even when E is over-specified, the effective number of active hyperedges remains stable, demonstrating effective self-regularization. We view E as a capacity upper bound. In practice, choose the smallest E at which performance plateaus and the active edge count remains well below E.Detailed sensitivity curves and structural diagnostics are provided in Section B.3. 
+
+5.5. UK Biobank: Disentangling Real-World Disease Pathways 
+
+We evaluate BHPI on the UK Biobank (UKB), a large prospective cohort study linked to electronic health records (Bycroft et al., 2018). UKB serves as a challenging bench-mark for multi-disease modeling due to its high-dimensional feature space, extreme class imbalance, and the complex de-pendency structure among chronic conditions. After quality control, the final analysis cohort comprises N ≈ 277 , 291 
+
+participants. Additional dataset characteristics are summa-rized in Table 9. We consider P = 71 baseline risk factors spanning demographics, biomarkers, lifestyle exposures, and socioeconomic indicators. Disease outcomes comprise 
+
+V = 66 chronic conditions derived from ICD-10 codes and mapped to Phecodes to improve phenotypic coherence and reduce coding noise (Wu et al., 2019; Wei et al., 2017). Disease prevalence ranges from common to extremely rare, placing the analysis firmly in the rare-disease regime. We set the maximum number of latent hyperedges to E = 60 to allow sufficient flexibility for capturing heterogeneous and overlapping disease pathways. Model performance is eval-uated using stratified 60/20/20 train–validation–test splits, with results averaged over 100 independent random splits. 
+
+Predictive Stability in the Rare-Disease Regime We first assess whether BHPI improves risk estimation without sacrificing predictive accuracy. Figure 2 reports per-disease                      
+
+> Table 4. Predictive calibration on UKB (66 diseases). BHPI ties for best Brier and achieves ECE <0.01 .MODEL ECE BRIER
+> BHPI 0.005 0.041
+> OPTIMAL LOGISTIC 0.001 0.041
+> LGBM 0.021 0.043 BINARY RELEVANCE 0.031 0.045 CLASSIFIER CHAIN 0.044 0.052 RA KEL D0.006 0.042
+
+∆AUC relative to optimally tuned logistic regression, strati-fied by disease prevalence. While performance on common diseases is largely saturated across all methods, a clear di-vergence emerges for low-prevalence conditions. Discrimi-native baselines, such as LightGBM and Classifier Chains, exhibit high-variance failure modes as evidenced by long lower tails in the ∆AUC distribution. In contrast, BHPI consistently matches or exceeds the baseline, suggesting that BHPI stabilizes estimation for rare diseases by linking them to related conditions through shared latent structure. Beyond discrimination, BHPI also achieves competitive predictive calibration across all baselines (Table 4). It ties for best Brier and achieves ECE = 0 .005 (< 0.01 ); the small gap with Logistic is expected since Logistic optimizes per-disease calibration independently. 
+
+Hypergraph-Specific Predictive Advantage To isolate the source of BHPI’s advantage, we compare against two structured baselines (Table 5; mean ∆AUC ×100 vs per-disease logistic): Bayesian Factor Regression (BFR) with K
+
+shared latent factors and per-disease loadings, which tests generic low-rank latent sharing; and a clique-expanded pair-wise graph derived from the same discovered hyperedges, which tests whether pairwise reduction preserves the predic-tive signal. Only BHPI consistently outperforms optimally tuned logistic regression across prevalence groups, with the advantage strongest for rare diseases ( +1 .2, p = 3 × 10 −5). BFR matches or underperforms logistic at every preva-lence group, the best-performing clique-expanded variant achieves at most +0 .1 in any group, and a learnable clique-GCN does not exceed chance (AUC ≈ 0.50). The clique fail-ure has a clear representational reading: the clique-expanded graph is ∼ 65% dense even at PIP threshold 0.9, so clique expansion collapses higher-order group membership into near-uniform pairwise links. The primary advantage of the hypergraph representation is therefore structural selectiv-ity : BHPI identifies which diseases co-participate in the same risk-modulated pathway, an assignment that clique expansion cannot recover by construction. 
+
+Disentangling Risk-Modulated Pathways with Posterior Uncertainty To understand the structural mechanisms un-7Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference                                          
+
+> Figure 3. Disentanglement and parsimony of risk-modulated pathways. (Left) PIPs for disease–pathway membership and risk-factor activation, revealing sparse, overlapping disease organization and pathway-specific modulation with quantified uncertainty. (Right) Summary of the thresholded structure ( PIP (ze= 1) >0.5), showing compact pathway sizes, limited pathway participation per disease and risk factor, and overall structural parsimony.
+> Table 5. Mean ∆AUC ( ×100 ) versus per-disease Logistic on UKB, with paired Wilcoxon p-values, stratified by disease prevalence. Only BHPI consistently outperforms Logistic. Bold indicates entries with p < 0.05 .METHOD <2% 2–5% ≥5%
+> BHPI +1.2 (3 E-5) +0.2 (0.11) +0.2 (0.02) BFR K= 20 +0.1 (0.29) -0.3 (2 E-6) -0.2 (4 E-6) BFR K= 30 -0.5 (1 E-3) -0.8 (2 E-8) -0.5 (4 E-6) CLIQUE -EXP .+0.1 (0.01) -0.2 (5 E-4) -0.3 (4 E-6)
+
+derlying the observed predictive stability, we examine how BHPI disentangles latent disease pathways while enforcing parsimony. Figure 3(left) visualizes posterior uncertainty over the learned latent structure. The disease–hyperedge matrix exhibits a sparse, approximately block-structured pattern with overlapping memberships, indicating that dis-eases cluster into localized latent pathways while remaining allowed to participate in multiple contexts. In contrast, the risk-factor–hyperedge matrix reveals selective, pathway-specific activation patterns, highlighting that different pre-dictors modulate distinct subsets of latent pathways rather than acting globally. Together, these patterns demonstrate that BHPI disentangles risk-factor–specific disease organi-zation while explicitly quantifying uncertainty over both pathway composition and modulation. As posterior mass concentrates, this uncertainty resolves into a compact global structure. Although initialized with 
+
+E = 60 candidate hyperedges, the posterior concentrates on a parsimonious solution, with an expected 27.2 active hyperedges (28 with PIP > 0.5). As summarized in Fig-ure 3(right), most hyperedges involve 2–12 diseases, while individual diseases participate in multiple pathways, reflect-ing heterogeneous risk contexts. On the predictor side, in-dividual risk factors act on a limited number of pathways. This structured sparsity distinguishes BHPI from dense la-tent factor models that conflate unrelated mechanisms and hinder interpretability. At the global scale, Figure 4(left) provides a view of how risk factors propagate through latent pathways to affect multiple diseases. The resulting structure                          
+
+> Table 6. PIP-stratified mean AUC ( ×100 ) on UKB (66 diseases) and simulation. High-PIP edges retain essentially all predictive signal; low-PIP edges are close to chance. CONFIGURATION <2% 2–5% ≥5% SIMU
+> FULL MODEL 68.9 69.7 71.6 75.7
+> HIGH -PIP ONLY 68.7 69.6 71.6 75.6
+> RANDOM SUBSET 60.2 61.3 62.7 65.7 LOW -PIP ONLY 58.6 55.0 57.4 51.2
+
+is modular, overlapping and sparse, offering an interpretable summary of heterogeneous disease etiology learned from EHR data. To verify that this discovered structure carries genuine pre-dictive signal, we compare the full model against three masked variants: high-PIP edges only, low-PIP edges only, and a size-matched random subset (full per-prevalence breakdown in Table 6). The high-PIP edges retain essen-tially all predictive signal, while low-PIP edges are close to chance. This confirms that the posterior structure car-ries meaningful information rather than reflecting arbitrary uncertainty. 
+
+Pathway-Level Illustration To concretely demonstrate how our framework translates global posterior structure into interpretable mechanisms, we visualize representative la-tent pathways and their modulating risk factors in Figure 4 (right). This case study highlights three core properties of BHPI: sparse disease membership , selective risk-factor ac-tivation , and graded posterior uncertainty encoded directly through learned PIPs. 
+
+(a) Divergent risk pathways (mechanism disentangle-ment): A single risk factor may influence multiple, non-redundant disease pathways. For example, Smoking is inferred as a modulator for multiple non-redundant hyper-edges. BHPI disentangles its impact into distinct biological contexts: a respiratory injury pathway grouping Emphy-sema , Asthma , Chronic airway obstruction and Chronic bronchitis , consistent with the well-documented smoking– 8Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference      
+
+> Figure 4. Global visualization of the learned risk-factor–to-disease pathway structure (hyperedges with PIP (ze= 1) >0.5) (Left). Risk factors (top) connect to latent pathways (middle), which in turn connect to diseases (bottom). Edge widths correspond to PIPs, illustrating uncertainty, overlap, and modular risk propagation. Node annotations report the number of incident pathways. Pathway-level illustration (Right). Divergent risk pathways for smoking (top) and convergent disease pathways involving Dementia (bottom).
+
+respiratory disease association (Forey et al., 2011), and a separate mucosal damage pathway linking Ulcers , which aligns with smoking as a peptic-ulcer risk factor (Kurata & Nogawa, 1997). The repulsion prior prevents these path-ways from collapsing into a single dense factor, avoiding the entanglement typical of standard multitask models. 
+
+(b) Convergent disease contexts (heterogeneity discov-ery): Conversely, BHPI captures disease heterogeneity by allowing a single disease to participate in multiple path-ways. For instance, Dementia belongs simultaneously to: (i) Vascular-cognitive pathways: shared with Cerebrovas-cular disease and Heart valve disease , modulated by Age ,
+
+Sex , and sensory impairment, indicating vascular etiology and supported by the vascular cognitive impairment lit-erature (Van Der Flier et al., 2018); (ii) Geriatric frailty pathway: grouped with Osteoporosis , Incontinence , and 
+
+Mobility issues , driven by Age , General pain , reflecting sys-temic decline and frailty–dementia clustering (Kojima et al., 2016); (iii) Metabolic-neurodegenerative pathway: linked with Type 2 Diabetes and Atherosclerosis , modulated by Al-cohol frequency and Smoking , consistent with metabolic ex-haustion mechanisms and the diabetes–dementia link (Xue et al., 2019). Independent multimorbidity clustering studies also report closely related respiratory, cardiometabolic, neu-ropsychiatric, and dementia-linked patterns (Grande et al., 2021; Sim ˜oes et al., 2017). These overlapping memberships demonstrate how BHPI represents heterogeneous disease etiology without enforcing mutually exclusive clustering. 
+
+# 6. Conclusion and Discussion 
+
+We introduced Bayesian Hypergraph Pathway Inference (BHPI) , a structured framework for multi-disease modeling that discovers latent, risk-factor–modulated disease path-ways. By representing pathways as hyperedges and allowing risk factors to act directly on this structure, BHPI captures higher-order and overlapping disease organization that is inaccessible to pairwise or independent outcome models. Across simulations and the UK Biobank, BHPI demon-strates stable prediction in the rare-disease regime, identifies parsimonious and non-redundant pathways via a repulsion prior, and provides calibrated posterior uncertainty over both pathway composition and risk-factor modulation through structured variational inference, offering interpretability be-yond black-box architectures. Several extensions warrant future investigation. Incorpo-rating longitudinal EHR data would allow BHPI to model disease trajectories and time-varying pathway activation. Scaling inference to high-dimensional genetic features may require stochastic or amortized variants of the current frame-work. Although BHPI focuses on associative structure learn-ing, integrating causal constraints or Mendelian randomiza-tion could further strengthen causal interpretability. Finally, while the linear observation model preserves interpretability and closed-form CAVI updates, coupling the hypergraph structure with nonlinear predictors is a promising extension. 
+
+# Acknowledgements 
+
+This research has been conducted using the UK Biobank Resource under application number 176775. This work was supported by National Institutes of Health (NIH) un-der awards R01AG081413, R01EB034720, R01AG068191. We thank the anonymous reviewers for their constructive feedback, which substantially improved the paper. 9Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+# Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here. 
+
+# References 
+
+Antelmi, A., Cordasco, G., Polato, M., Scarano, V., Spag-nuolo, C., and Yang, D. A survey on hypergraph repre-sentation learning. ACM Computing Surveys , 56(1):1–38, 2023. Argyriou, A., Evgeniou, T., and Pontil, M. Convex multi-task feature learning. Machine Learning , 73(3):243–272, 2008. Barab ´asi, A.-L., Gulbahce, N., and Loscalzo, J. Network medicine: a network-based approach to human disease. 
+
+Nature Reviews Genetics , 12(1):56–68, 2011. Bishop, C. M. and Nasrabadi, N. M. Pattern recognition and machine learning , volume 4. Springer, 2006. Blei, D. M., Kucukelbir, A., and McAuliffe, J. D. Varia-tional inference: A review for statisticians. Journal of the American Statistical Association , 112(518):859–877, 2017. Blumm, N., Barabasi, A.-L., and Christakis, N. A dynamic network approach for the study of human. PLoS compu-tational biology , 5:e1000353, 05 2009. Bonilla, E. V., Chai, K., and Williams, C. Multi-task Gaus-sian process prediction. Advances in neural information processing systems , 20, 2007. Bycroft, C., Freeman, C., Petkova, D., Band, G., Elliott, L. T., Sharp, K., Motyer, A., Vukcevic, D., Delaneau, O., O’Connell, J., et al. The UK Biobank resource with deep phenotyping and genomic data. Nature , 562(7726): 203–209, 2018. Caruana, R. Multitask learning. Machine Learning , 28(1): 41–75, 1997. Choi, E., Bahadori, M. T., Schuetz, A., Stewart, W. F., and Sun, J. Doctor ai: Predicting clinical events via recurrent neural networks. In Machine learning for healthcare conference , pp. 301–318. PMLR, 2016. Evgeniou, T. and Pontil, M. Regularized multi–task learning. In Proceedings of the tenth ACM SIGKDD international conference on Knowledge discovery and data mining , pp. 109–117, 2004. Feng, Y., You, H., Zhang, Z., Ji, R., and Gao, Y. Hypergraph neural networks. In Proceedings of the AAAI confer-ence on artificial intelligence , volume 33, pp. 3558–3565, 2019. Firth, D. Bias reduction of maximum likelihood estimates. 
+
+Biometrika , 80(1):27–38, 1993. Forey, B. A., Thornton, A. J., and Lee, P. N. Systematic review with meta-analysis of the epidemiological evi-dence relating smoking to COPD, chronic bronchitis and emphysema. BMC Pulmonary Medicine , 11:36, 2011. Gelman, A., Jakulin, A., Pittau, M. G., and Su, Y.-S. Aweakly informative default prior distribution for logistic and other regression models. The Annals of Applied Statistics , 2:1360–1383, Dec 2008. Goh, K.-I., Cusick, M. E., Valle, D., Childs, B., Vidal, M., and Barab ´asi, A.-L. The human disease network. 
+
+Proceedings of the National Academy of Sciences , 104 (21):8685–8690, 2007. Grande, G., Marengoni, A., Vetrano, D. L., Roso-Llorach, A., Rizzuto, D., Zucchelli, A., Qiu, C., Fratiglioni, L., and Calder ´on-Larra ˜naga, A. Multimorbidity burden and dementia risk in older adults: the role of inflammation and genetics. Alzheimer’s & Dementia , 17(5):768–776, 2021. Harutyunyan, H., Khachatrian, H., Kale, D. C., Ver Steeg, G., and Galstyan, A. Multitask learning and benchmark-ing with clinical time series data. Scientific data , 6(1):96, 2019. Heinze, G. and Schemper, M. A solution to the problem of separation in logistic regression. Statistics in medicine ,21(16):2409–2419, 2002. Hoerl, A. E. and Kennard, R. W. Ridge regression: Biased estimation for nonorthogonal problems. Technometrics ,12(1):55–67, 1970. Jensen, A. B., Moseley, P. L., Oprea, T. I., Ellesøe, S. G., Eriksson, R., Schmock, H., Jensen, P. B., Jensen, L. J., and Brunak, S. Temporal disease trajectories condensed from population-wide registry data covering 6.2 million patients. Nature communications , 5(1):4022, 2014. King, G. and Zeng, L. Logistic regression in rare events data. Political Analysis , 9:137 – 163, 2001. Kojima, G., Taniguchi, Y., Iliffe, S., and Walters, K. Frailty as a predictor of Alzheimer disease, vascular dementia, and all dementia among community-dwelling older peo-ple: a systematic review and meta-analysis. Journal of the American Medical Directors Association , 17(10):881– 888, 2016. 10 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+Kurata, J. H. and Nogawa, A. N. Meta-analysis of risk factors for peptic ulcer: nonsteroidal antiinflammatory drugs, Helicobacter pylori, and smoking. Journal of Clinical Gastroenterology , 24(1):2–17, 1997. Lafferty, J. and Blei, D. Correlated topic models. Advances in neural information processing systems , 18, 2005. Li, W. and McCallum, A. Pachinko allocation: DAG-structured mixture models of topic correlations. In Pro-ceedings of the 23rd international conference on Machine learning , pp. 577–584, 2006. Menche, J., Sharma, A., Kitsak, M., Ghiassian, S. D., Vidal, M., Loscalzo, J., and Barab ´asi, A.-L. Uncovering disease-disease relationships through the incomplete interactome. 
+
+Science , 347(6224):1257601, 2015. Miotto, R., Li, L., Kidd, B. A., and Dudley, J. T. Deep pa-tient: an unsupervised representation to predict the future of patients from the electronic health records. Scientific reports , 6(1):26094, 2016. Murray, C. J., Aravkin, A. Y., Zheng, P., Abbafati, C., Abbas, K. M., Abbasi-Kangevari, M., Abd-Allah, F., Abdelalim, A., Abdollahi, M., Abdollahpour, I., et al. Global bur-den of 87 risk factors in 204 countries and territories, 1990–2019: a systematic analysis for the global burden of disease study 2019. The lancet , 396(10258):1223–1249, 2020. Polson, N. G., Scott, J. G., and Windle, J. Bayesian in-ference for logistic models using p ´olya–gamma latent variables. Journal of the American Statistical Associa-tion , 108(504):1339–1349, 2013. Rajkomar, A., Oren, E., Chen, K., Dai, A. M., Hajaj, N., Hardt, M., Liu, P. J., Liu, X., Marcus, J., Sun, M., et al. Scalable and accurate deep learning with electronic health records. NPJ digital medicine , 1(1):18, 2018. Rasmy, L., Xiang, Y., Xie, Z., Tao, C., and Zhi, D. Med-BERT: pretrained contextualized embeddings on large-scale structured electronic health records for disease pre-diction. NPJ digital medicine , 4(1):86, 2021. Read, J., Pfahringer, B., Holmes, G., and Frank, E. Classifier chains for multi-label classification. Machine Learning ,85(3):333–359, 2011. Sim ˜oes, D., Ara ´ujo, F. A., Severo, M., Monjardino, T., Cruz, I., Carmona, L., and Lucas, R. Patterns and consequences of multimorbidity in the general population: there is no chronic disease management without rheumatic disease management. Arthritis Care & Research , 69(1):12–20, 2017. Skou, S. T., Mair, F. S., Fortin, M., Guthrie, B., Nunes, B. P., Miranda, J. J., Boyd, C. M., Pati, S., Mtenga, S., and Smith, S. M. Multimorbidity. Nature Reviews Disease Primers , 8(1):48, 2022. Standley, T., Zamir, A., Chen, D., Guibas, L., Malik, J., and Savarese, S. Which tasks should be learned together in multi-task learning? In International conference on machine learning , pp. 9120–9132. PMLR, 2020. Tibshirani, R. Regression shrinkage and selection via the lasso. Journal of the Royal Statistical Society Series B: Statistical Methodology , 58(1):267–288, 1996. Tsoumakas, G. and Vlahavas, I. Random k-labelsets: An en-semble method for multilabel classification. In European conference on machine learning , pp. 406–417. Springer, 2007. Van Der Flier, W. M., Skoog, I., Schneider, J. A., Pantoni, L., Mok, V., Chen, C. L. H., and Scheltens, P. Vascular cognitive impairment. Nature Reviews Disease Primers ,4(1):18003, 2018. Wei, W.-Q., Bastarache, L. A., Carroll, R. J., Marlo, J. E., Osterman, T. J., Gamazon, E. R., et al. Evaluating phe-codes, clinical classification software, and ICD-9-CM codes for phenome-wide association studies in the elec-tronic health record. PLOS ONE , 12(7):e0175508, 2017. Wu, P., Gifford, A., Meng, X., Li, X., Campbell, H., Varley, T., Zhao, J., Carroll, R., Bastarache, L., Denny, J. C., Theodoratou, E., and Wei, W.-Q. Mapping ICD-10 and ICD-10-CM codes to Phecodes: Workflow development and initial evaluation. JMIR Medical Informatics , 7(4): e14325, 2019. Xu, R., Ali, M. K., Ho, J. C., and Yang, C. Hypergraph trans-formers for EHR-based clinical predictions. AMIA Joint Summits on Translational Science Proceedings , 2023: 582–591, 2023. Xue, M., Xu, W., Ou, Y.-N., Cao, X.-P., Tan, M.-S., Tan, L., and Yu, J.-T. Diabetes mellitus and risks of cognitive impairment and dementia: a systematic review and meta-analysis of 144 prospective studies. Ageing Research Reviews , 55:100944, 2019. Yadati, N., Nimishakavi, M., Yadav, P., Nitin, V., Louis, A., and Talukdar, P. Hypergcn: A new method for training graph convolutional networks on hypergraphs. Advances in neural information processing systems , 32, 2019. Zhang, Y. and Yang, Q. A survey on multi-task learning. 
+
+IEEE Transactions on Knowledge and Data Engineering ,34(12):5586–5609, 2022. 11 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+Zhang, Z., Cui, H., Xu, R., Xie, Y., Ho, J. C., and Yang, C. TACCO: Task-guided co-clustering of clinical con-cepts and patient visits for disease subtyping based on EHR data. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining ,pp. 6324–6334. Association for Computing Machinery, 2024. Zhou, D., Huang, J., and Sch ¨olkopf, B. Learning with hypergraphs: Clustering, classification, and embedding. 
+
+Advances in neural information processing systems , 19, 2006. Zou, H. and Hastie, T. Regularization and variable selection via the elastic net. Journal of the Royal Statistical Society: Series B (Statistical Methodology) , 67(2):301–320, 2005. 12 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+# A. Variational Inference Details 
+
+In this section, we provide the full derivation of the Coordinate Ascent Variational Inference (CAVI) updates summarized in the main text. We begin by defining the complete log-joint probability of the generative model and the variational family. 
+
+A.1. P´ olya–Gamma Augmentation 
+
+To handle the non-conjugate logistic likelihood, we introduce auxiliary variables ωi,v | ˜ηi,v ∼ P´ olya–Gamma (1 , ˜ηi,v ). This transforms the conditional posterior of the log-odds into a Gaussian form. 
+
+A.2. Full Joint Posterior 
+
+Let Θ =
+
+
+
+z(RE ), r(RE ), m(RV ×E ), ρ(RV ×E ), μ(Rp×E ), γ(Rp×E ), ν(Rp×E ), σ 2
+
+> μ
+
+, α
+
+
+
+denote the full set of model parameters, and the observed data is Y. For each subject i, the diagnosis status for disease v is yi,v ∈ { 0, 1} if the disease is observed after the baseline, otherwise yi,v = NA . To eliminate the effect of prior-baseline diagnosis, we define a risk indicator Ri,v = I(no diagnosis of v before baseline). Then the disease outcome is only defined when Ri,v = 1 . Conditional on ω where ωi,v ∼ P´ olya–Gamma (1 , 0) , the log-likelihood becomes 
+
+log p(Y | Θ, ω) ∝ X
+
+> i,v
+
+Ri,v 
+
+
+
+κi,v ˜ηi,v − 12 ωi,v ˜η2
+
+> i,v
+
+
+
+, where κi,v = yi,v − 1/2. (3) The posterior distribution of the model parameters is expressed as 
+
+p(Θ | Y , ω) ∝ p(Y | Θ, ω)p(Θ),
+
+where p(Θ) is the prior distribution over all parameters. Figure 5 gives the full probabilistic graphical model corresponding to the generative process introduced in Section 3.3 of the main text. Thus, the posterior kernel is given by 
+
+p(Θ | Y , ω) ∝p(Y | Θ, ω) ·
+
+> E
+
+Y
+
+> e=1
+> V
+
+Y
+
+> v=1
+
+p(mv,e | ρv,e , z e)p(ρv,e ) ·
+
+> E
+
+Y
+
+> e=1
+
+p(ze | re)p(re)
+
+·
+
+> p
+
+Y
+
+> j=1
+> E
+
+Y
+
+> e=1
+
+p(μj,e | γj,e , σ 2
+
+> μ
+
+) ·
+
+> p
+
+Y
+
+> j=1
+
+p(γj | z, m, νj ) ·
+
+> p
+
+Y
+
+> j=1
+> E
+
+Y
+
+> e=1
+
+p(νj,e ) · p(σ2
+
+> μ
+
+). (4) The log posterior is 
+
+log p(Θ | Y , ω) ∝ log p(Y | Θ, ω) + 
+
+> E
+
+X
+
+> e=1
+> V
+
+X
+
+> v=1
+
+log p(mv,e | ρv,e , z e)+
+
+> E
+
+X
+
+> e=1
+
+log p(ze | re) + 
+
+> p
+
+X
+
+> j=1
+> E
+
+X
+
+> e=1
+
+log p(μj,e | γj,e , σ 2
+
+> μ
+
+) + 
+
+> p
+
+X
+
+> j=1
+
+log p(γj | z, m, νj )+
+
+> E
+
+X
+
+> e=1
+> V
+
+X
+
+> v=1
+
+log p(ρv,e ) + 
+
+> E
+
+X
+
+> e=1
+
+log p(re) + 
+
+> p
+
+X
+
+> j=1
+> E
+
+X
+
+> e=1
+
+log p(νj,e ) + log p(σ2
+
+> μ
+
+), (5) with log p(γj | z, m, νj ) = 
+
+> E
+
+X
+
+> e=1
+
+ze [γj,e log νj,e + (1 − γj,e ) log(1 − νj,e )] 
+
+− ωγ
+
+X
+
+> e1<e 2
+
+O(He1 , H e2 ) · ze1 γj,e 1 · ze2 γj,e 2 .
+
+A.3. Optimal Updating Rule under Coordinate Ascent 
+
+Since the posterior in (4) is computationally intractable, we can use the variational inference (VI) framework (Blei et al., 2017), which approximates the posterior distribution of the model parameters by a simpler distribution. To develop an 13 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+re ρv,e νj,e 
+
+ze mv,e γj,e 
+
+Hv,e μj,e σ2
+
+> μ
+
+βj,v αv
+
+yi,v xi
+
+E
+
+V P × E
+
+P × V V
+
+N × V N
+
+Hypergraph structure Predictor–hyperedge effects Coefficients Observed 
+
+Figure 5. Plate diagram of the BHPI generative model. The generative DAG is: ze → mv,e ; Hv,e = zemv,e ; {ze, H } → γj,e → μj,e ;
+
+βj,v = d−1
+
+> v
+
+P 
+
+> e
+
+Hv,e μj,e ; yi,v ∼ Bernoulli (σ(αv + x⊤ 
+
+> i
+
+βv )) .
+
+efficient VI algorithm, we first approximate the posterior by minimizing the Kullback-Leibler (KL) divergence between a variational family q(Θ) and the true posterior, i.e., 
+
+q∗(Θ) = arg min 
+
+> q(Θ)∈Q
+
+KL (q(Θ)|| p(Θ | Y )) ,
+
+where KL (q(Θ)|| p(Θ | Y )) = Eq(Θ) [log q(Θ)] − Eq(Θ) [log p(Θ | Y )] = Eq(Θ) [log q(Θ)] − Eq(Θ) [log p(Θ, Y)] + log p(Y).
+
+Recall that the evidence lower bound (ELBO) is defined as 
+
+L(q) = Eq(Θ) [log p(Θ, Y)] − Eq(Θ) [log q(Θ)] = log p(Y) − KL (q(Θ)|| p(Θ | Y )) , (6) so that minimizing this KL divergence is equivalent to maximizing the ELBO. To present the derivation of the update rule of our proposed structured VI scheme, which preserves the logical dependencies emphasized in Section 4.2, we start with the generic mean-field variational inference (MFVI) (Blei et al., 2017), which assumes mutual independence across each parameter, to express the variational distribution q(Θ) in a factorized form, i.e., q(Θ) = Q 
+
+> j
+
+qj (θj ). Therefore, we can find q∗(Θ) using a coordinate ascent variational inference (CAVI) (Bishop & Nasrabadi, 2006) to iteratively optimize each factor of the mean-field variational distribution while holding the others fixed, until a convergence criterion is met. That is, the optimal qj (θj ) under MFVI is given by maximizing the ELBO in Equation 14 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+(6) in terms of the factor θj , i.e., q∗ 
+
+> j
+
+(θj ) = arg max qj (θj ) L(qj ), where 
+
+L(qj ) = Eqj (θj )
+
+Eq−j (Θ−j ) {log p(θj , Θ−j , Y)} − Eqj (θj ) [log qj (θj )] = Eqj (θj )
+
+log  exp Eq−j (Θ−j ) {log p(θj , Θ−j , Y)} − Eqj (θj ) [log qj (θj )] = Eqj (θj ) [log ˜ p (θj | Θ−j , Y)] − Eqj (θj ) [log qj (θj )] + log( const )= −KL (qj (θj )|| ˜p (θj | Θ−j , Y)) + log( const ),
+
+˜p(θj | Θ−j , Y) = exp Eq−j (Θ−j ) {log p(θj , Θ−j , Y)}
+
+const ,
+
+Θ−j denotes all variables in Θ except θj , q−j (Θ−j ) = Q  
+
+> k̸=j
+
+qk(θk), and const is a normalization term irrelevant to qj (θj ).So the optimal update for qj (θj ) is obtained by minimizing the KL divergence between qj (θj ) and ˜p (θj | Θ−j , Y), that is, 
+
+q∗ 
+
+> j
+
+(θj ) = arg min    
+
+> qj(θj)
+
+KL (qj (θj )|| ˜p (θj | Θ−j , Y)) = ˜ p (θj | Θ−j , Y) ∝ exp Eq−j (Θ−j ) {log p(Θ, Y)} . (7) By matching qj (θj ) to the conditional distribution of θj given the observed data Y and the other factors, this update rule (7) makes q∗ 
+
+> j
+
+(θj ) as close to the true posterior as possible within the distribution family. In our structured variational family, certain variables are modeled via conditional distributions (e.g., q(mv,e , z e) = q(mv,e |
+
+ze)q(ze)). To derive the optimal update for the marginal factor q(θj ), we isolate the terms in the ELBO that depend on θj .Unlike the standard mean-field case, the entropy term Eq [log q] now contributes a conditional entropy component, leading to the update rule: 
+
+q∗(θj ) ∝ exp Eq(Θ\θj ) {log p(Θ, Y) − log q(Θ−j | θj )} , (8) 
+
+A.4. Coordinate Ascent Updates for BHPI 
+
+A.4.1. F ROM OPTIMAL FACTORS TO ITERATIVE UPDATES .Equations (9)–(15) give the optimal coordinate-wise variational factors under CAVI. In implementation, the corresponding variational parameters are updated by substituting the current expectations of the other factors into these expressions at each iteration, as summarized in Algorithm 1. For example, the update for q(ze) takes current estimates of q(mv,e ) and 
+
+q(γj,e ) as inputs and outputs a closed-form Bernoulli parameter, exactly the substitution that Algorithm 1 executes at each coordinate step. 
+
+P´ olya–Gamma augmented variables 
+
+q(ωi,v ) = P´ olya–Gamma (1 , ˜η∗ 
+
+> i,v
+
+), where ˜η∗ 
+
+> i,v
+
+=
+
+q
+
+Eq
+
+˜η2
+
+> i,v
+
+. (9) 
+
+Disease-specific intercepts q∗(αv ) = N (α∗ 
+
+> v
+
+, ϱ 2∗ 
+
+> v
+
+), where 
+
+ϱ2∗ 
+
+> v
+
+=
+
+" NX
+
+> i=1
+
+Ri,v Eq [ωi,v ] + 1
+
+σ2
+
+> α
+
+#−1
+
+, α∗ 
+
+> v
+
+= ϱ2∗
+
+> v
+
+( NX
+
+> i=1
+
+Ri,v (κi,v − Eq [ωi,v ] Eq [ηi,v ]) 
+
+)
+
+. (10) 
+
+Risk-factor-hyperedge effects q∗(μj,e | γj,e ) = (1 − γj,e ) · δ0 + γj,e · N (μ∗
+
+> j,e
+
+, σ 2∗
+
+> j,e
+
+), where 
+
+σ2∗ 
+
+> j,e
+
+= Eq
+
+σ−2
+
+> μ
+
+ +
+
+> N
+
+X
+
+> i=1
+> V
+
+X
+
+> v=1
+
+Ri,v x2 
+
+> i,j
+
+Eq [ωi,v ] Eq
+
+s2 
+
+> v,e
+
+| ze = 1 !−1
+
+, s v,e = d−1 
+
+> v
+
+Hv,e , a \(j,e ) 
+
+> i,v
+
+= ηi,v − xi,j sv,e μj,e ,
+
+(11) 
+
+μ∗ 
+
+> j,e
+
+= σ2∗
+
+> j,e
+
+( NX
+
+> i=1
+> V
+
+X
+
+> v=1
+
+Ri,v xi,j 
+
+
+
+κi,v − Eq [ωi,v ]
+
+n
+
+Eq
+
+h
+
+a\(j,e ) 
+
+> i,v
+
+| ze = 1 
+
+i
+
++ α∗
+
+> v
+
+o 
+
+Eq [sv,e | ze = 1] 
+
+)
+
+. (12) 
+
+Risk-factor-hyperedge effect selector q(γj,e | ze) = (1 − ze) · δ0 + ze · Bernoulli (ν∗
+
+> j,e
+
+), where logit (ν∗
+
+> j,e
+
+) = 12
+
+(   μ∗
+
+> j,e
+
+2
+
+σ2∗
+
+> j,e
+
++ log( σ2∗
+
+> j,e
+
+) − Eq
+
+log σ2
+
+> μ
+
+)
+
++ Eq
+
+
+
+log νj,e 
+
+1 − νj,e 
+
+
+
+− λ X 
+
+> e′̸=e
+
+Eq [O(Se, S e′ )] re′ νj,e ′ . (13) 15 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+Node-hyperedge incidence q(mv,e | ze) = (1 − ze) · δ0 + ze · Bern (ρ∗
+
+> v,e
+
+), where logit (ρ∗
+
+> v,e
+
+) = Eq
+
+
+
+log ρv,e 
+
+1 − ρv,e 
+
+
+
++ d−1 
+
+> v
+
+Eq [ζv,e | ze = 1] − 12 d−2 
+
+> v
+
+Eq [ξv,e | ze = 1] 
+
+− λ
+
+> P
+
+X
+
+> j=1
+
+νj,e 
+
+X 
+
+> e′̸=e
+
+Eq [O (Se, S e′ | mv,e = 1) − O (Se, S e′ | mv,e = 0)] re′ νj,e ′ , (14) 
+
+ζv,e =
+
+> N
+
+X
+
+> i=1
+
+Ri,v 
+
+
+
+κi,v − ωi,v 
+
+h
+
+a(−e) 
+
+> i,v
+
++ αv
+
+i 
+
+bi,e , ξv,e =
+
+> N
+
+X
+
+> i=1
+
+Ri,v ωi,v b2
+
+> i,e
+
+, bi,e = x⊤ 
+
+> i
+
+μe, a(−e) 
+
+> i,v
+
+= ηi,v − sv,e bi,e .
+
+Hyperedge existence q(ze) = Bernoulli (r∗ 
+
+> e
+
+), where logit (r∗ 
+
+> e
+
+) = 
+
+> V
+
+X
+
+> v=1
+
+ρ∗
+
+> v,e
+
+
+
+d−1 
+
+> v
+
+Eq [ζv,e | ze = 1] − 12 d−2 
+
+> v
+
+Eq [ξv,e | ze = 1] 
+
+
+
++ Eq
+
+
+
+log re
+
+1 − re
+
+
+
++
+
+> V
+
+X
+
+> v=1
+
+ρ∗
+
+> v,e
+
+Eq [log ρv,e ] − log ρ∗
+
+> v,e
+
+ + (1 − ρ∗
+
+> v,e
+
+) Eq [log(1 − ρv,e )] − log(1 − ρ∗
+
+> v,e
+
+)
+
++
+
+> P
+
+X
+
+> j=1
+
+ν∗
+
+> j,e
+
+Eq [log νj,e ] − log ν∗
+
+> j,e
+
+ + (1 − ν∗
+
+> j,e
+
+) Eq [log(1 − νj,e )] − log(1 − ν∗
+
+> j,e
+
+)
+
+− λ
+
+> P
+
+X
+
+> j=1
+
+νj,e 
+
+X 
+
+> e′̸=e
+
+Eq [O(Se, S e′ )] re′ νj,e ′ . (15) 
+
+Slab variance q(σ2
+
+> μ
+
+) = Inverse-Gamma  a∗
+
+> μ
+
+, b∗
+
+> μ
+
+, where a∗ 
+
+> μ
+
+= aμ + 12
+
+PPj=1 
+
+PEe=1 r∗ 
+
+> e
+
+ν∗
+
+> j,e
+
+, and b∗ 
+
+> μ
+
+= bμ +
+
+> 12
+
+PPj=1 
+
+PEe=1 r∗ 
+
+> e
+
+ν∗
+
+> j,e
+
+h μ∗
+
+> j,e
+
+2 + σ2∗
+
+> j,e
+
+i
+
+.
+
+Prior inclusion probabilities 
+
+q(νj,e ) = Beta (a∗(ν) 
+
+> j,e
+
+, b ∗(ν) 
+
+> j,e
+
+), where a∗(ν) 
+
+> j,e
+
+= aν + r∗ 
+
+> e
+
+ν∗
+
+> j,e
+
+, b∗(ν) 
+
+> j,e
+
+= bν + 1 − r∗ 
+
+> e
+
+ν∗
+
+> j,e
+
+.q(ρv,e ) = Beta (a∗(ρ) 
+
+> v,e
+
+, b ∗(ρ) 
+
+> v,e
+
+), where a∗(ρ) 
+
+> v,e
+
+= aρ + r∗ 
+
+> e
+
+ρ∗
+
+> v,e
+
+, b∗(ρ) 
+
+> v,e
+
+= bρ + 1 − r∗ 
+
+> e
+
+ρ∗
+
+> v,e
+
+.q(re) = Beta (a∗(r) 
+
+> e
+
+, b ∗(r) 
+
+> e
+
+), where a∗(r) 
+
+> e
+
+= ar + r∗ 
+
+> e
+
+, b∗(r) 
+
+> e
+
+= br + 1 − r∗ 
+
+> e
+
+.
+
+A.4.2. E XPECTATIONS 
+
+Eq [log ρv,e ] = ψ
+
+
+
+a∗(ρ)
+
+> v,e
+
+
+
+− ψ
+
+
+
+a∗(ρ) 
+
+> v,e
+
++ b∗(ρ)
+
+> v,e
+
+
+
+, Eq [log(1 − ρv,e )] = ψ
+
+
+
+b∗(ρ)
+
+> v,e
+
+
+
+− ψ
+
+
+
+a∗(ρ) 
+
+> v,e
+
++ b∗(ρ)
+
+> v,e
+
+
+
+Eq [log νj,e ] = ψ
+
+
+
+a∗(ν)
+
+> j,e
+
+
+
+− ψ
+
+
+
+a∗(ν) 
+
+> j,e
+
++ b∗(ν)
+
+> j,e
+
+
+
+, Eq [log(1 − νj,e )] = ψ
+
+
+
+b∗(ν)
+
+> j,e
+
+
+
+− ψ
+
+
+
+a∗(ν) 
+
+> j,e
+
++ b∗(ν)
+
+> j,e
+
+
+
+Eq [log re] = ψ
+
+
+
+a∗(r)
+
+> e
+
+
+
+− ψ
+
+
+
+a∗(r) 
+
+> e
+
++ b∗(r)
+
+> e
+
+
+
+, Eq [log(1 − re)] = ψ
+
+
+
+b∗(r)
+
+> e
+
+
+
+− ψ
+
+
+
+a∗(r) 
+
+> e
+
++ b∗(r)
+
+> e
+
+
+
+Eq
+
+σ−2
+
+> μ
+
+ = a∗
+
+> μ
+
+b∗
+
+> μ
+
+, Eq
+
+log σ2
+
+> μ
+
+ = log b∗ 
+
+> μ
+
+− ψ(a∗
+
+> μ
+
+), Eq [ωi,v ] = 12η∗
+
+> i,v
+
+tanh  η∗ 
+
+> i,v
+
+/2
+
+Eq [O(Se, S e′ )] ≈
+
+ρ∗·,e 
+
+⊤ ρ∗·,e ′
+
+min 
+
+PVv=1 ρ∗
+
+> v,e
+
+, PVv=1 ρ∗
+
+> v,e ′
+
+
+
+h(v=1)  
+
+> e
+
+=  ρ∗
+
+> 1,e
+
+, ρ ∗
+
+> 2,e
+
+, . . . , ρ ∗
+
+> v−1,e
+
+, 1, ρ ∗
+
+> v+1 ,e
+
+, . . . , ρ ∗
+
+> V,e
+
+⊤ , h(v=0)  
+
+> e
+
+=  ρ∗
+
+> 1,e
+
+, ρ ∗
+
+> 2,e
+
+, . . . , ρ ∗
+
+> v−1,e
+
+, 0, ρ ∗
+
+> v+1 ,e
+
+, . . . , ρ ∗
+
+> V,e
+
+⊤ ,
+
+Eq [O (Se, S e′ | mv,e = 1) − O (Se, S e′ | mv,e = 0)] = 
+
+h
+
+h(v=1) 
+
+> e
+
+i⊤
+
+ρ∗·,e ′
+
+min 
+
+
+
+∥h(v=1)  
+
+> e
+
+∥1, PVv=1 ρ∗
+
+> v,e ′
+
+ −
+
+h
+
+h(v=0) 
+
+> e
+
+i⊤
+
+ρ∗·,e ′
+
+min 
+
+
+
+∥h(v=0)  
+
+> e
+
+∥1, PVv=1 ρ∗
+
+> v,e ′
+
+
+
+16 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+Eq [ηi,v ] = d−1
+
+> vE
+
+X
+
+> e=1
+
+r∗ 
+
+> e
+
+ρ∗
+
+> v,e
+
+
+
+> P
+
+X
+
+> j=1
+
+xi,j ν∗
+
+> j,e
+
+μ∗
+
+> j,e
+
+ , Eq [˜ ηi,v ] = Eq [ηi,v ] + α∗
+
+> v
+
+Eq
+
+b2 
+
+> i,e
+
+| ze = 1  =
+
+> P
+
+X
+
+> j=1
+
+x2 
+
+> i,j
+
+ν∗
+
+> j,e
+
+h μ∗
+
+> j,e
+
+2 + σ2∗
+
+> j,e
+
+i
+
++ 2 X
+
+> j<k
+
+xi,j xi,k ν∗
+
+> j,e
+
+μ∗
+
+> j,e
+
+ν∗
+
+> k,e
+
+μ∗
+
+> k,e
+
+Eq
+
+η2
+
+> i,v
+
+ = d−2
+
+> v
+
+X
+
+> e
+
+r∗ 
+
+> e
+
+ρ∗
+
+> v,e
+
+Eq
+
+b2 
+
+> i,e
+
+| ze = 1  + 2 d−2
+
+> v
+
+X
+
+> e<e ′
+
+r∗ 
+
+> e
+
+r∗ 
+
+> e′
+
+ρ∗
+
+> v,e
+
+ρ∗
+
+> v,e ′
+
+
+
+> P
+
+X
+
+> j=1
+
+xi,j ν∗
+
+> j,e
+
+μ∗
+
+> j,e
+
+
+
+> P
+
+X
+
+> j=1
+
+xi,j ν∗ 
+
+> j,e ′
+
+μ∗
+
+> j,e ′
+
+
+
+Eq
+
+˜η2
+
+> i,v
+
+ = Eq
+
+η2
+
+> i,v
+
+ +
+
+h
+
+(α∗ 
+
+> v
+
+)2 + ϱ2∗
+
+> v
+
+i
+
++ 2 α∗ 
+
+> v
+
+Eq [ηi,v ]
+
+Eq [ξv,e | ze = 1] = 
+
+> N
+
+X
+
+> i=1
+
+Ri,v Eq [ωi,v ] Eq
+
+b2 
+
+> i,e
+
+| ze = 1 
+
+Eq
+
+h
+
+a(−e)
+
+> i,v
+
+i
+
+= Eq [ηi,v ] − d−1 
+
+> v
+
+r∗ 
+
+> e
+
+ρ∗
+
+> v,e
+
+
+
+> P
+
+X
+
+> j=1
+
+xi,j ν∗
+
+> j,e
+
+μ∗
+
+> j,e
+
+
+
+Eq
+
+h
+
+a\(j,e ) 
+
+> i,v
+
+| ze = 1 
+
+i
+
+= Eq
+
+h
+
+a(−e)
+
+> i,v
+
+i
+
++ d−1 
+
+> v
+
+ρ∗
+
+> v,e
+
+
+
+> P
+
+X
+
+> j=1
+
+xi,j ν∗
+
+> j,e
+
+μ∗
+
+> j,e
+
+ − d−1 
+
+> v
+
+ρ∗
+
+> v,e
+
+xi,j ν∗
+
+> j,e
+
+μ∗
+
+> j,e
+
+Eq [ζv,e | ze = 1] = 
+
+> N
+
+X
+
+> i=1
+
+Ri,v 
+
+
+
+κi,v − Eq [ωi,v ]
+
+n
+
+Eq
+
+h
+
+a(−e)
+
+> i,v
+
+i
+
++ α∗
+
+> v
+
+o 
+
+> P
+
+X
+
+> j=1
+
+xi,j ν∗
+
+> j,e
+
+μ∗
+
+> j,e
+
+
+
+# B. Additional Simulation Results 
+
+B.1. Visualization of Structure Discovery 
+
+Figure 6. Recovery of latent disease hypergraph. Heatmaps show true (left) and inferred (right) disease hypergraph incidence matrices for a representative simulation replicate. BHPI accurately recovers overlapping hypergraph structure with limited redundancy. 
+
+To qualitatively assess the structural recovery performance of BHPI, we visualize the latent disease hypergraph incidence matrix H and the risk-factor-hyperedge effect selector γj , along with the effect size μj . Figure 6 compares the ground-truth incidence matrix against the posterior mean inferred by BHPI. The model successfully identifies the block-diagonal structure and handles overlapping memberships without introducing significant noise. Furthermore, Figure 7 illustrates that BHPI accurately captures the sparsity and magnitude of feature effects, correctly assigning risk factors to their respective latent pathways. 17 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference     
+
+> Figure 7. Bar plots show true versus inferred effects of predictor 1 across hyperedges, measured by PIP of γand magnitude μ.
+
+B.2. Ablation: Role of the Repulsion Prior                                       
+
+> Table 7. Role of the repulsion prior in hypergraph identifiability ( N= 2000 and 5000 ). Predictive performance remains stable, while repulsion reduces redundancy and improves stability of inferred hyperedges, as measured by Jaccard similarity (Jacc.), overlap coefficients (Ov.) across replicates, effective hyperedge (Eff.#/RF) per risk factor (RF), and hyperedge overlap per RF (Ov./RF).
+> N= 2000 N= 5000
+> λAUC JACC .OV.EFF .#/RF OV./RF AUC JACC .OV.EFF .#/RF OV./RF
+> = 0 74.69 0.542 0.800 1.992 0.097 74.51 0.581 0.836 2.392 0.116
+> >075.00 0.565 0.812 1.874 0.082 74.63 0.619 0.830 2.151 0.102
+
+The repulsion prior Rrep is designed to enforce identifiability by penalizing redundant latent pathways. In this section, we expand on the results in Table 3, as displayed in Table 7. While predictive AUC is relatively insensitive to the repulsion strength λ, the structural metrics, specifically Jaccard similarity, show marked improvement when λ > 0. Without repulsion, the model often instantiates multiple near-identical hyperedges to represent a single disease pathway, leading to a “collapsed” latent space that is difficult to interpret. 
+
+B.3. Sensitivity Analysis 
+
+We evaluate the robustness of BHPI to the repulsion strength λ, and the assumed maximum number of latent hyperedges E.Regarding λ, as shown in Figure 8, we observe a wide “stable regime” where the balance between sparsity and structure recovery remains optimal, suggesting that BHPI does not require extensive hyperparameter tuning to achieve reliable results. Moreover, from Figure 9, we find that increasing λ sharpens posterior inclusion probabilities (PIPs) and reduces redundancy between inferred hyperedges, leading to more stable latent structures across random splits. We further examine robustness to over-specification of model capacity by varying E as displayed in Figure 10, and find that as E increases beyond the “true” number of pathways, the variational factor q(ze) effectively prunes the excess components. This shows that even when E is over-specified, the effective number of active hyperedges remains stable, demonstrating effective self-regularization. 
+
+B.4. Structural-PIP Calibration: CAVI vs MCMC 
+
+To validate the accuracy of the structural posterior, we compute PIP expected calibration error (ECE) for H, z, and γ on the paper’s simulation setting and compare against a full Gibbs sampler with P ´olya–Gamma augmentation ( μ = 1 .5, σ = 0 .5,50 replications; Table 8). These results show that CAVI and MCMC achieve comparable PIP calibration on the structural variables (ECE 0.03 –0.09 for both methods), with MCMC performing slightly better. Structural recovery and predictive AUC are also closely matched. Taken together, these diagnostics support the more precise statement that BHPI provides well-supported structural posterior uncertainty and competitive predictive calibration. 18 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference       
+
+> Figure 8. Robustness of predictive performance to repulsion strength across model sizes. Each panel fixes the number of hyperedges E;predictive AUC remains stable across a wide range of λand E, indicating robustness to both hyperparameters.
+> Figure 9. Structural stability, sharpness, and redundancy across repulsion strengths.
+
+B.5. Initialization Stability and Identifiability 
+
+Empirically, after permutation alignment, the hypergraph overlap across different initializations on the same data is 
+
+0.905 ± 0.062 in simulation and 0.875 ± 0.044 on UKB. Cross-replicate overlap in simulation is 0.81 − 0.83 . Predictive variability remains small throughout (AUC std 0.01). In practice, we run CAVI from multiple initializations and select the model with the highest validation performance. Among the selected models, the core hypergraph structure — which edges are active and which diseases are confidently assigned — is consistent; the remaining differences involve borderline diseases whose membership PIPs are near 0.5. Exact hyperedge-level identifiability is not guaranteed: the repulsion prior reduces redundancy but does not break permutation symmetry of the latent hyperedges. For this reason, our scientific claims do not rely on a unique labeled decomposition, but instead on quantities that are stable under relabeling: permutation-aligned overlap, pairwise co-membership structure, disease-level effects, and held-out predictions. 
+
+# C. Additional Results for UKB Application 
+
+In this section, we provide additional information and results for the UK Biobank (UKB) application. This includes detailed dataset characteristics in Table 9, receiver operating characteristic (ROC) analysis for several representative diseases, and an expanded library of qualitative case studies that illustrate the clinical interpretability of the learned latent hypergraph. 19 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+Figure 10. Robustness to over-specification of the maximum number of hyperedges E, measured by the posterior expected number of active hyperedges. 
+
+Table 8. Structural-PIP calibration: CAVI vs full Gibbs MCMC sampler (mean ± s.d. across 50 replicates). ECE is the per-variable expected calibration error of the PIPs. Method H overlap ECE H ECE z ECE γ Pred. AUC MCMC 0.885 ± 0.068 0.081 ± 0.019 0.058 ± 0.053 0.039 ± 0.032 0.747 ± 0.009 
+
+CAVI 0.850 ± 0.054 0.087 ± 0.026 0.028 ± 0.081 0.050 ± 0.030 0.741 ± 0.008 
+
+The cohort characteristics, summarized in Table 9, reflect the high-dimensional and imbalanced nature of real-world clinical data. 
+
+Table 9. UK Biobank dataset characteristics. The cohort exhibits high-dimensional predictors, substantial class imbalance, and a mix of common and rare disease outcomes. 
+
+STATISTIC VALUE 
+
+PARTICIPANTS (N ) 277,291 RISK FACTORS (P ) 71 DISEASE OUTCOMES (V ) 66 
+
+Disease Prevalence (%) 
+
+MEDIAN 1.8% RANGE (M IN – M AX ) 1.0% – 21.8% 
+
+Data Sparsity 
+
+AVG . D ISEASES PER PATIENT 4.2 OBSERVATION WINDOW 19 Y EARS 
+
+C.1. ROC for Representative Diseases 
+
+To complement the aggregate performance metrics reported in the main text, we visualize the predictive stability of BHPI across diseases with varying prevalence. As shown in Figure 11, BHPI maintains competitive AUCs even for low-prevalence conditions (e.g., prevalence ≈ 1% ), where baseline models often exhibit higher variance or sensitivity to class imbalance. 
+
+C.2. Extended Qualitative Case Studies 
+
+While the main text highlights the “Smoking” and “Dementia” examples, to further validate the clinical utility of BHPI, we provide an extensive analysis of additional latent pathways recovered from the UK Biobank data. These cases illustrate the model’s ability to handle complex geriatric, metabolic, and psychiatric comorbidities. C.2.1. D IVERGENT RISK PATHWAYS 
+
+Case A: The Systemic Impact of Sleeplessness. We examine “Sleeplessness / Insomnia,” a risk factor often treated as a generic marker of poor health. BHPI reveals that this feature actively modulates distinct phenotypic pathways: (i) 
+
+20 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference  
+
+> Figure 11. ROC curves of representative diseases for CAVI, logistic regression, and LGBM, with the prevalence indicated in brackets.
+
+The Mental Health Pathway (Hyperedge 22): Sleeplessness is a primary driver of a highly specific cluster ( V = 1 )containing only Other mental disorder . Modulated by Sex and Chest pain , this captures the bidirectional link between sleep and psychiatric instability. (ii) The Cardio-Metabolic Pathway (Hyperedge 16): In contrast, Sleeplessness also drives Hyperedge 16 ( V = 17 ), co-occurring with Obesity , Type 2 Diabetes , and Sleep apnea . Here, it interacts with lifestyle predictors like Diet and BMI , reflecting the physiological impact of sleep deprivation on metabolic regulation. (iii) The Genitourinary Pathway (Hyperedge 27): Finally, it links to Hyperplasia of prostate , capturing the symptom-driven association where nocturia disrupts sleep. 
+
+Case B: Alcohol: Organ Toxicity vs. Caloric Impact. (i) The Liver-Toxicity Pathway (Hyperedge 18): Alcohol intake predicts Hyperedge 18 ( V = 11 ), which includes Nonalcoholic liver disease and Cholelithiasis . This isolates the direct toxic/inflammatory effects on the hepatic system. (ii) The Pure Obesity Pathway (Hyperedge 25): Distinct from organ damage, Alcohol intake also drives Hyperedge 25 ( V = 1 ), which contains only Obesity . This isolates the caloric contribution of alcohol to body mass separate from pathophysiological organ damage. C.2.2. C ONVERGENT DISEASE PATHWAYS 
+
+Case C: Type 2 Diabetes Contexts. (i) Active Metabolic Syndrome (Hyperedge 16): Diabetes appears with Obesity 
+
+and Sleep apnea , modulated by modifiable lifestyle factors (Diet, Physical activity). This represents the active, manageable phase of the disease. (ii) Cardiovascular End-Point (Hyperedge 4): Diabetes also appears in Hyperedge 4 ( V = 29 ), dominated by Heart failure and Atherosclerosis . Here, predictors are markers of established damage ( Chest pain , Wheeze ), modeling Diabetes as a contributor to terminal cardiovascular collapse. 
+
+Case D: Obesity Heterogeneity. (i) Frailty & Structural Pathway (Hyperedge 20): Obesity co-occurs with Prolapse of vaginal walls and Osteoporosis , modulated by Age and Sex . (ii) Metabolic-Digestive Pathway (Hyperedge 13): Obesity is grouped with Type 2 Diabetes and Liver disease , driven by Employment and Walking frequency .21 Disentangling Latent Risk Pathways via Bayesian Hypergraph Inference 
+
+# D. Computational Cost 
+
+D.1. Theoretical Complexity 
+
+As discussed in Section 4.2, the per-iteration computational complexity of the BHPI coordinate ascent algorithm is approximately O(N · E · (P + V )) . This linear scaling with respect to the number of samples ( N ), the number of risk factors (P ), and the number of diseases ( V ) is a critical property that enables the framework to handle biobank-scale data. The primary computational bottleneck lies in the simultaneous update of the hyperedge existence ze, the disease-membership indicators mv,e and the feature-effect selectors γj,e , all of which require aggregating information across all N individuals in the dataset. However, because the variational updates for different hyperedges e ∈ { 1, . . . , E } are independent within each iteration, the algorithm can be trivially parallelized to further reduce wall-clock time in high-performance computing environments. 
+
+D.2. Empirical Scaling with Model Capacity 
+
+To evaluate how the “structural discovery tax” grows with model complexity, we measured the training time on the simulated dataset while varying the maximum number of latent hyperedges E (E = 10 , 15 and 20 respectively). As shown in the scaling results in Table 10, the training time grows linearly with E. This confirms that our repulsion-aware inference remains stable even as model capacity increases, as the variational “global switch” r∗ 
+
+> e
+
+efficiently prunes redundant components without incurring exponential computational overhead. While the proposed BHPI model incurs a higher computational cost during the training phase compared to independent baseline models, it remains highly scalable and practical for biobank-scale datasets. As summarized in Table 10, the training time for nearly 300,000 samples is approximately 74 minutes, a manageable one-time “structural discovery tax” for learning a complex, interpretable latent hypergraph. Crucially, while BHPI requires more time for one-time structural discovery, its inference latency remains on par with simple logistic regression ( < 0.1 ms), ensuring the model’s suitability for real-time clinical decision support even at biobank scale. While BHPI requires more memory (27.8 GB) to maintain its structured variational parameters, this remains well within the capacity of standard modern research servers, proving that the model can effectively scale to the high-dimensional requirements of modern EHR analysis without compromising on predictive speed.                                                         
+
+> Table 10. Wall-clock runtimes for simulated data and UK Biobank application ( N≈277 ,291 ;V= 66 ). Synthetic tests were conducted on a single-core Intel Xeon 6342 (4 GB RAM); UK Biobank results utilized 4 cores and 60 GB RAM. BHPI maintains inference latency on par with Logistic Regression ( <0.1ms) while providing structured latent discovery.
+> Simulated Data (Section 5.1) UK Biobank Model Runtime (sec)
+> N= 2000
+> Runtime (sec)
+> N= 5000 Model Memory (GB) Training (min) Inference (ms)
+> Logistic Reg. 0.12 0.23 Logistic Reg. 3.74 5.82 <0.1
+> LightGBM 3.56 6.14 LightGBM 3.18 17.41 0.48 Binary Relevance 0.30 0.61 Binary Relevance 1.45 12.24 0.29 Classifier Chains 0.33 0.68 Classifier Chains 1.36 8.23 0.56 RAkELd 0.59 1.35 RAkELd 1.39 3.06 1.56
+> BHPI ( E= 10 /15 /20 )1.6/2.7/3.2 4.1/6.4/9.3 BHPI ( E= 60 )27.8 73.7 <0.1
+
+22
