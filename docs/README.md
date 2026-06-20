@@ -6,64 +6,56 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-19
-- 运行时间：2026-06-19 21:52:26 UTC
+- 最新运行日期：2026-06-20
+- 运行时间：2026-06-20 20:34:57 UTC
 - 运行状态：成功
-- 本次总论文数：14
-- 精读区：3
-- 速读区：11
+- 本次总论文数：12
+- 精读区：6
+- 速读区：6
 
 ### 今日简报（AI）
-1) 今日精读3篇、速读11篇，重点聚焦临床可解释AI与单细胞扰动预测两大前沿方向。
-2) 最值得关注的是《Medical Heuristic Learning》（9.0/10）提出的可审计临床规则框架，以及《Elucidating the Design Space of Generative Models for Single-Cell Perturbation Prediction》（8.0/10）对生成模型设计空间的系统解析。
-3) 建议优先精读这两篇高评论文，分别关注LLM驱动的可解释决策规则构建和单细胞扰动预测模型的设计关键。
-- 详情：[/202606/19/README](/202606/19/README)
+今日处理12篇论文，精读6篇、速读6篇，聚焦空间组学、遗传风险评分及GPU加速变异检测等前沿方向。最值得关注精读高分《OmicsNavigator》与《LT-FGRS》，分别实现空间组学可审计假设验证和群体遗传风险估计；速读中《cuBayes》的1分钟全基因组SNV检测尤为亮眼。建议普通读者优先了解《cuBayes》的算法效率突破，以及《PertDiffBench》对单细胞扰动预测模型的基准评估。
+- 详情：[/202606/20/README](/202606/20/README)
 
 ### 精读区论文标签
-1. [Medical Heuristic Learning: An LLM-Driven Framework for Interpretable and Auditable Clinical Decision Rules](/202606/19/2606.16337v1-medical-heuristic-learning-an-llm-driven-framework-for-interpretable-and-auditable-clinical-decision-rules)  
+1. [OmicsNavigator: An auditable scientific partner for scalable hypothesis validation in spatial omics](/202606/20/biorxiv-10-1101-2025-07-21-665821-v2-omicsnavigator-an-auditable-scientific-partner-for-scalable-hypothesis-validation-in-spatial-omics)  
    标签：评分：9.0/10、query:med-ai
-   evidence：基于LLM的可解释临床决策规则，用于医疗数据
-2. [Elucidating the Design Space of Generative Models for Single-Cell Perturbation Prediction](/202606/19/biorxiv-10-64898-2026-06-15-732063-v1-elucidating-the-design-space-of-generative-models-for-single-cell-perturbation-prediction)  
+   evidence：基于大语言模型的自主系统用于空间组学数据分析，实现零样本生物标志物检索
+2. [LT-FGRS: a unifying R-package for the estimation of family-based genetic liabilities at population-scale](/202606/20/biorxiv-10-64898-2026-06-15-731517-v1-lt-fgrs-a-unifying-r-package-for-the-estimation-of-family-based-genetic-liabilities-at-population-scale)  
+   标签：评分：9.0/10、query:gwas
+   evidence：用于家族遗传易损性估计的统一R包，直接相关于PRS计算
+3. [Medical Heuristic Learning: An LLM-Driven Framework for Interpretable and Auditable Clinical Decision Rules](/202606/20/2606.16337v1-medical-heuristic-learning-an-llm-driven-framework-for-interpretable-and-auditable-clinical-decision-rules)  
    标签：评分：8.0/10、query:med-ai
-   evidence：面向单细胞扰动预测的生成模型（虚拟细胞）
-3. [Fine-mapping candidate neuropsychiatric regulatory variants using cell type-aware comparative genomics](/202606/19/biorxiv-10-64898-2026-06-17-732994-v1-fine-mapping-candidate-neuropsychiatric-regulatory-variants-using-cell-type-aware-comparative-genomics)  
+   evidence：基于LLM的临床决策规则框架，符合医学大语言模型要求
+4. [Medical Heuristic Learning: An LLM-Driven Framework for Interpretable and Auditable Clinical Decision Rules](/202606/20/2606.16337v2-medical-heuristic-learning-an-llm-driven-framework-for-interpretable-and-auditable-clinical-decision-rules)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：基于LLM的临床决策规则框架，符合医学大语言模型要求
+5. [How Post-Training Shapes Biological Reasoning Models](/202606/20/2606.16517v1-how-post-training-shapes-biological-reasoning-models)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：使用强化学习和基因组数据对生物推理模型进行后训练分析
+6. [Large-scale prediction of transcription factor binding across human cell types informs regulatory genomics and reveals promiscuous occupancy associated with chromatin contacts](/202606/20/biorxiv-10-64898-2026-06-16-732527-v1-large-scale-prediction-of-transcription-factor-binding-across-human-cell-types-informs-regulatory-genomics-and-reveals-promiscuous-occupancy-associated-with-chromatin-contacts)  
    标签：评分：8.0/10、query:gwas
-   evidence：利用细胞类型感知的精细定位方法识别性状相关调控变异
+   evidence：使用ATAC-seq大规模预测转录因子结合的平台，为GWAS解释提供调控基因组学信息
 
 ### 速读区论文标签
-1. [Medical Heuristic Learning: An LLM-Driven Framework for Interpretable and Auditable Clinical Decision Rules](/202606/19/2606.16337v2-medical-heuristic-learning-an-llm-driven-framework-for-interpretable-and-auditable-clinical-decision-rules)  
+1. [Hypergraph Variable Selection with False Discovery Rate Control](/202606/20/2606.20514v1-hypergraph-variable-selection-with-false-discovery-rate-control)  
+   标签：评分：7.0/10、query:gwas
+   evidence：超图变量选择与错误发现率控制
+2. [cuBayes: GPU accelerated FreeBayes that achieves 1-minute whole-genome SNV calling while maintaining algorithmic semantics](/202606/20/biorxiv-10-64898-2026-06-12-731910-v1-cubayes-gpu-accelerated-freebayes-that-achieves-1-minute-whole-genome-snv-calling-while-maintaining-algorithmic-semantics)  
+   标签：评分：7.0/10、query:gwas
+   evidence：GPU加速的变异检测器实现快速全基因组SNV检测，是GWAS计算算法关键
+3. [PertDiffBench: Benchmarking Diffusion Models for Single-Cell Perturbation Response Prediction](/202606/20/biorxiv-10-64898-2026-06-13-732013-v1-pertdiffbench-benchmarking-diffusion-models-for-single-cell-perturbation-response-prediction)  
    标签：评分：7.0/10、query:med-ai
-   evidence：LLM驱动的可解释临床决策规则框架
-2. [A Bayesian spatio-temporal nearest neighbor Gaussian process model for pooled genetic data](/202606/19/2606.19743v1-a-bayesian-spatio-temporal-nearest-neighbor-gaussian-process-model-for-pooled-genetic-data)  
-   标签：评分：7.0/10、query:gwas
-   evidence：提出用于汇总遗传数据的贝叶斯时空NNGP模型，适用于GWAS
-3. [OmicsNavigator: An auditable scientific partner for scalable hypothesis validation in spatial omics](/202606/19/biorxiv-10-1101-2025-07-21-665821-v2-omicsnavigator-an-auditable-scientific-partner-for-scalable-hypothesis-validation-in-spatial-omics)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：利用大语言模型进行空间组学数据假设验证
-4. [Effect of population structure and stabilizing selection on quantitative genetic variation](/202606/19/biorxiv-10-64898-2026-03-29-714437-v2-effect-of-population-structure-and-stabilizing-selection-on-quantitative-genetic-variation)  
-   标签：评分：7.0/10、query:gwas
-   evidence：群体结构和选择对数量遗传变异的理论分析，对GWAS解释具有指导意义
-5. [Annotation-Based Gene-Peak Links Improve Regulatory Network Prediction of Gene Expression in Human Kidney Multi-Omics](/202606/19/biorxiv-10-64898-2026-06-12-731741-v1-annotation-based-gene-peak-links-improve-regulatory-network-prediction-of-gene-expression-in-human-kidney-multi-omics)  
-   标签：评分：7.0/10、query:gwas
-   evidence：基于注释的基因-峰点链接用于功能基因组学整合
-6. [How Post-Training Shapes Biological Reasoning Models](/202606/19/2606.16517v1-how-post-training-shapes-biological-reasoning-models)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：在基因组数据上使用强化学习训练生物推理模型
-7. [PyPeakRankR: Reproducible Peak-Level Feature Extraction for Regulatory Element Ranking](/202606/19/2606.18179v1-pypeakrankr-reproducible-peak-level-feature-extraction-for-regulatory-element-ranking)  
+   evidence：扩散模型基准测试用于单细胞扰动预测，符合虚拟细胞/基因组大模型
+4. [RepGene: Toward a Unified Gene Representation Space Robust to Missing Biological Views](/202606/20/biorxiv-10-64898-2026-06-11-731512-v1-repgene-toward-a-unified-gene-representation-space-robust-to-missing-biological-views)  
    标签：评分：6.0/10、query:gwas
-   evidence：调控元件特征提取工具，支持GWAS功能注释
-8. [Shrinkage priors for Bayesian Substitute Confounders](/202606/19/2606.18535v1-shrinkage-priors-for-bayesian-substitute-confounders)  
-   标签：评分：6.0/10、query:gwas
-   evidence：贝叶斯因子分配学习稀疏替代混淆变量，适用于GWAS混杂校正
-9. [When, Where, and How: Adaptive Binning for Tabular Self-Supervised Learning](/202606/19/2606.19827v1-when-where-and-how-adaptive-binning-for-tabular-self-supervised-learning)  
+   evidence：统一基因表示整合多生物学视图
+5. [AutoZyme: An Autonomous Agentic Framework to Optimize Bioinformatics Software](/202606/20/biorxiv-10-64898-2026-06-12-731250-v1-autozyme-an-autonomous-agentic-framework-to-optimize-bioinformatics-software)  
    标签：评分：6.0/10、query:med-ai
-   evidence：表格自监督学习的自适应分箱方法，适用于电子健康记录的深度学习
-10. [Hypergraph Variable Selection with False Discovery Rate Control](/202606/19/2606.20514v1-hypergraph-variable-selection-with-false-discovery-rate-control)  
-   标签：评分：6.0/10、query:gwas
-   evidence：超图变量选择方法控制FDR，适用于GWAS精细定位
-11. [Identifying Modulators of Cellular Responses by Heterogeneity-sequencing](/202606/19/biorxiv-10-1101-2024-10-28-620481-v2-identifying-modulators-of-cellular-responses-by-heterogeneity-sequencing)  
+   evidence：用于优化基因组学软件的自主智能体框架，与医疗数据中的AI智能体相关
+6. [Benchmarking gene expression reconstruction from single-cell latent representations](/202606/20/biorxiv-10-64898-2026-06-15-731445-v1-benchmarking-gene-expression-reconstruction-from-single-cell-latent-representations)  
    标签：评分：6.0/10、query:med-ai
-   evidence：单细胞RNA-seq结合双机器学习识别细胞反应因果调节因子
+   evidence：为虚拟细胞模型进行基因表达重建基准测试
 
 
 <div class="dpr-home-promo-card">
