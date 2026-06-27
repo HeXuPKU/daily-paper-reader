@@ -6,68 +6,44 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-26
-- 运行时间：2026-06-26 22:08:48 UTC
+- 最新运行日期：2026-06-27
+- 运行时间：2026-06-27 20:34:01 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：5
-- 速读区：11
+- 本次总论文数：8
+- 精读区：4
+- 速读区：4
 
 ### 今日简报（AI）
-今天精读两篇高分论文，分别聚焦电子健康记录的队列锚定基础模型和跨祖先细胞类型特异性eQTL映射；速读涉及多代理生物知识发现、化学-遗传翻译基准及转录响应预测。最值得关注的是队列锚定模型如何从风险评分拓展到可审计的同伴队列，以及整合单细胞与批量数据实现跨祖先遗传定位。建议普通读者可深入这两篇精读，理解临床决策支持与精准医学的新范式。
-- 详情：[/202606/26/README](/202606/26/README)
+今日精选8篇论文，聚焦基因组统计建模与电子健康记录AI应用。最值得关注：基因组维度如何影响混合模型功效与精准定位分辨率（9.0分），以及队列锚定基础模型实现电子健康记录风险评分与可审计同伴队列（8.0分）。普通读者可进一步了解基因组预测的统计方法改进，或AI模型在医疗中的可解释性应用。
+- 详情：[/202606/27/README](/202606/27/README)
 
 ### 精读区论文标签
-1. [Cohort-Anchored Foundation Models for Electronic Health Records: From Risk Scores to Auditable Peer Cohorts](/202606/26/2606.21885v1-cohort-anchored-foundation-models-for-electronic-health-records-from-risk-scores-to-auditable-peer-cohorts)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：基于群组锚定的电子健康记录基础模型，与医疗AI和EHR信号一致
-2. [traceCB: Trans-ancestry cell-type-specific eQTLs mapping by integrating scRNA-seq and bulk data](/202606/26/biorxiv-10-64898-2026-06-20-733502-v1-tracecb-trans-ancestry-cell-type-specific-eqtls-mapping-by-integrating-scrna-seq-and-bulk-data)  
+1. [Genomic Dimensionality Bounds Mixed-Model Association Power, Fine-Mapping Resolution, and Genomic Prediction Reliability](/202606/27/biorxiv-10-64898-2026-06-02-729628-v2-genomic-dimensionality-bounds-mixed-model-association-power-fine-mapping-resolution-and-genomic-prediction-reliability)  
    标签：评分：9.0/10、query:gwas
-   evidence：跨祖源细胞类型特异性eQTL定位方法
-3. [DeepBD: A Grounded Agentic Workflow for Variant Prioritization and Diagnosis of Genetic Birth Defects](/202606/26/2606.24779v1-deepbd-a-grounded-agentic-workflow-for-variant-prioritization-and-diagnosis-of-genetic-birth-defects)  
+   evidence：混合模型GWAS和精细定位的理论框架
+2. [Cohort-Anchored Foundation Models for Electronic Health Records: From Risk Scores to Auditable Peer Cohorts](/202606/27/2606.21885v1-cohort-anchored-foundation-models-for-electronic-health-records-from-risk-scores-to-auditable-peer-cohorts)  
    标签：评分：8.0/10、query:med-ai
-   evidence：基于大语言模型的智能体工作流用于变异优先排序
-4. [GenoSim: A Forward-Time Genotype Simulator for Clinical and Population Genetics with Population Stratification](/202606/26/biorxiv-10-64898-2026-06-20-733503-v1-genosim-a-forward-time-genotype-simulator-for-clinical-and-population-genetics-with-population-stratification)  
+   evidence：电子健康记录的基础模型，使用队列锚定，适用于医学AI和风险评分计算
+3. [DeepBD: A Grounded Agentic Workflow for Variant Prioritization and Diagnosis of Genetic Birth Defects](/202606/27/2606.24779v1-deepbd-a-grounded-agentic-workflow-for-variant-prioritization-and-diagnosis-of-genetic-birth-defects)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：使用LLM的智能体工作流进行变异优先排序；符合医用大语言模型与智能体主题
+4. [Evaluating sequence-to-function deep learning models for ancestry-stratified regulatory variant effect prediction using multi-ancestry blood eQTLs](/202606/27/biorxiv-10-64898-2026-06-22-730889-v1-evaluating-sequence-to-function-deep-learning-models-for-ancestry-stratified-regulatory-variant-effect-prediction-using-multi-ancestry-blood-eqtls)  
    标签：评分：8.0/10、query:gwas
-   evidence：用于GWAS基准测试的基因型模拟器
-5. [Computational reconstruction of hierarchical cis-regulatory networks reveals synergistic transcription control and disease-associated rewiring](/202606/26/biorxiv-10-64898-2026-06-24-734159-v1-computational-reconstruction-of-hierarchical-cis-regulatory-networks-reveals-synergistic-transcription-control-and-disease-associated-rewiring)  
-   标签：评分：8.0/10、query:gwas
-   evidence：整合多组学数据的深度学习框架重建顺式调控网络，属于功能基因组学与GWAS整合
+   evidence：跨血统调控变异效应预测的深度学习模型评估
 
 ### 速读区论文标签
-1. [BioInsight: Multi-Agent Orchestration for Interactive Biomedical Knowledge Discovery](/202606/26/2606.20997v1-bioinsight-multi-agent-orchestration-for-interactive-biomedical-knowledge-discovery)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：多智能体系统用于交互式生物医学知识发现
-2. [Chem2Gen-Bench: Benchmarking Chemical-to-Genetic Translation in Perturbation Response Space](/202606/26/2606.21109v1-chem2gen-bench-benchmarking-chemical-to-genetic-translation-in-perturbation-response-space)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：扰动响应空间中化学到遗传翻译的基准测试，与虚拟细胞模型相关
-3. [Stable-Shift: Biologically Structured Prediction of Transcriptional Responses to Unseen Gene Perturbations](/202606/26/2606.24940v1-stable-shift-biologically-structured-prediction-of-transcriptional-responses-to-unseen-gene-perturbations)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：利用生物上下文和图卷积预测遗传扰动的转录响应
-4. [Multivariable Mendelian randomization with weak instruments: a comparison of Bayesian and frequentist methods](/202606/26/2606.26638v1-multivariable-mendelian-randomization-with-weak-instruments-a-comparison-of-bayesian-and-frequentist-methods)  
+1. [Near perfect identification of half sibling versus niece/nephew avuncular pairs without pedigree information or genotyped relatives](/202606/27/biorxiv-10-64898-2026-01-06-697070-v7-near-perfect-identification-of-half-sibling-versus-niecenephew-avuncular-pairs-without-pedigree-information-or-genotyped-relatives)  
    标签：评分：7.0/10、query:gwas
-   evidence：孟德尔随机化弱工具方法，直接关联GWAS统计方法
-5. [Benchmarking gene expression reconstruction from single-cell latent representations](/202606/26/biorxiv-10-64898-2026-06-15-731445-v1-benchmarking-gene-expression-reconstruction-from-single-cell-latent-representations)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：对潜在空间重建基因表达进行基准测试，与虚拟细胞模型和潜在空间方法相关
-6. [Elucidating the Design Space of Generative Models for Single-Cell Perturbation Prediction](/202606/26/biorxiv-10-64898-2026-06-15-732063-v1-elucidating-the-design-space-of-generative-models-for-single-cell-perturbation-prediction)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：单细胞扰动预测的生成模型，虚拟细胞建模
-7. [An atlas-scale generative model for unified representation learning of bulk RNA-seq data](/202606/26/biorxiv-10-64898-2026-06-18-733198-v1-an-atlas-scale-generative-model-for-unified-representation-learning-of-bulk-rna-seq-data)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：批量RNA-seq数据生成模型，属于大规模基因组模型
-8. [When, Where, and How: Adaptive Binning for Tabular Self-Supervised Learning](/202606/26/2606.19827v1-when-where-and-how-adaptive-binning-for-tabular-self-supervised-learning)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：面向医疗表格数据的自适应分箱自监督学习方法
-9. [MORL-A2C: Multi-Objective Reinforcement Learning Reranker for Optimizing Healthiness in MOPI-HFRS](/202606/26/2606.23603v1-morl-a2c-multi-objective-reinforcement-learning-reranker-for-optimizing-healthiness-in-mopi-hfrs)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：多目标强化学习在健康感知食品推荐系统中的应用，属于医疗健康数据
-10. [Deviance-style normalization for jointly overdispersed counts](/202606/26/2606.26061v1-deviance-style-normalization-for-jointly-overdispersed-counts)  
+   evidence：基于SNP的IBD方法区分亲缘关系，对GWAS群体结构控制重要
+2. [To select or not to select: predictively consistent priors instead of model selection](/202606/27/2606.22850v1-to-select-or-not-to-select-predictively-consistent-priors-instead-of-model-selection)  
    标签：评分：6.0/10、query:gwas
-   evidence：针对过度分散计数数据的标准化方法，可应用于基于测序的GWAS预处理
-11. [From Nuisance to Signal: Leveraging Close Relatives in Biobank-Scale Demographic Inference](/202606/26/biorxiv-10-64898-2026-06-15-729614-v1-from-nuisance-to-signal-leveraging-close-relatives-in-biobank-scale-demographic-inference)  
+   evidence：预测一致先验用于广义线性模型变量选择，与GWAS统计方法相关
+3. [Mapping active cis-regulatory elements from transcription initiation events](/202606/27/biorxiv-10-64898-2026-05-11-724207-v2-mapping-active-cis-regulatory-elements-from-transcription-initiation-events)  
    标签：评分：6.0/10、query:gwas
-   evidence：利用亲属进行群体历史推断的方法，与GWAS群体结构相关
+   evidence：通过转录起始事件绘制活性调控元件，有助于GWAS变异的功能解读
+4. [biomeStat: Using Agentic AI for Scalable Genomic Epidemiology Demonstrated Through End-to-End Analysis of 1,000 Asian Dengue Virus Genomes](/202606/27/biorxiv-10-64898-2026-06-10-731380-v1-biomestat-using-agentic-ai-for-scalable-genomic-epidemiology-demonstrated-through-end-to-end-analysis-of-1000-asian-dengue-virus-genomes)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：用于可扩展基因组流行病学的智能体AI，使用自主AI智能体执行生物信息学流程
 
 
 <div class="dpr-home-promo-card">
