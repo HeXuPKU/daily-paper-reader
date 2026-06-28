@@ -6,44 +6,58 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-27
-- 运行时间：2026-06-27 20:34:01 UTC
+- 最新运行日期：2026-06-28
+- 运行时间：2026-06-28 20:31:20 UTC
 - 运行状态：成功
-- 本次总论文数：8
+- 本次总论文数：12
 - 精读区：4
-- 速读区：4
+- 速读区：8
 
 ### 今日简报（AI）
-今日精选8篇论文，聚焦基因组统计建模与电子健康记录AI应用。最值得关注：基因组维度如何影响混合模型功效与精准定位分辨率（9.0分），以及队列锚定基础模型实现电子健康记录风险评分与可审计同伴队列（8.0分）。普通读者可进一步了解基因组预测的统计方法改进，或AI模型在医疗中的可解释性应用。
-- 详情：[/202606/27/README](/202606/27/README)
+1) 今日共处理12篇文献，精读4篇、速读8篇，聚焦电子健康记录队列锚定基础模型与遗传缺陷诊断智能体两项前沿。  
+2) 最值得关注的是评分9.0的《Cohort-Anchored Foundation Models》与8.0的《DeepBD》，前者实现从风险评分到可审计同伴队列的跃迁，后者通过智能体工作流优先排序变异基因。  
+3) 建议优先阅读这两篇精读论文，了解临床可解释AI与自动化基因诊断的落地路径。
+- 详情：[/202606/28/README](/202606/28/README)
 
 ### 精读区论文标签
-1. [Genomic Dimensionality Bounds Mixed-Model Association Power, Fine-Mapping Resolution, and Genomic Prediction Reliability](/202606/27/biorxiv-10-64898-2026-06-02-729628-v2-genomic-dimensionality-bounds-mixed-model-association-power-fine-mapping-resolution-and-genomic-prediction-reliability)  
-   标签：评分：9.0/10、query:gwas
-   evidence：混合模型GWAS和精细定位的理论框架
-2. [Cohort-Anchored Foundation Models for Electronic Health Records: From Risk Scores to Auditable Peer Cohorts](/202606/27/2606.21885v1-cohort-anchored-foundation-models-for-electronic-health-records-from-risk-scores-to-auditable-peer-cohorts)  
+1. [Cohort-Anchored Foundation Models for Electronic Health Records: From Risk Scores to Auditable Peer Cohorts](/202606/28/2606.21885v1-cohort-anchored-foundation-models-for-electronic-health-records-from-risk-scores-to-auditable-peer-cohorts)  
+   标签：评分：9.0/10、query:med-ai
+   evidence：基于队列锚定的电子健康记录基础模型，生成风险评分和可审计的同伴队列
+2. [DeepBD: A Grounded Agentic Workflow for Variant Prioritization and Diagnosis of Genetic Birth Defects](/202606/28/2606.24779v1-deepbd-a-grounded-agentic-workflow-for-variant-prioritization-and-diagnosis-of-genetic-birth-defects)  
    标签：评分：8.0/10、query:med-ai
-   evidence：电子健康记录的基础模型，使用队列锚定，适用于医学AI和风险评分计算
-3. [DeepBD: A Grounded Agentic Workflow for Variant Prioritization and Diagnosis of Genetic Birth Defects](/202606/27/2606.24779v1-deepbd-a-grounded-agentic-workflow-for-variant-prioritization-and-diagnosis-of-genetic-birth-defects)  
+   evidence：基于大语言模型的智能体流程进行变异优先级排序
+3. [HoloCell: A Generative Foundation Model for Holistic Cellular Modeling](/202606/28/biorxiv-10-64898-2026-06-07-730684-v2-holocell-a-generative-foundation-model-for-holistic-cellular-modeling)  
    标签：评分：8.0/10、query:med-ai
-   evidence：使用LLM的智能体工作流进行变异优先排序；符合医用大语言模型与智能体主题
-4. [Evaluating sequence-to-function deep learning models for ancestry-stratified regulatory variant effect prediction using multi-ancestry blood eQTLs](/202606/27/biorxiv-10-64898-2026-06-22-730889-v1-evaluating-sequence-to-function-deep-learning-models-for-ancestry-stratified-regulatory-variant-effect-prediction-using-multi-ancestry-blood-eqtls)  
-   标签：评分：8.0/10、query:gwas
-   evidence：跨血统调控变异效应预测的深度学习模型评估
+   evidence：用于整体细胞建模的生成基础模型，直接关联虚拟细胞模型生成
+4. [biomeStat: Using Agentic AI for Scalable Genomic Epidemiology Demonstrated Through End-to-End Analysis of 1,000 Asian Dengue Virus Genomes](/202606/28/biorxiv-10-64898-2026-06-10-731380-v1-biomestat-using-agentic-ai-for-scalable-genomic-epidemiology-demonstrated-through-end-to-end-analysis-of-1000-asian-dengue-virus-genomes)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：使用智能体AI进行可扩展的基因组流行病学分析
 
 ### 速读区论文标签
-1. [Near perfect identification of half sibling versus niece/nephew avuncular pairs without pedigree information or genotyped relatives](/202606/27/biorxiv-10-64898-2026-01-06-697070-v7-near-perfect-identification-of-half-sibling-versus-niecenephew-avuncular-pairs-without-pedigree-information-or-genotyped-relatives)  
+1. [MORL-A2C: Multi-Objective Reinforcement Learning Reranker for Optimizing Healthiness in MOPI-HFRS](/202606/28/2606.23603v1-morl-a2c-multi-objective-reinforcement-learning-reranker-for-optimizing-healthiness-in-mopi-hfrs)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：多目标强化学习在健康食品推荐中的应用
+2. [MORL-A2C: Multi-Objective Reinforcement Learning Reranker for Optimizing Healthiness in MOPI-HFRS](/202606/28/2606.23603v2-morl-a2c-multi-objective-reinforcement-learning-reranker-for-optimizing-healthiness-in-mopi-hfrs)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：多目标强化学习用于健康饮食推荐
+3. [Genetic susceptibility to obesity-related asthma and its modulation by sequelae of obesity](/202606/28/biorxiv-10-64898-2026-06-16-731769-v1-genetic-susceptibility-to-obesity-related-asthma-and-its-modulation-by-sequelae-of-obesity)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：利用eQTL进行基因-环境交互作用分析
+4. [eRNAformer enables genome-wide de novo mapping of enhancer-derived RNA loci](/202606/28/biorxiv-10-64898-2026-06-24-734403-v1-ernaformer-enables-genome-wide-de-novo-mapping-of-enhancer-derived-rna-loci)  
    标签：评分：7.0/10、query:gwas
-   evidence：基于SNP的IBD方法区分亲缘关系，对GWAS群体结构控制重要
-2. [To select or not to select: predictively consistent priors instead of model selection](/202606/27/2606.22850v1-to-select-or-not-to-select-predictively-consistent-priors-instead-of-model-selection)  
-   标签：评分：6.0/10、query:gwas
-   evidence：预测一致先验用于广义线性模型变量选择，与GWAS统计方法相关
-3. [Mapping active cis-regulatory elements from transcription initiation events](/202606/27/biorxiv-10-64898-2026-05-11-724207-v2-mapping-active-cis-regulatory-elements-from-transcription-initiation-events)  
-   标签：评分：6.0/10、query:gwas
-   evidence：通过转录起始事件绘制活性调控元件，有助于GWAS变异的功能解读
-4. [biomeStat: Using Agentic AI for Scalable Genomic Epidemiology Demonstrated Through End-to-End Analysis of 1,000 Asian Dengue Virus Genomes](/202606/27/biorxiv-10-64898-2026-06-10-731380-v1-biomestat-using-agentic-ai-for-scalable-genomic-epidemiology-demonstrated-through-end-to-end-analysis-of-1000-asian-dengue-virus-genomes)  
+   evidence：深度学习定位增强子RNA位点并富集遗传风险因子
+5. [Statistical Matching via Schrödinger Bridge beyond Conditional Independence](/202606/28/2606.22770v1-statistical-matching-via-schrdinger-bridge-beyond-conditional-independence)  
    标签：评分：6.0/10、query:med-ai
-   evidence：用于可扩展基因组流行病学的智能体AI，使用自主AI智能体执行生物信息学流程
+   evidence：基于薛定谔桥的统计匹配方法，支持部分重叠数据集整合，与EHR-GWAS整合相关
+6. [RetiSEM: Generalising Causal Models for Fragmented Biomedical Data](/202606/28/2606.24488v1-retisem-generalising-causal-models-for-fragmented-biomedical-data)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：从碎片化生物医学数据中学习因果模型
+7. [An atlas-scale generative model for unified representation learning of bulk RNA-seq data](/202606/28/biorxiv-10-64898-2026-06-18-733198-v1-an-atlas-scale-generative-model-for-unified-representation-learning-of-bulk-rna-seq-data)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：大规模bulk RNA-seq生成模型用于表示学习
+8. [Stability-driven multi-omics integration for reproducible latent structure](/202606/28/biorxiv-10-64898-2026-06-23-734064-v1-stability-driven-multi-omics-integration-for-reproducible-latent-structure)  
+   标签：评分：6.0/10、query:gwas
+   evidence：多组学整合框架及稳定性评估，可用于GWAS功能整合
 
 
 <div class="dpr-home-promo-card">
