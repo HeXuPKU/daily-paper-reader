@@ -6,44 +6,41 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-01
-- 运行时间：2026-07-01 20:39:15 UTC
+- 最新运行日期：2026-07-02
+- 运行时间：2026-07-02 21:44:47 UTC
 - 运行状态：成功
-- 本次总论文数：8
+- 本次总论文数：7
 - 精读区：3
-- 速读区：5
+- 速读区：4
 
 ### 今日简报（AI）
-今日聚焦遗传病与心脏病的AI诊断新范式，DeepBD以9.0分荣登榜首，CPAgents以8.0分紧随其后。两类方法分别利用智能体工作流和复合表型生成，在出生缺陷变异优先排序和心脏疾病关联分析上展现突破。建议重点关注智能体驱动医学推理的实践，并留意后续多阶段统计推理评估基准的进展。
-- 详情：[/202607/01/README](/202607/01/README)
+今日共处理7篇文献，精读了2篇高分论文，速读4篇。最值得关注的是心脏疾病复合表型生成Agent（9.0分）和224种灵长类复杂性状的蛋白质编码基因组-表型图谱（8.0分）。建议优先精读这两篇，可了解AI驱动的心脏病风险建模和跨物种遗传机制。
+- 详情：[/202607/02/README](/202607/02/README)
 
 ### 精读区论文标签
-1. [DeepBD: A Grounded Agentic Workflow for Variant Prioritization and Diagnosis of Genetic Birth Defects](/202607/01/2606.24779v1-deepbd-a-grounded-agentic-workflow-for-variant-prioritization-and-diagnosis-of-genetic-birth-defects)  
+1. [CPAgents: Agentic Composite Phenotype Generation for Cardiac Disease Association](/202607/02/2606.28179v1-cpagents-agentic-composite-phenotype-generation-for-cardiac-disease-association)  
    标签：评分：9.0/10、query:med-ai
-   evidence：智能体LLM工作流用于遗传诊断的变异优先级排序
-2. [CPAgents: Agentic Composite Phenotype Generation for Cardiac Disease Association](/202607/01/2606.28179v1-cpagents-agentic-composite-phenotype-generation-for-cardiac-disease-association)  
+   evidence：智能体框架用于PheWAS复合表型生成，直接关联医疗AI与基因组学
+2. [A phylogenetic protein-coding genome-phenome map of complex traits across 224 primate species.](/202607/02/biorxiv-10-1101-2025-09-08-674744-v3-a-phylogenetic-protein-coding-genome-phenome-map-of-complex-traits-across-224-primate-species)  
    标签：评分：8.0/10、query:gwas
-   evidence：用于表型组关联研究的智能体表型生成，与GWAS方法学相关
-3. [Genetically informed single-cell and spatial mapping of metabolic programs in human health and disease](/202607/01/biorxiv-10-64898-2026-06-25-734643-v2-genetically-informed-single-cell-and-spatial-mapping-of-metabolic-programs-in-human-health-and-disease)  
+   evidence：提供了跨224种灵长类的系统发育基因组-表型组图谱，作为GWAS复杂性状分析的互补框架。
+3. [Formation, persistence, and breakdown of carrier-set topology in linkage disequilibrium: empirical structure in 1000 Genomes and a two locus Wright Fisher model](/202607/02/biorxiv-10-64898-2026-07-01-735767-v1-formation-persistence-and-breakdown-of-carrier-set-topology-in-linkage-disequilibrium-empirical-structure-in-1000-genomes-and-a-two-locus-wright-fisher-model)  
    标签：评分：8.0/10、query:gwas
-   evidence：整合代谢物GWAS汇总统计与单细胞转录组
+   evidence：研究连锁不平衡中载体集拓扑结构，直接关联精细定位
 
 ### 速读区论文标签
-1. [Landmarking with Latent Class Mixed Models for Dynamic Prediction of Time-to-event Data with Heterogeneous Biomarker Trajectories](/202607/01/2606.24678v1-landmarking-with-latent-class-mixed-models-for-dynamic-prediction-of-time-to-event-data-with-heterogeneous-biomarker-trajectories)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：利用电子健康记录和隐类混合模型进行动态预测
-2. [GeneBench-Pro: Evaluating Multistage Statistical Reasoning\\in Genomics, Quantitative Biology, and Translational Biomedicine](/202607/01/biorxiv-10-64898-2026-06-29-735386-v1-genebench-pro-evaluating-multistage-statistical-reasoningin-genomics-quantitative-biology-and-translational-biomedicine)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：用于评估AI智能体在基因组学多阶段统计推理能力的基准，涉及大规模基因组模型和医疗大语言模型
-3. [CW-B: Class Weighted Boosting Framework for Imbalance Resilient Multi Class Cardiac Phenotyping](/202607/01/2606.29907v1-cw-b-class-weighted-boosting-framework-for-imbalance-resilient-multi-class-cardiac-phenotyping)  
+1. [Re-mixing Embeddings for Patient Augmentation in Data Scarce Multiple Instance Learning](/202607/02/2606.25770v1-re-mixing-embeddings-for-patient-augmentation-in-data-scarce-multiple-instance-learning)  
    标签：评分：6.0/10、query:med-ai
-   evidence：基于类别加权提升的电子健康记录心脏表型分类
-4. [biomeStat: Using Agentic AI for Scalable Genomic Epidemiology Demonstrated Through End-to-End Analysis of 1,000 Asian Dengue Virus Genomes](/202607/01/biorxiv-10-64898-2026-06-10-731380-v1-biomestat-using-agentic-ai-for-scalable-genomic-epidemiology-demonstrated-through-end-to-end-analysis-of-1000-asian-dengue-virus-genomes)  
+   evidence：针对医学多实例学习的患者增强方法，与医疗深度学习相关
+2. [Tabular Foundation Models Are Competitive Cellular Perturbation Predictors Across Biological Scales](/202607/02/biorxiv-10-64898-2026-06-28-735106-v2-tabular-foundation-models-are-competitive-cellular-perturbation-predictors-across-biological-scales)  
    标签：评分：6.0/10、query:med-ai
-   evidence：使用自主AI智能体进行基因组流行病学分析，涉及智能体在医疗数据中的应用
-5. [Integrating Semantic Retrieval, LLM-based Refinement, and Structured Expert Curation for Scalable AOP Gene Mapping](/202607/01/biorxiv-10-64898-2026-06-25-734475-v1-integrating-semantic-retrieval-llm-based-refinement-and-structured-expert-curation-for-scalable-aop-gene-mapping)  
+   evidence：评估表格基础模型用于细胞扰动预测，与医疗AI中的虚拟细胞模型生成和大型基因组模型相关。
+3. [GeneBench-Pro: Evaluating Multistage Statistical Reasoning\\in Genomics, Quantitative Biology, and Translational Biomedicine](/202607/02/biorxiv-10-64898-2026-06-29-735386-v1-genebench-pro-evaluating-multistage-statistical-reasoningin-genomics-quantitative-biology-and-translational-biomedicine)  
    标签：评分：6.0/10、query:med-ai
-   evidence：LLM辅助的毒理基因组学基因映射工作流
+   evidence：基因组学AI智能体基准测试
+4. [GeneBench-Pro: Evaluating Multistage Statistical Reasoning in Genomics, Quantitative Biology, and Translational Biomedicine](/202607/02/biorxiv-10-64898-2026-06-29-735386-v2-genebench-pro-evaluating-multistage-statistical-reasoning-in-genomics-quantitative-biology-and-translational-biomedicine)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：基因组学AI智能体基准测试
 
 
 <div class="dpr-home-promo-card">
