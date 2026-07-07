@@ -6,58 +6,66 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-06
-- 运行时间：2026-07-06 21:41:14 UTC
+- 最新运行日期：2026-07-07
+- 运行时间：2026-07-07 21:55:39 UTC
 - 运行状态：成功
-- 本次总论文数：12
+- 本次总论文数：14
 - 精读区：3
-- 速读区：9
+- 速读区：11
 
 ### 今日简报（AI）
-今日聚焦多基因性状染色体选择算法与模块化基因调控网络推断，同时关注LLM在变异解读及单细胞预测中的新进展。
-最值得精读的是《Selecting Chromosomes for Polygenic Traits》（9.0分）的算法复杂性证明，以及《MERLIN-SUITE》（8.0分）的多组学GRN推断框架。
-建议优先消化这两篇精读论文，再结合《Benchmarking large language models for ACMG/AMP variant interpretation》（7.0分）评估AI工具的实际表现。
-- 详情：[/202607/06/README](/202607/06/README)
+今日共筛选14篇论文，精读2篇，其中《Detecting domain-level organization in genome-wide association study summary statistics using frequency-impact-reliability profiles》评分最高（9.0/10）。
+
+最值得关注的两个方向：基因组关联研究中的域级组织检测方法，以及表格基础模型在跨尺度细胞扰动预测中的竞争力。
+
+建议优先阅读精读文章中的方法学创新，并留意速读中多模态组织病理学与贝叶斯网络在电子病历中的应用。
+- 详情：[/202607/07/README](/202607/07/README)
 
 ### 精读区论文标签
-1. [Selecting Chromosomes for Polygenic Traits: Algorithms and Complexity](/202607/06/biorxiv-10-1101-2022-11-14-516379-v2-selecting-chromosomes-for-polygenic-traits-algorithms-and-complexity)  
+1. [Detecting domain-level organization in genome-wide association study summary statistics using frequency-impact-reliability profiles](/202607/07/biorxiv-10-64898-2026-07-01-735858-v1-detecting-domain-level-organization-in-genome-wide-association-study-summary-statistics-using-frequency-impact-reliability-profiles)  
    标签：评分：9.0/10、query:gwas
-   evidence：针对多基因性状的染色体选择算法，直接相关PRS计算
-2. [MERLIN-SUITE: Probabilistic modular GRN inference from multi-omics data integrating regulatory priors and transcription factor activity](/202607/06/2607.01791v1-merlin-suite-probabilistic-modular-grn-inference-from-multi-omics-data-integrating-regulatory-priors-and-transcription-factor-activity)  
-   标签：评分：8.0/10、query:gwas
-   evidence：概率GRN推断整合调控先验，适用于功能基因组与GWAS的整合
-3. [A geometric representation of gene-by-gene and gene-by-environment interactions on the extended complex plane](/202607/06/biorxiv-10-64898-2026-06-26-734831-v1-a-geometric-representation-of-gene-by-gene-and-gene-by-environment-interactions-on-the-extended-complex-plane)  
+   evidence：FIR-GWAS框架检测GWAS汇总统计中的结构
+2. [Tabular Foundation Models Are Competitive Cellular Perturbation Predictors Across Biological Scales](/202607/07/biorxiv-10-64898-2026-06-28-735106-v2-tabular-foundation-models-are-competitive-cellular-perturbation-predictors-across-biological-scales)  
    标签：评分：8.0/10、query:med-ai
-   evidence：基因-环境相互作用的几何表示，直接匹配需求10中的基因-环境交互信号
+   evidence：评估表格基础模型在细胞扰动预测中的性能，与虚拟细胞模型和大规模基因组模型相关
+3. [Benchmarking large language models for ACMG/AMP variant interpretation and variant calling](/202607/07/biorxiv-10-64898-2026-06-30-735646-v1-benchmarking-large-language-models-for-acmgamp-variant-interpretation-and-variant-calling)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：在基因组学中评估大语言模型在变异解读和变异检出上的表现
 
 ### 速读区论文标签
-1. [MORPH Predicts the Single-Cell Outcome of Genetic Perturbations Across Conditions and Data Modalities](/202607/06/biorxiv-10-1101-2025-06-27-661992-v2-morph-predicts-the-single-cell-outcome-of-genetic-perturbations-across-conditions-and-data-modalities)  
+1. [Data-Efficient Multimodal Alignment for Histopathology-based Molecular Prediction](/202607/07/2606.29949v1-data-efficient-multimodal-alignment-for-histopathology-based-molecular-prediction)  
    标签：评分：7.0/10、query:med-ai
-   evidence：使用深度学习预测遗传扰动的单细胞结果，与虚拟细胞模型和基因组模型相关
-2. [Benchmarking large language models for ACMG/AMP variant interpretation and variant calling](/202607/06/biorxiv-10-64898-2026-06-30-735646-v1-benchmarking-large-language-models-for-acmgamp-variant-interpretation-and-variant-calling)  
+   evidence：组织病理学与转录组学多模态对齐用于分子预测
+2. [Continuous-Time Bayesian Networks with Structured Shrinkage Priors for Modelling Multimorbidity Trajectories in Large-Scale Electronic Health Records](/202607/07/2607.01549v1-continuous-time-bayesian-networks-with-structured-shrinkage-priors-for-modelling-multimorbidity-trajectories-in-large-scale-electronic-health-records)  
    标签：评分：7.0/10、query:med-ai
-   evidence：对大语言模型进行ACMG/AMP变异解读和变异调用的基准测试
-3. [LLM-Guided ODE Discovery and Parameter Inference from Small-Cohort Aggregate Data](/202607/06/2607.00733v1-llm-guided-ode-discovery-and-parameter-inference-from-small-cohort-aggregate-data)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：大语言模型引导的常微分方程发现用于临床数据
-4. [Impacts of batch effects on the performance of machine learning classifiers across multiple studies](/202607/06/biorxiv-10-64898-2026-06-24-734352-v1-impacts-of-batch-effects-on-the-performance-of-machine-learning-classifiers-across-multiple-studies)  
+   evidence：利用电子健康记录建模多发病率轨迹的贝叶斯网络
+3. [Biologically Informed Deep Neural Networks for Multi-Omic Integration, Pathway Activity Inference and Risk Stratification in Cancer](/202607/07/2607.05306v1-biologically-informed-deep-neural-networks-for-multi-omic-integration-pathway-activity-inference-and-risk-stratification-in-cancer)  
+   标签：评分：7.0/10、query:gwas
+   evidence：生物信息深度网络用于多组学整合和通路推断
+4. [Novel 4D tensor decomposition-based approach integrating tri-omics profiling data can identify functionally relevant gene clusters](/202607/07/biorxiv-10-64898-2026-03-19-712900-v3-novel-4d-tensor-decomposition-based-approach-integrating-tri-omics-profiling-data-can-identify-functionally-relevant-gene-clusters)  
+   标签：评分：7.0/10、query:gwas
+   evidence：张量分解整合三组学数据，支持功能基因组学与GWAS整合
+5. [A geometric representation of gene-by-gene and gene-by-environment interactions on the extended complex plane](/202607/07/biorxiv-10-64898-2026-06-26-734831-v1-a-geometric-representation-of-gene-by-gene-and-gene-by-environment-interactions-on-the-extended-complex-plane)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：基因-基因和基因-环境相互作用的几何表示
+6. [Tabular Foundation Models Are Competitive Cellular Perturbation Predictors Across Biological Scales](/202607/07/biorxiv-10-64898-2026-06-28-735106-v1-tabular-foundation-models-are-competitive-cellular-perturbation-predictors-across-biological-scales)  
+   标签：评分：7.0/10、query:gwas
+   evidence：表格基础模型作为机器学习工具应用于基因组扰动预测
+7. [GeneBench-Pro: Evaluating Multistage Statistical Reasoning\\in Genomics, Quantitative Biology, and Translational Biomedicine](/202607/07/biorxiv-10-64898-2026-06-29-735386-v1-genebench-pro-evaluating-multistage-statistical-reasoningin-genomics-quantitative-biology-and-translational-biomedicine)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：基因组学AI智能体基准，多阶段推理
+8. [GeneBench-Pro: Evaluating Multistage Statistical Reasoning in Genomics, Quantitative Biology, and Translational Biomedicine](/202607/07/biorxiv-10-64898-2026-06-29-735386-v2-genebench-pro-evaluating-multistage-statistical-reasoning-in-genomics-quantitative-biology-and-translational-biomedicine)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：基因组学AI智能体基准，多阶段推理
+9. [GeneBench-Pro: Evaluating Multistage Statistical Reasoning in Genomics, Quantitative Biology, and Translational Biomedicine](/202607/07/biorxiv-10-64898-2026-06-29-735386-v3-genebench-pro-evaluating-multistage-statistical-reasoning-in-genomics-quantitative-biology-and-translational-biomedicine)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：用于基因组学和转化生物医学中AI智能体的评估基准
+10. [Causal ASCEND: Scalable Two-tier Causal Discovery on High Dimensional Multi-omics Data](/202607/07/2607.04527v1-causal-ascend-scalable-two-tier-causal-discovery-on-high-dimensional-multi-omics-data)  
    标签：评分：6.0/10、query:gwas
-   evidence：批次效应影响汇总组学数据的机器学习模型，对GWAS/PRS预测有参考价值
-5. [Inference of fitness landscapes with heterogeneous patterns of epistasis across sites](/202607/06/biorxiv-10-64898-2026-06-25-734428-v1-inference-of-fitness-landscapes-with-heterogeneous-patterns-of-epistasis-across-sites)  
+   evidence：多组学数据因果发现，可扩展的两级框架
+11. [Enhancing predictive accuracy of yield traits in cassava through multi-trait genomic prediction](/202607/07/biorxiv-10-64898-2026-07-01-735838-v1-enhancing-predictive-accuracy-of-yield-traits-in-cassava-through-multi-trait-genomic-prediction)  
    标签：评分：6.0/10、query:gwas
-   evidence：适应度景观统计推断框架涉及上位效应，与GWAS交互效应统计方法相关
-6. [Tabular Foundation Models Are Competitive Cellular Perturbation Predictors Across Biological Scales](/202607/06/biorxiv-10-64898-2026-06-28-735106-v2-tabular-foundation-models-are-competitive-cellular-perturbation-predictors-across-biological-scales)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：表格基础模型用于跨生物尺度的细胞扰动预测
-7. [Scalable and rare-variant aware genome inference across the 1kGP cohort](/202607/06/biorxiv-10-64898-2026-06-29-735275-v1-scalable-and-rare-variant-aware-genome-inference-across-the-1kgp-cohort)  
-   标签：评分：6.0/10、query:gwas
-   evidence：可扩展的稀有变异感知基因组推断方法，涉及GWAS统计方法
-8. [GeneBench-Pro: Evaluating Multistage Statistical Reasoning\\in Genomics, Quantitative Biology, and Translational Biomedicine](/202607/06/biorxiv-10-64898-2026-06-29-735386-v1-genebench-pro-evaluating-multistage-statistical-reasoningin-genomics-quantitative-biology-and-translational-biomedicine)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：评估AI智能体在基因组学推理能力的基准，涉及大语言模型与智能体
-9. [GeneBench-Pro: Evaluating Multistage Statistical Reasoning in Genomics, Quantitative Biology, and Translational Biomedicine](/202607/06/biorxiv-10-64898-2026-06-29-735386-v3-genebench-pro-evaluating-multistage-statistical-reasoning-in-genomics-quantitative-biology-and-translational-biomedicine)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：评估AI智能体在基因组学推理能力的基准，涉及大语言模型与智能体
+   evidence：多性状基因组预测方法与多基因风险评分预测模型类似
 
 
 <div class="dpr-home-promo-card">
