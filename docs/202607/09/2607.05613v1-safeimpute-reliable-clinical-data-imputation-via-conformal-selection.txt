@@ -1,0 +1,733 @@
+Title: SafeImpute: Reliable Clinical Data Imputation via Conformal Selection
+
+URL Source: https://arxiv.org/pdf/2607.05613v1
+
+Published Time: Wed, 08 Jul 2026 00:18:02 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# SafeImpute: Reliable Clinical Data Imputation via Conformal Selection 
+
+# Xinrui He 
+
+University of Illinois Urbana-Champaign Champaign, IL, USA xhe33@illinois.edu 
+
+# Mengting Ai 
+
+University of Illinois Urbana-Champaign Champaign, IL, USA mai10@illinois.edu 
+
+# Junting Wang 
+
+University of Illinois Urbana-Champaign Champaign, IL, USA junting3@illinois.edu 
+
+# Curtiss B. Cook 
+
+Mayo Clinic Scottsdale, AZ, USA cook.curtiss@mayo.edu 
+
+# Jingrui He 
+
+University of Illinois Urbana-Champaign Champaign, IL, USA jingrui@illinois.edu 
+
+## Abstract 
+
+Clinical care often relies on key laboratory indicators, yet real-world patient visits are sparse and tests are ordered irregularly, leading to pervasive missingness. While many imputation methods improve average accuracy, they provide limited guidance on which imputed values are reliable enough for high-stakes downstream use. In this work, we study reliable clinical imputation, aiming to produce accurate imputations while selectively releasing the re-liable results, with statistical control over clinically unacceptable errors. To achieve this goal, we propose SafeImpute , a reliable imputation framework for irregular and sparse clinical longitudi-nal records. SafeImpute constructs an event graph that captures both intra-patient temporal trajectories and inter-patient clinical similarity, and learns imputations with a two-relation GNN and adaptive fusion, regularized by an auxiliary masked reconstruc-tion objective. For reliability guarantees, SafeImpute converts a proxy risk score into conformal p-values and applies the Benjamini– Hochberg procedure to control the false discovery rate (FDR) of unacceptable errors among released imputations at a user-specified tolerance. Experiments on our Mayo Clinic data, the public MIMIC-III and MIMIC-IV datasets show that SafeImpute achieves strong imputation accuracy while providing reliable error control, outper-forming diverse baselines in both standard imputation evaluation and FDR-controlled selective-release evaluation. Code is available at https://github.com/Xinrui17/SafeImpute. 
+
+## CCS Concepts 
+
+• Computing methodologies → Neural networks ; • Applied computing → Health informatics .
+
+## Keywords 
+
+Clinical Data Imputation, Graph Neural Networks, Conformal Se-lection, FDR Control 
+
+> Accepted at the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD 2026). This is the authors’ accepted manuscript. The final version of record will appear in the ACM Digital Library with DOI: 10.1145/3770855.3817967.
+
+## 1 Introduction 
+
+In clinical care, key indicators, e.g., Hemoglobin A1c (HbA1c) for diabetes management [ 4], are crucial for disease monitoring and treatment adjustment [ 44 ], yet patient visits are irregular, and labs are often not ordered at every visit, resulting in pervasive miss-ingness in longitudinal records. Recent years have seen growing interest in clinical data imputation, with methods ranging from statistical models [ 31 , 47 , 48 ] to deep generative models and rep-resentation learning [ 6, 15 , 55 , 57 ]. Despite this progress, most approaches emphasize overall accuracy and provide limited guar-antees on error control in high-stakes use, where unreliable results can directly mislead diagnosis and treatment adjustment. Clinical deployment, therefore, raises a question beyond overall accuracy: which imputed results are reliable enough to support clinical decision-making, and how can we provide explicit control over imputation errors? This motivates reliable clinical imputation, which augments imputation with uncertainty or reliability assess-ment, thereby producing imputations with quantitative error con-trol. Related quality-control frameworks have been studied in high-stakes prediction, including Bayesian methods [ 9, 52 ], imprecise probability [ 3], and conformal prediction [ 1 ]. Several works have begun to apply these ideas in clinical settings [ 17 , 30 , 34 , 37 ], such as conformalized models for genomic medicine [ 39 ] and SAFER [ 43 ], which uses conformal prediction to provide statistical false discovery rate (FDR) control for treatment prediction. However, risk-controlled clinical imputation remains underexplored, particu-larly for irregular and sparsely observed patient records [5, 26]. Building on this gap, we focus on two challenges in reliable clin-ical data imputation. (i) Modeling irregular, sparse, and hetero-geneous longitudinal records. Real-world patient visits usually occur at uneven intervals, and lab tests are ordered opportunis-tically, yielding highly sparse and heterogeneous measurement patterns. As a result, intra-patient temporal evidence is often lim-ited, while informative signals may instead come from cross-patient analogies. This calls for an imputation model that can exploit both the limited temporal trajectory and relational structure across pa-tients under severe missingness. (ii) Reliable imputation with statistical error control. In high-stakes settings, the goal is not only to minimize average error, but to determine which imputations 
+
+> 1arXiv:2607.05613v1 [cs.LG] 6 Jul 2026 Xinrui He, Mengting Ai, Junting Wang, Curtiss B. Cook and Jingrui He
+
+are reliable enough to act on, and provide a quantitative guaran-tee that clinically unacceptable errors are rare among the released results. This requires uncertainty quantification for each imputed entry and a statistically grounded selection procedure that can control the error rate when releasing many imputations. To address these challenges, we propose SafeImpute , a reliable imputation framework for irregular and sparse clinical records that couples a strong event graph imputer with alse discovery rate (FDR) control. Specifically, to address the irregular and sparse nature of clinical visits and measurements, we construct an event graph with temporal edges that capture intra-patient trajectories and trend-aware value edges that connect clinically similar events to capture inter-patient analogies. On this event graph, we learn event repre-sentations with a two-relation GNN that performs relation-specific message passing and fuses temporal and value signals via adaptive gating. To ensure reliability in high-stakes settings, SafeImpute 
+
+computes a proxy risk score for each imputed entry and calibrates it into conformal p-values, then applies the Benjamini–Hochberg procedure to select a subset of imputations while controlling the FDR of clinically unacceptable errors at a user-specified tolerance level. Together, SafeImpute produces accurate imputations and selectively releases them with statistical error control. The major contributions of this paper are summarized as follows: 
+
+• We formulate the problem of reliable clinical data imputa-tion, where the goal is not only to achieve accurate impu-tation but also to selectively release reliable results with statistical control over clinically unacceptable errors. 
+
+• We propose SafeImpute , a reliable imputation framework that (i) represents irregular clinical visits as an event graph, where temporal edges capture intra-patient trajectories and similarity edges connect clinically related visits across patients, and learns imputations using a two-relation GNN with adaptive fusion; and (ii) provides reliability control by calibrating a proxy risk score into conformal p-values and applying the Benjamini–Hochberg procedure to control the false discovery rate among released imputations at a user-specified tolerance. 
+
+• Extensive experiments on Mayo Clinic dataset and the MIMIC-III/IV datasets demonstrate that SafeImpute achieves strong imputation accuracy while providing reliable error control. 
+
+## 2 Preliminary 2.1 Clinical Imputation 
+
+In many clinical decision-making scenarios, decisions are driven by a small set of decision-critical laboratory markers that are directly relevant for diagnosis and treatment planning, rather than by com-pleting every missing measurement. Motivated by this, we focus on imputing a designated decision-critical target, such as HbA1c for diabetes monitoring and treatment adjustment. We consider irregular, multi-lab longitudinal clinical records, where each patient has an irregular set of clinical visits over time and only a subset of laboratory tests may be measured at each visit. We treat each visit as an event node that aggregates the laboratory tests recorded during that visit. Let V denote the set of all event nodes across patients. For node 𝑖 ∈ V , let 𝑝 𝑖 denote its patient identity and 𝑡 𝑖 
+
+its timestamp. Let L be the set of laboratory variables together with the available attributes of the patient. We denote the value of variable ℓ ∈ L at node 𝑖 by 𝑧 𝑖,ℓ . Formally, given partially observed multi-lab inputs {𝑧 𝑖,ℓ }ℓ ∈ L , our goal is to impute only the designated target 𝑦 𝑖 at event nodes where it is missing. 
+
+## 2.2 Conformal Selection 
+
+Conformal selection (CS) [ 26 ] is a model-agnostic framework for selecting a subset of test instances while controlling the false dis-covery rate (FDR) [7] in finite samples. CS formulates one hypothesis test for each candidate test sam-ple. Let {( 𝑥 𝑖 , 𝑦 𝑖 )} 𝑛 𝑖 =1 denote the calibration samples and {𝑥 𝑛 +𝑗 }𝑚 𝑗 =1
+
+denote the test candidates. For each test candidate 𝑗 ∈ [ 𝑚 ], CS considers the hypotheses 
+
+𝐻 0𝑗 : 𝑦 𝑛 +𝑗 ≤ 𝑐 (1) Rejecting 𝐻 0𝑗 indicates that the 𝑗 -th test candidate is deemed to exceed the threshold 𝑐 .
+
+Nonconformity scores and conformal p-values. CS relies on a non-conformity measure 𝐽 (· , ·) that quantifies how atypical an observa-tion is relative to the calibration data. For calibration samples, the nonconformity scores are 
+
+𝐽 𝑖 = 𝐽 (𝑥 𝑖 , 𝑦 𝑖 ), 𝑖 = 1, . . . , 𝑛. (2) For a test candidate 𝑥 𝑛 +𝑗 , since 𝑦 𝑛 +𝑗 is unobserved, CS replaces it by the threshold 𝑐 and computes 
+
+b𝐽 𝑛 +𝑗 = 𝐽 (𝑥 𝑛 +𝑗 , 𝑐 ). (3) The conformal p-value [ 26 ] for testing (1) is then computed via a rank-based comparison between b𝐽 𝑛 +𝑗 and {𝐽 𝑖 }𝑛 𝑖 =1. Intuitively, a smaller conformal p-value provides stronger evidence against 𝐻 0𝑗 .
+
+BH procedure and FDR control. To determine the final selected subset, CS applies the Benjamini–Hochberg (BH) [ 7] procedure to the set of conformal p-values {𝑝 𝑛 +𝑗 }𝑚 𝑗 =1. Let 𝑝 (1) ≤ · · · ≤ 𝑝 (𝑚 ) be the sorted p-values and define 
+
+𝑘 ★ = max 
+
+
+
+𝑘 ∈ [ 𝑚 ] : 𝑝 (𝑘 ) ≤ 𝑘 𝑚 𝛼 
+
+
+
+, (4) with the convention that 𝑘 ★ = 0 if the set is empty. 𝛼 ∈ ( 0, 1) is the target FDR level. BH rejects all hypotheses with 𝑝 𝑛 +𝑗 ≤ 𝑝 (𝑘 ★ ) ,yielding the selected set. Under the standard validity conditions for conformal p-values (e.g., exchangeability), this procedure guaran-tees finite-sample FDR control at level 𝛼 .
+
+## 3 Method 
+
+In this section, we present SafeImpute , including event-graph con-struction for irregular clinical records, two-relation GNN learning over temporal and trend-aware value edges, and the selection mod-ule that provides FDR-controlled selective imputation release. 
+
+## 3.1 Event Graph Construction 
+
+Event Node. We treat each patient visit as an event node. To pre-serve as much event-level information as possible under irregular missingness, we encode both available lab values and missingness 
+
+> 2SafeImpute: Reliable Clinical Data Imputation via Conformal Selection
+
+Figure 1: SafeImpute overview for reliable clinical imputation. We convert irregular and sparse longitudinal records into an event graph with temporal edges and trend-aware value edges, then learn with a two-relation GNN combined with an adaptive fusion gating network to impute missing labs. To achieve FDR control over clinically unacceptable errors, we compute a proxy risk score that combines perturbation-induced instability with evidence degree, convert it to conformal p-values, and apply the Benjamini–Hochberg procedure to selectively release safe imputations. 
+
+patterns in the node feature. Specifically, for each lab ℓ ∈ L at event node 𝑖 , we define an observation indicator 
+
+𝑚 𝑖,ℓ = I𝑧 𝑖,ℓ is observed  . (5) We then represent each event by concatenating lab values with their indicators: 
+
+x𝑖 =
+
+h
+
+𝑧 𝑖, 1, 𝑚 𝑖, 1, 𝑧 𝑖, 2, 𝑚 𝑖, 2, . . . , 𝑧 𝑖, | L | , 𝑚 𝑖, | L | , 𝑔 𝑖 
+
+i
+
+, (6) where unobserved 𝑧 𝑖,ℓ are set to 0 only for feature construction. To mitigate scale differences across lab values, we normalize the lab values. With event nodes, we construct an event graph G = (V , E𝑡 ∪E 𝑣 )
+
+with two types of edges that capture two complementary signals: 
+
+intra-patient trajectories and inter-patient analogies . Specifically, we include (1) intra-patient temporal edges E𝑡 that connect consecu-tive events of the same patient, preserving local temporal continu-ity; and (2) inter-patient trend-aware value edges E𝑣 that connect events among patients using lab value-level and trend-level infor-mation, enabling information sharing between clinically similar event contexts. We describe the construction of these two edge types below. 
+
+Temporal Edges. To preserve intra-patient trajectories, for each patient 𝑝 we sort its event nodes by time. Let next (𝑖 ) denote the immediate subsequent event of the same patient after node 𝑖 . We add a temporal edge between consecutive events if the time gap is within a threshold: 
+
+E𝑡 = (𝑖, 𝑗 ) 𝑝 𝑖 = 𝑝 𝑗 , 𝑗 = next (𝑖 ), 0 < 𝑡 𝑗 − 𝑡 𝑖 ≤ Δ𝑡 . (7) 
+
+Trend-aware Value Edges. Temporal edges capture within-patient continuity but do not facilitate information sharing across patients. To model inter-patient analogies, we additionally connect events that exhibit similar lab levels and temporal trends. For each node 𝑖 and lab ℓ, let 𝑟 𝑖,ℓ denote the most recent prior event of patient 𝑝 𝑖 before 𝑡 𝑖 where lab ℓ is observed. If such an event does not exist, we set 𝑟 𝑖,ℓ = ∅. We define the per-lab trend as the rate of change from the last available observation: 
+
+𝛿 𝑖,ℓ =
+
+
+
+𝑧 𝑖,ℓ − 𝑧 𝑟 𝑖,ℓ ,ℓ 
+
+(𝑡 𝑖 − 𝑡 𝑟 𝑖,ℓ ) + 𝜖 , 𝑟 (𝑖, ℓ ) ≠ ∅, 𝑡 𝑖 > 𝑡 𝑟 𝑖,ℓ ,
+
+missing , otherwise .
+
+(8) For a pair of nodes (𝑖, 𝑗 ), the sets of commonly observed labs for values and trends are defined as: 
+
+L𝑖 𝑗 = ℓ ∈ L | 𝑧 𝑖,ℓ and 𝑧 𝑗,ℓ are observed , (9) 
+
+L𝛿 𝑖 𝑗 = ℓ ∈ L | 𝛿 𝑖,ℓ and 𝛿 𝑗,ℓ are observed . (10) To avoid node similarity being biased by the number of commonly observed labs, we compute RMS-normalized Euclidean distances 
+
+> 3Xinrui He, Mengting Ai, Junting Wang, Curtiss B. Cook and Jingrui He
+
+over the common dimensions as value and trend similarities: 
+
+𝑑 𝑣 (𝑖, 𝑗 ) =
+
+vt 1
+
+|L 𝑖 𝑗 |∑︁ ℓ ∈ L 𝑖 𝑗 
+
+  ˆ𝑧 𝑖,ℓ − ˆ𝑧 𝑗,ℓ 
+
+2, (11) 
+
+𝑑 𝛿 (𝑖, 𝑗 ) =
+
+vut 1
+
+|L 𝛿 𝑖 𝑗 |∑︁ ℓ ∈ L 𝛿 𝑖 𝑗 
+
+ ˆ𝛿 𝑖,ℓ − ˆ𝛿 𝑗,ℓ 
+
+2
+
+, (12) where ˆ𝑧 𝑖,ℓ and ˆ𝛿 𝑖,ℓ denote the normalized value and trend features, respectively. We connect 𝑖 and 𝑗 if both the value and trend distance criteria are satisfied: 
+
+E𝑣 = {( 𝑖, 𝑗 )| 𝑑 𝑣 (𝑖, 𝑗 ) ≤ 𝜏 𝑣 , 𝑑 𝛿 (𝑖, 𝑗 ) ≤ 𝜏 𝛿 }. (13) To avoid isolated nodes under sparse observations, for any node 
+
+𝑖 with L𝛿 𝑖 𝑗 = ∅ for all 𝑗 , we connect 𝑖 to its nearest value-based neighbor. 
+
+## 3.2 Two-Relation Learning 
+
+To learn event representations that jointly capture intra-patient progression and inter-patient similarity, we propose a two-relation graph neural network (GNN) that performs separate message pass-ing over temporal edges E𝑡 and value edges E𝑣 , followed by adaptive fusion at each layer. Let h(0) 
+
+> 𝑖
+
+= x𝑖 . At layer 𝑘 , we compute relation-wise messages for each node 𝑖 :
+
+m(𝑘 ) 
+
+> 𝑡,𝑖
+
+= GNN (𝑘 ) 
+
+> 𝑡
+
+(H(𝑘 −1) ; E𝑡 )𝑖 , (14) 
+
+m(𝑘 ) 
+
+> 𝑣,𝑖
+
+= GNN (𝑘 ) 
+
+> 𝑣
+
+(H(𝑘 −1) ; E𝑣 )𝑖 , (15) where GNN (𝑘 ) 
+
+> 𝑡
+
+and GNN (𝑘 ) 
+
+> 𝑣
+
+are GCN layers with independent pa-rameters: 
+
+GNN (H; E) = 𝜎 
+
+ ˜D− 12 ˜A ˜D− 12 HW 
+
+
+
+, (16) where ˜A is the adjacency with self-loops and ˜D is the corresponding degree matrix, W is the learnable weight matrix and 𝜎 (·) is the activation function. We fuse the two relation-specific messages using a learnable gate computed for each node at each layer: 
+
+𝛼 (𝑘 ) 
+
+> 𝑖
+
+= sigmoid 
+
+
+
+w(𝑘 )⊤  m(𝑘 ) 
+
+> 𝑡,𝑖
+
++ m(𝑘 )
+
+> 𝑣,𝑖
+
+
+
+, (17) 
+
+h(𝑘 ) 
+
+> 𝑖
+
+= 𝛼 (𝑘 ) 
+
+> 𝑖
+
+m(𝑘 ) 
+
+> 𝑡,𝑖
+
++  1 − 𝛼 (𝑘 )
+
+> 𝑖
+
+m(𝑘 ) 
+
+> 𝑣,𝑖
+
+. (18) After the final layer 𝐾 , we apply a multi-output linear prediction head: 
+
+ˆz𝑖 = W𝑜 h(𝐾 ) 
+
+> 𝑖
+
++ b𝑜 , (19) where each output dimension corresponds to one laboratory vari-able. The prediction for the designated target measurement is de-noted by ˜𝑦 𝑖 , i.e., the target dimension of ˆz𝑖 .Let Ωtrain be the set of training nodes with observed target labels 
+
+𝑦 𝑖 . We train the main target prediction by minimizing 
+
+Ltarget = 1
+
+|Ωtrain |∑︁ 𝑖 ∈Ωtrain 
+
+( ˜𝑦 𝑖 − 𝑦 𝑖 )2. (20) Although the final task is to impute the designated target mea-surement, we further regularize the event representations by recon-structing randomly masked non-target laboratory values. At each epoch, we randomly mask a small fraction of observed non-target labs from the input and ask the model to reconstruct them from the learned event representation. Let Mℓ be the set of masked node–lab pairs for lab ℓ. To reduce sensitivity to outlying lab values, we use the Huber reconstruction loss: 
+
+Laux = 1
+
+Íℓ≠𝑦 |M ℓ |∑︁ ℓ≠𝑦 ∑︁ (𝑖,ℓ ) ∈ M ℓ
+
+𝜌 𝜂 ( ˆ𝑧 𝑖,ℓ − 𝑧 𝑖,ℓ ), (21) where 
+
+𝜌 𝜂 (𝑒 ) =
+
+( 12 𝑒 2, |𝑒 | ≤ 𝜂, 𝜂  |𝑒 | − 12 𝜂  , |𝑒 | > 𝜂. (22) The final training objective is 
+
+L = Ltarget + 𝜆 Laux . (23) 
+
+## 3.3 Conformal Selection and FDR Control 
+
+In clinical settings, imputed laboratory values may directly influ-ence diagnosis, prognosis assessment, and treatment planning. We therefore apply conformal selection with false discovery rate (FDR) control to retain only reliable imputations: among the released im-putations, the expected fraction of clinically unacceptable errors is controlled at a user-specified level. 
+
+Risk hypothesis. Let ˆ𝑦 𝑖 be the model prediction at node 𝑖 and 𝑦 𝑖 
+
+be the ground-truth label (available only on calibration). We define the true error on labeled points as 
+
+𝜅 (𝑖 ) = |𝑦 𝑖 − ˆ𝑦 𝑖 |. (24) Given a user-specified tolerance 𝛿 > 0 for the target variable, we call node 𝑖 risky if 𝜅 (𝑖 ) ≥ 𝛿 . For each test-time node 𝑗 (with unknown 
+
+𝑦 𝑗 ), we consider the null hypothesis 
+
+𝐻 𝑗 : 𝜅 ( 𝑗 ) ≥ 𝛿 (the imputation at 𝑗 is risky) . (25) 
+
+Proxy risk score. Since 𝜅 ( 𝑗 ) is unobservable at test time, confor-mal selection requires a label-free proxy score that tends to be larger for risky imputations. We therefore define a proxy risk score by combining two complementary signals: prediction instability under structure-preserving perturbations, capturing sensitivity to small changes in relational evidence; and an evidence penalty, capturing the scarcity of relational support even when predictions appear stable. To compute prediction instability, we perform margin-weighted edge perturbations that reflect how strongly each edge is supported by the edge construction rules. For each edge 𝑒 , we compute a normalized margin 𝑚 (𝑒 ) ∈ [ 0, 1] to the threshold and convert it into an edge-specific keep probability 
+
+𝜋 (𝑒 ) = 𝜋 min + ( 𝜋 max − 𝜋 min ) · 𝑚 (𝑒 )𝛾 , (26) where 𝜋 min , 𝜋 max ∈ (0, 1) and 𝛾 > 0. Edges that barely satisfy the threshold have small 𝑚 (𝑒 ) and are dropped more often, while strongly supported edges have large 𝑚 (𝑒 ) and are kept with higher probability. For a temporal edge 𝑒 = (𝑖, 𝑗 ) ∈ E 𝑡 :
+
+𝑚 𝑡 (𝑒 ) = 1 − min 
+
+ Δ𝑡 𝑖 𝑗 
+
+Δ𝑡 
+
+, 1
+
+
+
+. (27) and for a value edge 𝑒 = (𝑖, 𝑗 ) ∈ E 𝑣 ,
+
+𝑠 𝑣 (𝑒 ) = max 
+
+( 𝑑 𝑣 𝑖 𝑗 
+
+𝜏 𝑣 
+
+, 𝑑 𝛿 𝑖 𝑗 
+
+𝜏 𝛿 
+
+)
+
+, 𝑚 𝑣 (𝑒 ) = 1 − min {𝑠 𝑣 (𝑒 ), 1} (28) 
+
+> 4SafeImpute: Reliable Clinical Data Imputation via Conformal Selection
+
+If the trend is unavailable for at least one endpoint, we use value-only strength 𝑠 𝑣 (𝑒 ) = 𝑑 𝑣 𝑖 𝑗 /𝜏 𝑣 .Let G (1) , . . . , G (𝐾 ) be 𝐾 independent perturbations obtained by sampling each edge 𝑒 according to Bernoulli (𝜋 (𝑒 )) . Let ˆ𝑦 (𝑘 ) 
+
+> 𝑖
+
+be the model prediction for node 𝑖 when running inference on G (𝑘 ) . We define the prediction-instability score as the dispersion of these predictions: 
+
+𝑆 pred (𝑖 ) = Std 
+
+
+
+{ ˆ𝑦 (𝑘 ) 
+
+> 𝑖
+
+}𝐾 𝑘 =1
+
+
+
+, (29) where Std (·) denotes the standard deviation across perturbations. Beyond perturbation sensitivity, reliability also depends on the amount of relational evidence supporting a node. When the con-structed relations are sparse for a node (hence small degree), there is limited information propagation from other events, and the im-putation is driven by a weak neighborhood signal. To reflect this evidence scarcity, we incorporate a degree-based penalty that down-weights nodes with insufficient temporal/value support, indepen-dent of the instability term. Concretely, let deg 𝑡 (𝑖 ) and deg 𝑣 (𝑖 ) denote the degrees of node 
+
+𝑖 in the temporal and value graphs, respectively. We define the evidence penalty as 
+
+𝑆 evid (𝑖 ) = 1√︁ 
+
+deg 𝑡 (𝑖 ) + 1 + 1√︁ 
+
+deg 𝑣 (𝑖 ) + 1 , (30) so that nodes with weaker neighborhood evidence receive larger penalties. Finally, we define the proxy risk score used for conformal testing as 
+
+ˆ𝜅 (𝑖 ) = 𝑆 pred (𝑖 ) + 𝛽 𝑆 evid (𝑖 ), (31) where 𝛽 ≥ 0 balances instability and evidence. Intuitively, ˆ𝜅 (𝑖 )
+
+becomes large when predictions are sensitive to plausible pertur-bations or when the node is weakly supported by the constructed relations. 
+
+Conformal p-values. Given the proxy risk score ˆ𝜅 (𝑖 ), we test the risk hypothesis in (25) by constructing conformal p-values using the calibration set. Concretely, we partition nodes into three disjoint subsets, Ωtrain , Ωcal , and Ωtest . We first define the calibration “bad” subset 
+
+B = {𝑖 ∈ Ωcal : |𝑦 𝑖 − ˆ𝑦 (𝑖 )| ≥ 𝛿 }, (32) which provides an empirical reference set for the null population. A common concern for applying conformal prediction on graphs is that node dependencies may violate exchangeability. Recent studies show that conformal validity can still hold for node-level tasks on static graphs when the nonconformity score is invariant to permu-tations of the calibration/test nodes [ 56 ]. In our setting, calibration and test nodes are treated identically during graph construction: their features and edges are determined solely by observed covari-ates, with targets masked. Under this setting, we give the following exchangeability assumption between Ωcal and Ωtest .
+
+Assumption 3.1 (Exchangeability of calibration and test nodes). Conditioned on the observed covariates used and the trained model parameters, the collection of node-level examples in Ωcal ∪ Ωtest 
+
+is exchangeable under permutations of indices. 
+
+For each node 𝑗 , we compute a conformal p-value [ 26 ] against 
+
+B as 
+
+𝑝 𝑗 = 1 + Í𝑖 ∈ B 1{ ˆ𝜅 (𝑖 ) < ˆ𝜅 ( 𝑗 )} + 𝑈 𝑗 
+
+Í𝑖 ∈ B 1{ ˆ𝜅 (𝑖 ) = ˆ𝜅 ( 𝑗 )} |Ωcal | + 1 , (33) where 𝑈 𝑗 ∼ Unif [0, 1] is used for random tie-breaking. Intuitively, a smaller 𝑝 𝑗 means that the current imputation has unusually low proxy risk compared with the calibration bad set B, and is therefore less likely to be risky. 
+
+Proposition 3.1 (Valid p-values under the risk null). Under Assumption 3.1 and the validity conditions of conformal selection for the proxy-risk score, for any test node 𝑗 satisfying the null 𝐻 𝑗 in (25) ,the p-value in (33) is super-uniform: 
+
+P(𝑝 𝑗 ≤ 𝛼 ) ≤ 𝛼, ∀𝛼 ∈ [ 0, 1]. (34) 
+
+FDR-controlled selection via Benjamini–Hochberg. In clinical de-ployment, it is more meaningful to control the overall error burden among the imputed values that are actually presented to clinicians or downstream decision models. We therefore target control of the false discovery rate (FDR) [ 7 ], defined as the expected proportion of truly risky imputations among those we accept for deployment. To this end, we apply the Benjamini–Hochberg (BH) procedure [ 7, 26 ]to the collection of p-values {𝑝 𝑗 }𝑗 ∈Ωtest at a target level 𝛼 ∈ ( 0, 1).Let 𝑝 (1) ≤ · · · ≤ 𝑝 (𝑚 ) be the sorted p-values over the 𝑚 = |Ωtest |
+
+test nodes, and let 
+
+𝑘 ★ = max 
+
+n
+
+𝑘 : 𝑝 (𝑘 ) ≤ 𝑘 𝑚 𝛼 
+
+o
+
+, (35) with the convention that 𝑘 ★ = 0 if the set is empty. We then select the nodes 
+
+S( 𝛼 ) = { 𝑗 ∈ Ωtest : 𝑝 𝑗 ≤ 𝑝 (𝑘 ★ ) }. (36) Since the null hypothesis 𝐻 𝑗 corresponds to “the imputation at 𝑗 is risky”, rejecting 𝐻 𝑗 means selecting node 𝑗 as sufficiently reliable for release. Therefore, S( 𝛼 ) is the deployed subset with a user-specified FDR control level. 
+
+Proposition 3.2 (FDR control via BH). Assume the null p-values are independent or satisfy the standard positive regression dependence on a subset (PRDS) condition [ 8]. Then applying BH at level 𝛼 to {𝑝 𝑗 }𝑗 ∈Ωtest yields 
+
+FDR = E
+
+" { 𝑗 ∈ S( 𝛼 ) : |𝑦 𝑗 − ˆ𝑦 ( 𝑗 )| ≥ 𝛿 }
+
+max {|S( 𝛼 )| , 1}
+
+#
+
+≤ 𝛼, (37) 
+
+i.e., among the selected imputations, the expected fraction of truly risky ones is controlled by 𝛼 .
+
+The proof follows the conformal testing used in [ 26 , 43 ]; for completeness we provide it in Appendix A. 
+
+## 4 Results 
+
+In this section, we analyze four key aspects to demonstrate the effectiveness of SafeImpute : (i) overall imputation accuracy and reliability control of the proposed method compared with various baselines; (ii) the performance of the pure event-graph imputer without FDR control; (iii) an ablation study that quantifies the impact of major design components; and (iv) a detailed analysis of FDR-controlled selection. 
+
+> 5Xinrui He, Mengting Ai, Junting Wang, Curtiss B. Cook and Jingrui He
+
+Table 1: Overall performance comparison. Best results are in bold and second-best are underlined. Method Dataset Mayo Clinic MIMIC-III MIMIC-IV Metric MAE ↓ RMSE ↓ Prec. ↑ MAE ↓ RMSE ↓ Prec. ↑ MAE ↓ RMSE ↓ Prec. ↑
+
+Statistical 
+
+Mean 0.4311 0.5086 0.8333 1.2528 1.4844 0.3970 1.1601 1.4991 0.5044 KNN 0.4983 0.5776 0.5000 1.2758 1.5844 0.4879 1.2962 1.6638 0.4557 MICE 0.3889 0.4589 0.8333 1.0382 1.2747 0.5394 0.9960 1.3906 0.6346 Missforest 0.3419 0.4416 0.8333 1.1409 1.3614 0.4697 0.9864 1.3351 0.6185 Hyperimpute 0.3833 0.4819 0.8333 0.9844 1.2409 0.5758 0.9872 1.3693 0.6185 
+
+Deep Learning 
+
+GAIN 0.3635 0.4360 0.8333 1.0613 1.3510 0.5394 1.0148 1.4378 0.6275 GRAPE 0.2494 0.3688 0.8333 0.9724 1.2526 0.6333 1.0057 1.6450 0.6487 TDM 0.4191 0.4832 0.6667 0.9934 1.2543 0.6091 1.1313 1.4749 0.5143 MIWAE 0.5040 0.6054 0.6667 1.1782 1.5031 0.5182 1.0124 1.4118 0.6232 Remasker 0.5250 0.6475 0.8333 1.1112 1.3463 0.5061 1.2324 1.5260 0.4431 DIFFIMPUTER 0.3060 0.4026 1.0000 1.0771 1.3122 0.5212 0.9791 1.2305 0.6400 
+
+Sequential LSTM 0.6620 0.7771 0.8333 1.1633 1.4025 0.4455 0.9934 1.4242 0.6293 TRANS 0.2649 0.3129 1.0000 2.1025 2.4062 0.1939 1.1627 1.9186 0.6052 
+
+SafeImpute 0.2464 0.3125 1.0000 0.9662 1.2351 0.6333 0.9715 1.3820 0.6555 
+
+## 4.1 Experimental Settings 
+
+4.1.1 Datasets. We evaluate SafeImpute on HbA1c (A1c) impu-tation for diabetes patients, where HbA1c is a key indicator for long-term glycemic control and diabetes management, using three datasets: Mayo Clinic, MIMIC-III [ 29 ], and MIMIC-IV [ 28 ]. Mayo Clinic dataset contains real-world records collected in 2022–2023 from patients diagnosed with type 1 diabetes, where each patient has multiple visits; for each visit, we extract {A1c, glucose, choles-terol, gender} as features, and the lab variables exhibit naturally occurring missingness because tests are not ordered at every visit. To create a test set for evaluation, we additionally mask 10% of ob-served A1c values as held-out targets. For MIMIC-III and MIMIC-IV, we construct diabetes cohorts by filtering patients with diabetes diagnoses and treat each A1c measurement as an anchor visit; for each anchor, we retrieve the most recent glucose and cholesterol measurements recorded at or before the A1c timestamp (within 7 days for glucose and 90 days for cholesterol), and use gender as the demographic feature, yielding irregular longitudinal event sequences with naturally occurring missingness across patients. We randomly mask 40% of observed A1c values as held-out targets. Apart from the held-out test nodes, we split the remaining nodes into training/validation/calibration sets with a 70%/15%/15% ratio. Statistics of processed datasets and detailed analysis of Mayo Clinic data are provided in the appendix B. Definitions of the evaluation metrics are provided in Appendix C. 
+
+4.1.2 Baselines. Existing imputation baselines generally do not provide native uncertainty estimation or selective-release mech-anisms. Since prior work on uncertainty estimation for imputa-tion [ 23 ] suggests that methods such as MICE [ 32 ] and MIWAE [ 35 ]can reflect both calibration and accuracy, we include a diverse set of baselines spanning statistical, deep learning, and sequen-tial methods. Statistical methods: Mean imputes each feature by the training-set mean. KNN imputes from the k nearest samples based on similarity over observed dimensions. MICE [ 32 ] iteratively fits feature-wise conditional regressors to update missing entries. MissForest [ 45 ] performs iterative imputation using random-forest predictors. HyperImpute [ 25 ] selects a strong imputer via auto-mated model and hyperparameter search. Deep learning methods: GAIN [ 54 ] uses adversarial training to generate realistic impu-tations. GRAPE [ 55 ] leverages graph neural message passing to propagate information for missing values. MIWAE [ 35 ] performs imputation under a variational generative framework. TDM [ 58 ]models complex tabular dependencies with a deep imputation ar-chitecture. ReMasker [ 15 ] learns masked reconstruction with a de-noising objective. DiffImputer [ 57 ] uses diffusion-based denoising to generate completed samples. Sequential methods: LSTM [ 22 ] im-putes using recurrent hidden states over irregular event sequences. TRANS [ 53 ] is a transformer-based sequential model for electronic health records data prediction; we adapt it for imputation by cast-ing missing-value recovery as a prediction problem over masked targets. We evaluate all methods on the same set of predictions selected by the proxy risk score and report each method’s empirical Precision based on its own imputation outputs. 
+
+4.1.3 Implementation. We choose the target FDR level 𝛼 according to the empirical FDR–acceptance trade-off on each dataset. Specifi-cally, we set 𝛼 =0.15 for Mayo Clinic and 𝛼 =0.35 for MIMIC-III/IV. Very strict target levels can yield an extremely small or empty ac-cepted set, making the selective results unstable and less practically useful. We set the clinically interpretable threshold 𝛿 to 0.6 percent-age points for Mayo Clinic and 1.0 percentage point for MIMIC-III/IV. For all datasets, we use an auxiliary loss weight 𝜆 =0.1 and set 
+
+𝛽 =0.1 when computing the proxy risk score. All experiments are run on a single NVIDIA H200 GPU. For baselines, we use the default PyPI implementation for MICE; for HyperImpute and MissForest, we use their official packages; and for KNN, we set 𝑘 =10 . For other baselines, we adopt the original implementations and follow the hyperparameter recommendations in the corresponding papers, with minor tuning for each dataset, and report the best-performing 
+
+> 6SafeImpute: Reliable Clinical Data Imputation via Conformal Selection
+
+Table 2: Event graph imputation without FDR control.                                                                                       
+
+> Method Mayo Clinic MIMIC-III MIMIC-IV
+> MAE RMSE MAE RMSE MAE RMSE Mean 0.6612 0.8198 1.3455 1.8495 1.3016 1.7386 KNN 0.7479 0.9239 1.3785 1.9068 1.1507 1.6223 MICE 0.6369 0.8045 1.1787 1.6490 1.1056 1.5231 Missforest 0.6300 0.8010 1.1523 1.6148 1.1233 1.5490 Hyperimpute 0.6640 0.8263 1.1664 1.6396 1.1441 1.5725 GAIN 0.7200 0.8564 1.4251 1.8650 1.2270 1.7497 GRAPE 0.5655 0.7743 1.2072 1.8092 1.1509 1.8945 TDM 0.6213 0.7946 1.1816 1.7180 1.2578 1.7052 Remasker 0.6654 0.8329 1.2120 1.7055 1.3179 1.6859 DIFFIMPUTER 0.6227 0.7988 1.1411 1.7129 1.0467 1.4541
+> LSTM 0.9289 1.1666 1.3377 1.8428 1.1449 1.7672 TRANS 0.5991 0.7696 1.5403 1.8801 1.4214 2.2184
+> SafeImpute 0.4142 0.5253 1.0621 1.6002 0.9642 1.5181
+
+configuration. Each experiment is repeated with five random seeds, and we report the mean performance. 
+
+## 4.2 Overall Performance 
+
+Table 1 shows the overall performance of SafeImpute against a broad set of baselines on Mayo Clinic, MIMIC-III, and MIMIC-IV. Overall, SafeImpute is consistently top-performing across datasets, demonstrating strong performance with FDR control and robust-ness under irregular and sparse missing data. Beyond the overall gains, comparing baseline behaviors to our method yields several findings. (i) Among non-neural baselines that are still commonly used in practice, MissForest and HyperImpute are relatively strong competitors, but they become less competitive in more challenging settings (e.g., when missingness is severe); notably, after applying our FDR-controlled selection, these simple methods also improve compared to their uncontrolled results (Table 2), suggesting that risk-aware selection can be a broadly useful add-on for simple im-puters. (ii) LSTM becomes less competitive, indicating that when sufficient temporal context is not available, classic time-series mod-els remain sensitive to irregular long gaps and sparse supervision. (iii) GRAPE, as a purely graph-based method, performs strongly, reinforcing the effectiveness of capturing intra-patient and inter-patient relations via the graph. (iv) TRANS achieves comparable performance on Mayo Clinic, implying that combining a temporal Transformer with graph modeling can be effective when sequences are short and irregular; at the same time, our comparison suggests that high-quality error control often requires method-aware design to support more reliable selection. 
+
+## 4.3 Event Graph Evaluation 
+
+We then evaluate the pure imputation performance on the event graph without any error control. In this setting, we construct edges only using the proposed temporal and trend-aware value criteria, and we do not add extra value-only edges when no eligible trend-based neighbor exists, to avoid noisy connections. Table 2 reports results on Mayo Clinic, MIMIC-III, and MIMIC-IV. The proposed event-graph imputer achieves the best or second best performance across all three datasets, highlighting the benefit of event-graph 
+
+Table 3: Ablation study of the event-graph imputer without FDR-controlled selection.                          
+
+> Variant Mayo MIMIC-III
+> MAE RMSE MAE RMSE w/o temporal edges 0.9669 1.2231 1.2889 1.8091 w/o trend-aware value edges 0.4213 0.5141 1.0902 1.7683 w/o adaptive fusion gate 0.9773 1.2373 1.1192 1.7312 w/o auxiliary reconstruction 0.4434 0.5485 1.0355 1.5724
+> SafeImpute 0.4142 0.5253 1.0621 1.6002
+
+Table 4: Ablation study of the proxy risk score under FDR-controlled selection.                   
+
+> Dataset Variant MAE RMSE FDR
+> Mayo Instability-only score 0.3150 0.3675 0.3575 Proxy risk score 0.2464 0.3125 0.0000
+> MIMIC-III Instability-only score 1.1468 1.6246 0.6304 Proxy risk score 0.9662 1.2351 0.3667
+
+construction and a two-relation GNN that combines intra-patient temporal continuity with inter-patient value-based similarity under irregular and sparse visit patterns. Sequential baselines are less com-petitive, suggesting that irregular visits and sparse observations limit sequence-only modeling, while classical imputers remain be-hind because feature-conditional modeling cannot fully capture latent relational signals under severe missingness. Additionally, the pure event-graph imputer sometimes slightly outperforms the FDR-controlled version because the latter adds value-only fallback edges to support reliability estimation, which may introduce noisy cross-patient connections. This reflects a small accuracy and reliability trade-off for selective release. 
+
+## 4.4 Ablation Study 
+
+We conduct ablation studies on Mayo Clinic and MIMIC-III to assess both the event-graph imputer and the reliability-control module. Removing temporal edges or trend-aware value edges degrades performance, showing that intra-patient temporal continuity and inter-patient clinical similarity provide complementary signals. Re-moving the adaptive fusion gate causes a substantial drop, high-lighting the importance of dynamically balancing the two relations. The auxiliary reconstruction loss improves performance on Mayo Clinic and serves as an additional regularizer for learning event representations from sparse non-target labs. We also ablate the proxy risk score for FDR-controlled selection. Using prediction instability alone leads to much higher FDR than the full proxy score, increasing FDR from 0.0000 to 0.3575 on Mayo Clinic and from 0.3667 to 0.6304 on MIMIC-III. This confirms that the evidence penalty is important for reliable release under sparse relational support. 
+
+## 4.5 A Close Look at FDR Control 
+
+FDR and Power. Recall that our test-time null hypothesis is 𝐻 𝑗 :
+
+|𝑦 𝑗 − ˆ𝑦 ( 𝑗 )| ≥ 𝛿 , i.e., node 𝑗 has a risky imputation. Our goal is to reject these risky-imputation nulls and retain nodes whose imputa-tions are sufficiently reliable for release. Figure 2 sweeps the BH target level 𝛼 and reports the FDR among the selected set, defined 
+
+> 7Xinrui He, Mengting Ai, Junting Wang, Curtiss B. Cook and Jingrui He
+
+Figure 2: FDR–power trade-off of conformal selection on Mayo Clinic dataset. Each panel fixes the clinical tolerance 𝛿 and sweeps the target FDR level 𝛼 . The dashed gray line indicates perfect calibration (FDR = 𝛼 ). 
+
+as the fraction of selected nodes that are in fact risk points (with 
+
+|𝑦 𝑗 − ˆ𝑦 ( 𝑗 )| ≥ 𝛿 ). We also report power, measured as the fraction of non-risk nodes (with |𝑦 𝑗 − ˆ𝑦 ( 𝑗 )| < 𝛿 ) that are successfully retained. Across 𝛿 ∈ { 0.5, 0.6, 0.7, 0.8}, the achieved FDR closely follows the target, indicating conservative control. As 𝛼 increases, more hypotheses are rejected and more nodes are selected, leading to higher power and eventual saturation when the BH cutoff becomes non-restrictive. Larger tolerances 𝛿 make the risky-imputation null less likely to hold, resulting in fewer true risk points; consequently, the retained set attains higher power and lower FDR, consistent with the intended screening behavior. FDR curves on MIMIC-III and MIMIC-IV are provided in Appendix D.  
+
+> (a) Mayo Clinic (b) MIMIC-III
+
+Figure 3: Alignment between the proxy risk score ˆ𝜅 and the real imputation error. 
+
+Selective Release Summary. Table 5 summarizes the selective re-lease results under the chosen operating point for each dataset. The retained subset is selected by the pre-specified proxy risk score, conformal calibration, and the Benjamini–Hochberg procedure, without access to test labels during selection. The results show that SafeImpute retains a nontrivial fraction of imputations under the target FDR constraint, rather than achieving error control by selecting only a very small subset. The acceptance fraction reflects the coverage of released imputations under the target FDR con-straint, while power measures how many truly reliable imputations are successfully retained. Across datasets, the selected operating points illustrate the trade-off between empirical FDR and retained coverage: stricter selection yields lower FDR but smaller accep-tance fractions, while more permissive target levels retain more imputations at the cost of higher empirical FDR. 
+
+Quality of the Proxy Risk Score. Our FDR-controlled selection relies on conformal p-values constructed from the proxy risk score 
+
+ˆ𝜅 , which in turn determines the BH rejection set. A well-behaved proxy should ideally exhibit a monotonic relationship with the 
+
+Table 5: Selective release results under the chosen target FDR levels. FDR measures the fraction of clinically unacceptable errors among retained imputations, while power measures the fraction of truly reliable imputations that are retained.                     
+
+> Dataset FDR ↓Power ↑Acceptance Fraction ↑Precision ↑
+> Mayo Clinic 0.000 0.1818 0.1132 1.000 MIMIC-III 0.3667 0.0982 0.0883 0.6333 MIMIC-IV 0.3437 0.2163 0.1822 0.6563
+
+realized imputation error: nodes with larger ˆ𝜅 should, on average, have larger realized errors |𝑦 − ˆ𝑦 |. Such alignment is crucial because it makes the ranking induced by ˆ𝜅 informative for separating high-error nodes from low-error ones. Here, we evaluate this property on both the Mayo Clinic and MIMIC-III datasets. For each dataset, we partition evaluation nodes into quantile groups (5 for Mayo Clinic and 10 for MIMIC-III) according to ˆ𝜅 and plot the mean absolute error within each group against the mean proxy score. Figure 3 shows a clear increasing trend on both datasets: groups with higher average ˆ𝜅 consistently have higher mean absolute residuals. This indicates that ˆ𝜅 is a meaningful surrogate of the unobserved error and is suitable for conformal selection when test labels are unavailable. 
+
+## 5 Related Work 5.1 Data Imputation 
+
+Missing data is a pervasive challenge in many applications [ 20 ]. Classical methods, e.g. , simple heuristics (mean/median substitu-tion) and machine learning methods such as KNN imputation [ 47 ]offer straightforward solutions but rely on restrictive assumptions and ignore feature relationships. Deep learning approaches lever-age various techniques and training paradigms [ 21 , 41 , 42 , 51 ](e.g., GANs, GNNs, and diffusion models). Representative exam-ples include GAIN [ 54 ], which trains a generator to impute miss-ing entries conditioned on observed entries while a discriminator distinguishes observed entries from imputed ones; GRAPE [ 55 ], which represents tabular data [ 62 ] as a bipartite graph with ob-served values treated as edges and formulates imputation as an edge-level prediction task; and DiffPuter [ 57 ], which combines diffu-sion models with an EM-style training procedure to learn the joint distribution of complete data and perform conditional sampling for missing entries. Autoencoder-based methods [ 18 , 50 ], such as ReMasker [ 15 ], adapt masked autoencoding to tabular imputation by masking entries and training a deep learning-based model to 
+
+> 8SafeImpute: Reliable Clinical Data Imputation via Conformal Selection
+
+reconstruct entries from context. Data imputation is particularly im-portant in healthcare settings, where missing data is common due to irregular measurements and clinical workflows. Many of these ideas have also been adapted to clinical records. For example, GRU-D [ 13 ] and BRITS [ 12 ] leverage RNNs to model temporal dynamics. Attention-based models such as SAITS [ 16 ] use self-attention with self-supervised masking to better capture long-range dependencies of clinical variables. GRIN [ 14 ] exploits GNNs [ 38 , 60 ] and performs message passing across variables and time. More recently, diffusion-based approaches such as CSDI [ 46 ] perform conditional denoising to iteratively refine missing values and have shown strong perfor-mance on ICU benchmarks. Although these methods are effective, they primarily optimize the reconstruction error and overlook the reliability of imputations. 
+
+## 5.2 Uncertainty Quantification in Healthcare Models 
+
+Given the high stakes of the domain, modern healthcare machine learning models increasingly incorporate uncertainty quantifica-tion (UQ) techniques to improve trustworthiness and safety [ 11 , 24 ]. Bayesian approaches [ 10 , 33 ] place probabilistic priors on model parameters to capture epistemic uncertainty and have been used in medical applications [ 36 , 59 ] to indicate low-confidence predic-tions. For example, Qiu et al. [ 40 ] applied a Bayesian neural network to clinical records and found that instances with high predictive uncertainty were harmful to overall model performance. Related approximations include Monte Carlo dropout [ 19 ], which performs stochastic inference by enabling dropout at test time; TrUE-Net [ 27 ]applies this strategy to AD genomic variant classification. Deep ensembles are another empirical way to improve predictive per-formance and quantify the uncertainty via inter-model variability. DEGU [ 61 ] integrates ensemble learning to improve the robust-ness and explainability of genomic DNNs. Another complementary direction is conformal prediction (CP), which offers distribution-free uncertainty quantification with formal coverage guarantees through calibrated prediction sets. Building on CP, conformal selec-tion [ 26 ] accepts predictions only when the conformal prediction set is sufficiently informative, yielding an explicit and risk-controllable mechanism for accepting a prediction [ 49 ]. This paradigm has been increasingly adopted in recent clinical studies [ 2 , 26 , 39 ]. SAFER [ 43 ]uses conformal inference to provide statistical guarantees while filtering out uncertain treatment recommendations. Together, these advances motivate the integration of uncertainty quantification to support more reliable and risk-aware clinical AI. 
+
+## 6 Conclusion 
+
+We propose SafeImpute , a framework for reliable clinical data im-putation that models irregular and sparse longitudinal records by constructing an event graph capturing both intra-patient temporal structure and inter-patient clinical similarity. For reliability control, 
+
+SafeImpute calibrates a proxy risk score into conformal p-values and applies the Benjamini–Hochberg procedure to control the false discovery rate of clinically unacceptable imputation errors. Exten-sive experiments demonstrate that SafeImpute achieves strong imputation performance while providing meaningful reliability guarantees, outperforming selected baselines in both standard and FDR-controlled imputation evaluation. Future work includes: (i) incorporating multi-modal information and multi-source clinical data; and (ii) moving beyond imputation metrics to evaluate the effect of reliable imputations on downstream tasks, such as risk prediction and treatment recommendation. 
+
+## Ethical Use of Data 
+
+To protect patient privacy, all data were anonymized during col-lection and processing. The use of this dataset has been reviewed and approved by the Institutional Review Board (IRB) to ensure compliance with ethical standards and participant protections. We strictly adhere to relevant laws and regulations regarding data use and protection to ensure the legal and compliant use of the data. 
+
+## Acknowledgments 
+
+This work is supported by National Science Foundation under Award No. IIS-2117902. The views and conclusions are those of the authors and should not be interpreted as representing the offi-cial policies of the funding agencies or the government. 
+
+## References                                                
+
+> [1] Anastasios N Angelopoulos, Rina Foygel Barber, and Stephen Bates. 2024. The-oretical foundations of conformal prediction. arXiv preprint arXiv:2411.11824
+> (2024). [2] Anastasios Nikolas Angelopoulos, Stephen Bates, Adam Fisch, Lihua Lei, and Tal Schuster. 2024. Conformal Risk Control. In The Twelfth International Conference on Learning Representations .https://openreview.net/forum?id=33XGfHLtZg [3] Thomas Augustin, Frank PA Coolen, Gert De Cooman, and Matthias CM Troffaes. 2014. Introduction to imprecise probabilities . John Wiley & Sons. [4] Yikun Ban, Xinrui He, Patricia M. Verona, Curtiss B. Cook, and Jingrui He. 2025. GLM-DM: language model boosted neural networks for HbA1c trend prediction in diabetes mellitus. Future Science OA 11, 1 (2025), 2567166. arXiv:https://doi.org/10.1080/20565623.2025.2567166 doi:10.1080/20565623.2025. 2567166 PMID: 41215678. [5] Stephen Bates, Emmanuel Candès, Lihua Lei, Yaniv Romano, and Matteo Sesia. 2023. Testing for outliers with conformal p-values. The Annals of Statistics 51, 1 (2023), 149–178. [6] Brett K Beaulieu-Jones, Jason H Moore, and Pooled Resource Open-Access ALS Clinical Trials Consortium. 2017. Missing data imputation in the electronic health record using deeply learned autoencoders. In Pacific symposium on biocomputing 2017 . World Scientific, 207–218. [7] Yoav Benjamini and Yosef Hochberg. 1995. Controlling the false discovery rate: a practical and powerful approach to multiple testing. Journal of the Royal statistical society: series B (Methodological) 57, 1 (1995), 289–300. [8] Yoav Benjamini and Daniel Yekutieli. 2001. The control of the false discovery rate in multiple testing under dependency. Annals of statistics (2001), 1165–1188. [9] David M Blei, Alp Kucukelbir, and Jon D McAuliffe. 2017. Variational inference: A review for statisticians. Journal of the American statistical Association 112, 518 (2017), 859–877. [10] Charles Blundell, Julien Cornebise, Koray Kavukcuoglu, and Daan Wierstra. 2015. Weight uncertainty in neural network. In International conference on machine learning . PMLR, 1613–1622. [11] Andrea Campagner, Elia Mario Biganzoli, Clara Balsano, Cristina Cereda, and Federico Cabitza. 2025. Modeling unknowns: A vision for uncertainty-aware machine learning in healthcare. International Journal of Medical Informatics 203 (2025), 106014. doi:10.1016/j.ijmedinf.2025.106014 [12] Wei Cao, Dong Wang, Jian Li, Hao Zhou, Lei Li, and Yitan Li. 2018. Brits: Bidirectional recurrent imputation for time series. Advances in neural information processing systems 31 (2018). [13] Zhengping Che, Sanjay Purushotham, Kyunghyun Cho, David Sontag, and Yan Liu. 2018. Recurrent neural networks for multivariate time series with missing values. Scientific reports 8, 1 (2018), 6085. [14] Andrea Cini, Ivan Marisca, and Cesare Alippi. 2021. Filling the g_ap_s: Mul-tivariate time series imputation by graph neural networks. arXiv preprint arXiv:2108.00298 (2021). [15] Tianyu Du, Luca Melis, and Ting Wang. 2024. ReMasker: Imputing Tabular Data with Masked Autoencoding. In The Twelfth International Conference on Learning Representations .https://openreview.net/forum?id=KI9NqjLVDT [16] Wenjie Du, David Côté, and Yan Liu. 2023. Saits: Self-attention-based imputation for time series. Expert Systems with Applications 219 (2023), 119619. [17] Pamela Giustinelli, Charles F Manski, and Francesca Molinari. 2022. Precise or imprecise probabilities? Evidence from survey response related to late-onset 9
+
+Xinrui He, Mengting Ai, Junting Wang, Curtiss B. Cook and Jingrui He 
+
+dementia. Journal of the European Economic Association 20, 1 (2022), 187–221. [18] Lovedeep Gondara and Ke Wang. 2018. Mida: Multiple imputation using de-noising autoencoders. In Pacific-Asia conference on knowledge discovery and data mining . Springer, 260–272. [19] John Hammersley. 2013. Monte carlo methods . Springer Science & Business Media. [20] Xinrui He, Yikun Ban, Jiaru Zou, Tianxin Wei, Curtiss Cook, and Jingrui He. 2025. LLM-Forest: Ensemble Learning of LLMs with Graph-Augmented Prompts for Data Imputation. In Findings of the Association for Computational Linguistics: ACL 2025 , Wanxiang Che, Joyce Nabende, Ekaterina Shutova, and Mohammad Taher Pilehvar (Eds.). Association for Computational Linguistics, Vienna, Austria, 6921– 6936. doi:10.18653/v1/2025.findings-acl.361 [21] Xinrui He, Tianxin Wei, and Jingrui He. 2023. Robust Basket Recommendation via Noise-tolerated Graph Contrastive Learning. In Proceedings of the 32nd ACM International Conference on Information and Knowledge Management (Birming-ham, United Kingdom) (CIKM ’23) . Association for Computing Machinery, New York, NY, USA, 709–719. doi:10.1145/3583780.3615039 [22] Sepp Hochreiter and Jürgen Schmidhuber. 1997. Long short-term memory. Neural computation 9, 8 (1997), 1735–1780. [23] Zarin Tahia Hossain and Mostafa Milani. 2025. Beyond Accuracy: An Empirical Study of Uncertainty Estimation in Imputation. arXiv preprint arXiv:2511.21607 
+
+(2025). [24] Sarah Jabbour, David Fouhey, Nikola Banovic, Stephanie D. Shepard, Ella Kaze-rooni, Michael W. Sjoding, and Jenna Wiens. 2025. On the Limits of Selective AI Prediction: A Case Study in Clinical Decision Making. arXiv:2508.07617 [cs.HC] https://arxiv.org/abs/2508.07617 [25] Daniel Jarrett, Bogdan C Cebere, Tennison Liu, Alicia Curth, and Mihaela van der Schaar. 2022. Hyperimpute: Generalized iterative imputation with automatic model selection. In International Conference on Machine Learning . PMLR, 9916– 9937. [26] Ying Jin and Emmanuel J Candès. 2023. Selection by prediction with conformal p-values. Journal of Machine Learning Research 24, 244 (2023), 1–41. [27] Taeho Jo, Eun Hye Lee, Alzheimer’s Disease Neuroimaging Initiative (ADNI), and the Alzheimer’s Disease Sequencing Project (ADSP). 2025. Uncertainty-aware genomic classification of Alzheimer’s disease: a transformer-based ensemble approach with Monte Carlo dropout. Briefings in Bioinformatics 26, 6 (2025), bbaf587. [28] Alistair EW Johnson, Lucas Bulgarelli, Lu Shen, Alvin Gayles, Ayad Shammout, Steven Horng, Tom J Pollard, Sicheng Hao, Benjamin Moody, Brian Gow, et al .2023. MIMIC-IV, a freely accessible electronic health record dataset. Scientific data 10, 1 (2023), 1. [29] Alistair EW Johnson, Tom J Pollard, Lu Shen, Li-wei H Lehman, Mengling Feng, Mohammad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G Mark. 2016. MIMIC-III, a freely accessible critical care database. 
+
+Scientific data 3, 1 (2016), 1–9. [30] Siddhartha Kapuria, Patrick Minot, Ariel Kapusta, Naruhiko Ikoma, and Farshid Alambeigi. 2024. A novel dual layer cascade reliability framework for an informed and intuitive clinician-ai interaction in diagnosis of colorectal cancer polyps. 
+
+IEEE Journal of Biomedical and Health Informatics 28, 4 (2024), 2326–2337. [31] Ki-Yeol Kim, Byoung-Jin Kim, and Gwan-Su Yi. 2004. Reuse of imputed data in microarray analysis increases imputation efficiency. BMC bioinformatics 5, 1 (2004), 160. [32] Roderick JA Little and Donald B Rubin. 2019. Statistical analysis with missing data . Vol. 793. John Wiley & Sons. [33] L López, Shaza Elsharief, Dhiyaa Al Jorf, Firas Darwish, Congbo Ma, and Farah E Shamout. 2025. Uncertainty Quantification for Machine Learning in Healthcare: A Survey. arXiv preprint arXiv:2505.02874 (2025). [34] Charles Lu, Andréanne Lemay, Ken Chang, Katharina Höbel, and Jayashree Kalpathy-Cramer. 2022. Fair conformal predictors for applications in medical imaging. In Proceedings of the AAAI conference on artificial intelligence , Vol. 36. 12008–12016. [35] Pierre-Alexandre Mattei and Jes Frellsen. 2019. MIWAE: Deep generative mod-elling and imputation of incomplete data sets. In International conference on machine learning . PMLR, 4413–4423. [36] Alireza Mehrtash, William M Wells, Clare M Tempany, Purang Abolmaesumi, and Tina Kapur. 2020. Confidence calibration and predictive uncertainty estimation for deep medical image segmentation. IEEE transactions on medical imaging 39, 12 (2020), 3868–3878. [37] Alexander S Millar, John Arnn, Sam Himes, and Julio C Facelli. 2024. Uncertainty in breast cancer risk prediction: a conformal prediction study of race stratification. In MEDINFO 2023—The Future Is Accessible . IOS Press, 991–995. [38] Kanika Narang, Adit Krishnan, Junting Wang, Chaoqi Yang, Hari Sundaram, and Carolyn Sutter. 2021. Ranking User-Generated Content via Multi-Relational Graph Convolution. In Proceedings of the 44th International ACM SIGIR Conference on Research and Development in Information Retrieval (Virtual Event, Canada) 
+
+(SIGIR ’21) . Association for Computing Machinery, New York, NY, USA, 470–480. doi:10.1145/3404835.3462857 [39] Christina Papangelou, Konstantinos Kyriakidis, Pantelis Natsiavas, Ioanna Chou-varda, and Andigoni Malousi. 2025. Reliable machine learning models in genomic medicine using conformal prediction. Frontiers in Bioinformatics Volume 5 - 2025 (2025). doi:10.3389/fbinf.2025.1507448 [40] Riyi Qiu, Yugang Jia, Mirsad Hadzikadic, Michael Dulin, Xi Niu, and Xin Wang. 2019. Modeling the uncertainty in electronic health records: a Bayesian deep learning approach. arXiv preprint arXiv:1907.06162 (2019). [41] Aravind Sankar, Junting Wang, Adit Krishnan, and Hari Sundaram. 2020. Beyond Localized Graph Neural Networks: An Attributed Motif Regularization Frame-work. In 2020 IEEE International Conference on Data Mining (ICDM) . 472–481. doi:10.1109/ICDM50108.2020.00056 [42] Aravind Sankar, Junting Wang, Adit Krishnan, and Hari Sundaram. 2022. Self-supervised role learning for graph neural networks. Knowledge and Information Systems 64, 8 (2022), 2091–2121. [43] Yishan Shen, Yuyang Ye, Hui Xiong, and Yong Chen. 2025. SAFER: A Cal-ibrated Risk-Aware Multimodal Recommendation Model for Dynamic Treat-ment Regimes. In Forty-second International Conference on Machine Learning .https://openreview.net/forum?id=7UqNM85dD6 [44] Shariq I Sherwani, Haseeb A Khan, Aishah Ekhzaimy, Afshan Masood, and Meena K Sakharkar. 2016. Significance of HbA1c test in diagnosis and prognosis of diabetic patients. Biomarker insights 11 (2016), BMI–S38440. [45] Daniel J Stekhoven and Peter Bühlmann. 2012. MissForest—non-parametric missing value imputation for mixed-type data. Bioinformatics 28, 1 (2012), 112– 118. [46] Yusuke Tashiro, Jiaming Song, Yang Song, and Stefano Ermon. 2021. CSDI: Con-ditional Score-based Diffusion Models for Probabilistic Time Series Imputation. arXiv:2107.03502 [cs.LG] https://arxiv.org/abs/2107.03502 [47] Olga Troyanskaya, Michael Cantor, Gavin Sherlock, Pat Brown, Trevor Hastie, Robert Tibshirani, David Botstein, and Russ B Altman. 2001. Missing value estimation methods for DNA microarrays. Bioinformatics 17, 6 (2001), 520–525. [48] Alireza Vafaei Sadr, Jiang Li, Wenke Hwang, Mohammed Yeasin, Ming Wang, Harold Lehmann, Ramin Zand, and Vida Abedi. 2025. Flexible imputation toolkit for electronic health records. Scientific reports 15, 1 (2025), 17176. [49] Janette Vazquez and Julio C Facelli. 2022. Conformal prediction in clinical medical sciences. Journal of Healthcare Informatics Research 6, 3 (2022), 241–252. [50] Pascal Vincent, Hugo Larochelle, Yoshua Bengio, and Pierre-Antoine Manzagol. 2008. Extracting and composing robust features with denoising autoencoders. In 
+
+Proceedings of the 25th international conference on Machine learning . 1096–1103. [51] Junting Wang, Chenghuan Guo, Jiao Yang, Yanhui Guo, Yan Gao, and Hari Sun-daram. 2025. Multi-modal Relational Item Representation Learning for Inferring Substitutable and Complementary Items. arXiv preprint arXiv:2507.22268 (2025). [52] Dongxia Wu, Liyao Gao, Matteo Chinazzi, Xinyue Xiong, Alessandro Vespignani, Yi-An Ma, and Rose Yu. 2021. Quantifying uncertainty in deep spatiotemporal forecasting. In Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining . 1841–1851. [53] Zhichao Yang, Avijit Mitra, Weisong Liu, Dan Berlowitz, and Hong Yu. 2023. TransformEHR: transformer-based encoder-decoder generative model to en-hance prediction of disease outcomes using electronic health records. Nature communications 14, 1 (2023), 7857. [54] Jinsung Yoon, James Jordon, and Mihaela van der Schaar. 2018. GAIN: Missing Data Imputation using Generative Adversarial Nets. In Proceedings of the 35th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 80) , Jennifer Dy and Andreas Krause (Eds.). PMLR, 5689–5698. https://proceedings.mlr.press/v80/yoon18a.html [55] Jiaxuan You, Xiaobai Ma, Yi Ding, Mykel J Kochenderfer, and Jure Leskovec. 2020. Handling Missing Data with Graph Representation Learning. In 
+
+Advances in Neural Information Processing Systems , H. Larochelle, M. Ran-zato, R. Hadsell, M.F. Balcan, and H. Lin (Eds.), Vol. 33. Curran Associates, Inc., 19075–19087. https://proceedings.neurips.cc/paper_files/paper/2020/file/ dc36f18a9a0a776671d4879cae69b551-Paper.pdf [56] Soroush H Zargarbashi, Simone Antonelli, and Aleksandar Bojchevski. 2023. Conformal prediction sets for graph neural networks. In International Conference on Machine Learning . PMLR, 12292–12318. [57] Hengrui Zhang, Liancheng Fang, Qitian Wu, and Philip S Yu. 2025. Diffputer: Empowering diffusion models for missing data imputation. In The Thirteenth International Conference on Learning Representations .[58] He Zhao, Ke Sun, Amir Dezfouli, and Edwin V Bonilla. 2023. Transformed distribution matching for missing value imputation. In International Conference on Machine Learning . PMLR, 42159–42186. [59] Yidong Zhao, Changchun Yang, Artur Schweidtmann, and Qian Tao. 2022. Effi-cient bayesian uncertainty estimation for nnu-net. In International Conference on Medical Image Computing and Computer-Assisted Intervention . Springer, 535–544. [60] Lecheng Zheng, Baoyu Jing, Zihao Li, Zhichen Zeng, Tianxin Wei, Mengting Ai, Xinrui He, Lihui Liu, Dongqi Fu, Jiaxuan You, et al . 2025. Pyg-ssl: A graph self-supervised learning toolkit. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 6580–6586. [61] Jessica Zhou, Kaeli Rizzo, Trevor Christensen, Ziqi Tang, and Peter K Koo. 2026. Uncertainty-aware genomic deep learning with knowledge distillation. npj 
+
+10 SafeImpute: Reliable Clinical Data Imputation via Conformal Selection     
+
+> Artificial Intelligence 2, 1 (2026), 3. [62] Jiaru Zou, Dongqi Fu, Sirui Chen, Xinrui He, Zihao Li, Yada Zhu, Jiawei Han, and Jingrui He. 2026. RAG over Tables: Hierarchical Memory Index, Multi-Stage Retrieval, and Benchmarking. In ICLR 2026 Workshop on Logical Reasoning of Large Language Models .https://openreview.net/forum?id=LUW0zHCE2W
+
+## A Proof of FDR Control 
+
+Goal. Let 𝜅 (𝑖 ) = |𝑦 𝑖 − ˆ𝑦 (𝑖 )| be the true imputation error on labeled nodes, and fix a clinical tolerance 𝛿 > 0. For each test node 𝑗 ∈ Ωtest 
+
+we test the null 
+
+𝐻 𝑗 : 𝜅 ( 𝑗 ) ≥ 𝛿, (38) i.e., the imputation at 𝑗 is risky .Let ˆ𝜅 (𝑥 ) be our label-free proxy risk score in (31) . To apply the selective conformal testing argument in [ 26 ], we define a noncon-formity score that is monotone in the binary label 1{𝜅 (𝑖 ) ≥ 𝛿 }. Let 
+
+𝑀 ≥ sup 𝑖 ˆ𝜅 (𝑖 ) (finite since ˆ𝜅 is bounded in practice). Define, for any node 𝑖 and candidate risk label 𝑏 ∈ { 0, 1},
+
+𝐽 (𝑥, 𝑏 ) = ˆ𝜅 (𝑥 ) + 2𝑀 · 1{𝑏 = 1}. (39) Thus, if the node is not risky ( 𝑏 = 0), then 𝐽 (𝑥, 𝑏 ) = ˆ𝜅 (𝑥 ); if it is risky (𝑏 = 1), then 𝐽 (𝑥, 1) = ˆ𝜅 (𝑥 ) + 2𝑀 . The score 𝐽 (𝑖, 𝑏 ) is monotone in terms of the risk label 𝑏 .For each calibration node 𝑖 ∈ Ωcal , define its observed risk label 
+
+𝐵 𝑖 = 1{𝜅 (𝑖 ) ≥ 𝛿 }, (40) and for each test node 𝑗 ∈ Ωtest , under the null 𝐻 𝑗 we have 𝐵 𝑗 = 1.Let 
+
+𝐽 𝑖 = 𝐽 (𝑖, 𝐵 𝑖 ) (𝑖 ∈ Ωcal ), b𝐽 𝑗 = 𝐽 ( 𝑗, 1) ( 𝑗 ∈ Ωtest ), (41) i.e., we evaluate the test score at the null label 𝑏 = 1.
+
+Conformal p-values. Let 𝑛 = |Ωcal | and index calibration nodes as 
+
+{1, . . . , 𝑛 }, and test nodes as {𝑛 +1, . . . , 𝑛 +𝑚 } with 𝑚 = |Ωtest |. Using the standard conformal rank with random tie-breaking, define for each test node 𝑗 ∈ { 1, . . . , 𝑚 },
+
+𝑝 𝑗 =
+
+Í𝑛 𝑖 =1 1{𝐽 𝑖 < b𝐽 𝑛 +𝑗 } + 𝑈 𝑗 
+
+
+
+1 + Í𝑛 𝑖 =1 1{𝐽 𝑖 = b𝐽 𝑛 +𝑗 }
+
+
+
+𝑛 + 1 (42) where 𝑈 𝑗 ∼ Unif [0, 1]. This is exactly the conformal p-value con-struction, as defined in [ 26 ], for testing the null label 𝑏 = 1, with a nonconformity score monotone in 𝑏 .
+
+Super-uniformity. By exchangeability of calibration and test nodes (Assumption 3.1) and monotonicity of 𝐽 in (39) , the p-values in (42) are selectively super-uniform with respect to the nulls 𝐻 𝑗 : for every 
+
+𝛼 ∈ [ 0, 1],
+
+P  ( 𝑗 ∈ 𝑆 ) ∧ ( 𝑝 𝑗 ≤ 𝛼 )  ≤ 𝛼, (43) where 𝑆 denotes the set of tested hypotheses produced by the procedure [26]. 
+
+BH step and FDR control. Apply Benjamini–Hochberg (BH) [ 7]at level 𝛼 to {𝑝 𝑗 }𝑚 𝑗 =1. Let 𝑝 (1) ≤ · · · ≤ 𝑝 (𝑚 ) and 
+
+𝑘 ★ = max 
+
+n
+
+𝑘 : 𝑝 (𝑘 ) ≤ 𝛼𝑘 𝑚 
+
+o
+
+, R = { 𝑗 : 𝑝 𝑗 ≤ 𝑝 (𝑘 ★ ) }, (44) where R is the BH rejection set. In our setting, rejecting 𝐻 𝑗 means declaring node 𝑗 reliable (i.e., deploying its imputation). Let 𝑅 = |R| 
+
+Table 6: Statistics of the preprocessed datasets. 
+
+Dataset #Patient #Avg Event. 
+
+Mayo Clinic 84 7.40 MIMIC-III 4243 2.20 MIMIC-IV 28880 4.95 
+
+and define the number of false discoveries (deployed but truly risky) as 
+
+𝑉 =
+
+> 𝑚
+
+∑︁ 
+
+> 𝑗 =1
+
+1{ 𝑗 ∈ R , 𝐻 𝑗 true }. (45) The FDR is FDR = E 𝑉 
+
+> max {𝑅, 1}
+
+.To obtain FDR control after selecting a deployed subset via Benjamini–Hochberg, we further assume the null p-values are in-dependent or satisfy PRDS [ 8] [ 5 , 8]. Define indicator variables 
+
+𝑅 𝑗 = 1{ 𝑗 ∈ R} and 𝑇 𝑗 = 1{𝐻 𝑗 true }. Then 
+
+FDR = E
+
+" Í𝑚 𝑗 =1 𝑇 𝑗 𝑅 𝑗 
+
+max {1, Í𝑚 𝑗 =1 𝑅 𝑗 }
+
+#
+
+= E
+
+"
+
+1max {1, Í𝑚 𝑗 =1 𝑅 𝑗 }
+
+> 𝑚
+
+∑︁ 
+
+> 𝑗 =1
+
+𝑇 𝑗 𝑅 𝑗 
+
+#
+
+.
+
+(46) From the classical BH guarantee under PRDS super-uniform p-values [7, 8, 26, 43], we have for each 𝑗 ,
+
+E[𝑇 𝑗 𝑅 𝑗 ] ≤ 𝛼 E[𝑅 𝑗 ]. (47) Summing over 𝑗 and applying the standard BH bounding argument yields 
+
+FDR = E
+
+" Í𝑚 𝑗 =1 𝑇 𝑗 𝑅 𝑗 
+
+max {1, Í𝑚 𝑗 =1 𝑅 𝑗 }
+
+#
+
+≤ 𝛼. (48) Therefore, among the deployed imputations (BH rejections), the expected fraction of truly risky ones is controlled at level 𝛼 . This completes the proof. 
+
+## B Datasets Analysis 
+
+Dataset statistics. Table 6 reports the basic statistics of the three preprocessed datasets used in our study. The Mayo Clinic dataset was collected from patients diagnosed with type 1 diabetes who had multiple clinical visits at Mayo Clinic during 2022–2023. We focus on routinely used metabolic and anthropometric measure-ments, including HbA1c (A1C), glucose, cholesterol and lipid panel components, and basic body measurements (weight, height, BMI), together with basic demographics. MIMIC-III and MIMIC-IV are publicly available critical-care EHR datasets from the Beth Israel Deaconess Medical Center. MIMIC-III covers ICU stays between 2001 and 2012, while MIMIC-IV contains more recent ICU and emergency department records from 2008 to 2019. 
+
+Missingness patterns across measurements. Figure 4 visualizes missingness across visits and lab measurements in the Mayo Clinic data. Rows correspond to visits sorted by patient and time, and columns correspond to measurements. Missingness is highly het-erogeneous: some measurements are recorded consistently, whereas lipid panel components such as LDL, HDL, and triglycerides show substantially higher missing rates. This pattern reflects opportunis-tic test ordering in routine care. 
+
+> 11 Xinrui He, Mengting Ai, Junting Wang, Curtiss B. Cook and Jingrui He
+
+Figure 4: Rows are visits sorted by patient and time; columns are lab measurements. Darker cells indicate observed values, and lighter cells indicate missing values. 
+
+Figure 5: Left: distribution of the number of visits per patient. Right: distribution of inter-visit intervals between consecu-tive visits within each patient. 
+
+Figure 6: Visit-wise missingness for 10 randomly sampled Mayo Clinic patients. Stacked segments show missing ratios at each specific visit index, with total bar height indicating cumulative missingness. 
+
+Heterogeneous longitudinal follow-up. Figure 5 (left) shows the distribution of the number of visits per patient in Mayo Clinic data. Most patients have a moderate number of visits, while a small fraction have substantially fewer or more visits. This heterogeneity means that some patients provide limited intra-patient history, motivating the use of cross-patient information when individual trajectories are short. 
+
+Irregular inter-visit intervals. Figure 5 (right) reports inter-visit time gaps, in days, between consecutive visits within each patient  
+
+> (a) MIMIC-III (b) MIMIC-IV
+
+Figure 7: Additional FDR–power trade-off curves on MIMIC-III and MIMIC-IV with 𝛿 = 1.0.
+
+in Mayo Clinic data. The distribution is highly non-uniform and is consistent with periodic diabetes monitoring, while also showing substantial irregularity across patients. 
+
+Visit-wise missingness dynamics. Figure 6 summarizes visit-wise missing ratios for 10 randomly sampled patients in Mayo Clinic data. Missingness varies both across visits within the same patient and across patients at the same visit index, further highlighting the irregular and opportunistic nature of measurement collection in real-world clinical practice. 
+
+## C Evaluation Metrics 
+
+Let ˆ𝑦 𝑖 denote the imputed value and 𝑦 𝑖 denote the ground-truth value for an evaluated node 𝑖 . The mean absolute error (MAE) is defined as 
+
+MAE = 1
+
+|Ωtest |∑︁ 𝑖 ∈Ωtest 
+
+| ˆ𝑦 𝑖 − 𝑦 𝑖 |. (49) The root mean squared error (RMSE) is 
+
+RMSE =√︄ 1
+
+|Ωtest |∑︁ 𝑖 ∈Ωtest 
+
+( ˆ𝑦 𝑖 − 𝑦 𝑖 )2. (50) For selective-release evaluation, let S denote the set of released imputations selected by the FDR-control procedure. Given the clin-ically meaningful error threshold 𝛿 , an imputation is considered reliable if | ˆ𝑦 𝑖 − 𝑦 𝑖 | < 𝛿 and risky otherwise. We define precision as the fraction of released imputations that are truly reliable: 
+
+Precision = |{ 𝑖 ∈ S : | ˆ𝑦 𝑖 − 𝑦 𝑖 | < 𝛿 }| 
+
+max {|S| , 1} . (51) Equivalently, since empirical FDR measures the fraction of risky imputations among the released set, precision corresponds to 1 −
+
+FDR . Higher precision indicates that a larger fraction of released imputations are within the clinically acceptable error range. 
+
+## D FDR Curves on MIMIC-III and MIMIC-IV 
+
+Figure 7 provides additional FDR–power trade-off curves on MIMIC-III and MIMIC-IV. We fix the clinically interpretable tolerance to 
+
+𝛿 = 1.0 and sweep the target FDR level 𝛼 . These results show how the BH target level controls the selective release behavior on public clinical datasets: increasing 𝛼 makes the selection rule less restrictive and generally increases power, while the achieved FDR remains interpretable relative to the target level.
