@@ -1,0 +1,763 @@
+Title: Complexity-Budgeted, Interaction-Aware Interpretable Model for Tabular Data
+
+URL Source: https://arxiv.org/pdf/2607.07060v1
+
+Published Time: Thu, 09 Jul 2026 00:32:29 GMT
+
+Number of Pages: 31
+
+Markdown Content:
+# Complexity-Budgeted, Interaction-Aware Interpretable Model for Tabular Data 
+
+Srikumar Krishnamoorthy Information Systems Area, Indian Institute of Management Ahmedabad, India 
+
+Abstract 
+
+Inherently interpretable classifiers for tabular data typically rely on sparse features, rules, or pat-terns that users can inspect directly. The marginal feature-screening step common to these methods can discard variables whose predictive value emerges only through joint configurations with other variables. We present Interaction Aware Interpretable Machine Learning (IAIML), a framework that addresses this limitation through three coordinated mechanisms: adaptive per-feature discretization, finite-grid pairwise interaction scoring, and a partitioned explanation budget. Detected interactions are routed through one of two strategies: relaxing the screening filter so that interaction-supported variables enter the pattern search, or constructing explicit pair terms for a sparse downstream classi-fier. On a 40-dataset panel comprising 24 real-world tabular benchmarks and 16 synthetic interaction stress tests, evaluated under nested cross-validation, IAIML achieves mean AUC within 1.4 points of tuned gradient-boosted ensembles while requiring roughly 14–28 times fewer fitted explanation components. On datasets with strong pairwise interaction structure and low marginal signal, IAIML outperforms all baselines. Among compact interpretable methods, IAIML is comparable to RuleFit in AUC and component count and is less expensive to tune. EBM obtains a small but significant AUC advantage across the full panel, with a substantially larger lookup-table footprint. Performance de-grades on datasets requiring higher-order interactions beyond the pairwise scope. Component-isolated ablations confirm that adaptive discretization and interaction-aware admission each contribute incre-mentally. These results support IAIML as a compact, interaction-aware framework appropriate for settings where bounded explanation size and controlled treatment of feature interactions are design requirements. 
+
+Keywords: Interpretable machine learning, Feature interaction detection, Pattern mining, Classifi-cation, Complexity budgeting 
+
+# 1 Introduction 
+
+Machine learning is increasingly used to support important decisions in healthcare, finance, criminal jus-tice, and public policy. In these settings, stakeholders require that automated decisions be explainable, auditable, and contestable (Rudin, 2019; Guidotti et al., 2019; De Bock et al., 2024). This requirement has motivated a growing body of work on inherently interpretable models, which provide transparency by construction, as opposed to post-hoc explanation methods that approximate opaque models after the fact (Ribeiro et al., 2016; Lundberg and Lee, 2017). Interpretable model families include decision trees (Breiman et al., 1984), rule lists (Letham et al., 2015; Angelino et al., 2018), scoring systems (Ustun and Rudin, 2016), generalized additive models (Lou et al., 2012, 2013), and pattern-based classifiers (Krishnamoorthy, 2024). A common thread across these families is sparsity: the model’s prediction is traceable to a small number of features, rules, or patterns that a human reviewer can inspect directly. Achieving sparsity, however, typically requires an early screening step that ranks candidate features by their individual association with the target variable. This marginal screening is a natural choice for auditability and computational control, but it introduces a systematic vulnerability. Two variables may each be individually uninformative while their joint configuration is highly predictive of the outcome. Consider a clinical setting in which a patient’s risk depends on the combination of two biomarkers, neither of which is predictive on its own. A screening rule that ranks features by marginal association 1arXiv:2607.07060v1 [cs.LG] 8 Jul 2026 will discard both biomarkers before their joint signal can be observed. This problem is not limited to rare edge cases. Feature interactions are well documented in genomics, clinical risk prediction, and credit scoring (Dumitrescu et al., 2022), and their suppression can degrade both accuracy and the fidelity of the resulting explanations. The vulnerability is especially direct in pattern-mining methods that assign item utilities from marginal association before evaluating joint patterns. In such methods, a feature with negligible marginal signal receives low utility regardless of how informative it becomes when combined with a partner. Other interpretable families handle interactions differently. Tree-derived rules can encode split-based interactions, but only those that the greedy splitting heuristic happens to explore. Explain-able Boosting Machines (EBM) add selected pairwise terms through residual-based boosting (Lou et al., 2013), but residual-based pair selection can miss pairs whose constituent features contribute negligible main effects. RuleFit (Friedman and Popescu, 2008) inherits interaction structure from a tree ensemble, but provides no mechanism to distinguish rules that capture genuine synergy from those that capture redundant marginal signal. In each case, interaction detection is either absent, implicit, or coupled to marginal signal strength. This paper introduces Interaction Aware Interpretable Machine Learning (IAIML), a pattern-classification framework that detects pairwise synergy independently of marginal signal strength and channels it into a sparse, budget-constrained classifier. IAIML builds on the HUG-IML pattern-mining method (Krishnamoorthy, 2024) and addresses a specific gap: the suppression of interaction-only variables by marginal-utility-based candidate admission. The framework scores pairwise interactions on a coarse discretization grid, then routes detected synergy through one of two strategies. The first relaxes the screening filter so that interaction-supported variables can enter the pattern search. The second constructs explicit algebraic pair terms and supplies them to the downstream classifier. Apartitioned explanation budget caps the total number of auditable components, ensuring that the added representational capacity does not compromise inspectability. Every prediction remains traceable to a bounded set of patterns, original features, and, where applicable, named pair terms. This paper makes the following three contributions: 1. Presents an information-theoretic interaction criterion for marginal-signal-independent synergy de-tection. The criterion quantifies pairwise excess joint information from discretized contingency ta-bles independently of marginal signal strength. Finite-grid concentration and ranking-consistency guarantees establish when the resulting source selection can be trusted at a given sample size. 2. Introduces IAIML, a three-stage framework that operationalizes the information-theoretic interac-tion criterion. The framework combines adaptive per-feature discretization, two separable routing strategies for channeling detected synergy into the explanation (IAIML-R for pattern-level admis-sion, IAIML-A for named algebraic pair terms), and a partitioned complexity budget that caps the total number of auditable explanation components. 3. Empirically evaluates the framework under a shared nested cross-validation protocol. On a 40-dataset panel (24 real-world benchmarks, 16 synthetic interaction stress tests), IAIML achieves mean AUC within 1.4 points of tuned gradient-boosted ensembles while requiring roughly 14– 28 times fewer fitted explanation components. On a subset of datasets with strong pairwise interaction structure and low marginal signal, IAIML outperforms all baselines. Component-isolated ablations confirm that each design element contributes incrementally. The remainder of the paper is organized as follows. Section 2 reviews related work. Section 3 introduces information-theoretic preliminaries and the pattern-mining formalism. Section 4 describes the proposed three-stage framework. Section 5 develops the theoretical motivation and complexity analysis. Section 6 presents the empirical study and shares the key findings. Section 7 discusses implications and limitations, and Section 8 presents concluding remarks. 22 Related Work 
+
+Tree-based and rule-based methods. Decision trees (Breiman et al., 1984; Bertsimas and Dunn, 2017) provide direct rule-based transparency and can implicitly capture interactions through recursive parti-tioning. Their interpretability and computational efficiency make them a natural first choice in many applied settings. The interactions that emerge are determined by the greedy splitting heuristic, which fa-vors features with strong marginal signal. Rule list and rule set methods (Letham et al., 2015; Angelino et al., 2018; Lakkaraju et al., 2016) offer compact Boolean decision logic optimized for auditability; CORELS (Angelino et al., 2018) provides certifiably optimal rule lists, a guarantee no other method in this family offers, though it requires pre-binarized features. Scoring systems (Ustun and Rudin, 2016) produce integer point tables that are directly usable in clinical and regulatory settings. RuleFit (Fried-man and Popescu, 2008) bridges ensemble learning and interpretability by extracting conjunctive rules from a tree ensemble and fitting a LASSO-regularized linear model over rules and original features. This architecture is effective at capturing interaction structure inherited from tree splits, though the interaction coverage is governed by the tree-growing heuristic rather than a targeted synergy criterion. 
+
+Additive and post-hoc methods. Generalized additive models provide visualizable per-feature shape functions. Explainable Boosting Machines (EBM) (Lou et al., 2012, 2013; Nori et al., 2019; Chang et al., 2021) represent the current state of the art among inherently interpretable methods, fitting pairwise interaction terms through greedy cyclic boosting guided by the FAST algorithm (Lou et al., 2013). FAST selects pairs by residual-error reduction after main effects are fit, a strategy that is effective when interacting features also carry moderate marginal signal. A structural consequence of residual-based selection is that pairs whose constituent features carry negligible marginal signal contribute little residual to explain and may therefore receive lower priority, even when their joint configuration is informative. Neural Additive Models (Agarwal et al., 2021) and TabNet (Arık and Pfister, 2021) extend the additive paradigm with flexible or attention-based alternatives, trading some global transparency for capacity. Sparse linear models with engineered features (Gosiewska et al., 2021; Dumitrescu et al., 2022; Liu et al., 2024; Chen et al., 2024) augment logistic regression with nonlinear transforms, an approach that has shown promise in credit scoring and other regulated domains. Post-hoc explanation methods such as LIME (Ribeiro et al., 2016) and SHAP (Lundberg and Lee, 2017) provide local approximations of opaque models; their role is complementary to inherently interpretable models, which build transparency into the model itself (Rudin, 2019; Borgonovo et al., 2024; De Bock et al., 2024). 
+
+Pattern mining and Interaction detection. High Utility Itemset mining (Wu et al., 2015; Fournier-Viger et al., 2014; Zida et al., 2017; Krishnamoorthy, 2017; Tseng et al., 2016) identifies itemsets whose aggregate utility exceeds a threshold. The HUG-IML framework (Krishnamoorthy, 2024) adapts this machinery for supervised classification via feature–target correlation utilities and information-gain filter-ing. IAIML uses HUG-IML-style high-utility gain pattern mining as the pattern-generation backbone, but changes the upstream candidate-admission mechanism and the downstream representation budget. The original HUG-IML formulation assigns feature utilities from marginal feature–target association and filters mined patterns by information gain. IAIML keeps the interpretable pattern vocabulary but adds adaptive discretization, explicit pairwise interaction scoring, and one of two controlled pathways for allowing low-marginal but interaction-supported variables to enter the final sparse classifier. Section 5 shows formally why HUG-IML’s marginal-utility weighting cannot detect interaction-only patterns. Feature interaction detection more broadly draws on ANOVA-based tree diagnostics (Hooker, 2007), Friedman’s H-statistic (Friedman and Popescu, 2008), Shapley interaction indices (Grabisch and Roubens, 1999; Sundararajan et al., 2020; Borgonovo et al., 2024), and Partial Information Decomposition (PID) (Williams and Beer, 2010; Griffith and Koch, 2014; Bertschinger et al., 2014). The interaction score used by IAIML is a simplified, grid-based measure of net interaction rather than a full PID estimate. In PID terms, the score compares how much a pair of features tells us about the label when considered jointly versus the sum of what each feature tells us on its own. This comparison blends two different effects together: synergy (information that only emerges when 3Table 1: Summary of interpretable model families with respect to interaction handling.                                
+
+> Method family Inherent Explicit interaction Marginal-independent Complexity-transparency? criterion? detection? bounded?
+> Trees / rule lists Yes No No Partially Scoring systems Yes No No Yes RuleFit Yes No (implicit via trees) No Yes EBM Yes Yes (FAST residual) No No Post-hoc (SHAP, LIME) No No N/A N/A IAIML (this paper) Yes Yes Yes Yes
+
+the features are considered together) and redundancy (information that both features already share individually), without separating them. A positive score simply means the pair, taken together, carries more information about the label than the two features do separately. This makes the score useful as a quick screening tool for spotting pairs of features whose joint behavior matters even when neither feature looks informative on its own. Discretization of continuous features, meaning the conversion of them into discrete bins or categories, is a classical preprocessing step (Fayyad and Irani, 1993; Dougherty et al., 1995; Kerber, 1992; Tsai et al., 2008; Garcia et al., 2013). Most existing methods choose how to bin each feature by optimizing a criterion for that feature alone, without regard to other features. IAIML builds on this same general approach but extends it by also taking feature interactions into account when deciding how each feature should be discretized. Table 1 summarizes the related literature. The limitation IAIML addresses is most direct for pattern-mining frameworks that use marginal feature–target utilities before evaluating candidate itemsets. Re-lated interpretable families such as EBM and RuleFit can represent pairwise structure, but they ob-tain it through residual-based boosting or tree-derived rule extraction rather than through an explicit marginal-signal-independent synergy score tied to a bounded pattern vocabulary. IAIML combines such a criterion with an inherently interpretable downstream classifier. Section 6 evaluates it directly against representative baselines: tuned gradient-boosted ensembles as strong predictive baselines, EBM as the leading GAM-with-interactions method, and RuleFit as the leading tree-derived rule-ensemble method. 
+
+# 3 Preliminaries 
+
+Let D = {(x(i), y (i))}ni=1 denote a labeled dataset with p predictors x(i) ∈ Rp and binary 1 labels y(i) ∈{0, 1}. We write fj for the j-th feature and x(i) 
+
+> j
+
+for its value in the i-th instance. Let Dtr and Dtst 
+
+denote training and test splits obtained by stratified partitioning. 
+
+I(X; Y ) denotes the mutual information between random variables X and Y , estimated from em-pirical distributions on discretized contingency tables: ˆI(X; Y ) = X
+
+> x∈X
+
+X
+
+> y∈Y
+
+ˆp(x, y ) log ˆp(x, y )ˆp(x)ˆ p(y) , (1) where ˆ p denotes the empirical distribution. We use natural logarithms (nats); results hold for any logarithmic base up to a constant. The information gain of a discretized feature fj (with Bj bins) with respect to the target is IG( fj ) ≡
+
+I(bin( fj , B j ); y), i.e., the mutual information between the binned feature and the label. 
+
+Definition 3.1 (Interaction Information) . For discretized features fi, f j and target y, the interaction information is 
+
+I(fi, f j ) = I(fi, f j ; y) − I(fi; y) − I(fj ; y). (2) 
+
+> 1Generalization to multiclass settings is straightforward; we focus on binary classification for clarity of exposition.
+
+4When I > 0, the pair exhibits synergy : joint information exceeds the sum of marginal contributions. When I < 0, the pair is redundant .
+
+Definition 3.2 (Interaction-only Signal) . A feature pair ( fi, f j ) exhibits an interaction-only signal with respect to target y if there exist thresholds 0 < ϵ 1 ≪ ϵ2 such that: (a) I(fi; y) < ϵ 1 and I(fj ; y) < ϵ 1 (weak marginal signal), (b) I(fi, f j ; y) > ϵ 2 (strong joint signal), where ϵ1 is small enough that neither feature would survive a marginal relevance screen and ϵ2 is large enough to be practically interesting. This implies I(fi, f j ) > ϵ 2 − 2ϵ1 ≈ ϵ2.
+
+Definition 3.3 (High Utility Gain Pattern) . A HUG pattern is an itemset X in the top-k high utility itemsets (constrained to maximum length L) that satisfies the information gain threshold: HUG = 
+
+{X | X ∈ topkHUI L and IG( X) ≥ G}, where the external utility of feature fj for class c is defined as EU( fj , c ) = |corr( fj , y )| · wc and wc is a class weight. While we build upon HUG-IML framework (Krishnamoorthy, 2024), our contributions apply more broadly to any framework that screens features by marginal association. 
+
+Definition 3.4 (Pair Transform Family) . For a selected feature pair ( fi, f j ), the pair transform family 
+
+Φij consists of four operators applied to the original continuous feature values: 
+
+ϕprod  
+
+> ij
+
+= fi · fj , ϕabs  
+
+> ij
+
+= |fi − fj |, (3) 
+
+ϕsign  
+
+> ij
+
+= fi − fj , ϕsum  
+
+> ij
+
+= fi + fj . (4) These transforms render specific interaction structures, namely multiplicative, distance-based, direc-tional, and additive, accessible to a downstream linear classifier. 
+
+# 4 Methodology 
+
+The proposed framework addresses the interaction gap in interpretable classification through a coor-dinated sequence of three major stages. Figure 1 illustrates the overall architecture. The first stage, 
+
+adaptive discretization (Section 4.1), replaces fixed global binning with a supervised per-feature bin selection that respects each feature’s distributional complexity. The second stage, interaction detection and feature construction (Section 4.2), applies an information-theoretic synergy criterion to identify feature pairs whose joint predictive value exceeds their marginal contributions and channels this evi-dence through one of two separable routing pathways. The third stage, complexity-budgeted learning 
+
+(Section 4.3), caps the total number of explanation components via a partitioned budget and trains a sparse logistic regression classifier within this budget. The key design principle throughout is separable interpretability : each additional representational capacity enters the model through a single, semanti-cally transparent mechanism, so that every prediction can be unambiguously attributed to its source components. IAIML first learns adaptive discretization rules using only the training fold. It then computes coarse-grid pairwise interaction scores on the same training fold and records the top source–partner pairs. IAIML-R uses these pairs only to relax candidate admission for pattern mining; IAIML-A instead converts them into named pair transforms and appends them to the sparse classifier vocabulary. In both pathways, the final classifier is fit after applying the partitioned component budget. All learned bins, selected pairs, mined patterns, and coefficients are then applied to the held-out outer fold. 
+
+4.1 Adaptive Per-Feature Discretization 
+
+Pattern-based interpretable classifiers that operate on discretized features and more broadly any itemset-mining or rule-induction framework that converts continuous predictors to categorical items, typically use equal-frequency binning with a global bin count B shared across all numerical features. This is a 5Figure 1: High-level architecture of the interaction-aware interpretable classification framework. Stage 1 (green) performs adaptive per-feature discretization. Stage 2 (yellow) scores pairwise interaction in-formation and selects source–partner pairs (Algorithm 1). The framework then routes detected synergy through exactly one of two mutually exclusive pathways, augmented-pair operators (orange, IAIML-A, Path A) or interaction-relaxed mining (light green, IAIML-R, Path B). Stage 3 (blue) applies a parti-tioned complexity budget and fits a sparse logistic regression classifier. deliberate interpretability choice: all mined items are stated in the same type of discretized vocabulary. It is also a source of avoidable error. A fixed global B makes the explanation vocabulary easy to describe, but it asks every feature to express its class relationship at the same resolution. This creates two systematic failure modes. Under-resolution occurs when features with complex or multi-modal conditional distributions p(fj | y) are discretized too coarsely, merging distinct distributional regimes into single bins and destroying class-discriminative structure. Over-fragmentation occurs when features with simple distributions or few distinct values are discretized too finely, producing bins with few observations and inflating estimation variance in downstream information-gain computations. The standard remedy, grid search over a small set of candidate values B ∈ { 5, 7, 10 , 15 }, selects the best single global value but cannot resolve per-feature mismatches. A feature whose conditional distribution is bimodal may require B = 10 to separate the modes, while a near-binary feature needs only B = 3. 
+
+4.1.1 Elbow-Point Information Gain Search 
+
+We select Bj per feature j via a supervised search over a candidate set B = {B(1) < B (2) < · · · < B (C)}
+
+(default {2, 3, 5, 7, 10 , 15 }) with an elbow-stopping rule. 6Proposition 4.1 (Monotonicity of Training-Sample IG) . Let ˆPn denote the empirical distribution of (fj , y ) over n training samples. If the partition πB′ induced by B′ equal-frequency bins refines πB for 
+
+B′ > B , then IG( y; bin( fj , B ′)) ≥ IG( y; bin( fj , B )), where both quantities are computed under ˆPn.
+
+Proof. Refinement implies bin( fj , B ) = g(bin( fj , B ′)) for some surjection g, so y → bin( fj , B ′) →
+
+bin( fj , B ) is a Markov chain and the data-processing inequality gives the result. For arbitrary candidate counts the quantile cutpoints of πB and πB′ need not coincide, so strict nest-ing does not hold in general. In practice the IG sequence is nevertheless observed to be non-decreasing on training data: quantile bins become approximately nested for continuous features with large n, and any minor non-monotonicity simply triggers early stopping rather than selecting a suboptimal bin count. Exact nesting can be enforced by choosing B(c) | B(c+1) (e.g. {2, 4, 8, 16 , 32 }). On held-out data, however, high bin counts may decrease IG due to overfitting. The elbow-stopping rule resolves this without requiring a held-out set. 
+
+Definition 4.1 (Elbow-Stopping Rule) . Given the candidate IG sequence {IG j (B(c))}Cc=1 , marginal gain ratio threshold ρ ∈ (0 , 1), and stabilisation constant ϵ0 = 10 −9, define the first-violation index 
+
+τj := min 
+
+(
+
+c ∈ { 2, . . . , C } : IG j (B(c)) − IG j (B(c−1) )IG j (B(c−1) ) + ϵ0
+
+< ρ 
+
+)
+
+, (5) with τj := C + 1 if no such c exists. The selected bin count is 
+
+B∗ 
+
+> j
+
+= B(τj −1) . (6) Since τj ≥ 2 by construction, B∗ 
+
+> j
+
+≥ B(1) : the coarsest candidate is always admissible, providing a natural fallback for uninformative features. When IG j (B(1) ) = 0, the ratio at c = 2 reduces to IG j (B(2) )/ϵ 0, which exceeds ρ for any feature with non-trivial class separation at the second candidate. 
+
+Proposition 4.2 (Properties of Elbow-Stopping) . (a) B∗ 
+
+> j
+
+≤ B(C), bounding the cardinality of the discretised feature. (b) If IG j (·) is concave over B and the candidates are equally spaced, the marginal gain ratio is non-increasing, so elbow-stopping selects a bin count in the knee region of the IG curve. (c) B∗ 
+
+> j
+
+≤ min( B(C), d j ) where dj := |{ x(i) 
+
+> j
+
+}i|: for B > d j the implementation collapses duplicate quantile edges, the effective partition is unchanged, the marginal gain drops to zero, and the rule stops. A na¨ ıve implementation evaluates each ( j, B ) pair independently at cost O(C · n log n) per feature. Our implementation sorts once and reuses the sorted order for all candidates, reducing the cost to 
+
+O(n log n + C · n) per feature and O(p (n log n + C · n)) overall. 
+
+4.1.2 Pair-Aware Bin Selection 
+
+The marginal procedure can be suboptimal for features whose predictive value is interaction-driven. When interaction scoring (Section 4.2) has identified a feature’s partners P(j), we define the pair score 
+
+for candidate bin count B applied to both fj and partner fq:ps( fj , f q, B ) = max 
+
+
+
+I bin( fj , B ); y | bin( fq, B ), max  IG j (B), IG q(B) 
+
+. (7) The first branch is the conditional mutual information, the unique signal fj contributes beyond its partner. The second ensures the score is at least as large as either marginal contribution. Both are non-negative and bounded above by I(bin( fj , B ), bin( fq, B ); y). 7The pair-aware score for feature j is 
+
+Sj (B) = max 
+
+
+
+IG j (B), max   
+
+> fq∈P (j)
+
+ps( fj , f q, B )
+
+
+
+. (8) The selection applies a coarsen-by-default policy: candidates are capped at B ≤ Bcap = 8 (provided at least one candidate satisfies this bound; otherwise all candidates are retained) to keep joint contingency tables tractable ( B2cap = 64 cells), and the smallest B whose score reaches at least α = 0 .85 of the best is selected: 
+
+B∗ 
+
+> j
+
+= min  B ∈ B ≤Bcap : Sj (B) ≥ α · max  
+
+> B′
+
+Sj (B′) . (9) Features without interaction partners fall back to the marginal elbow-stopping rule (Definition 4.1). 
+
+Remark 4.1 (Interpretability of Adaptive Resolution) . Adaptive binning does not alter the explanation vocabulary: the final items remain statements about original variables falling into intervals; only the number of intervals is learned per variable. Pair-aware binning prevents an interaction-relevant variable from being discretised at a resolution chosen solely from a flat marginal IG curve, without introducing an interaction feature itself. The coarsen-by-default policy and the cap B ≤ 8 ensure that resolution increases only when the training data support it. 
+
+4.2 Interaction Information Scoring and Feature Construction 
+
+Definitions 3.1–3.2 characterise interaction-only feature pairs: pairs whose predictive content resides almost entirely in their joint distribution. This section establishes why standard marginal-selection methods miss such pairs (Section 4.2.2), connects the interaction information to the Williams–Beer synergy decomposition (Section 4.2.1), and describes the budgeted scoring algorithm that identifies synergistic sources for downstream feature construction (Section 4.2.3). Section 4.2.4 specifies how the resulting interaction evidence is routed into the model. 
+
+4.2.1 Interaction Information as a Synergy Measure 
+
+The interaction information (Definition 3.1) directly measures the excess joint predictive power of a feature pair beyond marginal contributions. We establish its connection to PID synergy under a minimal discreteness assumption. 
+
+Assumption 4.1 (Discrete Feature Space) . Features fi, f j take values in finite alphabets Vi, Vj of sizes 
+
+Bi, B j , and the target y takes values in a finite label set of size K. Zero-probability cells are permitted; entropy terms use the convention 0 log 0 = 0. 
+
+Proposition 4.3 (Connection to PID Synergy) . Under Assumption 4.1, the interaction information relates to the Williams–Beer Partial Information Decomposition (Williams and Beer, 2010) as 
+
+I(fi, f j ) = Syn( fi, f j → y) − Red( fi, f j → y), (10) where Syn is the synergistic information and Red is the redundant (shared) information. 
+
+Proof. The PID decomposes joint mutual information into four non-negative atoms: 
+
+I(fi, f j ; y) = Uniq( fi) + Uniq( fj ) + Red + Syn , (11) with marginal identities I(fk; y) = Uniq( fk) + Red for k ∈ { i, j }. Substituting into (2): 
+
+I(fi, f j ) = Uniq( fi) + Uniq( fj ) + Red + Syn  − Uniq( fi) + Red  − Uniq( fj ) + Red 
+
+= Syn − Red .
+
+Corollary 4.4 (Interaction Information for Interaction-Only Pairs) . For an interaction-only pair (Def-inition 3.2), Uniq( fi) ≈ 0, Uniq( fj ) ≈ 0, and Red ≤ min( I(fi; y), I (fj ; y)) < ϵ 1. Therefore I(fi, f j ) ≈
+
+8Syn( fi, f j → y): the interaction information is an especially clean proxy for synergy in the interaction-only regime. 
+
+Remark 4.2 (PID Framework Dependence) . The identity I(fk; y) = Uniq( fk) + Red is an axiom of the Williams–Beer framework (Williams and Beer, 2010); alternative PID definitions (Griffith and Koch, 2014; Bertschinger et al., 2014) may yield different decompositions. However, I itself is a well-defined information-theoretic quantity, a signed combination of standard mutual-information terms, and does not depend on any PID framework. Only its interpretation as Syn − Red is framework-dependent; the ranking criterion based on I is not. 
+
+4.2.2 Limitations of Marginal Feature Selection 
+
+With the synergy characterisation in place, we identify the structural mechanism by which interaction-only pairs are suppressed in any selection pipeline that ranks features by marginal target association. 
+
+Assumption 4.2 (Marginal-Utility Coupling) . The utility assigned to feature fj for class c satisfies EU( fj , c ) = g I(fj ; y) · wc, where g : R≥0 → R≥0 is continuous, non-decreasing, with g(0) = 0, and 
+
+wc > 0 is a class weight. This captures any utility that is a continuous monotone function of mutual information. Correlation-based utilities such as that in (Krishnamoorthy, 2024) satisfy the weaker property that I(fj ; y) → 0 implies corr( fj , y ) → 0 (since vanishing MI implies independence), so the conclusion of Proposition 4.5 applies to them as well. 
+
+Proposition 4.5 (Marginal-Utility Suppression) . Under Assumption 4.2, let ( fi, f j ) be an interaction-only pair with I(fi; y), I (fj ; y) < ϵ 1.(a) Utility suppression. For each constituent feature, EU( fk, c ) ≤ g(ϵ1) · wc → 0 as ϵ1 → 0. Any top-k
+
+selection stage that ranks items by a non-decreasing function of marginal feature–target association therefore assigns vanishing priority to both features before their joint value is evaluated. (b) Binarisation loss. The binary indicator ⊮[pattern present] is a deterministic function of ( fi, f j ), so I(⊮[pattern]; y) ≤ I(fi, f j ; y) by the data-processing inequality. This many-to-one mapping collapses the Bi × Bj joint configuration space to a single bit, discarding the within-pattern variation on which synergistic signal depends. 
+
+Proof. Part (a): g is continuous and non-decreasing with g(0) = 0, so I(fk; y) < ϵ 1 gives EU( fk, c ) = 
+
+g(I(fk; y)) · wc ≤ g(ϵ1) · wc → 0 as ϵ1 → 0. Part (b): the data-processing inequality gives the bound. The qualitative claim follows from the observation that a binary variable has entropy at most one bit, whereas the interaction-only pair’s predictive content, distributed across the full joint contingency table, can require log 2 min( BiBj , K ) bits to represent. 
+
+Remark 4.3 (Scope) . This result identifies a structural tendency in marginal-selection methods, not a peculiarity of any specific algorithm. The limitation is most direct for pattern-mining frameworks that apply marginal utilities before evaluating candidate itemsets. EBM’s greedy FAST pair selection partially mitigates this by examining residuals after main-effect fitting, but if both features contribute negligible main effects their pairwise signal competes with  p
+
+> 2
+
+ candidates under a fixed interaction budget. RuleFit’s tree-derived rules can implicitly capture interactions, but only those that the greedy splitting heuristic happens to explore. Section 6 evaluates how much these implicit mechanisms recover in practice. 
+
+4.2.3 Source Selection Algorithm 
+
+Algorithm 1 formalises the interaction-aware source selection as a budgeted best-partner ranking proce-dure. Each source column is scored by the strongest interaction information observed with any eligible partner, and the top s sources are retained. 
+
+Remark 4.4 (Coarse Grid for Interaction Estimation) . The coarse grid Bc = 4 is deliberate: the joint contingency table has only B2 
+
+> c
+
+K = 16 K cells, yielding more reliable per-cell frequencies than finer grids 9Algorithm 1 Budgeted Best-Partner Interaction Source Selection 
+
+Require: Feature matrix X ∈ Rn×p, labels y ∈ { 1, . . . , K }n, source budget s, coarse bin count Bc = 4, optional partner-search budget r
+
+Ensure: Ranked source records ( j, partner( j), bΘj ) 
+
+> 1:
+
+Discretise: For each eligible column j, compute cj ← qbin( fj , B c) ▷ Equal-frequency bins; non-finite rows skipped  
+
+> 2:
+
+Marginal MI: For each j, compute cIG j ← I(cj ; y) from the Bc × K contingency table  
+
+> 3:
+
+Initialise bΘj ← 0, partner( j) ← ∅ for every eligible j 
+
+> 4:
+
+if partner-search budget r is specified then  
+
+> 5:
+
+Choose a deterministic subset of r partner anchors and score all pairs with at least one anchor  
+
+> 6:
+
+else  
+
+> 7:
+
+Score all  p
+
+> 2
+
+ unordered pairs  
+
+> 8:
+
+end if  
+
+> 9:
+
+for each scored pair ( a, b ) do  
+
+> 10:
+
+cIG ab ← I(ca, c b; y) from the B2 
+
+> c
+
+× K contingency table  
+
+> 11:
+
+b∆ab ← cIG ab − cIG a − cIG b 
+
+> 12:
+
+if b∆ab > bΘa then bΘa ← b∆ab ; partner( a) ← b 
+
+> 13:
+
+end if  
+
+> 14:
+
+if b∆ab > bΘb then bΘb ← b∆ab ; partner( b) ← a 
+
+> 15:
+
+end if  
+
+> 16:
+
+end for  
+
+> 17:
+
+Rank by bΘj descending, breaking ties by marginal information then by deterministic index order  
+
+> 18:
+
+return the top s source records with their best partners at the same sample size. Since interaction scores serve as a ranking criterion for source selection rather than as calibrated downstream features, this resolution is appropriate. Theorem 5.1 makes the trade-off precise: the concentration bound scales with BiBj K, so coarser grids give tighter control at fixed n.
+
+4.2.4 Routing Pathways for Interaction Evidence 
+
+Interaction information is evidence, not a representation. Once a pair receives a high synergy score, the model must specify how that evidence enters the explanation. IAIML provides two mutually exclusive pathways. 
+
+Interaction-Relaxed Mining (IAIML-R). Survivor columns identified by Algorithm 1 are ad-mitted into the native pattern-mining candidate pool, even if their marginal utility alone would not qualify them. No generated features are added: the downstream classifier sees the same kinds of objects as before (original features and mined patterns) but the candidate pattern space is broader. This is appropriate when the final explanation should remain rule-like (“these original conditions co-occur”) rather than algebraic. The cost is that the interaction is implicit in which patterns were allowed to grow; understanding why a weak-marginal variable entered the model requires inspecting the mining provenance. 
+
+Augmented-Pair Operators (IAIML-A). Each selected source–partner pair is converted into named continuous operators (Section 4.2.5) and appended to the downstream linear classifier. The explanation becomes a sparse linear model over original features, patterns, and explicit pair terms. Each added column has a defined algebraic meaning and a fitted coefficient, so the model remains inherently interpretable, though less rule-like than relaxed mining. The advantage is directness: if a multiplicative or distance-based interaction drives the target, the model assigns weight to that named interaction rather than relying on a binary itemset to approximate the geometry. 10 The two pathways are mutually exclusive: enabling both would let the same interaction signal alter both the upstream pattern search and the downstream feature matrix, weakening attribution. 
+
+4.2.5 Augmented Feature Generation 
+
+For each selected pair ( fi, f j ) ∈ S , the four operators from Definition 3.4 are applied to the original continuous feature values, producing up to 4 |S| augmented features. Operating on continuous values rather than discretised representations preserves within-bin variation that carries the interaction signal. Each operator linearises a specific interaction structure. Writing h : R2 → R for the true interaction function relating ( fi, f j ) to the log-odds of y = 1: ϕprod  
+
+> ij
+
+covers multiplicative effects ( h ∝ ab ), ϕabs 
+
+> ij
+
+covers distance-based effects ( h ∝ | a − b|), ϕsign  
+
+> ij
+
+covers directional effects ( h ∝ a − b), and ϕsum  
+
+> ij
+
+covers additive effects ( h ∝ a + b). In each case h(a, b ) = β · ϕ(a, b ), so a linear classifier with coefficient β
+
+recovers h exactly. The operator set is deliberately small: it is not intended to span all pairwise functions. Threshold- and parity-style interactions remain better represented by discretised patterns or tree-derived rules. 
+
+4.3 Complexity-Budgeted Learning 
+
+IAIML-A models combine three feature families (mined patterns, original features, and augmented in-teraction operators), so the effective dimensionality peff = |Pmined |+|Forig |+|Faug | is no longer controlled by a single parameter. An unconstrained peff undermines both interpretability and generalisation. We therefore impose a budget governed by a single parameter K (topK ). 
+
+Definition 4.2 (Feature Budget) . Let Bp, Bo, Ba denote the number of retained mined patterns, original features, and augmented interaction operators respectively. Two budget modes are provided: (a) Per-family (default). Each family is independently capped at K: Bp ≤ K, Bo ≤ K, Ba ≤ K,giving |Φfinal | ≤ 3K.(b) Strict . A single global cap |Φfinal | ≤ K is enforced by pooling all features into a unified ranking and retaining the top K regardless of family membership. Within each family, features are ranked by an appropriate relevance criterion and the top entries are retained: mined patterns by information gain IG( X); original features by adaptive-binning information gain IG j (B∗ 
+
+> j
+
+); augmented operators by target correlation |corr( ϕ(·) 
+
+> ij
+
+, y )|. In strict mode the per-family rankings are computed first, then a normalised score (zero mean, unit variance within each family) determines the global selection. 
+
+# 5 Theoretical Guarantees 
+
+This section provides conditional guarantees for the discretized screening and budgeted representation used by IAIML. All results operate on the finite-alphabet plug-in mutual-information estimator applied after binning and none of them require a lower bound on cell probabilities. The concentration and ranking results (Sections 5.1–5.2) are distribution-free. The generalization bound (Section 5.3) treats the dictionary size N and budget Bmax as fixed. All four results concern pairwise interaction structure. We address four questions: how empirical interaction scores concentrate as a function of contingency-table size (Section 5.1), when this suffices for stable source selection (Section 5.2), what generalization guarantee the complexity budget provides (Section 5.3), and the computational cost of the full pipeline (Section 5.4). 
+
+5.1 Finite-Sample Concentration of Interaction Scores 
+
+The interaction-scoring stage ranks source variables by their strongest partner scores. The rele-vant finite-sample question is how the empirical interaction score concentrates as a function of the contingency-table size. 11 Let ∆ ij = I(( fi, f j ); y) − I(fi; y) − I(fj ; y) denote the population interaction score for a binned pair and let b∆ij be the plug-in estimate. For an alphabet of size a define the entropy modulus 
+
+ωa(η) = η log( a − 1) + h2(η), 0 < η < 1 − 1/a, (12) where h2 is the binary entropy function. This is a standard Fannes-type continuity term (Fannes, 1973) that handles zero-probability cells through total-variation continuity. 
+
+Theorem 5.1 (Uniform Concentration for Discretized Interaction Scores) . Let Q be a set of m can-didate feature pairs whose binned pair-label tables each have at most M = max (i,j )∈Q BiBj K cells. If 0 < η < 1 − 1/M and 
+
+n ≥ 2
+
+η2
+
+ M log 2 + log( m/δ ), (13) then with probability at least 1 − δ,max  
+
+> (i,j )∈Q
+
+| b∆ij − ∆ij | ≤ 7 ωM (η). (14) 
+
+Proof. For a fixed pair the empirical distribution over ( fi, f j , y ) is multinomial on at most M cells. The bound of Weissman et al. (2003) gives Pr  ∥ bPijy − Pijy ∥1 > η  ≤ exp( M log 2 − nη 2/2) . (15) A union bound over m pairs yields equation (13). Marginalization cannot increase ℓ1 distance so the same event controls all marginals needed below. Expanding ∆ ij in entropy terms: ∆ij = H(fi, f j ) − H(fi) − H(fj ) − H(y) + H(fi, y ) + H(fj , y ) − H(fi, f j , y ). (16) This involves seven distinct entropy terms each over an alphabet of size at most M . Since ωa is increasing in a, Fannes’ inequality gives | bH(·) − H(·)| ≤ ωM (η) per term and the triangle inequality yields | b∆ij − ∆ij | ≤ 7 ωM (η). The dominant quantity is M = BiBj K: stable interaction scores require data proportional to the joint contingency-table size. This motivates the coarse Bc = 4 grid for interaction screening and the cap Bcap = 8 in pair-aware bin selection. 
+
+5.2 Source-Ranking Consistency 
+
+Each source feature receives the best interaction score achieved with any eligible partner. For feature j
+
+define the population best-partner score Θj = max 0, max  
+
+> q:( j,q )∈Q
+
+∆jq , (17) and let bΘj be the empirical analogue. Order the population scores as Θ (1) ≥ Θ(2) ≥ · · · ≥ Θ(p′).
+
+Theorem 5.2 (Best-Partner Source Ranking Consistency) . Let S⋆s and bSs be the population and empirical top-s source sets. If the source-selection margin Γ s = Θ (s) − Θ(s+1) > 0 satisfies 7 ωM (η) ≤ Γs/2 (18) with n satisfying equation (13), then bSs = S⋆s with probability at least 1 − δ.12 Proof. On the event of Theorem 5.1 every pair score is estimated within 7 ωM (η). Taking a maximum over partners is non-expansive in the sup norm so max j | bΘj − Θj | ≤ 7ωM (η). If this is at most Γ s/2then for all a ∈ S⋆s and b / ∈ S⋆s :
+
+bΘa − bΘb ≥ (Θ a − Γs/2) − (Θ b + Γ s/2) ≥ 0. (19) 
+
+Corollary 5.3 (Threshold Selection) . Fix a threshold τ and margin γ > 0. If 7 ωM (η) ≤ γ and equation (13) holds then with probability at least 1 − δ every source with Θ j ≥ τ + γ is selected by the empirical rule bΘj ≥ τ and every source with Θ j ≤ τ − γ is rejected. 
+
+Remark 5.1 (Operational Interpretation) . The guarantee depends on the separation margin Γ s rather than on absolute estimation accuracy. When interaction sources are well separated the selected set is stable even with imprecise individual estimates. When Γ s is small the boundary is intrinsically ambiguous and bootstrap or permutation diagnostics are more informative than a single ranking. 
+
+5.3 Generalization Bound for Budgeted Models 
+
+The following bound is conditional on a finite candidate dictionary and isolates the cost of selecting at most Bmax components from it. 
+
+Theorem 5.4 (Generalization with Feature Selection) . Let F be the candidate dictionary with |F| = N .Consider linear classifiers supported on at most Bmax features from F. With probability at least 1 − δ
+
+over a sample of size n every such classifier h satisfies 
+
+R(h) ≤ ˆR(h) + 
+
+r 2( Bmax + 1) log( en/ (Bmax + 1)) 
+
+n +
+
+s
+
+log  2  NBmax 
+
+/δ 
+
+2n . (20) 
+
+Proof. For any fixed subset of Bmax features the VC-dimension of linear classifiers in RBmax is Bmax + 1 (Vapnik, 1995). Applying the VC bound with failure probability δ/   NBmax 
+
+ to each subset and union-bounding gives equation (20). The term log   NBmax 
+
+ is the statistical price of data-dependent feature selection. Reducing Bmax 
+
+simultaneously reduces the number of explanation components and this combinatorial penalty. 
+
+5.4 Computational Complexity 
+
+Let D denote the number of discretized atoms after preprocessing. The total training cost decomposes into four stages: 
+
+Ttotal = O(pn log n)
+
+| {z }
+
+> adaptive binning
+
++ Tmine (n, D, K )
+
+| {z }
+
+> pattern mining
+
++ O(nm pair )
+
+| {z }
+
+> interaction scoring
+
++ TLR (n, B max )
+
+| {z }
+
+> downstream classifier
+
+. (21) Adaptive binning sorts each of the p raw features once and evaluates a fixed set of candidate bin counts, giving cost O(pn log n). Pattern mining at depth L=1 performs a single linear scan over n
+
+examples and D atoms. At L=2 the search space is nominally  D
+
+> 2
+
+ atom pairs, but the top-K budget serves as a dynamic pruning threshold: the utility of the K-th best pattern found so far prunes any candidate whose upper-bound utility falls below it, so the number of pairs actually evaluated is C2 ≤  D
+
+> 2
+
+,with C2 decreasing as K or G tightens. At higher depths the same upper-bound pruning controls the combinatorial growth, making K the primary lever for bounding mining cost. Each interaction pair requires one O(n) contingency-table pass, giving interaction cost O(nm pair ) with mpair = Θ( p2) under exhaustive scoring and mpair = O(pr ) under a partner budget of size r. The downstream logistic-regression cost TLR (n, B max ) is governed by repeated passes over the n × Bmax design matrix. 13 6 Experimental Results 
+
+Our empirical study evaluates IAIML against tuned gradient-boosted tree ensembles and two inter-pretable interaction-aware baselines. The dataset panel contains 40 binary classification tasks: 24 real-world tabular benchmarks spanning credit risk, marketing response, health, and pricing domains (full list and sizes in Appendix B, Table 6), and 16 synthetic interaction stress tests designed to exhibit spe-cific pairwise and higher-order interaction structures (XOR, correlated-masked pairs, high-dimensional buried pairs, categorical–continuous conjunctions, threshold steps, parity groups, and other controlled regimes). Six models are compared. IAIML-A and IAIML-R instantiate the two routing pathways of Sec-tion 4.2.4. XGBoost and LightGBM are tuned gradient-boosted tree ensembles serving as strong pre-dictive baselines. EBM (Explainable Boosting Machine) and RuleFit are interpretable interaction-aware baselines representative of the GAM-with-interactions and tree-derived rule-ensemble families. Hyperparameters are selected via a fully nested cross-validation protocol. For each dataset, an outer stratified 5-fold split provides the train/test partitions used for performance estimation; within each outer training fold, an inner stratified 3-fold cross-validation loop (over the grids detailed in Appendix E) selects hyperparameters independently, and the selected configuration is refit on the full outer training fold and scored on the held-out outer test fold. This nested design ensures that no information from a test fold influences the hyperparameter choice used to score it. 
+
+Complexity metric. We measure the number of explanation components using an audit-load proxy: the number of atomic fitted units that a reviewer would need to inspect to characterize the fitted model at implementation level. For IAIML, these are selected mined patterns, original features, and augmented pair terms; for XGBoost and LightGBM, realized terminal leaves; for EBM, active lookup-table cells; and for RuleFit, nonzero rule or linear terms. These units are not equally expressive across families: an IAIML pattern of length L = 2 encodes a conjunction of two discretized conditions with one coefficient, while a boosted ensemble’s feature effects are scattered across many leaves, and an EBM lookup-table cell provides fine-grained nonlinear resolution at the cost of more entries. The proxy is therefore an approximation of audit load; description-length measures or human-subjects time-to-decision studies would refine the comparison (Rudin, 2019). Despite this caveat, component count provides a useful and reproducible order-of-magnitude comparison across families. Primary performance metrics are AUC, F1, and accuracy, averaged over the outer folds. Statistical comparison uses per-dataset mean AUC, followed by Wilcoxon signed-rank tests with Holm correction across the five pairwise comparisons against IAIML-A, and a Friedman test across all six models with mean-rank reporting. 
+
+6.1 Main Results 
+
+Table 2 and Figure 2 summarize the headline result. EBM reaches the highest mean AUC (0.9188), followed by LightGBM (0.9174), XGBoost (0.9168), RuleFit (0.9118), IAIML-R (0.9105), and IAIML-A (0.9048): a span of 1.40 AUC points separates the best and worst mean performers on this panel. A Friedman test across all six models rejects the null hypothesis of equal performance ( χ2 = 30 .56, 
+
+p < 0.001, N = 40 datasets), with mean ranks of 2.75 (EBM), 2.80 (LightGBM), 3.20 (XGBoost), 3.85 (RuleFit), 3.85 (IAIML-A), and 4.55 (IAIML-R); lower rank indicates better relative performance. This overall ordering is not stable across the two halves of the panel, as shown by the real-world and synthetic blocks in Table 2. On the 24 real-world datasets, LightGBM narrowly leads (0.9094) over EBM and XGBoost, which are themselves separated by only 0.0001 AUC (0.9080 vs. 0.9079), and the three compact methods, RuleFit and both IAIML pathways, cluster within 0.0023 AUC of one another at the bottom of the ordering (0.8980–0.9003). On the 16 synthetic datasets the same six methods spread out considerably further: EBM opens a clearer lead (0.9350) over the tree ensembles (0.9301, 0.9295), while IAIML-A falls to 0.9151, 1.4 points behind RuleFit’s 0.9289, a much wider gap than the even spacing seen on real-world data. This asymmetry follows directly from panel composition 14 Table 2: Nested cross-validation results, sorted by mean AUC within each block. The overall block averages over the full 40-dataset panel; the real-world and synthetic blocks repeat the same statistics within each of the panel’s two components (24 and 16 datasets respectively). AUC, F1, accuracy, and complexity are averaged over all outer folds.                                                                                                                   
+
+> Model Mean AUC Std. AUC Median AUC Mean F1 Mean Acc. Mean Complexity
+> Overall (40 datasets)
+> EBM 0.9188 0.0987 0.9516 0.8162 0.8835 3,273 LightGBM 0.9174 0.1014 0.9553 0.8215 0.8840 3,415 XGBoost 0.9168 0.1004 0.9485 0.8161 0.8813 1,708 RuleFit 0.9118 0.1010 0.9419 0.7739 0.8748 131
+> IAIML-R 0.9105 0.0971 0.9335 0.8037 0.8747 122 IAIML-A 0.9048 0.1041 0.9328 0.7898 0.8688 120
+> Real-world (24 datasets)
+> LightGBM 0.9094 0.0860 0.9354 0.7796 0.8785 3,051 EBM 0.9080 0.0805 0.9258 0.7675 0.8741 2,278 XGBoost 0.9079 0.0836 0.9340 0.7710 0.8739 1,674 RuleFit 0.9003 0.0848 0.9244 0.7304 0.8660 133
+> IAIML-R 0.9002 0.0809 0.9131 0.7577 0.8681 140 IAIML-A 0.8980 0.0819 0.9115 0.7546 0.8665 134
+> Synthetic (16 datasets)
+> EBM 0.9350 0.1221 0.9747 0.8893 0.8975 4,765 XGBoost 0.9301 0.1233 0.9710 0.8837 0.8924 1,760 LightGBM 0.9295 0.1231 0.9703 0.8843 0.8923 3,962 RuleFit 0.9289 0.1223 0.9676 0.8392 0.8879 127
+> IAIML-R 0.9259 0.1187 0.9529 0.8725 0.8846 94 IAIML-A 0.9151 0.1330 0.9611 0.8427 0.8724 99
+
+Table 3: Holm-corrected pairwise Wilcoxon signed-rank tests, IAIML-A as reference, on per-dataset mean AUC ( N = 40).                                        
+
+> Comparison Mean ∆AUC Wins Losses Ties Wilcoxon pHolm p
+> vs. IAIML-R −0.0057 17 14 90.652 0.652 vs. XGBoost −0.0120 16 23 10.072 0.216 vs. LightGBM −0.0126 13 26 10.033 0.131 vs. EBM −0.0140 929 20.001 0.006
+> vs. RuleFit −0.0070 17 22 10.302 0.604
+
+rather than from any real-world/synthetic distinction as such: the synthetic block was built to include stress tests on both sides of IAIML’s pairwise, algebraic-operator design boundary, so it stretches the ordering in both directions at once, whereas the real-world block reflects a narrower band of naturally occurring, mostly diffuse dependency structure that gives no single interaction-handling mechanism as much room to separate from the rest. Complexity shows a parallel asymmetry: EBM’s mean footprint nearly doubles from the real-world to the synthetic block (2,278 to 4,765 components) as its lookup tables expand to cover sharper synthetic decision boundaries, while both IAIML pathways and RuleFit stay within a narrow 94–140-component band in both blocks. Table 3 sharpens this picture. Under the reference-based Holm correction, IAIML-A shows no significant AUC difference from XGBoost ( p = 0 .216), LightGBM ( p = 0 .131), IAIML-R ( p = 0 .652), or RuleFit ( p = 0 .604), while EBM retains a significant edge ( p = 0 .006). The main result is a compactness-versus-performance trade-off rather than an outright accuracy claim: EBM, LightGBM, and XGBoost have the highest mean AUCs, while the two IAIML variants trail by 0.6–1.4 AUC points on average, 15 Figure 2: Accuracy–complexity trade-off across the six evaluated model families (40-dataset panel). IAIML remains within 1.4 AUC points of the strong predictive baselines at 14–28 × fewer fitted expla-nation units, while occupying the same compact-complexity tier as RuleFit. attaining this range with 14–28 times fewer fitted explanation components. 
+
+6.1.1 Compactness and the RuleFit Comparison 
+
+The compactness result is strongest relative to the two tree ensembles and EBM: IAIML-A uses 120 selected patterns/features on average, versus 1,708 realized leaves for XGBoost (14 .2× more), 3,415 for LightGBM (28 .5× more), and 3,273 lookup-table entries for EBM (27 .3× more); IAIML-R, at 122 components, is similarly compact. Against RuleFit, whose fitted models retain 131 active rule and linear terms on average, the three compact families occupy the same tier: both IAIML variants and RuleFit lie in the 120–131 component range, and the pairwise AUC gap between IAIML-A and RuleFit is not statistically significant (Table 3). Section 6.2 shows that hyperparameter-tuning cost further separates IAIML from RuleFit. This component-count parity compares counts of auditable units, not the complexity of each unit, and on the latter axis RuleFit’s units are individually more complex. RuleFit’s underlying trees are grown with tree size ∈ { 5, 10 } (Appendix Table 13), a parameter that fixes the number of terminal nodes per tree rather than a depth; reaching M terminal nodes requires depth at least ⌈log 2 M ⌉ in the balanced case, so trees with 5 or 10 leaves typically yield rules spanning three to four antecedent conditions. IAIML patterns are drawn from a grid capped at L ≤ 2 for the main comparison (Appendix Table 12), and the inner-CV loop selects the longer setting, L = 2, in only a slight majority of outer-training folds for both pathways (57% for IAIML-A, 54% for IAIML-R; Appendix Table 11). A RuleFit rule therefore conjoins, on average, more original-feature conditions than an IAIML pattern, even though the two families report similar total component counts in Table 2. The audit-load proxy used throughout this paper counts components rather than conditions per component, so it understates this difference: a reviewer auditing a RuleFit model is typically reading longer individual conditions than one auditing an IAIML model of comparable nominal size. 
+
+6.2 Computational Cost 
+
+Compactness of the fitted model is only part of the practical cost of using an interpretable method; the other part is how expensive the model is to tune. Table 4 reports the mean wall-clock cost of the full inner-CV hyperparameter search per outer fold, alongside the mean refit time of the selected configuration. 16 Table 4: Mean fit and hyperparameter-tuning time per model, averaged over all outer folds and datasets, sorted by tuning time.               
+
+> Model Mean fit time (s) Mean tune time (s)
+> IAIML-R 0.52 7.27 XGBoost 0.45 7.75 LightGBM 0.39 8.01 IAIML-A 1.31 16.56 EBM 2.26 21.10 RuleFit 15.38 126.41
+
+Figure 3: Distribution of per-dataset mean AUC for each model across the 40-dataset panel (box plot with individual dataset points, real-world circles and synthetic triangles). The six interquartile ranges overlap substantially; differences between models are small relative to dataset-to-dataset variation. IAIML-R is the fastest model to tune (7.3 seconds, on a log scale essentially tied with XGBoost’s 7.8 seconds and LightGBM’s 8.0 seconds); IAIML-A’s tuning time (16.6 seconds) is comparable to EBM’s (21.1 seconds). RuleFit is a clear outlier: its mean tuning time, 126.4 seconds, is roughly 6 ×
+
+EBM’s and 17 × IAIML-R’s, and its mean fit time (15.4 seconds) is likewise an order of magnitude above every other model’s (0.4–2.3 seconds). This cost stems from RuleFit’s need to grow an auxiliary tree ensemble before rule extraction and lasso fitting, repeated across every hyperparameter configuration in the inner-CV grid. While RuleFit and IAIML occupy the same compact-complexity tier in Figure 2, they do not occupy the same practical-cost tier under the evaluated implementation and grids. 
+
+6.3 Robustness Across Datasets 
+
+Table 2’s Std. AUC column shows that the six models have similar cross-dataset standard deviations (0.097–0.104), and Figure 3 confirms that their per-dataset AUC distributions overlap substantially. The low-AUC outliers, in the range 0.50–0.80, include both hard real-world datasets ( bank marketing ,
+
+compas recidivism , default credit card ) and the deliberately intractable SynthParityGroups . The 17 Figure 4: Mean AUC by dataset group, with models clustered into two families for direct within-family comparison: interpretable methods (both IAIML pathways, EBM, RuleFit) and tree-ensemble baselines (XGBoost, LightGBM). mean-AUC ordering in Table 2 is a real but fine-grained ranking superimposed on a much larger shared source of dataset-to-dataset variation. 
+
+6.4 Performance by Dataset Group and Interaction Structure 
+
+Figure 4 presents the same real-world/synthetic breakdown as Table 2, but clusters models into the two families the comparison is organized around, so that alternate ensembles and alternate interpretable methods can each be read directly rather than interleaved by rank. Within the ensemble family, XG-Boost and LightGBM are essentially interchangeable on both dataset groups (a 0.0015 AUC gap on real-world data, 0.0006 on synthetic), so the tree-ensemble baseline is not sensitive to which of the two implementations is chosen. Within the interpretable family the spread is wider and less stable: EBM leads and IAIML-A trails on both dataset groups, and the four-method spread widens from 0.0100 AUC on real-world data to 0.0199 on synthetic data, consistent with the operator-coverage limitation discussed next being more exposed on the synthetic panel. The expanded 40-dataset panel includes several synthetic benchmarks that isolate specific interaction structures, enabling a fine-grained view of where IAIML’s design provides distinctive value. The clearest gains appear on datasets built around low-marginal pairwise structure (refer to Appendix C), the regime IAIML’s interaction criterion directly targets. On synth high dim buried pairs , where two pairwise interactions are embedded among 100 features, IAIML-A reaches AUC 0.960, outperforming XGBoost (0.881), LightGBM (0.870), and RuleFit (0.878), and narrowly exceeding EBM (0.956), all at 100 components versus 2,971–8,886 for the baselines. On synth multi pairwise , where the label depends on three independent pairwise products with zero marginal signal, IAIML-A reaches 0.978 versus 0.970 for EBM and 0.961 for XGBoost, and on synth correlated masked , where the true interaction pair is obscured by correlated proxy features, IAIML-A again leads (0.907 vs. 0.904 for EBM). These results confirm that IAIML’s marginal-signal-independent interaction scoring provides measurable gains precisely where its core design assumption, that important feature pairs carry negligible marginal signal, is satisfied. The same benefit extends to several small, interaction-rich real-world datasets: on 
+
+hepatitis (n = 155), heart disease cleveland (n = 303), and pima diabetes (n = 768), the best IAIML variant exceeds all baselines by a modest but consistent 0.5–1.0 AUC points, helped both by the compact model’s lower variance at small sample sizes and by interaction-aware admission recovering clinically plausible feature combinations such as bilirubin–albumin, age–cholesterol, and glucose–insulin pairs. 18 The panel also contains two structures that fall outside this design envelope. SynthParityGroups 
+
+encodes a parity function across two groups of three features, a genuinely higher-order interaction that no pairwise criterion can recover; all six models perform near chance on it (AUC 0.50–0.52). 
+
+SynthModularPairwise is more diagnostic: IAIML-A drops to AUC 0.710 while IAIML-R recovers to 0.997, a divergence that traces to a specific failure of the algebraic pair-transform family (product, difference, sum) on a modular-arithmetic boundary that none of these four operators linearizes. Because the relaxed-mining pathway preserves the full discretized pattern vocabulary rather than committing to named algebraic operators, it recovers the signal that IAIML-A’s operators miss on this dataset. 
+
+6.5 Ablation Studies 
+
+To isolate the contribution of each design element, we evaluate 19 component-isolated configurations on the full 40-dataset panel (Table 14 in Appendix F). Figure 5 traces the subset of this progression obtained by adding one interaction-handling mechanism at a time: a patterns-only configuration with no interaction handling reaches mean AUC 0.821 at 42 components; admitting original features under marginal screening alone lifts this to 0.848; adding relaxed mining to the patterns-only configuration reaches 0.897; combining original features with relaxed mining reaches 0.907; and adding augmented-pair operators instead reaches 0.902. The two rightmost bars show the fully tuned models from the main comparison, IAIML-R (0.9105) and IAIML-A (0.9048), each slightly above its matched ablation-harness configuration because the main comparison additionally tunes pattern length and the information-gain threshold via nested cross-validation (Appendix E) rather than fixing them at the ablation default. The net effect of the full interaction-handling framework, relative to the patterns-only baseline, is a gain of approximately 8.6 AUC points. The remaining 14 configurations in Table 14, not shown in Figure 5, isolate two further points. First, extending relaxed mining to length-3 patterns ( RelaxedMining L3 Survivors20 ) reduces mean AUC to 0.849, well below the matched length-2 variant’s 0.907, confirming that deeper pattern spaces dilute rather than strengthen the mined evidence. Second, replacing the interaction-information admission criterion with a marginal information-gain criterion ( AugPair L2 MarginalIG Source20 ) drops mean AUC to 0.853 from 0.902 for the matched interaction-information variant, a direct confirmation that the synergy-based selection criterion carries predictive value beyond what marginal screening alone recover. 
+
+Figure 5: Incremental effect of adding interaction-handling components (40-dataset panel). 19 7 Discussion 
+
+Rudin (2019) has argued that the perceived trade-off between interpretability and accuracy is often unnecessary and that interpretable models can match opaque ones in many high-stakes settings. The results above provide additional evidence from the interaction-aware regime. IAIML does not outper-form the strongest baselines in mean AUC across the full panel: EBM holds a significant edge and the tree ensembles hold non-significant but consistent advantages. Its value lies instead in the compactness of its explanation, closing much of the accuracy gap while using 14–28 times fewer fitted components than EBM, XGBoost, or LightGBM. RuleFit reaches a similar level of compactness with a small AUC edge over IAIML; the two families occupy the same compact-complexity tier but differ in explanation semantics, in typical rule or pattern complexity, and in tuning cost, as detailed in Section 6.1. IAIML’s distinctive contribution within this tier is the explicit interaction-screening criterion and the ability to route interaction evidence into either a pure pattern vocabulary or a sparse algebraic-pair vocabu-lary, a choice the other compact methods do not offer. The clearest evidence for this design rationale comes from the datasets where pairwise interactions with low marginal signal carry the label signal: as observed in our experimental results, IAIML outperforms every baseline, including EBM, on exactly this subset, confirming that the marginal-signal-independent synergy criterion addresses a real gap in existing methods even though the gap does not dominate the average across a broad benchmark panel. The three interaction-aware families evaluated here, IAIML, EBM, and RuleFit, locate interaction structure through different mechanisms, and the comparison is informative about each mechanism’s blind spots rather than about a single winner. EBM’s FAST algorithm (Lou et al., 2013) ranks can-didate pairs by residual improvement after main-effect fitting and attains the best mean rank on this panel (2.75) at a cost of 3,273 lookup-table entries. RuleFit captures interaction structure implicitly through tree splits and reaches mean AUC 0.9118 at 131 active terms with no significant AUC differ-ence from IAIML-A (Holm p = 0 .604); as the compactness comparison notes, however, RuleFit’s rules are individually more complex than IAIML’s length-capped patterns, so the similar component counts understate IAIML’s audit-load advantage. The ablation study isolates the value of IAIML’s own cri-terion directly: replacing interaction-information admission with marginal information-gain admission costs approximately 5 AUC points, confirming that the synergy-based selection criterion carries value beyond marginal screening. Between IAIML’s two routing pathways, IAIML-R slightly outperforms IAIML-A overall (0.9105 vs. 0.9048) with no significant difference between them (Holm p = 0 .652), a gap driven in part by IAIML-A’s algebraic operators failing on non-linearizable structures such as the modular-arithmetic boundary in SynthModularPairwise . Practitioners can therefore select the pathway that matches their governance requirements, rule-like patterns versus named algebraic terms, without expecting a systematic accuracy trade-off. The complexity budget also provides a natural interface for model-risk governance: organizations can set Bmax to match audit capacity, ensuring that every retained pattern, feature, or pair term receives human review. The compactness advantage over tree ensembles and EBM, 14–28 times fewer fitted units under the audit-load proxy, is most relevant where regulatory scrutiny of individual predictions is common. Against RuleFit the comparison does not reduce to a size argument: IAIML-A, IAIML-R, and RuleFit (120, 122, and 131 mean components) occupy the same compact-complexity tier with no significant AUC differences among the three. The more informative differentiator is tuning economics: IAIML-R’s tuning time (7.3 seconds) is the fastest in the panel, roughly 17 times cheaper than RuleFit’s (126.4 seconds), a gap that recurs every time the model is retuned. Practitioners choosing among the three compact interpretable families are therefore choosing primarily on governance fit and tuning economics rather than trading final model size against accuracy. Exhaustive pairwise interaction scoring scales as O(p2n); the partner-budget variant reduces this to O(npr ) and remains appropriate for the moderate-dimensional regulated tabular datasets that motivate this work. IAIML is deliberately scoped to pairwise interaction structure: the interaction criterion, the guar-antees in Section 5, and the four augmented-pair operators are all built around two-way synergy, and 20 extending the criterion to order-k interactions would introduce O(pk) combinatorial cost together with unresolved definitional questions for multi-variable partial information decomposition (Williams and Beer, 2010). This boundary is visible empirically wherever the panel requires structure outside it. On SynthParityGroups , whose label depends on an inherently higher-order parity function, every model in the comparison performs near chance, not IAIML alone. On SynthXORInteractions and 
+
+SynthModularPairwise , the four fixed algebraic operators, product, absolute difference, signed differ-ence, and sum, do not linearize the underlying interaction: IAIML-A and IAIML-R reach only 0.941 and 0.943 AUC on the former, slightly behind all four baselines (0.949–0.952), and IAIML-A collapses to 0.710 on the latter, though IAIML-R’s discretized pattern vocabulary recovers most of the signal the algebraic operators miss on both. A richer or learnable operator family is the natural way to narrow this specific gap without abandoning the pairwise scope. Both pattern mining and interaction estimation operate on discretized features; adaptive binning mitigates but does not eliminate the resulting information loss, and continuous mutual-information estimators (Kraskov et al., 2004) could reduce it further at higher computational cost. 
+
+# 8 Conclusion 
+
+This paper introduced IAIML, an interaction-aware pattern classification for tabular binary classifi-cation. The framework addresses a specific limitation of marginal pattern-screening frameworks by scoring coarse-grid pairwise interaction evidence before final candidate selection, then routing that evi-dence through either interaction-relaxed mining (IAIML-R) or augmented-pair operators (IAIML-A). A partitioned component budget keeps the final sparse classifier within a bounded explanation footprint. On a 40-dataset panel (24 real-world, 16 synthetic), IAIML achieves mean AUC within 1.4 points of the strongest baselines while using 14–28 times fewer fitted explanation components. On datasets with strong pairwise interaction structure and low marginal signal, IAIML outperforms all baselines, confirming that the marginal-signal-independent synergy criterion addresses a genuine gap. Performance degrades on datasets requiring higher-order interactions or rich diffuse nonlinearity, delineating the method’s scope. These findings support interaction-aware pattern classification as a practical option when bounded explanation size and controlled treatment of feature interactions are central requirements. 
+
+# References 
+
+Agarwal, R., Melnick, L., Frosst, N., Zhang, X., Lengerich, B., Caruana, R., and Hinton, G. E. (2021). Neural additive models: Interpretable machine learning with neural nets. In Advances in Neural Information Processing Systems , pages 4699–4711. Angelino, E., Larus-Stone, N., Alabi, D., Seltzer, M., and Rudin, C. (2018). Learning certifiably optimal rule lists for categorical data. Journal of Machine Learning Research , 18(234):1–78. Arık, S. ¨O. and Pfister, T. (2021). TabNet: Attentive interpretable tabular learning. In Proceedings of the AAAI Conference on Artificial Intelligence , pages 6679–6687. Bertschinger, N., Rauh, J., Olbrich, E., Jost, J., and Ay, N. (2014). Quantifying unique information. 
+
+Entropy , 16(4):2161–2183. Bertsimas, D. and Dunn, J. (2017). Optimal classification trees. Machine Learning , 106(7):1039–1082. Borgonovo, E., Plischke, E., and Rabitti, G. (2024). The many Shapley values for explainable artificial intelligence: A sensitivity analysis perspective. European Journal of Operational Research , 318(3):911– 926. Breiman, L., Friedman, J., Olshen, R. A., and Stone, C. J. (1984). Classification and Regression Trees .CRC Press. 21 Chang, C.-H., Tan, S., Lengerich, B., Goldenberg, A., and Caruana, R. (2021). How interpretable and trustworthy are GAMs? In Proceedings of the ACM SIGKDD Conference on Knowledge Discovery and Data Mining , pages 95–105. Chen, Y., Calabrese, R., and Martin-Barragan, B. (2024). Interpretable machine learning for imbalanced credit scoring datasets. European Journal of Operational Research , 312(1):357–372. De Bock, K. W., Coussement, K., De Caigny, A., Slowi´ nski, R., Baesens, B., Boute, R. N., Choi, T.-M., Delen, D., Kraus, M., Lessmann, S., Maldonado, S., Martens, D., ´Oskarsd´ ottir, M., Vairetti, C., Verbeke, W., and Weber, R. (2024). Explainable AI for operational research: A defining framework, methods, applications, and a research agenda. European Journal of Operational Research , 317(2):249– 272. Dougherty, J., Kohavi, R., and Sahami, M. (1995). Supervised and unsupervised discretization of continuous features. In Proceedings of the International Conference on Machine Learning , pages 194–202. Dumitrescu, E., Hue, S., Hurlin, C., and Tokpavi, S. (2022). Machine learning for credit scoring: Improving logistic regression with non-linear decision-tree effects. European Journal of Operational Research , 297(3):1178–1192. Fannes, M. (1973). A continuity property of the entropy density for spin lattice systems. Communica-tions in Mathematical Physics , 31(4):291–294. Fayyad, U. M. and Irani, K. B. (1993). Multi-interval discretization of continuous-valued attributes for classification learning. In Proceedings of the International Joint Conference on Artificial Intelligence ,pages 1022–1027. Fournier-Viger, P., Wu, C.-W., Zida, S., and Tseng, V. S. (2014). FHM: Faster high-utility itemset mining using estimated utility co-occurrence pruning. In Proceedings of the International Symposium on Methodologies for Intelligent Systems , pages 83–92. Friedman, J. H. and Popescu, B. E. (2008). Predictive learning via rule ensembles. Annals of Applied Statistics , 2(3):916–954. Garcia, S., Luengo, J., S´ aez, J. A., L´ opez, V., and Herrera, F. (2013). A survey of discretization tech-niques: Taxonomy and empirical analysis in supervised learning. IEEE Transactions on Knowledge and Data Engineering , 25(4):734–750. Gosiewska, A., Kozak, A., and Biecek, P. (2021). Simpler is better: Lifting interpretability-performance trade-off via automated feature engineering. Decision Support Systems , 150:113556. Grabisch, M. and Roubens, M. (1999). An axiomatic approach to the concept of interaction among players in cooperative games. International Journal of Game Theory , 28(4):547–565. Griffith, V. and Koch, C. (2014). Quantifying synergistic mutual information. In Guided Self-Organization: Inception , pages 159–190. Springer. Guidotti, R., Monreale, A., Ruggieri, S., Turini, F., Giannotti, F., and Pedreschi, D. (2019). A survey of methods for explaining black box models. ACM Computing Surveys , 51(5):93. Hooker, G. (2007). Generalized functional ANOVA diagnostics for high-dimensional functions of de-pendent variables. Journal of Computational and Graphical Statistics , 16(3):709–732. 22 Kerber, R. (1992). ChiMerge: Discretization of numeric attributes. In Proceedings of the AAAI Con-ference on Artificial Intelligence , pages 123–128. Kraskov, A., St¨ ogbauer, H., and Grassberger, P. (2004). Estimating mutual information. Physical Review E , 69(6):066138. Krishnamoorthy, S. (2017). HMiner: Efficiently mining high utility itemsets. Expert Systems with Applications , 90:168–183. Krishnamoorthy, S. (2024). Interpretable classifier models for decision support using high utility gain patterns. IEEE Access , 12:126088–126107. Lakkaraju, H., Bach, S. H., and Leskovec, J. (2016). Interpretable decision sets: A joint framework for description and prediction. In Proceedings of the ACM SIGKDD Conference on Knowledge Discovery and Data Mining , pages 1675–1684. Letham, B., Rudin, C., McCormick, T. H., and Madigan, D. (2015). Interpretable classifiers using rules and Bayesian analysis: Building a better stroke prediction model. Annals of Applied Statistics ,9(3):1350–1371. Liu, M., Guo, C., and Xu, L. (2024). An interpretable automated feature engineering framework for improving logistic regression. Applied Soft Computing , 153:111269. Lou, Y., Caruana, R., and Gehrke, J. (2012). Intelligible models for classification and regression. In Proceedings of the ACM SIGKDD Conference on Knowledge Discovery and Data Mining , pages 150–158. Lou, Y., Caruana, R., Gehrke, J., and Hooker, G. (2013). Accurate intelligible models with pairwise interactions. In Proceedings of the ACM SIGKDD Conference on Knowledge Discovery and Data Mining , pages 623–631. Lundberg, S. M. and Lee, S.-I. (2017). A unified approach to interpreting model predictions. In Advances in Neural Information Processing Systems , pages 4765–4774. Nori, H., Jenkins, S., Koch, P., and Caruana, R. (2019). InterpretML: A unified framework for machine learning interpretability. Ribeiro, M. T., Singh, S., and Guestrin, C. (2016). Why should I trust you? Explaining the predictions of any classifier. In Proceedings of the ACM SIGKDD Conference on Knowledge Discovery and Data Mining , pages 1135–1144. Rudin, C. (2019). Stop explaining black box machine learning models for high stakes decisions and use interpretable models instead. Nature Machine Intelligence , 1(5):206–215. Sundararajan, M., Dhamdhere, K., and Agarwal, A. (2020). The Shapley Taylor interaction index. In 
+
+Proceedings of the International Conference on Machine Learning , pages 9259–9268. Tsai, C.-J., Lee, C.-I., and Yang, W.-P. (2008). A discretization algorithm based on class-attribute contingency coefficient. Information Sciences , 178(3):714–731. Tseng, V. S., Wu, C.-W., Fournier-Viger, P., and Yu, P. S. (2016). Efficient algorithms for mining top-k
+
+high utility itemsets. IEEE Transactions on Knowledge and Data Engineering , 28(1):54–67. Ustun, B. and Rudin, C. (2016). Supersparse linear integer models for optimized medical scoring systems. Machine Learning , 102(3):349–391. 23 Vapnik, V. N. (1995). The Nature of Statistical Learning Theory . Springer. Weissman, T., Ordentlich, E., Seroussi, G., Verd´ u, S., and Weinberger, M. J. (2003). Inequalities for the L1 deviation of the empirical distribution. Technical Report HPL-2003-97R1, Hewlett-Packard Labs. Williams, P. L. and Beer, R. D. (2010). Nonnegative decomposition of multivariate information. Wu, C.-W., Fournier-Viger, P., Gu, J.-Y., and Tseng, V. S. (2015). Mining closed+ high utility itemsets without candidate generation. In Proceedings of the Conference on Technologies and Applications of Artificial Intelligence , pages 187–194. Zida, S., Fournier-Viger, P., Lin, J. C.-W., Wu, C.-W., and Tseng, V. S. (2017). EFIM: A fast and memory efficient algorithm for high-utility itemset mining. Knowledge and Information Systems ,51(2):595–625. 
+
+# A Notation Table 
+
+Table 5: Summary of principal notation used. 
+
+Symbol Description 
+
+n Number of instances (rows) in the dataset 
+
+p Number of predictors (features) 
+
+D, Dtr , Dtst Full, training, and test datasets 
+
+fj The j-th feature ( j = 1 , . . . , p )
+
+y Binary target label ∈ { 0, 1}
+
+B, Bj , B∗ 
+
+> j
+
+Global, per-feature, and selected bin count IG( fj ) Information gain of discretized feature fj w.r.t. y
+
+I(fi, f j ) Interaction information of feature pair ( fi, f j )
+
+I(X; Y ) Mutual information between X and Y
+
+EU( fj , c ) External utility of feature fj for class c
+
+Φij Pair transform family for features ( fi, f j )
+
+S Set of selected source–partner pairs 
+
+Bmax Global complexity budget (max features in classifier) 
+
+Bp, B o, B a Budget allocations: patterns, originals, augmented 
+
+K Number of target classes (typically K = 2) 
+
+L Maximum pattern length 
+
+G Information gain threshold for HUG patterns 
+
+ρ Elbow-stopping threshold for adaptive binning 
+
+τ Interaction information threshold for source selection 
+
+α Coarsen-by-default fraction for pair-aware binning 
+
+R(h), ˆR(h) True risk and empirical risk of classifier hdVC VC-dimension IAIML-A, IAIML-R Augmented-pair and interaction-relaxed-mining IAIML variants 
+
+24 B Dataset Panel 
+
+Table 6 lists the dataset panel used in the empirical study: 24 real-world datasets spanning credit risk, marketing response, health, and pricing domains, and 16 synthetic interaction stress tests. Table 6: Dataset panel used for the nested cross-validation empirical results. Pos. Rate is the fraction of positive-class labels. 
+
+# Dataset Group Rows Features Pos. Rate 
+
+1 adult income Real-world 48,842 14 0.239 2 australian credit Real-world 690 14 0.445 3 bank marketing Real-world 45,211 15 0.117 4 breast cancer wisconsin Real-world 569 30 0.373 5 california housing binarized Real-world 20,640 8 0.500 6 chess krvskp Real-world 3,196 36 0.522 7 compas recidivism Real-world 7,214 7 0.451 8 default credit card Real-world 30,000 23 0.221 9 fico heloc Real-world 9,871 23 0.480 10 german credit Real-world 1,000 20 0.300 11 heart disease cleveland Real-world 303 13 0.459 12 hepatitis Real-world 155 19 0.794 13 ionosphere Real-world 351 33 0.641 14 magic gamma Real-world 19,020 10 0.352 15 mushroom Real-world 8,124 21 0.482 16 nursery Real-world 12,960 8 0.667 17 online shoppers intention Real-world 12,330 17 0.155 18 phoneme Real-world 5,404 5 0.293 19 pima diabetes Real-world 768 8 0.349 20 spambase Real-world 4,601 57 0.394 21 telco churn Real-world 7,043 19 0.265 22 vehicle silhouettes Real-world 846 18 0.235 23 waveform v2 Real-world 5,000 40 0.338 24 wine quality binarized Real-world 6,497 11 0.197 25 SynthAdditiveNonlinear Synthetic 10,000 10 0.500 26 SynthCategoricalRules Synthetic 10,000 12 0.349 27 SynthCirclesNonlinear Synthetic 10,000 10 0.500 28 SynthImbalancedRare Synthetic 10,000 10 0.123 29 SynthLinearLowDim Synthetic 10,000 5 0.498 30 SynthMixedMissing Synthetic 10,000 10 0.497 31 SynthModularPairwise Synthetic 9,999 10 0.333 32 SynthMoonsNonlinear Synthetic 10,000 10 0.500 33 SynthParityGroups Synthetic 10,000 12 0.504 34 SynthSparseWide Synthetic 10,000 50 0.501 35 SynthXORInteractions Synthetic 10,000 10 0.503 36 synth cat continuous interact Synthetic 10,000 10 0.193 37 synth correlated masked Synthetic 10,000 15 0.497 38 synth high dim buried pairs Synthetic 10,000 100 0.495 39 synth multi pairwise Synthetic 10,000 12 0.502 40 synth threshold steps Synthetic 10,000 8 0.467 
+
+25 C Per-Dataset AUC Results 
+
+Table 7: Per-dataset mean AUC, nested cross-validation (40-dataset panel). Bold indicates the best AUC for each dataset (ties within 0.001 all bolded). IA-A/IA-R = IAIML-A/IAIML-R. 
+
+Dataset Grp IA-A IA-R XGBoost LightGBM EBM RuleFit 
+
+adult income RW 0.911 0.911 0.929 0.930 0.927 0.921 australian credit RW 0.935 0.930 0.935 0.936 0.938 0.930 bank marketing RW 0.774 0.780 0.802 0.803 0.792 0.792 breast cancer wisconsin RW 0.995 0.996 0.991 0.993 0.994 0.992 california housing binarized RW 0.938 0.941 0.965 0.969 0.957 0.952 chess krvskp RW 0.995 0.995 1.000 1.000 0.997 1.000 
+
+compas recidivism RW 0.731 0.728 0.730 0.730 0.731 0.730 default credit card RW 0.771 0.772 0.783 0.783 0.783 0.779 fico heloc RW 0.869 0.899 0.924 0.923 0.922 0.916 german credit RW 0.781 0.781 0.777 0.775 0.789 0.770 heart disease cleveland RW 0.900 0.900 0.883 0.879 0.895 0.855 hepatitis RW 0.820 0.852 0.796 0.781 0.843 0.798 ionosphere RW 0.926 0.936 0.968 0.978 0.973 0.955 magic gamma RW 0.912 0.902 0.935 0.938 0.918 0.921 mushroom RW 1.000 1.000 1.000 1.000 1.000 1.000 
+
+nursery RW 1.000 1.000 1.000 1.000 1.000 1.000 
+
+online shoppers intention RW 0.922 0.925 0.933 0.935 0.926 0.928 phoneme RW 0.911 0.915 0.945 0.961 0.926 0.934 pima diabetes RW 0.837 0.830 0.818 0.810 0.829 0.798 spambase RW 0.981 0.981 0.988 0.989 0.985 0.981 telco churn RW 0.849 0.849 0.848 0.849 0.850 0.850 
+
+vehicle silhouettes RW 0.993 0.995 0.994 0.995 0.996 0.989 waveform v2 RW 0.962 0.955 0.960 0.959 0.963 0.960 wine quality binarized RW 0.838 0.833 0.885 0.910 0.857 0.856 SynthAdditiveNonlinear Syn 0.962 0.962 0.981 0.981 0.982 0.980 SynthCategoricalRules Syn 1.000 0.999 1.000 1.000 1.000 1.000 
+
+SynthCirclesNonlinear Syn 1.000 0.996 1.000 1.000 1.000 0.999 
+
+SynthImbalancedRare Syn 0.955 0.944 0.955 0.960 0.954 0.952 SynthLinearLowDim Syn 0.993 0.993 0.994 0.994 0.993 0.994 
+
+SynthMixedMissing Syn 0.931 0.931 0.928 0.928 0.929 0.930 SynthModularPairwise Syn 0.710 0.997 0.999 1.000 1.000 1.000 
+
+SynthMoonsNonlinear Syn 0.990 0.990 0.998 0.998 0.998 0.997 
+
+SynthParityGroups Syn 0.507 0.518 0.503 0.507 0.507 0.508 SynthSparseWide Syn 0.985 0.975 0.984 0.985 0.980 0.980 SynthXORInteractions Syn 0.941 0.943 0.952 0.951 0.949 0.949 synth cat continuous interact Syn 0.998 0.997 1.000 1.000 1.000 1.000 
+
+synth correlated masked Syn 0.907 0.887 0.900 0.899 0.904 0.900 synth high dim buried pairs Syn 0.960 0.921 0.881 0.870 0.956 0.878 synth multi pairwise Syn 0.978 0.936 0.961 0.960 0.969 0.955 synth threshold steps Syn 0.827 0.827 0.847 0.840 0.839 0.840 
+
+26 D Pairwise Model Comparisons 
+
+This appendix reports analyses that extend beyond the primary reference-based comparison in Section 6. 
+
+D.1 Full Round-Robin Pairwise Comparison 
+
+Table 3 in the main text follows the paper’s reference-based design of testing every baseline against IAIML-A as a fixed reference, with Holm correction across those five comparisons. Table 8 instead runs Wilcoxon signed-rank tests for all  62
+
+ = 15 pairs and applies Holm correction across all 15, a more conservative and more complete view of the statistical structure. Five of the fifteen comparisons reach significance under this stricter correction. Both IAIML pathways remain significantly behind EBM even under the joint correction (IAIML-A vs. EBM, p = 0 .014; IAIML-R vs. EBM, p < 0.001), confirming that this gap is not an artifact of the reference-based comparison’s narrower correction. RuleFit is significantly behind all three higher-mean-AUC baselines, XGBoost ( p = 0 .002), LightGBM (p = 0 .009), and EBM ( p = 0 .033), while showing no significant difference from either IAIML variant; together these place RuleFit at the bottom of the five-baseline ordering despite its compact rule count. No other pairwise comparison, including both comparisons among the tree ensembles and the comparison between the two IAIML pathways, reaches significance. Table 8: Full round-robin Wilcoxon signed-rank comparison across all  62
+
+ = 15 model pairs, per-dataset mean AUC ( N = 40), Holm-corrected across all 15 comparisons jointly.                                                                                                                          
+
+> ABMean ∆(A −B) Wins Losses Ties Wilcoxon pHolm pSig.
+> IAIML-A IAIML-R −0.0057 17 14 90.652 1.000 IAIML-A XGBoost −0.0120 16 23 10.072 0.431 IAIML-A LightGBM −0.0126 13 26 10.033 0.262 IAIML-A EBM −0.0140 929 20.001 0.014 ✓
+> IAIML-A RuleFit −0.0070 17 22 10.302 1.000 IAIML-R XGBoost −0.0063 11 28 10.006 0.053 IAIML-R LightGBM −0.0070 11 28 10.005 0.053 IAIML-R EBM −0.0083 632 20.000 <0.001 ✓
+> IAIML-R RuleFit −0.0013 11 28 10.033 0.262 XGBoost LightGBM −0.0007 15 24 10.241 1.000 XGBoost EBM −0.0020 16 23 10.606 1.000 XGBoost RuleFit +0 .0050 27 12 10.000 0.002 ✓
+> LightGBM EBM −0.0013 19 20 10.780 1.000 LightGBM RuleFit +0 .0057 28 10 20.001 0.009 ✓
+> EBM RuleFit +0 .0070 25 14 10.003 0.033 ✓
+
+D.2 Dataset-Group-Conditional Comparison 
+
+Table 9 repeats the reference-based test of Table 3 separately within the 24 real-world and 16 synthetic datasets, referenced from Section 6.4. On the real-world subset, IAIML-A’s gap to EBM reaches sig-nificance (Holm p = 0 .005); no other real-world comparison does. On the synthetic subset, none of the five comparisons reach significance, even though the raw mean AUC gaps are numerically larger there than on the real-world subset (e.g., −0.0199 vs. EBM, compared with −0.0100 on real-world data); this reflects the higher cross-dataset variance of the synthetic panel (Table 2, Std. AUC column) rather than a smaller effect. The synthetic-subset results should be read as suggestive rather than conclusive; the real-world result corroborates the full-panel finding in Table 3. 
+
+D.3 Per-Dataset Rank Distribution 
+
+Table 2 and Table 3 summarize model quality through panel-wide means and reference-based tests. Figure 6 and Table 10 complement this with the full per-dataset AUC rank structure (1 = best AUC on that dataset), extending the mean-rank summary of Section 6.1. LightGBM attains the most outright wins (14 of 40 datasets), followed by EBM (11) and IAIML-A (8); EBM concentrates most of its mass in ranks 1–3 (29 of 40, 72.5%), consistent with its leading mean 27 Table 9: Reference-based Wilcoxon tests (IAIML-A vs. each baseline), computed separately within the real-world ( N = 24) and synthetic ( N = 16) dataset groups.                                
+
+> Real-world ( N= 24 )Synthetic ( N= 16 )Comparison Mean ∆AUC Holm pMean ∆AUC Holm p
+> vs. IAIML-R −0.0023 0.723 −0.0108 0.789 vs. XGBoost −0.0099 0.221 −0.0150 1.000 vs. LightGBM −0.0114 0.221 −0.0144 1.000 vs. EBM −0.0100 0.005 −0.0199 1.000 vs. RuleFit −0.0024 0.723 −0.0138 1.000
+
+Figure 6: Per-dataset AUC rank (1 = best) for all six models across the 40-dataset panel: (a) real-world datasets (n=24); (b) synthetic datasets (n=16). No model wins outright on every dataset in either group, and rank volatility is visibly higher on the real-world subset than on the synthetic subset. 28 Table 10: Number of datasets (out of 40) on which each model attains each AUC rank (1 = best). IA-A/IA-R = IAIML-A/IAIML-R.                                           
+
+> Model Rank 1 Rank 2 Rank 3 Rank 4 Rank 5 Rank 6
+> IA-A 862212 10 IA-R 732014 14 XGBoost 411 11 815LightGBM 14 84572EBM 11 612 10 10RuleFit 53714 65
+
+rank in Section 6.1. RuleFit’s distribution is centered on rank 4 (14 of 40 datasets), reflecting consistent middle-of-the-pack performance. The two IAIML variants show different shapes: IAIML-R is sharply bimodal, combining 7 outright wins with a heavy concentration in the bottom two ranks (28 of 40, 70%), while IAIML-A is somewhat more spread out, winning on 8 datasets but still finishing fifth or sixth on 22 of 40 (55%). No single model wins on a majority of datasets, LightGBM’s 14 of 40 is the largest share, reinforcing the observation in Section 6.3 that dataset-to-dataset variation dominates the differences between models. 
+
+D.4 Hyperparameter Selection Frequency 
+
+Table 11 reports how often each hyperparameter value was selected by the inner-CV loop, aggregated over the 40 × 5 = 200 outer-training-fold selections underlying Table 2. The tree ensembles lean toward higher-capacity configurations (more estimators, deeper trees or more leaves), EBM leans toward finer binning and a higher learning rate, and RuleFit leans toward more rules and larger trees. The two IAIML variants diverge slightly from each other: IAIML-A is roughly balanced between pattern lengths 
+
+L = 1 and L = 2 with a lean toward the stricter information-gain threshold ( G = 0 .001), while IAIML-R is roughly balanced on both pattern length and threshold, consistent with relaxed mining’s reliance on breadth of admitted candidates rather than a small set of high-information patterns. Mean fit and tuning times per model are reported in Table 4 (Section 6.2). Table 11: Nested-CV inner-loop hyperparameter selection frequency, out of 200 outer-training-fold selections per model (40 datasets × 5 outer folds).                                         
+
+> Model Parameter Selection frequency
+> IAIML-A L2: 57%, 1: 42% top-K100: 57%, 200: 42%
+> G0.001: 50%, 0.01: 50% IAIML-R L2: 54%, 1: 46% top-K100: 54%, 200: 46%
+> G0.01: 62%, 0.001: 38% XGBoost nestimators 200: 68%, 100: 32% max depth 4: 61%, 3: 39% learning rate 0.1: 68%, 0.03: 32% LightGBM nestimators 200: 60%, 100: 40% num. leaves 15: 55%, 31: 46% learning rate 0.1: 58%, 0.03: 42% EBM max bins 64: 57%, 32: 42% learning rate 0.05: 68%, 0.01: 32% RuleFit max rules 100: 57%, 200: 42% tree size 10: 67%, 5: 33%
+
+29 E Hyperparameter Configuration 
+
+All models are tuned under a fully nested cross-validation protocol: an outer stratified 5-fold split provides train/test partitions for performance estimation, and within each outer training fold an inner stratified 3-fold loop selects hyperparameters from the grids below. The selected configuration is refit on the full outer training fold before scoring on the held-out outer test fold. Table 12: IAIML component grids used for nested model selection. Both pathways use B = −1 with adaptive binning, top-K ∈ { 100 , 200 }, G ∈ { 0.01 , 0.001 }, and original-plus-pattern mode. 
+
+Pathway Pair operators Relaxed mining Additional values 
+
+IAIML-A On Off L ∈ { 1, 2}; interaction-information mode IAIML-R Off On L ∈ { 1, 2}
+
+Table 13: Baseline model grids used for nested model selection. 
+
+Model Parameter Values 
+
+XGBoost nestimators {100 , 200 }
+
+XGBoost max depth {3, 4}
+
+XGBoost learning rate {0.03 , 0.1}
+
+LightGBM nestimators {100 , 200 }
+
+LightGBM learning rate {0.03 , 0.1}
+
+LightGBM num leaves {15 , 31 }
+
+EBM interactions {5}
+
+EBM max bins {32 , 64 }
+
+EBM learning rate {0.01 , 0.05 }
+
+EBM max rounds {200 }
+
+RuleFit nestimators {100 }
+
+RuleFit tree size {5, 10 }
+
+RuleFit max rules {100 , 200 }
+
+30 F Full Ablation Results 
+
+Table 14 reports all 19 component-isolated ablation configurations evaluated on the 40-dataset panel described in Section 6.5, sorted by mean AUC. Configuration names encode the enabled mechanism (Fixed /Adaptive binning, Plain /RelaxedMining /AugPair interaction handling, PatternsOnly feature mode, pattern length L1 /L2 /L3 , and source/survivor-set size or top-K budget where applicable). Table 14: Full component-isolated ablation results, 40-dataset panel, sorted by mean AUC. 
+
+Configuration Mean AUC Mean Complexity 
+
+RelaxedMining L2 0.9074 124.9 RelaxedMining L2 G0001 Survivors20 0.9070 126.8 RelaxedMining L2 Survivors20 0.9068 124.7 RelaxedMining L2 Survivors30 0.9067 124.7 RelaxedMining L2 TopK200 Survivors20 0.9061 217.6 AugPair L2 TopK200 Source20 0.9027 235.1 AugPair L2 Source20 0.9023 153.4 AugPair L2 Source30 0.9021 153.4 AugPair L2 0.9017 153.4 AugPair L2 StrictTopK200 Source20 0.9012 175.1 PatternsOnly Relaxed L2 0.8973 93.5 AugPair L2 MarginalIG Source20 0.8529 115.8 Adaptive G0001 L1 0.8500 67.3 RelaxedMining L3 Survivors20 0.8493 113.7 Plain L2 0.8479 73.5 Fixed B7 L1 0.8458 49.0 Adaptive topK200 L1 0.8452 52.8 Adaptive Bauto L1 0.8449 49.5 PatternsOnly Plain L2 0.8211 42.1 
+
+31
