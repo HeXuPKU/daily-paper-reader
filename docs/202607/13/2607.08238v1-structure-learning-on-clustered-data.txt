@@ -1,0 +1,2928 @@
+Title: Structure Learning on Clustered Data
+
+URL Source: https://arxiv.org/pdf/2607.08238v1
+
+Published Time: Fri, 10 Jul 2026 00:38:10 GMT
+
+Number of Pages: 46
+
+Markdown Content:
+# Structure Learning on Clustered Data 
+
+Ryan Thompson ryan.thompson-1@uts.edu.au 
+
+School of Mathematical and Physical Sciences University of Technology Sydney Ultimo, NSW 2007, Australia 
+
+Matt P. Wand matt.wand@uts.edu.au 
+
+School of Mathematical and Physical Sciences University of Technology Sydney Ultimo, NSW 2007, Australia 
+
+Veerabhadran Baladandayuthapani veerab@umich.edu 
+
+Department of Biostatistics University of Michigan Ann Arbor, MI 48105, USA 
+
+Abstract 
+
+Recent algorithmic advances have made directed acyclic graph (DAG) structure learning scalable for causal discovery. Yet, the currently available techniques assume a completely homogeneous population, precluding their application to clustered data where cluster-specific variations (e.g., patient-specific effects) are common. We address this issue by introducing a new approach that estimates a global structure while accounting for local cluster-level effects. The key idea is to extend the fixed- and random-effects framework of classical mixed models to the structure learning setting. Towards this end, we present a differentiable graph coupling mechanism that guarantees the union of the fixed- and random-effects graphs remains acyclic. Computationally, we provide a provably convergent first-order method and leverage efficient batched updates across clusters. Statistically, we establish identifiability of the model and show that our approach recovers the true structure asymptotically. In experiments on real and synthetic data, our proposal detects dependencies missed by alternative estimators, underscoring its value for structure learning in clustered settings. 
+
+Keywords: causal discovery, continuous acyclicity, directed acyclic graphs, heterogeneous data, mixed effects 
+
+1 Introduction 
+
+Directed acyclic graphs (DAGs)—graphs with directed edges and no cycles—are a fundamental tool for probabilistic modeling and causal inference (Spirtes et al., 2000; Pearl, 2009). Their capacity to compactly encode conditional independence relations makes them useful in a wide range of domains, e.g., psychology (Foster, 2010), economics (Imbens, 2020), and epidemiology (Tennant et al., 2021). The first formal treatments in statistics and machine learning appeared in the late 1980s (Lauritzen and Spiegelhalter, 1988; Pearl, 1988). Three decades later, Zheng et al. (2018) made a pivotal advance that transformed structure learning from a notoriously difficult combinatorial optimization problem to a tractable continuous optimization problem, opening the way to scalably learn graphs with hundreds of nodes using first-order algorithms. Surveys by Vowels et al. (2022) and Kitson et al. (2023) provide comprehensive overviews of this shift and its impact on modern structure learning.    
+
+> ©2026 Ryan Thompson, Matt P. Wand, and Veerabhadran Baladandayuthapani. License: CC-BY 4.0, see https://creativecommons.org/licenses/by/4.0/ .arXiv:2607.08238v1 [cs.LG] 9 Jul 2026 Thompson, Wand, and Baladandayuthapani
+> X1X2
+> X3X4
+> B
+
+# +   
+
+> X1X2
+> X3X4
+> U(1)
+
+# =  
+
+> X1X2
+> X3X4
+> W(1)
+
+...
+
+... ...
+
+...
+
+# +   
+
+> X1X2
+> X3X4
+> U(m)
+
+# =  
+
+> X1X2
+> X3X4
+> W(m)
+
+Figure 1: Schematic of mixed DAGs. The fixed-effects graph B, shown with solid black arrows, is added to cluster-specific random-effect deviations U(i), shown with colored dashed arrows, to form W(i) = B + U(i). Dotted colored arrows indicate edges with both fixed- and random-effect contributions. Different colors correspond to different clusters. While recent advances have made structure learning scalable, most methods are confined to the iid setting, where the population is assumed to follow a single homogeneous causal model. This assumption is convenient but fails when causal effects vary within the population. Several strands of work have begun to relax homogeneity, including mixtures of DAGs (Saeed et al., 2020), DAGs adapted to distributional shifts (Huang et al., 2020), and DAGs that vary with modifying covariates (Thompson et al., 2024). However, one of the most typical sources of heterogeneity addressed by non-graphical models, clustered data, remains largely unexplored for DAGs. In clustered data, observations come with known cluster memberships, and while clusters may share a common causal structure, the strength or polarity of effects can differ across them. For example, in proteomic studies, repeated measures on the same patients form clusters. These clusters may exhibit protein interactions that broadly align across the population yet have effects that differ in detail across individuals or groups. Drawing on the machinery of mixed-effects models (e.g., Jiang and Nguyen, 2021), we develop a scalable framework for learning DAGs on clustered data. Formally, let X(i) ∈ Rni×p
+
+be ni observations on p variables belonging to cluster i = 1 , . . . , m . A DAG on these variables can be represented by a sparse matrix W(i) ∈ Rp×p, known as a weighted adjacency matrix, with w(i)
+
+> jk
+
+̸ = 0 if and only if a directed edge exists from node j to node k. Hence, learning the DAG reduces to estimating an acyclic W(i), which we decompose into population-level and cluster-specific components. This decomposition leads to a structural equation model: 
+
+X(i) = X(i)W(i) + ε(i), W(i) = B + U(i), i = 1 , . . . , m, (1) where ε(i) ∈ Rni×p is stochastic noise. Here, the matrix B ∈ Rp×p represents fixed effects ,traditionally understood in linear mixed models as coefficients common to all clusters. Meanwhile, the matrices U(i) ∈ Rp×p contain random effects , which capture cluster-specific deviations. In analogy with linear mixed models, the random effects associated with node 
+
+k may be taken to follow u(i) 
+
+> k
+
+∼ N( 0, diag (γk)) , where γk is the kth column of a matrix 
+
+Γ ∈ Rp×p 
+
+> +
+
+collecting all random-effect variances. As Figure 1 illustrates, unlike standard (purely fixed-effects) DAGs, where a single W applies uniformly across the population, mixed DAGs allow specific effects to vary with cluster membership under a global structure. 
+
+> 2Structure Learning on Clustered Data
+
+Under model (1) , the overall DAG is determined by the union of two sparse matrices: the fixed-effects matrix B, whose nonzero entries capture population-level effects, and the random-effects variance matrix Γ, whose nonzero entries indicate which cluster-specific deviations are active across clusters. Learning the model therefore amounts to estimating B
+
+and Γ subject to the constraint that their union remains acyclic. We enforce this constraint through a graph coupling mechanism based on existing differentiable characterizations of acyclicity, guaranteeing that the combined fixed- and random-effects graphs are cycle-free. On the computational side, we develop a first-order optimization method with provable convergence and leverage efficient batched updates across clusters, making it feasible to learn graphs with up to hundreds of nodes. We further derive statistical results establishing identifiability of the model and correct recovery of the true structure asymptotically. Synthetic experiments and an application to proteomics confirm that our proposed approach recovers both population-level and cluster-specific effects that alternative approaches fail to detect. The remainder of the paper is organized as follows. Section 2 situates our proposal in the context of the broader literature. Section 3 introduces our framework for learning mixed DAGs. Section 4 describes algorithms and strategies for scalable computation. Section 5 establishes an asymptotic statistical guarantee. Section 6 reports experiments on synthetic, semi-synthetic, and real data. Section 7 closes the paper with some final remarks. 
+
+2 Related Work 
+
+The breakthrough work by Zheng et al. (2018) reformulates the combinatorial acyclicity constraint as a continuous, differentiable constraint by exploiting the correspondence between cycles in a graph and traces of matrix powers. Subsequent work by Zhang et al. (2022) and Bello et al. (2022), among others, develops alternative continuous acyclicity characterizations with improved numerical behavior, including polynomial and log-determinant formulations. Zhang et al. (2025) provide a unified analytic perspective of these characterizations. Zheng et al. (2020) devise extensions to non-parametric DAGs, Thompson et al. (2025a) extend the framework to variational inference, while Deng et al. (2023b) and Deng et al. (2024) establish theoretical guarantees. While these approaches are nonconvex, Deng et al. (2023a) show how discrete combinatorics can be used to escape local minima if desired. Though the above differentiable approaches assume iid observations, a few classical methods can handle clustered data. Bae et al. (2016) incorporate node-level random intercepts into DAGs, capable of capturing limited forms of cluster-level variation, while Li et al. (2018) allow edge strengths to consist of both fixed and random components. Both, however, rely on traditional discrete search and hence remain fundamentally combinatorial. More recent work considers DAGs that vary as a function of observed covariates rather than across clusters: Ni et al. (2019) use spline-based mapping and Thompson et al. (2024) employ a neural mapping with differentiable acyclicity. Oates et al. (2016) take a different route, jointly estimating observation-specific DAGs that are linked via a dependency network. These methods capture certain forms of heterogeneity, but none are designed specifically for clustered data. Our paper also contributes to the growing literature on mixed-effects models adapted for machine learning. Xiong et al. (2019) and Simchoni and Rosset (2021, 2023, 2025) integrate random effects into neural networks—including feedforward, convolutional, and recurrent variants—to handle clustered data, with high-cardinality categorical features as an 
+
+> 3
+
+Thompson, Wand, and Baladandayuthapani 
+
+important special case. Simchoni and Rosset (2024) extend this perspective to variational autoencoders, introducing random effects directly into the latent representation. Sholokhov et al. (2024) and Thompson et al. (2025b) develop algorithms for learning linear mixed models on high-dimensional data, enabling the selection of nonzero fixed and random effects across thousands of candidate predictors. These works, however, are confined to non-graphical models and so do not address multivariate relationships, let alone DAG structure learning. 
+
+3 Mixed DAGs 
+
+3.1 Objective Function 
+
+To formulate our estimator, we begin by narrowing our focus to a single node k within a single cluster i. The mixed-effects structural equation model (1) at this level takes the form 
+
+x(i) 
+
+> k
+
+= X(i)βk + X(i)u(i) 
+
+> k
+
++ ε(i) 
+
+> k
+
+,
+
+where x(i) 
+
+> k
+
+∈ Rni denotes the kth column of X(i), the vectors βk ∈ Rp and u(i) 
+
+> k
+
+∈ Rp represent the kth columns of the fixed-effects matrix B and random-effects matrix U(i), respectively, and ε(i) 
+
+> k
+
+∈ Rni represents the kth column of the noise matrix ε(i). It is common in the linear mixed model literature to assume Gaussian noise and random effects, so that ε(i) 
+
+> k
+
+∼ N( 0, I)
+
+and u(i) 
+
+> k
+
+∼ N( 0, diag (γk)) , where γk ∈ Rp 
+
+> +
+
+is the kth column of Γ. More generally, node-specific noise variances can be accommodated by taking ε(i) 
+
+> k
+
+∼ N( 0, σ 2
+
+> k
+
+I) and replacing I
+
+below by σ2
+
+> k
+
+I, while here we set σ2 
+
+> k
+
+= 1 to simplify notation. The diagonal covariance for the random effects is a common simplification in high-dimensional settings, where allowing unrestricted covariance is impractical. Throughout, we impose diag (B) = diag (Γ) = 0,excluding self-loops. Conditional on the parent variables of node k, the vector x(i) 
+
+> k
+
+follows 
+
+x(i) 
+
+> k
+
+∼ N( X(i)βk, V(i)(γk)) ,
+
+where the matrix V(i)(γk) captures correlations between observations within the ith cluster: 
+
+V(i)(γk) := I + X(i) diag( γk)X(i)⊤.
+
+We now move from this single-node description to the full model by applying the same construction across nodes k = 1 , . . . , p and clusters i = 1 , . . . , m . On the feasible DAG set, after integrating out the random effects, the resulting nodewise conditional densities factorize over nodes and independent clusters, yielding a negative log-likelihood of the form 
+
+l(B, Γ) = 
+
+> p
+
+X
+
+> k=1
+> m
+
+X
+
+> i=1
+
+n
+
+log det {V(i)(γk)} + ( x(i) 
+
+> k
+
+− X(i)βk)⊤V−(i)(γk)( x(i) 
+
+> k
+
+− X(i)βk)
+
+o
+
+, (2) where V−(i)(γk) := {V(i)(γk)}−1, and additive and multiplicative constants are omitted to simplify exposition. The negative log-likelihood (2) has explicit gradients with respect to the fixed-effects B and the random-effects variances Γ. For the fixed-effect βjk , the gradient is 
+
+∂∂β jk 
+
+l(B, Γ) = −2
+
+> m
+
+X
+
+> i=1
+
+x(i)⊤ 
+
+> j
+
+V−(i)(γk)( x(i) 
+
+> k
+
+− X(i)βk).
+
+4Structure Learning on Clustered Data 
+
+Likewise, the gradient with respect to the random-effect variance γjk is of the form 
+
+∂∂γ jk 
+
+l(B, Γ) = 
+
+> m
+
+X
+
+> i=1
+
+
+
+x(i)⊤ 
+
+> j
+
+V−(i)(γk)x(i) 
+
+> j
+
+−
+
+n
+
+x(i)⊤ 
+
+> j
+
+V−(i)(γk)( x(i) 
+
+> k
+
+− X(i)βk)
+
+o2
+
+.
+
+These gradient expressions are useful for the algorithmic developments that follow later. We take our estimator as a minimizer of the negative log-likelihood (2) over the fixed- and random-effects parameters while enforcing two key structural constraints. First, the graphs 
+
+G(B) and G(Γ) induced by B and Γ must jointly remain acyclic. Here, G(W) denotes the directed graph on {1, . . . , p } having an edge j → k if and only if wjk ̸ = 0 . In other words, the graph G(B) ∪ G (Γ) formed by the union of the individual edge sets must be a DAG. Second, sparsity is imposed to encourage parsimonious graphs with fewer edges and improve structure recovery. Together, these requirements lead to the constrained optimization problem 
+
+min  
+
+> B∈Rp×p,Γ∈Rp×p
+> +
+
+l(B, Γ) + λ1∥B∥1 + λ2∥Γ∥1 s. t. G(B) ∪ G (Γ) ∈ DAG p, (3) where DAG p is the set of all DAGs on nodes {1, . . . , p }. Here, λ1, λ 2 ≥ 0 are sparsity penalty parameters, and ∥ · ∥ 1 is the sum of the absolute values of the entries of its matrix argument. The optimization problem (3) is nonconvex, owing both to the form of the negative log-likelihood and to the DAG constraint. We denote its minimizers by ˆB and ˆΓ.To report cluster-specific graphs, we recover the random-effects U(i) via their so-called best linear unbiased predictors (BLUPs) ˆU(i). The BLUP for the kth column u(i) 
+
+> k
+
+of U(i) is 
+
+ˆu(i) 
+
+> k
+
+= diag(ˆ γk)X(i)⊤V−(i)(ˆ γk)( x(i) 
+
+> k
+
+− X(i) ˆβk).
+
+Combining ˆU(i) with the estimated fixed-effects ˆB produces a DAG for cluster i as 
+
+ˆW(i) = ˆB + ˆU(i).
+
+3.2 Differentiable Reformulation 
+
+As written, the DAG constraint in (3) constitutes a non-differentiable combinatorial restriction that precludes the use of scalable first-order optimization methods like gradient descent. Following the differentiable structure learning literature (e.g., Zheng et al., 2018; Bello et al., 2022), we reformulate the combinatorial DAG constraint as an equivalent differentiable DAG constraint. This line of work established the existence of smooth functions h(W) such that 
+
+h(W) = 0 ⇐⇒ G (W) ∈ DAG p.
+
+In other words, the differentiable function h(W) vanishes exactly on the set of DAGs, so enforcing h(W) = 0 is lossless relative to the original DAG constraint. We adopt the log-determinant form of h first proposed by Bello et al. (2022). For matrices W ∈ W := 
+
+{W ∈ Rp×p 
+
+> +
+
+: ρ(W) < 1}, where ρ(W) denotes the spectral radius of W, define the function 
+
+h(W) := − log det( I − W).
+
+Under the stated nonnegativity and spectral radius conditions, Bello et al. (2022) showed that h(W) = 0 if and only if W is acyclic. In the real-valued case, W can be mapped to a 
+
+> 5Thompson, Wand, and Baladandayuthapani
+
+nonnegative surrogate via the Hadamard product W ⊙ W before using h, preserving the zeros and hence the graph. Crucially, h is continuously differentiable on W with gradient 
+
+∇h(W) = ( I − W)−⊤ .
+
+Our setting requires a stronger constraint than above: the union of the graphs induced by the fixed-effects matrix B and random-effects matrix Γ must be acyclic. It is therefore insufficient for B and Γ to be individually acyclic, as their union can still contain cycles, leading to cluster-specific matrices ˆW(i) that are not valid DAGs. Since Γ has nonnegative entries, while B has real-valued entries, we enforce acyclicity of the union by applying the log-determinant characterization to the combined nonnegative matrix B ⊙ B + Γ:
+
+h(B, Γ) := − log det( I − B ⊙ B − Γ). (4) The following proposition formalizes the equivalence between acyclicity of the union graph induced by the fixed and random effects and the level-set of the log-determinant (4) at zero. 
+
+Proposition 1 Let h(B, Γ) be given in (4) and define the domain 
+
+D := {(B, Γ) ∈ Rp×p × Rp×p 
+
+> +
+
+: ρ(B ⊙ B + Γ) < 1}. (5) 
+
+Then, for any (B, Γ) ∈ D, it holds 
+
+G(B) ∪ G (Γ) ∈ DAG p ⇐⇒ h(B, Γ) = 0 .
+
+Proof See Appendix A. Proposition 1 shows that, on the domain D defined in (5) , enforcing h(B, Γ) = 0 is exactly equivalent to requiring that the union graph G(B) ∪ G (Γ) be acyclic. Consequently, the differentiable constraint in (4) is lossless relative to the original combinatorial DAG restriction. The proof carries the argument of Bello et al. (2022) over to the mixed-effects setting. The gradients of h(B, Γ) are 
+
+∇Bh(B, Γ) = 2( I − B ⊙ B − Γ)−⊤ ⊙ B
+
+and 
+
+∇Γh(B, Γ) = ( I − B ⊙ B − Γ)−⊤ .
+
+With this characterization, we can rewrite (3) without the combinatorial DAG constraint: 
+
+min  
+
+> (B,Γ)∈D
+
+l(B, Γ) + λ1∥B∥1 + λ2∥Γ∥1 s. t. h (B, Γ) = 0 .
+
+As discussed in the next section, it is possible to solve this optimization problem using first-order (gradient) methods, paving the way for scalable mixed-effects structure learning. 
+
+> 6
+
+Structure Learning on Clustered Data 
+
+4 Scalable Computation 
+
+4.1 Path-Following Algorithm 
+
+Standard first-order algorithms do not readily accommodate hard constraints like h(B, Γ) = 0 
+
+directly. We therefore adopt a path-following strategy in the spirit of Bello et al. (2022). The key idea is to relax the constraint by incorporating it into the objective via a smooth barrier: 
+
+min  
+
+> (B,Γ)∈D
+
+fμ(B, Γ; λ1, λ 2) := μ {l(B, Γ) + λ1∥B∥1 + λ2∥Γ∥1} + h(B, Γ). (6) Here, μ ≥ 0 is a continuation parameter that we decrease along a sequence μ(1) > μ (2) >
+
+· · · > μ (T ) ≥ 0. At iteration t + 1 of our strategy, we solve (6) with μ = μ(t+1) using the solution obtained from μ = μ(t) as an initialization point. Along this path, the log-determinant term h(B, Γ) acts as a smooth barrier over D, keeping ρ(B ⊙ B + Γ) < 1 and progressively steering iterates toward an acyclic union as μ decreases. In the limit as μ → 0,the barrier dominates and the resulting solution satisfies the acyclicity constraint h(B, Γ) = 0 .Algorithm 1 summarizes the full procedure. In practice, we set the initial continuation 
+
+Algorithm 1 Path-following algorithm 
+
+Input: Initializer (B(0) , Γ(0) ) ∈ D and parameters λ1, λ 2 > 0 and μ(1) > · · · > μ (T ) ≥ 0
+
+for t = 0 , 1, . . . , T − 1 do 
+
+Initialize (B, Γ) at (B(t), Γ(t)) and set 
+
+(B(t+1) , Γ(t+1) ) ← arg min 
+
+> (B,Γ)∈D
+
+fμ(t+1) (B, Γ; λ1, λ 2)
+
+end for Output: Solution ( ˆB, ˆΓ) = ( B(T ), Γ(T ))
+
+parameter μ(1) = 1 and take μ(t+1) = 0 .1μ(t) for T = 5 iterations. The initialization point 
+
+(B(0) , Γ(0) ) is set to matrices of zeros, i.e., (B(0) , Γ(0) ) = ( 0, 0), which trivially lies in D.
+
+4.2 Proximal Gradient Algorithm 
+
+To solve the inner problem (6) at each iteration of Algorithm 1, we design a proximal gradient algorithm (see, e.g., Polson et al., 2015). Towards this end, we use the fact that the objective function in (6) naturally decomposes into the sum of smooth and nonsmooth components as 
+
+fμ(B, Γ) := gμ(B, Γ) + rμ(B, Γ),
+
+where the smooth component and nonsmooth component are defined respectively as 
+
+gμ(B, Γ) := μ{l(B, Γ)} + h(B, Γ), rμ(B, Γ) := μ{λ1∥B∥1 + λ2∥Γ∥1} + ιRp×p
+
+> +
+
+(Γ). (7) We absorb the nonnegativity constraint on Γ into rμ via the indicator ιRp×p
+
+> +
+
+(Γ), which equals 
+
+0 if Γ ∈ Rp×p 
+
+> +
+
+and +∞ otherwise. The smooth component gμ admits gradients with respect to B and Γ, while the nonsmooth term rμ is amenable to proximal operators. This structure 
+
+7Thompson, Wand, and Baladandayuthapani 
+
+leads to simple updates: given current iterates (B(k), Γ(k)) we take a gradient step with step size α > 0 on the smooth component and then apply proximal operators to the result, thus handling the nonsmooth penalties. The corresponding elementwise operators are 
+
+soft λ(z) := sign( z) max( |z| − λ, 0) , soft + 
+
+> λ
+
+(z) := max( z − λ, 0) .
+
+The first operator soft λ(z) is the well-known proximal operator for the ℓ1-norm, applied to induce sparsity in the fixed-effects B. The second operator soft + 
+
+> λ
+
+(z) is the proximal operator for an ℓ1-norm combined with a projection onto the nonnegative reals, used to produce sparse random-effects variances in Γ. Algorithm 2 summarizes this proximal gradient procedure. In 
+
+Algorithm 2 Proximal gradient algorithm 
+
+Input: Initializer (B(0) , Γ(0) ) ∈ D, parameters λ1, λ 2 > 0 and μ ≥ 0, and step size α > 0
+
+Initialize iterator k ← 0
+
+while Not converged do 
+
+Perform proximal gradient updates 
+
+B(k+1) ← soft αμλ 1
+
+
+
+B(k) − α∇Bgμ(B(k), Γ(k))
+
+
+
+Γ(k+1) ← soft +
+
+> αμλ 2
+
+
+
+Γ(k) − α∇Γgμ(B(k), Γ(k))
+
+
+
+Increment iterator k ← k + 1 
+
+end while Output: Solution (B⋆, Γ⋆) = ( B(k), Γ(k))
+
+practice, we declare convergence when the relative change in gμ falls below 10 −6.To determine a suitable step size α in Algorithm 2, we derive a quadratic upper bound on the local change of the smooth component gμ. This upper bound ensures that updates yield a controlled decrease in gμ, thereby providing a principled basis for step size selection. The following proposition establishes this bound on any compact subset Ω ⊂ D.
+
+Proposition 2 Let gμ(B, Γ) be the smooth component (7) of the objective function, defined on the domain D given in (5) . Fix any compact set Ω ⊂ D. Then there exists a constant 
+
+L < ∞ such that for all (B, Γ), (B+, Γ+) ∈ Ω it holds 
+
+gμ(B+, Γ+) ≤ gμ(B, Γ) + ⟨∇ gμ(B, Γ), (∆ B, ∆Γ)⟩ + L
+
+2 ∥(∆ B, ∆Γ)∥2 
+
+> F
+
+,
+
+where ∆B := B+ − B, ∆Γ := Γ+ − Γ, and ∥(∆ B, ∆Γ)∥2 
+
+> F
+
+:= ∥∆B∥2 
+
+> F
+
++ ∥∆Γ∥2 
+
+> F
+
+. Here, ∥ · ∥ F
+
+denotes the Frobenius norm and ⟨· , ·⟩ denotes the Frobenius inner product. 
+
+Proof See Appendix B. Proposition 2 motivates the step size choice α ≤ 1/L , under which each proximal gradient descent update is guaranteed to be a descent step. In practice, we do not compute L
+
+explicitly when choosing the step size. Instead, we start from an initial step size and apply 
+
+> 8Structure Learning on Clustered Data
+
+backtracking line search until the inequality in Proposition 2 is satisfied by the trial update. This backtracking procedure can also be used to check that the trial update remains in D.With the step size condition above in hand, we now characterize the convergence properties of Algorithm 2 for fixed μ ≥ 0. The following theorem presents these properties. 
+
+Theorem 3 Let μ ≥ 0. Fix any compact set Ω ⊂ D. Then there exists a constant L < ∞
+
+such that, if Algorithm 2 is run with step size α < 1/L and the iterates (B(k), Γ(k)) remain in Ω, the sequence of objective values {fμ(B(k), Γ(k))} is decreasing and converges to a finite limit f ⋆μ. Moreover, as k → ∞ , the iterates satisfy 
+
+∥(B(k+1) , Γ(k+1) ) − (B(k), Γ(k))∥F → 0.
+
+Proof See Appendix C. Theorem 3 shows that the proximal gradient descent iterates are well-behaved. In particular, the objective values decrease monotonically and the successive updates vanish asymptotically. Thus, under the stated step size condition, the objective sequence converges to a finite limit and the change from one iterate to the next becomes arbitrarily small as the algorithm progresses. The requirement that the iterates remain in a compact set is a technical condition used in the proof. Although this condition can be enforced explicitly if desired, our numerical experience is that it is not necessary to impose in practice for stable convergence. 
+
+4.3 Batched Updates 
+
+Direct evaluation of the negative log-likelihood in Algorithm 2 requires computing, for each node k and cluster i, the covariance matrix V(i)(γk) together with its log-determinant and the quadratic form involving its inverse. Both of these quantities depend on a Cholesky factorization of V(i)(γk). Looping over all m clusters and p nodes, therefore, leads to mp 
+
+separate factorizations at every gradient step, each costing O(n3 
+
+> i
+
+), which is computationally prohibitive when performed serially. To avoid this bottleneck, we perform the entire likelihood evaluation in parallel using batched linear algebra routines. Prior to running Algorithm 2, the cluster matrices X(i) are padded into a block-aligned tensor X ∈ Rm×max i ni×p with a row mask to drop padded entries. Then, within each iteration of Algorithm 2, the random-effects variances γk are broadcast across clusters, producing the collection {V(i)(γk)}ik as a four-dimensional tensor. Next, batched routines compute the factorizations concurrently, and the resulting triangular factors are used (again in batch) to extract the log-determinant terms from their diagonals and perform triangular solves for the quadratic terms. In the setting ni ≥ p, the log-determinant and quadratic terms can be evaluated via Sylvester’s determinant identity and the Woodbury identity using p×p batched factorizations, reducing the per-factorization cost from O(n3 
+
+> i
+
+) to O(p3) (see, e.g., Harville, 1997). 
+
+4.4 Computational Complexity 
+
+Each iteration of Algorithm 2 evaluates the negative log-likelihood term l(B, Γ) and acyclicity term h(B, Γ), along with their gradients. The acyclicity term, which involves the log-determinant of a p × p matrix, requires O(p3) operations. The negative log-likelihood term requires O(p Pmi=1 min {n2 
+
+> i
+
+p + n3 
+
+> i
+
+, p 3}) operations. When the number of clusters m grows with the total sample size n• := Pmi=1 ni and the cluster sizes ni remain uniformly bounded by a 
+
+> 9
+
+Thompson, Wand, and Baladandayuthapani 100 200 300 400 500 
+
+> 250
+> 500
+> 750
+> 1000
+> Number of nodes
+> Run time (seconds)
+
+Figure 2: Run time in seconds as a function of the number of nodes p with n• = 1 ,000 
+
+observations and m = 20 clusters, measured on an NVIDIA RTX 4090. Averages (solid points) and standard errors (error bars) are measured over 30 datasets. All runs use regularization parameters λ1 = λ2 = 0 .001 .constant n, the negative log-likelihood term reduces to O(p2n•) operations. The gradients of both terms incur the same asymptotic costs. Hence, the cost per iteration of Algorithm 2 is 
+
+O(p Pmi=1 min {n2 
+
+> i
+
+p + n3 
+
+> i
+
+, p 3} + p3) in general and O(p2n• + p3) in the bounded-cluster regime. To examine how the run time scales with the number of nodes, we time Algorithm 1 as p varies. Figure 2 reports the results. As expected, the run time grows superlinearly in p, though not quite at a cubic rate (cubic complexity in p is worst-case complexity for computing the log-determinant). Overall, the times remain practical for many applications, with training taking about a minute for p = 100 and about 15 minutes for p = 500 .
+
+5 Statistical Properties 
+
+5.1 Setup 
+
+We now study some statistical properties of mixed DAGs. In particular, we first establish an identifiability result for the model and then present a statistical guarantee for our estimator in the asymptotic regime where the number of clusters m → ∞ . The guarantee addresses both (i) parameter estimation consistency and (ii) structure recovery consistency. We assume the data-generating process is a structural equation model of the form (1): 
+
+X(i) = X(i)W(i)0 + ε(i), W(i)0 = B0 + U(i)0 , i = 1 , . . . , m, 
+
+where the noise ε(i) ∼ N( 0, I) and the random-effects matrix U(i)0 ∈ Rp×p has columns satis-fying u(i) 
+
+> k, 0
+
+∼ N( 0, diag (γk, 0)) , with all random effects mutually independent and independent of the noise. The model parameters B0 ∈ Rp×p and Γ0 ∈ Rp×p 
+
+> +
+
+, representing the true fixed-and random-effects parameters, respectively, constitute a causal model satisfying 
+
+G(B0) ∪ G (Γ0) ∈ DAG p.
+
+10 Structure Learning on Clustered Data 
+
+We denote the edge sets (i.e., nonzero components) of the matrices B0 and Γ0 by 
+
+SB := {(j, k ) : βjk, 0̸ = 0 } and SΓ := {(j, k ) : γjk, 0̸ = 0 }.
+
+We assume SB̸ = ∅ and SΓ̸ = ∅ for simplicity, i.e., there is at least one edge in each graph. To estimate (B0, Γ0), we study the minimizer of the following optimization problem: 
+
+( ˆB, ˆΓ) ∈ arg min 
+
+> (B,Γ)∈F
+
+Fm(B, Γ).
+
+Here, the objective function Fm is the same penalized objective function in (3) but with the negative log-likelihood scaled by the number of clusters m to ensure a nondegenerate limit: 
+
+Fm(B, Γ) := ℓm(B, Γ) + λ1∥B∥1 + λ2∥Γ∥1, ℓm(B, Γ) = 1
+
+m l(B, Γ).
+
+The feasible set F is the same as the constraint set in (3) but with added box constraints: 
+
+F := {(B, Γ) ∈ Rp×p × Rp×p 
+
+> +
+
+: G(B) ∪ G (Γ) ∈ DAG p, ∥B∥∞ ≤ MB, ∥Γ∥∞ ≤ MΓ}. (8) The box constraints ∥B∥∞ ≤ MB and ∥Γ∥∞ ≤ MΓ are included in the constraint set as a technical convenience to guarantee compactness of F. The constants MB > 0 and MΓ > 0
+
+may be set arbitrarily large so long as they satisfy MB > ∥B0∥∞ and MΓ > ∥Γ0∥∞.
+
+5.2 Assumptions 
+
+The consistency results for the estimator rely on two assumptions which we set forth below. Because some true components γjk, 0 may equal zero, derivatives with respect to γjk at 
+
+γjk = 0 are interpreted as the corresponding one-sided derivatives from within Rp×p 
+
+> +
+
+.
+
+Assumption 1 As m → ∞ , the regularization parameters λ1 and λ2 satisfy λ1 → 0, λ2 → 0,
+
+√mλ 1 → ∞ , √mλ 2 → ∞ , and λ2/λ 1 → κ ∈ (0 , ∞).
+
+Assumption 1 specifies the scaling of the regularization parameters. The conditions λ1, λ 2 → 0
+
+allow consistent parameter estimation by making the penalties asymptotically negligible. The additional conditions √mλ 1, √mλ 2 → ∞ are needed for consistent structure recovery by ensuring that the penalties dominate the sampling fluctuations. The ratio condition 
+
+λ2/λ 1 → κ ∈ (0 , ∞) implies that the two penalties shrink at the same asymptotic order. 
+
+Assumption 2 The population Hessian H := ∇2L(B0, Γ0) is positive definite. In addition, let S := ( SB, SΓ) and write HSS for the principal submatrix of H indexed by S. For (j, k )
+
+indexing a component of B or Γ, let h(B) 
+
+> jk, S
+
+and h(Γ) 
+
+> jk, S
+
+denote the row vectors of second derivatives between βjk or γjk and the active components (BSB , ΓSΓ ), respectively. Then there exists an η ∈ (0 , 1) such that 
+
+h(B) 
+
+> jk, S
+
+H−1
+
+> SS
+
+sB
+
+κ1
+
+
+
+≤ 1 − η for all (j, k ) ∈ S c
+
+> B
+
+,
+
+and 
+
+h(Γ) 
+
+> jk, S
+
+H−1
+
+> SS
+
+sB
+
+κ1
+
+
+
+≤ κ(1 − η) for all (j, k ) ∈ S c
+
+> Γ
+
+,
+
+where sB := (sign( βjk, 0)) (j,k )∈S B contains the signs of all active components of B.
+
+11 Thompson, Wand, and Baladandayuthapani 
+
+Assumption 2 imposes regularity conditions on the population loss. Positive definiteness of the Hessian at the true parameters makes the population loss locally strongly convex around 
+
+(B0, Γ0). The two inequalities constitute an irrepresentability condition, analogous to those used to analyze ℓ1-penalized linear models (Zhao and Yu, 2006), that limits the influence of inactive components through the active parameters, needed for consistent structure recovery. 
+
+5.3 Results 
+
+The following theorem establishes identifiability of the model described in the setup. 
+
+Theorem 4 Under the data-generating process described above, if G(B0) ∪ G (Γ0) is a DAG, then the parameters (B0, Γ0) are identifiable from the distribution of the observed clustered data. Consequently, the graphs G(B0), G(Γ0), and their union are identifiable. 
+
+Proof See Appendix D. Theorem 4 implies that the data-generating parameters (B0, Γ0) are uniquely determined by the distribution of the observed clustered data. Since ℓm(B, Γ) is the negative log-likelihood under our structural equation model, the population loss L(B, Γ) := E[ ℓm(B, Γ)] coincides with the Kullback–Leibler divergence between the true distribution and the model up to an additive constant. Consequently, L(B, Γ) is uniquely minimized at (B0, Γ0). In the non-clustered setting, Peters and Bühlmann (2014) establish an analogous identifiability result for linear Gaussian structural equation models with equal noise variances. The following theorem establishes asymptotic consistency of parameter estimation and structure recovery of the estimator ( ˆB, ˆΓ) with respect to the ground truth (B0, Γ0).
+
+Theorem 5 Suppose the clusters X(1) , . . . , X(m) are iid and have a common (deterministic) cluster size ni ≡ n with 1 ≤ n < ∞, and Assumptions 1 and 2 hold. Then the estimator 
+
+( ˆB, ˆΓ) is parameter estimation consistent as m → ∞ :
+
+∥( ˆB, ˆΓ) − (B0, Γ0)∥Fp
+
+→ 0.
+
+Moreover, ( ˆB, ˆΓ) is structure recovery consistent as m → ∞ :
+
+Pr 
+
+
+
+G( ˆB) = G(B0) and G(ˆΓ) = G(Γ0)
+
+
+
+→ 1.
+
+Proof See Appendix E. Theorem 5 is stated for equal cluster sizes for simplicity. The result extends to unequal but uniformly bounded cluster sizes 1 ≤ ni ≤ n < ∞ with minor additional technicalities. The proof of Theorem 5 involves four steps. We first establish consistency of the parameter estimates. Next, we show that this result rules out false negatives in the recovered structure. We then employ a primal–dual witness argument (Wainwright, 2009) to establish the absence of false positives. Finally, we combine the results to get structure recovery consistency. To the best of our knowledge, no prior work has established structure recovery consistency for mixed DAGs. Related selection consistency results are available for non-graphical mixed-effects models. For example, Fan and Li (2012) establish model selection consistency for penalized procedures that select both fixed and random effects in linear mixed models. 
+
+> 12 Structure Learning on Clustered Data
+
+Moreover, even in the classical homogeneous setting, structure recovery guarantees for DAG estimators are limited. One notable exception is the ordered-variable regime, where the DAG reduces to a lower-triangular adjacency and Shojaie and Michailidis (2010) show ℓ1-penalized likelihood methods are structure recovery consistent under suitable conditions. 
+
+6 Experiments 
+
+6.1 Baselines and Metrics 
+
+We experimentally evaluate five estimators, using the following labels in figures and tables. 
+
+• Mixed DAG: our proposed mixed-effects DAG estimator, which jointly learns fixed-and random-effects structures while simultaneously enforcing acyclicity of their union. 
+
+• Fixed DAG: a fixed-effects-only DAG estimator following Bello et al. (2022), which does not include random effects and therefore ignores cluster-level heterogeneity. 
+
+• Mixed DAG (FM): a computationally simpler masked alternative to the mixed DAG that replaces the explicit acyclicity constraint with a fixed mask (FM) obtained from the fixed DAG estimate. Specifically, the fixed DAG estimate is converted into a topological ordering, and the resulting mask is applied to the fixed- and random-effects matrices, setting all entries that violate the ordering to zero. Thus, only edges from earlier to later variables in the ordering can be selected, thereby guaranteeing acyclicity. 
+
+• Mixed DAG (OM): the same masked mixed-effects DAG estimator as outlined above, but using an oracle mask (OM) obtained from a topological ordering of the true DAG. 
+
+• Mixed DG: a mixed-effects directed graph (DG) estimator that fits the same model as the mixed DAG but does not enforce acyclicity, and hence need not produce a DAG. The oracle variant serves as a purely theoretical baseline, providing an idealized bound on performance. Among these estimators, those with an explicit acyclicity constraint use the log-determinant acyclicity characterization of Bello et al. (2022), providing a uniform basis for comparison. Sparsity parameters are tuned on a validation set generated independently and identically to the training set. Appendix F provides implementation details. We consider several metrics that characterize different attributes of the estimators. We report the estimation error, defined as the average of squared differences between the estimated and true weighted adjacency matrices over all clusters. We report the structural Hamming distance (SHD), defined as the number of edge additions, deletions, and reversals needed to transform the estimated structure into the true structure. We also report the F1 score, defined as the harmonic mean of precision and recall in edge selection. Finally, we report the sparsity, defined as the total number of edges in the estimated graph. 
+
+6.2 Synthetic Data 
+
+We generate synthetic datasets from the structural equation model (1) as follows. First, we sample an Erdős–Rényi graph (Erdős and Rényi, 1959) with p nodes and s edges, draw a random ordering of the nodes, and orient each edge from the earlier node to the later node in that ordering, thereby obtaining a DAG. Each edge in this graph is then assigned a 
+
+> 13
+
+Thompson, Wand, and Baladandayuthapani 0.25             
+
+> 0.50
+> 0.75
+> 1.00
+> 0
+> 20
+> 40
+> 60
+> 30 100 300 1,000
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 30 100 300 1,000
+> 0
+> 30
+> 60
+> 90
+> 120
+> Sample size
+> Estimation error Structural Hamming distance
+> F1 score Sparsity
+> Mixed DAG Fixed DAG Mixed DAG (FM) Mixed DAG (OM) Mixed DG
+
+Figure 3: Performance on synthetic data generated from Erdős–Rényi DAGs with p = 50 
+
+nodes, s = 50 edges, and m = ⌈√n•⌉ clusters. Averages (solid points) and standard errors (error bars) are measured over 30 datasets. The dashed horizontal line in the bottom right panel indicates the number of edges in the true DAG. weight independently from Unif ([ −0.3, −0.1] ∪ [0 .1, 0.3]) , producing the fixed-effects matrix 
+
+B. We then draw the random-effects variances independently from Unif ([0 .1, 0.3]) to form the matrix Γ, and use these to generate the random-effects edge weights U(i) ∼ N( 0, Γ) for 
+
+i = 1 , . . . , m . Independently, the noise terms are sampled for each cluster as ε(i) ∼ N( 0, I) for 
+
+i = 1 , . . . , m . Finally, the total sample size n• is varied over five values logarithmically spaced between 30 and 1,000 . We set the number of clusters to m = ⌈√n•⌉ and assign observations randomly to clusters, resulting in clusters that vary in size with a mean of n•/m .Figures 3 and 4 present results for graphs with p = 50 and p = 200 nodes, respectively. In both settings, the mixed DAG exhibits excellent performance in both estimation and structure recovery. At very small sample sizes, where faithful recovery of the true DAG is intrinsically difficult, its results are comparable to those of the fixed DAG. As the sample size increases, however, a clear gap emerges, with the mixed DAG delivering substantially superior performance. Notably, the fixed DAG fails to recover the true graph structure even when 
+
+n• = 1 ,000 . The FM variant improves on the fixed DAG by incorporating cluster-specific edge weights, but its performance is limited by the quality of the ordering estimated from 
+
+14 Structure Learning on Clustered Data 0.25             
+
+> 0.50
+> 0.75
+> 1.00
+> 0
+> 50
+> 100
+> 150
+> 200
+> 30 100 300 1,000
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 30 100 300 1,000
+> 0
+> 100
+> 200
+> Sample size
+> Estimation error Structural Hamming distance
+> F1 score Sparsity
+> Mixed DAG Fixed DAG Mixed DAG (FM) Mixed DAG (OM) Mixed DG
+
+Figure 4: Performance on synthetic data generated from Erdős–Rényi DAGs with p = 200 
+
+nodes, s = 200 edges, and m = ⌈√n•⌉ clusters. Averages (solid points) and standard errors (error bars) are measured over 30 datasets. The dashed horizontal line in the bottom right panel indicates the number of edges in the true DAG. the fixed DAG. In contrast, the mixed DAG reliably recovers sparse, accurate structures, making it a practical method for learning DAGs from clustered data at scale. Moreover, its performance approaches that of the OM variant, which uses a topological ordering of the true DAG as an idealized benchmark. The mixed DG performs worst overall because it does not respect the acyclic nature of the graphs, highlighting the importance of the DAG constraint. Further experiments under alternative simulation designs are reported in Appendix G. These additional results show that the mixed DAG continues to perform excellently under (i) alternative sparsity levels, (ii) alternative graph types, and (iii) alternative cluster regimes. 
+
+6.3 Semi-synthetic Data 
+
+To complement the fully synthetic graph designs in the previous experiments, we generate semi-synthetic datasets from the ANDES network, a well-known DAG from physics (Conati et al., 1997). It is publicly available from the Bayesian Network Repository ( https://www. bnlearn.com/bnrepository ). The network contains p = 223 nodes and s = 338 edges, representing a large-scale graph with realistic topologies and sparsity patterns. We generate 
+
+15 Thompson, Wand, and Baladandayuthapani 
+
+the datasets by treating the network adjacency matrix as the ground-truth DAG and draw datasets by sampling fixed effects, random effects, and noise in the same fashion as before. Table 1 reports results for total sample size n• = 1 ,000 , with the number of clusters 
+
+m = ⌈√n•⌉ = 32 as in the main synthetic experiments. On this large graph, the mixed DAG maintains strong performance, achieving the best metrics among all practical competitors. The improvement over the fixed DAG is particularly pronounced, with a sevenfold decrease in estimation error and a sizable gain in F1 score. Importantly, the gap between the mixed DAG and the oracle mask variant is relatively modest, indicating that jointly learning the ordering and mixed effects does not incur a large statistical penalty at this scale. In contrast, methods that rely on a fixed ordering or omit acyclicity constraints exhibit degraded performance. Table 1: Performance on semi-synthetic data generated from the ANDES network from the Bayesian Network Repository with p = 223 nodes, s = 338 edges, and m = ⌈√n•⌉ = 32 
+
+clusters. Averages (standard errors) are measured over 30 datasets.                        
+
+> Est. error SHD F1 score Sparsity Mixed DAG 0.13 (0.00) 17.23 (0.67) 0.97 (0.00) 321.57 (0.64) Fixed DAG 0.90 (0.00) 187.13 (2.12) 0.60 (0.01) 209.23 (2.39) Mixed DAG (FM) 0.38 (0.01) 87.23 (1.13) 0.80 (0.00) 306.97 (1.29) Mixed DAG (OM) 0.12 (0.00) 10.43 (0.50) 0.98 (0.00) 327.57 (0.50) Mixed DG 0.29 (0.00) 118.97 (1.29) 0.83 (0.00) 364.20 (1.20)
+
+6.4 Real Data 
+
+As an illustrative real-world example, we consider the lung cancer multiplex immunofluo-rescence dataset from the R package VectraPolarisData . The dataset contains cell-level protein measurements from m = 153 patients. The observational units are individual cells, and for each cell we observe the expression levels of p = 6 protein markers of tumor and immune activity: cd19 , cd3 , cd14 , cd8 , hladr , and ck . This low-dimensional setting enables direct visualization of learned graphs that might be indicative of tumor-immune proteomic interactions. We treat cells as clustered by patient to allow marker interactions to vary across individuals and to incorporate patient-level tumor heterogeneity, which is common in cancers and especially in lung cancer. To balance patient contributions in this illustrative analysis, we randomly select 300 cells per patient and split them equally into training, validation, and testing sets, yielding n• = 153 × 100 = 15 ,300 cell-level observations in each split. Figure 5 shows that both methods recover a coherent ordering in which immune-associated markers cd19 , cd8 , hladr , cd3 , and cd14 feed into ck , consistent with ck as an epithe-lial/tumor marker downstream of immune-associated features. Relative to the fixed DAG, which selects 13 edges, the mixed DAG learns a slightly denser graph containing 15 edges. Compared with the fixed DAG, the mixed DAG reverses the direction of the edge between 
+
+hladr and cd14 , yielding hladr →cd14 rather than cd14 →hladr , and also adds the depen-dencies cd14 →cd3 and cd19 →ck . The remaining structure is consistent across the two graphs, including edges such as cd8 →cd14 , cd3 →ck , and cd14 →ck . These structural differ-ences are reflected in a sizable gap in the mean squared reconstruction error on the testing set, which drops from 0.83 under the fixed DAG to 0.67 under the mixed DAG.  
+
+> 16 Structure Learning on Clustered Data cd19 cd3 cd14 cd8 hladr ck
+> (a) Fixed DAG cd19 cd3 cd14 cd8 hladr ck (b) Mixed DAG
+
+Figure 5: Graphs learned on the VectraPolarisData . All edges in the graph produced by the mixed DAG contain both fixed and random effects. 
+
+7 Final Remarks 
+
+Many fields, including medicine and biology, give rise to clustered data with heterogeneous effects, making them unsuitable for existing approaches to causal discovery that assume a homogeneous population. Our approach addresses this issue by extending scalable structure learning techniques to clustered data through the integration of fixed- and random-effects principles within the framework of DAGs. We use a differentiable acyclicity constraint that guarantees the union of the fixed- and random-effects graphs remains acyclic, and develop a provably convergent first-order method that leverages efficient batched updates across clusters, making it feasible to learn graphs with hundreds of nodes. We further establish identifiability and show that our estimator recovers the true structure asymptotically. Synthetic, semi-synthetic, and real proteomics experiments demonstrate that the new estimator can recover both population-level and cluster-specific effects missed by alternative estimators. These results highlight its value as a principled tool for structure learning in clustered settings. 
+
+Acknowledgments and Disclosure of Funding 
+
+Thompson and Wand acknowledge financial support from the Australian Research Council under Discovery Project DP230101179. Baladandayuthapani was partially supported by National Institutes of Health grants R01CA244845- 01A1 and P30 CA46592 for this work. 
+
+Appendix A. Proof of Proposition 1 
+
+Proof 
+
+To simplify exposition, define the matrix 
+
+S := B ⊙ B + Γ.
+
+> 17
+
+Thompson, Wand, and Baladandayuthapani 
+
+Since (B, Γ) ∈ D, the matrix S is entrywise nonnegative and satisfies ρ(S) < 1. Hence, Theorem 1 of (Bello et al., 2022) applies to S and gives 
+
+− log det( I − S) = 0 ⇐⇒ G (S) ∈ DAG p.
+
+Since the left-hand side is exactly h(B, Γ), it follows 
+
+h(B, Γ) = 0 ⇐⇒ G (S) ∈ DAG p.
+
+For each pair (j, k ), the definition of S and the nonnegativity of β2 
+
+> jk
+
+and γjk imply 
+
+sjk = 0 ⇐⇒ β2 
+
+> jk
+
+= 0 and γjk = 0 ⇐⇒ βjk = 0 and γjk = 0 .
+
+Thus, sjk ̸ = 0 when βjk ̸ = 0 or γjk ̸ = 0 , and hence 
+
+G(S) = G(B ⊙ B + Γ) = G(B) ∪ G (Γ).
+
+Combining these equivalences gives 
+
+h(B, Γ) = 0 ⇐⇒ G (B) ∪ G (Γ) ∈ DAG p,
+
+thereby proving the claim of the proposition. 
+
+Appendix B. Proof of Proposition 2 
+
+The proof of the proposition requires two technical lemmas, which establish Lipschitz continuity of the gradients of the smooth parts of the objective function on a compact set. Lemma 6 first shows this property for the negative log-likelihood. 
+
+Lemma 6 Let l(B, Γ) be the negative log-likelihood (2) defined on the domain Rp×p × Rp×p 
+
+> +
+
+.Fix any compact set Ω ⊂ Rp×p × Rp×p 
+
+> +
+
+. Then there exists a constant Ll < ∞ such that 
+
+∥∇ l(B1, Γ1) − ∇ l(B2, Γ2)∥F ≤ Ll∥(B1, Γ1) − (B2, Γ2)∥F ,
+
+for all (B1, Γ1), (B2, Γ2) ∈ Ω. In particular, ∇l(B, Γ) is Ll-Lipschitz continuous on Ω.
+
+Proof 
+
+For each cluster i = 1 , . . . , m and node k = 1 , . . . , p , define 
+
+r(i) 
+
+> k
+
+(β) := x(i) 
+
+> k
+
+− X(i)β,
+
+and 
+
+ϕik (β, γ) := log det {V(i)(γ)} + r(i) 
+
+> k
+
+(β)⊤V−(i)(γ)r(i) 
+
+> k
+
+(β).
+
+Thus, writing βk and γk for the kth column of B and Γ, respectively, we have 
+
+l(B, Γ) = 
+
+> p
+
+X
+
+> k=1
+> m
+
+X
+
+> i=1
+
+ϕik (βk, γk).
+
+18 Structure Learning on Clustered Data 
+
+Now, for any γ ∈ Rp
+
+> +
+
+, it holds 
+
+V(i)(γ) = I + X(i) diag( γ)X(i)⊤ ⪰ I,
+
+where ⪰ denotes positive semidefinite ordering, and hence V(i)(γ) is positive definite with 
+
+λmin {V(i)(γ)} ≥ 1. In particular, log det {V(i)(γ)} and V−(i)(γ) are well-defined, and these mappings are C∞ on the open set 
+
+U := 
+
+n
+
+(B, Γ) ∈ Rp×p × Rp×p : V(i)(γk) ≻ 0 ∀ i = 1 , . . . , m, k = 1 , . . . , p 
+
+o
+
+.
+
+Since V(i)(γk) ⪰ I whenever Γ ≥ 0, we have Rp×p × Rp×p 
+
+> +
+
+⊂ U . Consequently, l(B, Γ) is twice continuously differentiable on U. Now, since Rp×p × Rp×p 
+
+> +
+
+is convex and Ω is compact, its convex hull conv(Ω) is compact and satisfies 
+
+conv(Ω) ⊂ Rp×p × Rp×p 
+
+> +
+
+⊂ U .
+
+Therefore, by continuity of the Hessian and compactness of conv (Ω) , there exists a finite constant 
+
+Ll := sup 
+
+> (B,Γ)∈conv(Ω)
+
+∥∇ 2l(B, Γ)∥op < ∞,
+
+where ∥ · ∥ op denotes the operator norm. Next, take any (B1, Γ1), (B2, Γ2) ∈ Ω and for 
+
+t ∈ [0 , 1] define the line segment 
+
+(B(t), Γ(t)) := ( B2, Γ2) + t{(B1, Γ1) − (B2, Γ2)}.
+
+By convexity of conv(Ω) it holds (B(t), Γ(t)) ∈ conv(Ω) for all t ∈ [0 , 1] and therefore 
+
+∇l(B1, Γ1) − ∇ l(B2, Γ2) = 
+
+Z 10
+
+∇2l(B(t), Γ(t)) {(B1, Γ1) − (B2, Γ2)} dt. 
+
+Taking norms, applying the triangle inequality, and then using ∥∇ 2l(B(t), Γ(t)) ∥op ≤ Ll for all t ∈ [0 , 1] , we have 
+
+∥∇ l(B1, Γ1) − ∇ l(B2, Γ2)∥F ≤
+
+Z 10
+
+∇2l(B(t), Γ(t)) {(B1, Γ1) − (B2, Γ2)} dt F
+
+≤
+
+Z 10
+
+∥∇ 2l(B(t), Γ(t)) ∥op dt ∥(B1, Γ1) − (B2, Γ2)∥F
+
+≤ Ll∥(B1, Γ1) − (B2, Γ2)∥F .
+
+We thus conclude that ∇l(B, Γ) is Ll-Lipschitz on Ω.Lemma 7 shows the same property for the log-determinant function. 
+
+Lemma 7 Let h(B, Γ) be the log-determinant function (4) defined on the domain D given in (5) . Fix any compact set Ω ⊂ D. Then there exists a constant Lh < ∞ such that 
+
+∥∇ h(B1, Γ1) − ∇ h(B2, Γ2)∥F ≤ Lh∥(B1, Γ1) − (B2, Γ2)∥F ,
+
+for all (B1, Γ1), (B2, Γ2) ∈ Ω. In particular, ∇h(B, Γ) is Lh-Lipschitz continuous on Ω.
+
+19 Thompson, Wand, and Baladandayuthapani 
+
+Proof 
+
+Define the quantities 
+
+S(B, Γ) := B ⊙ B + Γ, M(B, Γ) := I − S(B, Γ),
+
+so 
+
+h(B, Γ) = − log det {M(B, Γ)}.
+
+Now, for any (B, Γ) ∈ D, the matrix S(B, Γ) is entrywise nonnegative and satisfies 
+
+ρ{S(B, Γ)} < 1, meaning det {M(B, Γ)} > 0 (since it is a nonsingular M -matrix; see Meyer, 2000). In particular, these properties mean h(B, Γ) is C∞ on the open set 
+
+U := (B, Γ) ∈ Rp×p × Rp×p : det {M(B, Γ)} > 0 .
+
+Since det {M(B, Γ)} > 0 for all (B, Γ) ∈ D, we have Ω ⊂ U . Consequently, h(B, Γ) is twice continuously differentiable on U, so the Hessian ∇2h(B, Γ) is continuous on U. Now, since 
+
+Ω is compact and U is open, there exists δ > 0 such that the closed δ-neighborhood of 
+
+Ω is contained in U. Hence, by continuity of the Hessian and compactness of the closed 
+
+δ-neighborhood of Ω, there exists a finite constant 
+
+Mh := sup    
+
+> inf ( ˜B,˜Γ)∈Ω∥(B,Γ)−( ˜B,˜Γ)∥F≤δ
+
+∥∇ 2h(B, Γ)∥op < ∞.
+
+Also, by continuity of the gradient and compactness of Ω, it holds 
+
+Gh := sup 
+
+> (B,Γ)∈Ω
+
+∥∇ h(B, Γ)∥F < ∞.
+
+Define the quantity 
+
+Lh := max 
+
+
+
+Mh, 2Gh
+
+δ
+
+
+
+.
+
+Next, take any (B1, Γ1), (B2, Γ2) ∈ Ω. First, suppose case (i) is true: 
+
+∥(B1, Γ1) − (B2, Γ2)∥F ≤ δ. 
+
+For t ∈ [0 , 1] define the line segment 
+
+(B(t), Γ(t)) := ( B2, Γ2) + t{(B1, Γ1) − (B2, Γ2)}.
+
+It then follows 
+
+inf 
+
+> ( ˜B,˜Γ)∈Ω
+
+∥(B(t), Γ(t)) − ( ˜B, ˜Γ)∥F ≤ ∥ (B(t), Γ(t)) − (B2, Γ2)∥F = t∥(B1, Γ1) − (B2, Γ2)∥F ≤ δ
+
+for all t ∈ [0 , 1] , and hence (B(t), Γ(t)) ∈ U for all t ∈ [0 , 1] . Therefore, we have 
+
+∇h(B1, Γ1) − ∇ h(B2, Γ2) = 
+
+Z 10
+
+∇2h(B(t), Γ(t)) {(B1, Γ1) − (B2, Γ2)} dt. 
+
+Taking norms, applying the triangle inequality, and then using 
+
+∥∇ 2h(B(t), Γ(t)) ∥op ≤ Mh ≤ Lh
+
+20 Structure Learning on Clustered Data 
+
+for all t ∈ [0 , 1] gives 
+
+∥∇ h(B1, Γ1) − ∇ h(B2, Γ2)∥F ≤
+
+Z 10
+
+∥∇ 2h(B(t), Γ(t)) ∥op dt ∥(B1, Γ1) − (B2, Γ2)∥F
+
+≤ Lh∥(B1, Γ1) − (B2, Γ2)∥F .
+
+Next, suppose case (ii) is true: 
+
+∥(B1, Γ1) − (B2, Γ2)∥F > δ. 
+
+Then, using the triangle inequality, the definition of Gh, and the definition of Lh, it holds 
+
+∥∇ h(B1, Γ1) − ∇ h(B2, Γ2)∥F ≤ ∥∇ h(B1, Γ1)∥F + ∥∇ h(B2, Γ2)∥F
+
+≤ 2Gh
+
+≤ 2Gh
+
+δ ∥(B1, Γ1) − (B2, Γ2)∥F
+
+≤ Lh∥(B1, Γ1) − (B2, Γ2)∥F .
+
+Combining cases (i) and (ii), we conclude that ∇h(B, Γ) is Lh-Lipschitz on Ω.We are now ready to prove Proposition 2. 
+
+Proof 
+
+Since D is open relative to Rp×p × Rp×p 
+
+> +
+
+and Ω is compact, there exists δ > 0 such that the compact set 
+
+Ωδ := 
+
+(
+
+(B, Γ) ∈ Rp×p × Rp×p 
+
+> +
+
+: inf 
+
+> ( ˜B,˜Γ)∈Ω
+
+∥(B, Γ) − ( ˜B, ˜Γ)∥F ≤ δ
+
+)
+
+⊂ D.
+
+Applying Lemmas 6 and 7 to the compact set Ωδ and then using the triangle inequality, there exists a finite constant Lδ < ∞ such that 
+
+∥∇ gμ(B1, Γ1) − ∇ gμ(B2, Γ2)∥F ≤ Lδ∥(B1, Γ1) − (B2, Γ2)∥F
+
+for all (B1, Γ1), (B2, Γ2) ∈ Ωδ. Also, by continuity of gμ and ∇gμ and compactness of Ω × Ω,it holds 
+
+C := sup 
+
+> (B1,Γ1),(B2,Γ2)∈Ω
+
+|gμ(B1, Γ1) − gμ(B2, Γ2) − ⟨∇ gμ(B2, Γ2), (B1, Γ1) − (B2, Γ2)⟩| < ∞.
+
+Define the quantity 
+
+L := max 
+
+
+
+Lδ, 2Cδ2
+
+
+
+.
+
+Next, take any (B1, Γ1), (B2, Γ2) ∈ Ω. First, suppose case (i) is true: 
+
+∥(B1, Γ1) − (B2, Γ2)∥F ≤ δ. 
+
+21 Thompson, Wand, and Baladandayuthapani 
+
+For t ∈ [0 , 1] define the line segment 
+
+(B(t), Γ(t)) := ( B2, Γ2) + t{(B1, Γ1) − (B2, Γ2)}.
+
+It then follows 
+
+inf 
+
+> ( ˜B,˜Γ)∈Ω
+
+∥(B(t), Γ(t)) − ( ˜B, ˜Γ)∥F ≤ ∥ (B(t), Γ(t)) − (B2, Γ2)∥F = t∥(B1, Γ1) − (B2, Γ2)∥F ≤ δ
+
+for all t ∈ [0 , 1] , and hence (B(t), Γ(t)) ∈ Ωδ for all t ∈ [0 , 1] . Therefore, it holds 
+
+gμ(B1, Γ1) − gμ(B2, Γ2) − ⟨∇ gμ(B2, Γ2), (B1, Γ1) − (B2, Γ2)⟩
+
+=
+
+Z 10
+
+⟨∇ gμ(B(t), Γ(t)) − ∇ gμ(B2, Γ2), (B1, Γ1) − (B2, Γ2)⟩ dt 
+
+≤
+
+Z 10
+
+∥∇ gμ(B(t), Γ(t)) − ∇ gμ(B2, Γ2)∥F dt ∥(B1, Γ1) − (B2, Γ2)∥F
+
+≤
+
+Z 10
+
+Lδt dt ∥(B1, Γ1) − (B2, Γ2)∥2
+
+> F
+
+= Lδ
+
+2 ∥(B1, Γ1) − (B2, Γ2)∥2
+
+> F
+
+≤ L
+
+2 ∥(B1, Γ1) − (B2, Γ2)∥2 
+
+> F
+
+.
+
+Rearranging the above inequality gives 
+
+gμ(B1, Γ1) ≤ gμ(B2, Γ2) + ⟨∇ gμ(B2, Γ2), (B1, Γ1) − (B2, Γ2)⟩ + L
+
+2 ∥(B1, Γ1) − (B2, Γ2)∥2 
+
+> F
+
+.
+
+(9) Next, suppose case (ii) is true: 
+
+∥(B1, Γ1) − (B2, Γ2)∥F > δ. 
+
+Then, by the definition of C and the definition of L, it holds 
+
+gμ(B1, Γ1) − gμ(B2, Γ2) − ⟨∇ gμ(B2, Γ2), (B1, Γ1) − (B2, Γ2)⟩ ≤ C
+
+≤ Cδ2 ∥(B1, Γ1) − (B2, Γ2)∥2
+
+> F
+
+≤ L
+
+2 ∥(B1, Γ1) − (B2, Γ2)∥2 
+
+> F
+
+.
+
+Again, rearranging the above inequality gives 
+
+gμ(B1, Γ1) ≤ gμ(B2, Γ2) + ⟨∇ gμ(B2, Γ2), (B1, Γ1) − (B2, Γ2)⟩ + L
+
+2 ∥(B1, Γ1) − (B2, Γ2)∥2 
+
+> F
+
+.
+
+(10) Combining (9) and (10) and taking (B1, Γ1) = ( B+, Γ+) and (B2, Γ2) = ( B, Γ) completes the proof. 
+
+22 Structure Learning on Clustered Data 
+
+Appendix C. Proof of Theorem 3 
+
+Proof 
+
+We break the proof into two parts, addressing the two claims of the theorem in turn. 
+
+Part 1: Convergence of objective values We begin by proving the first claim of the theorem that the objective values are decreasing and convergent. Our proof works by upper bounding gμ and rμ to attain a sufficient decrease property for fμ. First, recall that Proposition 2 provides an upper bound for gμ as 
+
+gμ(B(k+1) , Γ(k+1) ) ≤ gμ(B(k), Γ(k)) + 
+
+D
+
+∇gμ(B(k), Γ(k)), (∆ B(k), ∆Γ(k))
+
+E
+
++ L
+
+2 ∥(∆ B(k), ∆Γ(k))∥2 
+
+> F
+
+,
+
+(11) where 
+
+∆B(k) := B(k+1) − B(k), ∆Γ(k) := Γ(k+1) − Γ(k).
+
+To bound rμ, recall that the proximal gradient updates 
+
+B(k+1) ← soft αμλ 1
+
+
+
+B(k) − α∇Bgμ(B(k), Γ(k))
+
+
+
+and 
+
+Γ(k+1) ← soft +
+
+> αμλ 2
+
+
+
+Γ(k) − α∇Γgμ(B(k), Γ(k))
+
+
+
+are the minimizers of the proximal quadratic model 
+
+Q(B, Γ) := 
+
+D
+
+∇gμ(B(k), Γ(k)), (B, Γ) − (B(k), Γ(k))
+
+E
+
++ 12α ∥(B, Γ)−(B(k), Γ(k))∥2 
+
+> F
+
++rμ(B, Γ).
+
+Hence, by virtue of the fact that B(k+1) and Γ(k+1) minimize Q(B, Γ), it holds 
+
+Q(B(k+1) , Γ(k+1) ) ≤ Q(B(k), Γ(k)). (12) Directly evaluating the expression for Q(B(k), Γ(k)) on the right-hand side of (12) yields 
+
+Q(B(k), Γ(k)) = rμ(B(k), Γ(k)).
+
+Likewise, evaluating the expression for Q(B(k+1) , Γ(k+1) ) on the left-hand side of (12) and subsequently rearranging terms yields 
+
+rμ(B(k+1) , Γ(k+1) ) ≤ rμ(B(k), Γ(k)) −
+
+D
+
+∇gμ(B(k), Γ(k)), (∆ B(k), ∆Γ(k))
+
+E
+
+− 12α ∥(∆ B(k), ∆Γ(k))∥2 
+
+> F
+
+.
+
+(13) Finally, to bound the objective function fμ we add (11) and (13) and cancel the inner product terms to get 
+
+fμ(B(k+1) , Γ(k+1) ) ≤ fμ(B(k), Γ(k)) −
+
+ 12α − L
+
+2
+
+
+
+∥(∆ B(k), ∆Γ(k))∥2 
+
+> F
+
+. (14) 
+
+23 Thompson, Wand, and Baladandayuthapani 
+
+By assumption, the step size α < 1/L , so 1/(2 α) − L/ 2 > 0. It immediately follows 
+
+fμ(B(k+1) , Γ(k+1) ) ≤ fμ(B(k), Γ(k)).
+
+Finally, since a continuous function on a compact set attains its minimum, fμ is bounded below on Ω. Moreover, because a monotone decreasing sequence bounded below converges, the sequence of objective values must converge, proving the first claim of the theorem. 
+
+Part 2: Vanishing difference in iterates We now prove the second claim of the theorem that the difference in iterates vanishes. Define the constant c := 1 /(2 α) − L/ 2. As before, since α < 1/L , we have c > 0. Hence, for every k, it holds from (14) 
+
+c∥(∆ B(k), ∆Γ(k))∥2 
+
+> F
+
+≤ fμ(B(k), Γ(k)) − fμ(B(k+1) , Γ(k+1) ).
+
+Summing both sides from k = 0 to K − 1 yields the bound 
+
+c
+
+> K−1
+
+X
+
+> k=0
+
+∥(∆ B(k), ∆Γ(k))∥2 
+
+> F
+
+≤ fμ(B(0) , Γ(0) ) − fμ(B(K), Γ(K)).
+
+Now, define the quantity 
+
+f inf  
+
+> μ
+
+:= inf  
+
+> (B,Γ)∈Ω
+
+fμ(B, Γ) > −∞ .
+
+From the fact that fμ(B(K), Γ(K)) ≥ f inf  
+
+> μ
+
+, we get 
+
+c
+
+> K−1
+
+X
+
+> k=0
+
+∥(∆ B(k), ∆Γ(k))∥2 
+
+> F
+
+≤ fμ(B(0) , Γ(0) ) − f inf  
+
+> μ
+
+.
+
+Thus, the sums on the left-hand side are uniformly bounded in K. Taking K → ∞ , we obtain ∞X
+
+> k=0
+
+∥(∆ B(k), ∆Γ(k))∥2 
+
+> F
+
+< ∞.
+
+Since this series is convergent and has nonnegative terms, its terms must converge to zero. Hence, it must hold 
+
+∥(∆ B(k), ∆Γ(k))∥2 
+
+> F
+
+→ 0,
+
+from which the second claim of the theorem immediately follows. 
+
+Appendix D. Proof of Theorem 4 
+
+Proof Fix one observation row from one cluster and suppress the cluster and row indices, writing the resulting random vector as (x1, . . . , x p)⊤. Since the joint distribution of the clustered data determines the marginal distribution of this vector, it suffices to recover 
+
+(B0, Γ0) from that marginal distribution. 
+
+24 Structure Learning on Clustered Data 
+
+Because G(B0) ∪ G (Γ0) is a DAG, there exists a topological ordering of the nodes. Fix one such ordering for notational convenience and index the variables accordingly. Then we may write 
+
+xk = X
+
+> j<k
+
+(βjk, 0 + ujk )xj + εk, k = 1 , . . . , p, 
+
+where the random-effects ujk ∼ N(0 , γ jk, 0) are independent, the noise terms εk ∼ N(0 , 1) are independent, and all random effects are independent of all noise terms. Conditional on the random effects, (x1, . . . , x p) is Gaussian with positive definite covariance, so its marginal distribution has a strictly positive density on Rp.A node is a source (i.e., it has no parents) if and only if its variance equals one. Indeed, if node k is a source, then xk = εk, so Var (xk) = 1 . Conversely, if node k is not a source, then at least one coefficient βjk, 0 + ujk with j < k is nonzero almost surely. Since the random effects entering node k do not appear in the structural equations for x1, . . . , x k−1, they are independent of (x1, . . . , x k−1). Therefore, the variance of xk satisfies 
+
+Var( xk) = Var 
+
+X
+
+> j<k
+
+(βjk, 0 + ujk )xj
+
+ + 1 > 1,
+
+because (x1, . . . , x k−1) has positive definite covariance and the coefficients are not zero almost surely. Thus, the source set is determined by the observed distribution. Choose any source and relabel it as node one. Then x1 = ε1, so x1 is independent of all remaining noise terms and all random effects. For k = 2 , . . . , p , we have 
+
+xk = ( β1k, 0 + u1k)x1 + X
+
+> 1<j<k
+
+(βjk, 0 + ujk )xj + εk.
+
+Thus, conditional on x1 = 0 , the vector (x2, . . . , x p) again follows a mixed-effects DAG model of the same form, with node one removed. Applying the previous variance characterization recursively to these conditional distributions identifies one source after another, and therefore allows us to construct a topological ordering of G(B0) ∪ G (Γ0).After constructing a topological ordering in the manner above, the parameters are recoverable node by node. For each k = 1 , . . . , p and any x1, . . . , x k−1 ∈ R, the conditional distribution of xk given (x1, . . . , x k−1) satisfies 
+
+xk | (x1, . . . , x k−1) ∼ N
+
+X
+
+> j<k
+
+βjk, 0xj , X
+
+> j<k
+
+γjk, 0x2 
+
+> j
+
++ 1 
+
+ ,
+
+because u1k, . . . , u k−1,k and εk are independent mean-zero Gaussians and the ujk are inde-pendent of (x1, . . . , x k−1). Since (x1, . . . , x k−1) has strictly positive density on Rk−1, the conditional mean uniquely determines the fixed effects βjk, 0 for j < k , and the conditional variance uniquely determines the random-effect variances γjk, 0 for j < k . Applying this argument for k = 1 , . . . , p shows that every entry of B0 and Γ0 is uniquely determined by the observed distribution. Therefore, (B0, Γ0) is identifiable, and so are G(B0), G(Γ0), and their union. 
+
+> 25
+
+Thompson, Wand, and Baladandayuthapani 
+
+Appendix E. Proof of Theorem 5 
+
+The proof requires three technical lemmas. All lemmas are stated and proved under the assumptions of Theorem 5. Lemma 8 first shows that the population loss is uniquely minimized at the true parameters. 
+
+Lemma 8 For all (B, Γ) ∈ F , where F is defined in (8) , the population loss satisfies the inequality 
+
+L(B, Γ) ≥ L(B0, Γ0),
+
+holding with equality if and only if (B, Γ) = ( B0, Γ0).
+
+Proof Let pB,Γ(X(1) ) denote the cluster-level density under (B, Γ). Since ℓm(B, Γ) is exactly the average negative log-likelihood (after restoring additive and multiplicative constants), taking expectation gives 
+
+L(B, Γ) = −E
+
+h
+
+log 
+
+n
+
+pB,Γ(X(1) )
+
+oi 
+
+, L(B0, Γ0) = −E
+
+h
+
+log 
+
+n
+
+pB0,Γ0 (X(1) )
+
+oi 
+
+.
+
+Taking the difference of the two terms above yields 
+
+L(B, Γ) − L(B0, Γ0) = E 
+
+"
+
+log 
+
+(
+
+pB0,Γ0 (X(1) )
+
+pB,Γ(X(1) )
+
+)# 
+
+.
+
+The right-hand side is the Kullback–Leibler divergence from pB0,Γ0 to pB,Γ and is therefore nonnegative. Equality holds if and only if pB,Γ(X(1) ) = pB0,Γ0 (X(1) ) almost surely, which by Theorem 4, implies (B, Γ) = ( B0, Γ0).Lemma 9 provides a uniform convergence result for the empirical loss and its Hessian over compact parameter sets. 
+
+Lemma 9 Let K ⊂ Rp×p × Rp×p 
+
+> +
+
+be compact. Then it holds 
+
+sup 
+
+> (B,Γ)∈K
+
+|ℓm(B, Γ) − L(B, Γ)| p
+
+→ 0
+
+and 
+
+sup 
+
+> (B,Γ)∈K
+
+∇2ℓm(B, Γ) − ∇ 2L(B, Γ) op 
+
+> p
+
+→ 0.
+
+Proof For each cluster i, write a(X(i), B, Γ) for the contribution of cluster i to the negative log-likelihood, so that 
+
+ℓm(B, Γ) = 1
+
+m
+
+> m
+
+X
+
+> i=1
+
+a(X(i), B, Γ).
+
+Because Γ ≥ 0, each covariance matrix 
+
+V(i)(γk) = I + X(i) diag( γk)X(i)⊤ ⪰ I,
+
+26 Structure Learning on Clustered Data 
+
+so the log-determinant and inverse terms appearing in a(X(i), B, Γ) are well-defined for every 
+
+(B, Γ) ∈ K. Consequently, for almost every X(i), the maps 
+
+(B, Γ) 7 → a(X(i), B, Γ), (B, Γ) 7 → ∇ 2a(X(i), B, Γ),
+
+are continuous on K. Next, since K is compact and ni ≡ n, a(X(i), B, Γ) and every scalar component of ∇2a(X(i), B, Γ) is bounded uniformly over (B, Γ) ∈ K by a polynomial in 
+
+∥X(i)∥F . Under the Gaussian structural equation model, X(i) has finite moments of all orders, so these bounds have finite expectation. The same bounds justify differentiation under the expectation, and therefore 
+
+∇2L(B, Γ) = E 
+
+h
+
+∇2a(X(1) , B, Γ)
+
+i
+
+.
+
+Thus, the uniform law of large numbers (e.g., Newey and McFadden, 1994, Lemma 2.4), applied on the compact set K using the continuity and polynomial bounds above, gives 
+
+sup 
+
+> (B,Γ)∈K
+
+|ℓm(B, Γ) − L(B, Γ)| p
+
+→ 0.
+
+The same result also gives entrywise uniform convergence of ∇2ℓm(B, Γ) to ∇2L(B, Γ) on 
+
+K. Since p is fixed, the Hessian has finitely many entries, and it follows 
+
+sup 
+
+> (B,Γ)∈K
+
+∇2ℓm(B, Γ) − ∇ 2L(B, Γ) op 
+
+> p
+
+→ 0.
+
+Finally, Lemma 10 establishes local strong convexity of the empirical loss in a neighborhood of the true parameter values. 
+
+Lemma 10 There exist constants c > 0 and δ > 0 such that, with probability tending to one, the empirical loss ℓm(B, Γ) satisfies 
+
+ℓm(B1, Γ1) ≥ ℓm(B2, Γ2) + ⟨∇ ℓm(B2, Γ2), (B1, Γ1) − (B2, Γ2)⟩ + c
+
+2 ∥(B1, Γ1) − (B2, Γ2)∥2
+
+> F
+
+for all (B1, Γ1), (B2, Γ2) ∈ F such that 
+
+∥(B1, Γ1) − (B0, Γ0)∥F ≤ δ and ∥(B2, Γ2) − (B0, Γ0)∥F ≤ δ. 
+
+Proof By Assumption 2, ∇2L(B0, Γ0) is positive definite. Let 
+
+λ0 := λmin {∇ 2L(B0, Γ0)} > 0.
+
+Since ∇2L(B, Γ) is continuous in a neighborhood of (B0, Γ0) relative to Rp×p × Rp×p 
+
+> +
+
+, there exists δ > 0 such that 
+
+λmin {∇ 2L(B, Γ)} ≥ λ0
+
+2
+
+whenever 
+
+∥(B, Γ) − (B0, Γ0)∥F ≤ δ. 
+
+27 Thompson, Wand, and Baladandayuthapani 
+
+Define the compact set 
+
+Kδ := 
+
+n
+
+(B, Γ) ∈ Rp×p × Rp×p 
+
+> +
+
+: ∥(B, Γ) − (B0, Γ0)∥F ≤ δ
+
+o
+
+,
+
+and apply Lemma 9 to get 
+
+sup 
+
+> (B,Γ)∈Kδ
+
+∇2ℓm(B, Γ) − ∇ 2L(B, Γ) op 
+
+> p
+
+→ 0.
+
+Therefore, with probability tending to one, it holds 
+
+sup  
+
+> ∥(B,Γ)−(B0,Γ0)∥F≤δ
+
+∇2ℓm(B, Γ) − ∇ 2L(B, Γ) op ≤ λ0
+
+4 .
+
+On this event, we have 
+
+λmin {∇ 2ℓm(B, Γ)} ≥ λmin {∇ 2L(B, Γ)} − ∇2ℓm(B, Γ) − ∇ 2L(B, Γ) op ≥ λ0
+
+4
+
+for all (B, Γ) in the neighborhood. Define c := λ0/4 and for any two points (B1, Γ1) and 
+
+(B2, Γ2) in this neighborhood, define 
+
+(B(t), Γ(t)) := ( B2, Γ2) + t{(B1, Γ1) − (B2, Γ2)}
+
+for t ∈ [0 , 1] . Since Kδ is convex, it holds (B(t), Γ(t)) ∈ Kδ for all t ∈ [0 , 1] . Moreover, because Γ(t) ∈ Rp×p 
+
+> +
+
+, each covariance matrix appearing in ℓm(B(t), Γ(t)) is positive definite, so ℓm(B(t), Γ(t)) is twice continuously differentiable on [0 , 1] . Therefore, Taylor’s theorem with the integral form of the remainder yields 
+
+ℓm(B1, Γ1) = ℓm(B2, Γ2) + ⟨∇ ℓm(B2, Γ2), (B1, Γ1) − (B2, Γ2)⟩ +
+
+Z 10
+
+(1 − t)Q(t) dt, 
+
+where 
+
+Q(t) := 
+
+(B1, Γ1) − (B2, Γ2), ∇2ℓm(( B2, Γ2) + t{(B1, Γ1) − (B2, Γ2)}){(B1, Γ1) − (B2, Γ2)} .
+
+Using the uniform lower bound on the Hessian gives 
+
+Q(t) ≥ c∥(B1, Γ1) − (B2, Γ2)∥2
+
+> F
+
+for all t ∈ [0 , 1] . Therefore, it holds 
+
+ℓm(B1, Γ1) ≥ ℓm(B2, Γ2) + ⟨∇ ℓm(B2, Γ2), (B1, Γ1) − (B2, Γ2)⟩ + c
+
+2 ∥(B1, Γ1) − (B2, Γ2)∥2 
+
+> F
+
+,
+
+which completes the proof. With these results in place, we are now ready to prove Theorem 5. 
+
+Proof 
+
+28 Structure Learning on Clustered Data 
+
+Part 1: Consistency of parameter estimation By the definition of Fm and the fact that ∥B∥∞ ≤ MB, ∥Γ∥∞ ≤ MΓ, and p is fixed, we have 
+
+sup 
+
+> (B,Γ)∈F
+
+|Fm(B, Γ) − L(B, Γ)| ≤ sup 
+
+> (B,Γ)∈F
+
+|ℓm(B, Γ) − L(B, Γ)| + λ1p2MB + λ2p2MΓ.
+
+We now show the two terms on the right-hand side converge to zero. Since F is compact, Lemma 9 implies 
+
+sup 
+
+> (B,Γ)∈F
+
+|ℓm(B, Γ) − L(B, Γ)| p
+
+→ 0.
+
+Moreover, by Assumption 1 the penalty terms on the right-hand side vanish, and hence 
+
+zm := sup 
+
+> (B,Γ)∈F
+
+|Fm(B, Γ) − L(B, Γ)| p
+
+→ 0.
+
+Now, fix any ϵ > 0 and define the set 
+
+Aϵ := {(B, Γ) ∈ F : ∥(B, Γ) − (B0, Γ0)∥F ≥ ϵ}.
+
+Since F is closed and bounded (since the set of acyclic matrices is closed), it is compact and hence Aϵ is also compact. Moreover, since L is continuous on F and, by Lemma 8, uniquely minimized at (B0, Γ0), it follows 
+
+∆ϵ := inf 
+
+> (B,Γ)∈A ϵ
+
+{L(B, Γ) − L(B0, Γ0)} > 0.
+
+Now, using that ( ˆB, ˆΓ) is the global minimizer of Fm, we have 
+
+L( ˆB, ˆΓ) ≤ Fm( ˆB, ˆΓ) + zm ≤ Fm(B0, Γ0) + zm ≤ L(B0, Γ0) + 2 zm.
+
+Therefore, on the event zm < ∆ϵ/2, it holds 
+
+L( ˆB, ˆΓ) < L (B0, Γ0) + ∆ ϵ. (15) Suppose for the sake of contradiction 
+
+∥( ˆB, ˆΓ) − (B0, Γ0)∥F ≥ ϵ, 
+
+then ( ˆB, ˆΓ) ∈ A ϵ, implying 
+
+L( ˆB, ˆΓ) ≥ L(B0, Γ0) + ∆ ϵ,
+
+which contradicts (15). Hence, whenever zm < ∆ϵ/2, it must hold 
+
+∥( ˆB, ˆΓ) − (B0, Γ0)∥F < ϵ. 
+
+Since zmp
+
+→ 0, we have 
+
+Pr 
+
+
+
+∥( ˆB, ˆΓ) − (B0, Γ0)∥F ≥ ϵ
+
+
+
+≤ Pr( zm ≥ ∆ϵ/2) → 0,
+
+and hence 
+
+( ˆB, ˆΓ) p
+
+→ (B0, Γ0),
+
+thereby proving the first claim of the theorem. 
+
+29 Thompson, Wand, and Baladandayuthapani 
+
+Part 2: No false negatives Let (j, k ) ∈ S B. Since p is fixed, the set SB is finite. Define 
+
+cB := min 
+
+> (a,b )∈S B
+
+|βab, 0| > 0.
+
+If ˆβjk = 0 , then | ˆβjk − βjk, 0| = |βjk, 0| ≥ cB. Hence, by Part 1, we have 
+
+Pr( ˆβjk = 0) ≤ Pr( | ˆβjk − βjk, 0| ≥ cB) → 0.
+
+Therefore, Pr ( ˆβjk ̸ = 0) → 1 for all (j, k ) ∈ S B. Since p is fixed, SB is finite and the union bound gives 
+
+Pr 
+
+
+
+∃ (j, k ) ∈ S B : ˆβjk = 0 
+
+
+
+≤ X
+
+> (j,k )∈S B
+
+Pr( ˆβjk = 0) → 0. (16) Similarly, let (j, k ) ∈ S Γ. Since p is fixed, the set SΓ is finite. Define 
+
+cΓ := min 
+
+> (a,b )∈S Γ
+
+γab, 0 > 0.
+
+If ˆγjk = 0 , then |ˆγjk − γjk, 0| = γjk, 0 ≥ cΓ. Hence, again by Part 1, we have 
+
+Pr (ˆ γjk = 0) ≤ Pr( |ˆγjk − γjk, 0| ≥ cΓ) → 0,
+
+which implies Pr(ˆ γjk ̸ = 0) → 1 for all (j, k ) ∈ S Γ. The union bound therefore gives 
+
+Pr( ∃ (j, k ) ∈ S Γ : ˆ γjk = 0) ≤ X
+
+> (j,k )∈S Γ
+
+Pr(ˆ γjk = 0) → 0. (17) Combining (16) and (17) yields 
+
+Pr 
+
+ ˆβjk ̸ = 0 ∀ (j, k ) ∈ S B ∧ ˆγjk ̸ = 0 ∀ (j, k ) ∈ S Γ
+
+
+
+→ 1,
+
+proving ( ˆB, ˆΓ) contains no false negatives. 
+
+Part 3: No false positives Part 3(a) Define the structure-restricted feasible set 
+
+FS := {(B, Γ) ∈ F : βjk = 0 ∀ (j, k ) ∈ S c
+
+> B
+
+, γ jk = 0 ∀ (j, k ) ∈ S c
+
+> Γ
+
+}.
+
+This set is nonempty because (B0, Γ0) ∈ F S . Since G(B0) ∪ G (Γ0) is a DAG, any spanning subgraph (i.e., a graph obtained by deleting edges) is also a DAG. Therefore, every element of FS is acyclic. In particular, for any (B, Γ) ∈ F S , it holds 
+
+G(B) ∪ G (Γ) ⊆ G (B0) ∪ G (Γ0).
+
+Let ( ˜B, ˜Γ) be a global minimizer of Fm over FS . We work on the event that ( ˜B, ˜Γ) is close enough to (B0, Γ0) such that: 
+
+• sign( ˜βjk ) = sign( βjk, 0) and | ˜βjk | < M B for all (j, k ) ∈ S B; and 
+
+30 Structure Learning on Clustered Data 
+
+• 0 < ˜γjk < M Γ for all (j, k ) ∈ S Γ.This event occurs with probability tending to one due to the same line of reasoning as in Part 1, but on FS , together with the inequalities ∥B0∥∞ < M B and ∥Γ0∥∞ < M Γ.Define the gradients on the nonzero components as 
+
+∇B,SB ℓm(B, Γ) := 
+
+ ∂∂β jk 
+
+ℓm(B, Γ)
+
+
+
+> (j,k )∈S B
+
+and 
+
+∇Γ,SΓ ℓm(B, Γ) := 
+
+ ∂∂γ jk 
+
+ℓm(B, Γ)
+
+
+
+> (j,k )∈S Γ
+
+,
+
+which can be stacked together as 
+
+∇S ℓm(B, Γ) := 
+
+∇B,SB ℓm(B, Γ)
+
+∇Γ,SΓ ℓm(B, Γ)
+
+
+
+.
+
+On the event above, the acyclicity constraint is automatic on FS (each such union graph is a spanning subgraph of the true union DAG), the box constraints are inactive on the nonzero components, and the nonnegative constraint on Γ is inactive on SΓ. The first-order conditions for ( ˜B, ˜Γ) on the nonzero components are 
+
+∇B,SB ℓm( ˜B, ˜Γ) + λ1sB = 0 (18) and, since γjk ≥ 0 and nonzero ˜γjk > 0,
+
+∇Γ,SΓ ℓm( ˜B, ˜Γ) + λ21 = 0. (19) Stacking these equations together gives 
+
+∇S ℓm( ˜B, ˜Γ) + λ1
+
+ sB
+
+λ2/λ 11
+
+
+
+= 0. (20) 
+
+Part 3(b) Define the sets of acyclicity-preserving inactive indices 
+
+TB := {(j, k ) ∈ S c 
+
+> B
+
+: G(B0) ∪ G (Γ0) ∪ { j → k} ∈ DAG p}
+
+and 
+
+TΓ := {(j, k ) ∈ S c 
+
+> Γ
+
+: G(B0) ∪ G (Γ0) ∪ { j → k} ∈ DAG p} ,
+
+where {j → k} denotes the directed graph with node set {1, . . . , p } and edge set {(j, k )}. We show that the strict dual feasibility conditions hold with probability tending to one on the acyclicity-preserving inactive sets defined above. For indices Sc 
+
+> B
+
+\T B and Sc 
+
+> Γ
+
+\T Γ, any nonzero value would create a cycle in the union graph and hence violate feasibility of (B, Γ) ∈ F 
+
+on the event that all true edges are present (i.e., the no false negatives event established in Part 2). It therefore suffices to establish dual feasibility on TB and TΓ. Specifically, we show the following inequalities with probability tending to one: 
+
+31 Thompson, Wand, and Baladandayuthapani 
+
+• For every (j, k ) ∈ T B, it holds 
+
+∂∂β jk 
+
+ℓm( ˜B, ˜Γ) ≤
+
+
+
+1 − η
+
+2
+
+
+
+λ1; (21) and 
+
+• For every (j, k ) ∈ T Γ, it holds 
+
+∂∂γ jk 
+
+ℓm( ˜B, ˜Γ) > −
+
+
+
+1 − η
+
+2
+
+
+
+λ2. (22) These inequalities ensure strict dual feasibility for all inactive coordinates that admit feasible perturbations. We begin by performing a Taylor expansion on the nonzero entries. Since Γ ∈ Rp×p 
+
+> +
+
+on 
+
+F, each covariance matrix V(i)(γk) is positive definite, so log det {V(i)(γk)} and V−(i)(γk)
+
+are C2 (indeed C∞) on an open neighborhood of F. Hence, ℓm(B, Γ) is C2 on an open neighborhood of F, and we may expand ∇S ℓm(B, Γ) around (B0, Γ0) as 
+
+∇S ℓm( ˜B, ˜Γ) = ∇S ℓm(B0, Γ0) + H(m)
+
+> SS
+
+ ˜BSB − BSB,0
+
+˜ΓSΓ − ΓSΓ,0
+
+
+
+, (23) where H(m) 
+
+> SS
+
+is the mean Hessian along the line segment between (B0, Γ0) and ( ˜B, ˜Γ) restricted to the nonzero components. Combining (20) and (23) gives 
+
+H(m)
+
+> SS
+
+ ˜BSB − BSB,0
+
+˜ΓSΓ − ΓSΓ,0
+
+
+
+= −∇ S ℓm(B0, Γ0) − λ1
+
+ sB
+
+λ2/λ 11
+
+
+
+.
+
+Since FS is compact, Lemma 9 gives 
+
+sup 
+
+> (B,Γ)∈F S
+
+∇2ℓm(B, Γ) − ∇ 2L(B, Γ) op 
+
+> p
+
+→ 0.
+
+Moreover, the same argument as in Part 1, but with minimization carried out over FS , gives 
+
+( ˜B, ˜Γ) p
+
+→ (B0, Γ0). Together with continuity of ∇2L(B, Γ), these two results imply that 
+
+H(m)
+
+> SS
+> p
+
+→ HSS . Since HSS is nonsingular (because H is positive definite by Assumption 2), 
+
+H(m) 
+
+> SS
+
+is invertible with probability tending to one, and so 
+
+ ˜BSB − BSB,0
+
+˜ΓSΓ − ΓSΓ,0
+
+
+
+= −H−(m)
+
+> SS
+
+
+
+∇S ℓm(B0, Γ0) + λ1
+
+ sB
+
+λ2/λ 11
+
+ 
+
+.
+
+Because the clusters are iid and satisfy ni ≡ n, each coordinate of ∇ℓm(B0, Γ0) can be written as an average of iid mean-zero clusterwise contributions with finite variance under the Gaussian structural equation model. Therefore, by Chebyshev’s inequality, ∇S ℓm(B0, Γ0) = Op(m−1/2)
+
+coordinatewise. Further, H−(m) 
+
+> SS
+
+= Op(1) and, by Assumption 1, m−1/2 = o(λ1). Hence, it holds  ˜BSB − BSB,0
+
+˜ΓSΓ − ΓSΓ,0
+
+
+
+= −λ1H−(m)
+
+> SS
+
+ sB
+
+λ2/λ 11
+
+
+
++ op(λ1). (24) 
+
+32 Structure Learning on Clustered Data 
+
+We now perform a Taylor expansion on the zero entries. Take a zero fixed-effect entry 
+
+(j, k ) ∈ T B. Expand its partial derivative around (B0, Γ0) as 
+
+∂∂β jk 
+
+ℓm( ˜B, ˜Γ) = ∂∂β jk 
+
+ℓm(B0, Γ0) + h(m, B)
+
+> jk, S
+
+ ˜BSB − BSB,0
+
+˜ΓSΓ − ΓSΓ,0
+
+
+
+, (25) where h(m, B) 
+
+> jk, S
+
+is the mean cross-Hessian row between βjk and the active entries. Substitute (24) into (25) to get 
+
+∂∂β jk 
+
+ℓm( ˜B, ˜Γ) = ∂∂β jk 
+
+ℓm(B0, Γ0) − λ1h(m, B) 
+
+> jk, S
+
+H−(m)
+
+> SS
+
+ sB
+
+λ2/λ 11
+
+
+
++ op(λ1).
+
+The first term on the right-hand side can be written as 
+
+∂∂β jk 
+
+ℓm(B0, Γ0) = ∂∂β jk 
+
+L(B0, Γ0) + 
+
+ ∂∂β jk 
+
+ℓm(B0, Γ0) − ∂∂β jk 
+
+L(B0, Γ0)
+
+
+
+.
+
+Since (B0, Γ0) uniquely minimizes L over F by Lemma 8, the population derivative vanishes along any direction that preserves acyclicity of the union graph. The term in brackets is an average of iid mean-zero clusterwise contributions with finite variance and is therefore 
+
+Op(m−1/2) by Chebyshev’s inequality. Hence, we have 
+
+∂∂β jk 
+
+ℓm(B0, Γ0) = Op(m−1/2) = op(λ1),
+
+where the final equality follows from Assumption 1. Also λ2/λ 1 → κ by Assumption 1. Then, since h(m, B)
+
+> jk, S
+> p
+
+→ h(B) 
+
+> jk, S
+
+, we have 
+
+h(m, B) 
+
+> jk, S
+
+H−(m)
+
+> SS
+
+ sB
+
+λ2/λ 11
+
+ p
+
+→ h(B) 
+
+> jk, S
+
+H−1
+
+> SS
+
+sB
+
+κ1
+
+
+
+.
+
+By Assumption 2, the right-hand side has absolute value at most 1 − η, therefore 
+
+Pr 
+
+ ∂∂β jk 
+
+ℓm( ˜B, ˜Γ) ≤
+
+
+
+1 − η
+
+2
+
+
+
+λ1
+
+
+
+→ 1
+
+for each (j, k ) ∈ T B. Since p is fixed, TB is finite, so the above convergence holds uniformly over all such (j, k ) ∈ T B by the union bound, proving (21). The same line of argument as above applies to a zero random-effect variance entry 
+
+(j, k ) ∈ T Γ, yielding 
+
+∂∂γ jk 
+
+ℓm( ˜B, ˜Γ) = ∂∂γ jk 
+
+ℓm(B0, Γ0) − λ1h(m, Γ) 
+
+> jk, S
+
+H−(m)
+
+> SS
+
+ sB
+
+λ2/λ 11
+
+
+
++ op(λ1).
+
+The first term on the right-hand side can be written as 
+
+∂∂γ jk 
+
+ℓm(B0, Γ0) = ∂∂γ jk 
+
+L(B0, Γ0) + 
+
+ ∂∂γ jk 
+
+ℓm(B0, Γ0) − ∂∂γ jk 
+
+L(B0, Γ0)
+
+
+
+.
+
+33 Thompson, Wand, and Baladandayuthapani 
+
+Since (B0, Γ0) uniquely minimizes L over F by Lemma 8, the right derivative of L is nonnegative along any direction that preserves acyclicity of the union graph. The term in brackets is an average of iid clusterwise contributions with finite variance and is therefore 
+
+Op(m−1/2) by Chebyshev’s inequality. Hence, we have 
+
+∂∂γ jk 
+
+ℓm(B0, Γ0) = ∂∂γ jk 
+
+L(B0, Γ0) + Op(m−1/2) ≥ − op(λ2),
+
+where the final inequality follows by Assumption 1. Then, since h(m, Γ)
+
+> jk, S
+> p
+
+→ h(Γ) 
+
+> jk, S
+
+, we have 
+
+h(m, Γ) 
+
+> jk, S
+
+H−(m)
+
+> SS
+
+ sB
+
+λ2/λ 11
+
+ p
+
+→ h(Γ) 
+
+> jk, S
+
+H−1
+
+> SS
+
+sB
+
+κ1
+
+
+
+.
+
+Again, Assumption 2 upper bounds the right-hand side by κ(1 − η), therefore 
+
+Pr 
+
+ ∂∂γ jk 
+
+ℓm( ˜B, ˜Γ) > −
+
+
+
+1 − η
+
+2
+
+
+
+λ2
+
+
+
+→ 1
+
+for each (j, k ) ∈ T Γ. As before, the above convergence holds uniformly over all (j, k ) ∈ T Γ by the union bound, proving (22). 
+
+Part 3(c) By Part 1, ( ˆB, ˆΓ) p
+
+→ (B0, Γ0), and as explained in Part 3(b), ( ˜B, ˜Γ) p
+
+→ (B0, Γ0).Since (B0, Γ0) is the unique minimizer of L over F by Lemma 8, it is also the unique minimizer of L over the subset FS . Let δ > 0 and c > 0 be the constants from Lemma 10. Hence, with probability tending to one, we have 
+
+∥( ˆB, ˆΓ) − (B0, Γ0)∥F ≤ δ and ∥( ˜B, ˜Γ) − (B0, Γ0)∥F ≤ δ. 
+
+On this event, Lemma 10 with (B1, Γ1) = ( ˆB, ˆΓ) and (B2, Γ2) = ( ˜B, ˜Γ) yields 
+
+ℓm( ˆB, ˆΓ) − ℓm( ˜B, ˜Γ) ≥
+
+D
+
+∇ℓm( ˜B, ˜Γ), ( ˆB, ˆΓ) − ( ˜B, ˜Γ)
+
+E
+
++ c
+
+2 ∥( ˆB, ˆΓ) − ( ˜B, ˜Γ)∥2 
+
+> F
+
+.
+
+Adding the difference of ℓ1 penalties to both sides gives 
+
+Fm( ˆB, ˆΓ) − Fm( ˜B, ˜Γ) ≥ X
+
+> (j,k )∈S B
+
+ ∂∂β jk 
+
+ℓm( ˜B, ˜Γ)( ˆβjk − ˜βjk ) + λ1(| ˆβjk | − | ˜βjk |)
+
+
+
++ X
+
+> (j,k )∈S c
+> B
+
+ ∂∂β jk 
+
+ℓm( ˜B, ˜Γ) ˆβjk + λ1| ˆβjk |
+
+
+
++ X
+
+> (j,k )∈S Γ
+
+ ∂∂γ jk 
+
+ℓm( ˜B, ˜Γ)(ˆ γjk − ˜γjk ) + λ2(ˆ γjk − ˜γjk )
+
+
+
++ X
+
+> (j,k )∈S c
+> Γ
+
+ ∂∂γ jk 
+
+ℓm( ˜B, ˜Γ)ˆ γjk + λ2 ˆγjk 
+
+
+
++ c
+
+2 ∥( ˆB, ˆΓ) − ( ˜B, ˜Γ)∥2 
+
+> F
+
+.
+
+By (18) and the inequality 
+
+|a| − | b| ≥ sign( b)( a − b),
+
+34 Structure Learning on Clustered Data 
+
+the sum over SB is nonnegative. By (19) , the sum over SΓ is equal to zero. By (21) , we have 
+
+∂∂β jk 
+
+ℓm( ˜B, ˜Γ) ˆβjk + λ1| ˆβjk | ≥ η
+
+2 λ1| ˆβjk |
+
+for all (j, k ) ∈ T B. Likewise, since ˆγjk ≥ 0 and (22) holds, we have 
+
+∂∂γ jk 
+
+ℓm( ˜B, ˜Γ)ˆ γjk + λ2 ˆγjk ≥ η
+
+2 λ2 ˆγjk 
+
+for all (j, k ) ∈ T Γ. On the event from Part 2 (no false negatives), feasibility of ( ˆB, ˆΓ) ∈ F 
+
+implies 
+
+ˆβjk = 0 ∀ (j, k ) ∈ S c 
+
+> B
+
+\ T B and ˆγjk = 0 ∀ (j, k ) ∈ S c 
+
+> Γ
+
+\ T Γ,
+
+since turning on any such coordinate would create a directed cycle in the union graph. It follows 
+
+Fm( ˆB, ˆΓ) − Fm( ˜B, ˜Γ) ≥ η
+
+2 λ1
+
+X
+
+> (j,k )∈T B
+
+| ˆβjk | + η
+
+2 λ2
+
+X
+
+> (j,k )∈T Γ
+
+ˆγjk + c
+
+2 ∥( ˆB, ˆΓ) − ( ˜B, ˜Γ)∥2 
+
+> F
+
+.
+
+Since ( ˆB, ˆΓ) is the global minimizer of Fm over F and ( ˜B, ˜Γ) ∈ F S ⊆ F , it holds 
+
+Fm( ˆB, ˆΓ) ≤ Fm( ˜B, ˜Γ).
+
+Combining the previous inequalities, we conclude 
+
+X
+
+> (j,k )∈T B
+
+| ˆβjk | = 0 and X
+
+> (j,k )∈T Γ
+
+ˆγjk = 0 ,
+
+with probability tending to one. Together with the feasibility implications above, this result gives 
+
+ˆβjk = 0 ∀ (j, k ) ∈ S c 
+
+> B
+
+and ˆγjk = 0 ∀ (j, k ) ∈ S c
+
+> Γ
+
+,
+
+proving ( ˆB, ˆΓ) contains no false positives. 
+
+Part 4: Consistency of structure recovery Part 2 guarantees ( ˆB, ˆΓ) contain no false negatives. Part 3 guarantees ( ˆB, ˆΓ) contain no false positives. It immediately follows 
+
+Pr 
+
+
+
+G( ˆB) = G(B0) and G(ˆΓ) = G(Γ0)
+
+
+
+→ 1,
+
+thereby proving the second claim of the theorem. 
+
+35 Thompson, Wand, and Baladandayuthapani 
+
+Appendix F. Implementation Details 
+
+F.1 Sparsity parameters 
+
+The sparsity parameters λ1 and λ2 are taken equal and swept over a grid of 30 values equally spaced on a logarithmic grid between 1 and 10 −3. As with all differentiable approaches, the weighted adjacency matrices produced by MixDAG can contain small nonzero values that violate acyclicity. These violations arise because gradient descent does not produce exact zeros when finite stopping rules are used. We thus follow the common practice of hard thresholding (e.g., Zheng et al., 2018; Bello et al., 2022) and set any elements of B and Γ
+
+that are below 0.05 in absolute value to zero. All baselines are thresholded similarly. 
+
+F.2 Polishing 
+
+A drawback to ℓ1-induced sparsity is that it biases the estimates of B and Γ towards zero. This bias is a consequence of the shrinkage inherent to the ℓ1 norm and is a well-documented side effect of ℓ1 penalties (Hastie et al., 2020). We correct for this bias in all baselines through a “polishing” step. Specifically, after fitting the model, we retain the selected edges and reoptimize over this fixed structure, removing the ℓ1 penalties (and the DAG constraint since the solution is already acyclic). Let MB, MΓ ∈ { 0, 1}p×p denote binary masks with entries 
+
+M B 
+
+> jk
+
+:= 1( ˆβjk ̸ = 0) , M Γ 
+
+> jk
+
+:= 1(ˆ γjk ̸ = 0) .
+
+We then solve 
+
+min  
+
+> B∈Rp×p,Γ∈Rp×p
+> +
+
+l(MB ⊙ B, MΓ ⊙ Γ).
+
+This polishing step is typically fast, as it optimizes over a reduced parameter space and involves the negative log-likelihood only and not the acyclicity constraint or ℓ1 penalties. 
+
+F.3 Computational Environment 
+
+The experiments are run on a Linux machine with eight NVIDIA RTX 4090 graphics cards. Each experimental run used a single graphics card, with multiple runs performed in parallel. Our implementations are in Python and built on PyTorch (Paszke et al., 2019). 
+
+Appendix G. Additional Experiments 
+
+We assess the robustness of MixDAG to a range of alternative simulation designs. In particular, we vary the graph sparsity, the graph type, and the cluster regime. Figures 6 and 7 show results for denser graphs with s = 2 p and s = 3 p edges, respectively, rather than the s = p
+
+edges used in the main experiments. Figures 8 and 9 show results for scale-free graphs (Barabási and Albert, 1999) with degree exponents 2 and 3, respectively, in place of the Erdős–Rényi graphs used in the main experiments. Finally, Figures 10 and 11 show results for alternative cluster regimes with fixed average cluster size ( m = ⌈n•/10 ⌉) and fixed number of clusters ( m = 10 ), respectively, instead of the regime in the main experiments where both the number of clusters and cluster sizes increase with n•. Across all designs, MixDAG 
+
+continues to perform well relative to the competing methods, indicating the gains in the main experiments are not specific to a particular graph sparsity, graph type, or cluster regime. 
+
+> 36
+
+Structure Learning on Clustered Data 0.25       
+
+> 0.50
+> 0.75
+> 1.00
+> 0
+> 50
+> 100
+> 30 100 300 1,000
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 30 100 300 1,000
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+
+Sample size       
+
+> Estimation error Structural Hamming distance
+> F1 score Sparsity
+> Mixed DAG Fixed DAG Mixed DAG (FM) Mixed DAG (OM) Mixed DG
+
+Figure 6: Performance on synthetic data generated from Erdős–Rényi DAGs with p = 50 
+
+nodes, s = 100 edges, and m = ⌈√n•⌉ clusters. Averages (solid points) and standard errors (error bars) are measured over 30 datasets. The dashed horizontal line in the bottom right panel indicates the number of edges in the true DAG. 
+
+37 Thompson, Wand, and Baladandayuthapani 0.3       
+
+> 0.6
+> 0.9
+> 0
+> 50
+> 100
+> 150
+> 200
+> 30 100 300 1,000
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 30 100 300 1,000
+> 0
+> 100
+> 200
+> 300
+
+Sample size       
+
+> Estimation error Structural Hamming distance
+> F1 score Sparsity
+> Mixed DAG Fixed DAG Mixed DAG (FM) Mixed DAG (OM) Mixed DG
+
+Figure 7: Performance on synthetic data generated from Erdős–Rényi DAGs with p = 50 
+
+nodes, s = 150 edges, and m = ⌈√n•⌉ clusters. Averages (solid points) and standard errors (error bars) are measured over 30 datasets. The dashed horizontal line in the bottom right panel indicates the number of edges in the true DAG. 
+
+38 Structure Learning on Clustered Data 0.3       
+
+> 0.6
+> 0.9
+> 0
+> 20
+> 40
+> 60
+> 30 100 300 1,000
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 30 100 300 1,000
+> 0
+> 25
+> 50
+> 75
+> 100
+
+Sample size       
+
+> Estimation error Structural Hamming distance
+> F1 score Sparsity
+> Mixed DAG Fixed DAG Mixed DAG (FM) Mixed DAG (OM) Mixed DG
+
+Figure 8: Performance on synthetic data generated from scale-free (degree exponent 2) DAGs with p = 50 nodes, s = 50 edges, and m = ⌈√n•⌉ clusters. Averages (solid points) and standard errors (error bars) are measured over 30 datasets. The dashed horizontal line in the bottom right panel indicates the number of edges in the true DAG. 
+
+39 Thompson, Wand, and Baladandayuthapani 0.25       
+
+> 0.50
+> 0.75
+> 1.00
+> 0
+> 20
+> 40
+> 30 100 300 1,000
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 30 100 300 1,000
+> 0
+> 30
+> 60
+> 90
+
+Sample size       
+
+> Estimation error Structural Hamming distance
+> F1 score Sparsity
+> Mixed DAG Fixed DAG Mixed DAG (FM) Mixed DAG (OM) Mixed DG
+
+Figure 9: Performance on synthetic data generated from scale-free (degree exponent 3) DAGs with p = 50 nodes, s = 50 edges, and m = ⌈√n•⌉ clusters. Averages (solid points) and standard errors (error bars) are measured over 30 datasets. The dashed horizontal line in the bottom right panel indicates the number of edges in the true DAG. 
+
+40 Structure Learning on Clustered Data 0.4       
+
+> 0.6
+> 0.8
+> 1.0
+> 0
+> 20
+> 40
+> 30 100 300 1,000
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 30 100 300 1,000
+> 0
+> 30
+> 60
+> 90
+
+Sample size       
+
+> Estimation error Structural Hamming distance
+> F1 score Sparsity
+> Mixed DAG Fixed DAG Mixed DAG (FM) Mixed DAG (OM) Mixed DG
+
+Figure 10: Performance on synthetic data generated from Erdős–Rényi DAGs with p = 50 
+
+nodes, s = 50 edges, and m = ⌈n•/10 ⌉ clusters. Averages (solid points) and standard errors (error bars) are measured over 30 datasets. The dashed horizontal line in the bottom right panel indicates the number of edges in the true DAG. 
+
+41 Thompson, Wand, and Baladandayuthapani 0.25       
+
+> 0.50
+> 0.75
+> 1.00
+> 25
+> 50
+> 75
+> 30 100 300 1,000
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 30 100 300 1,000
+> 0
+> 50
+> 100
+> 150
+
+Sample size       
+
+> Estimation error Structural Hamming distance
+> F1 score Sparsity
+> Mixed DAG Fixed DAG Mixed DAG (FM) Mixed DAG (OM) Mixed DG
+
+Figure 11: Performance on synthetic data generated from Erdős–Rényi DAGs with p = 50 
+
+nodes, s = 50 edges, and m = 10 clusters. Averages (solid points) and standard errors (error bars) are measured over 30 datasets. The dashed horizontal line in the bottom right panel indicates the number of edges in the true DAG. 
+
+42 Structure Learning on Clustered Data 
+
+References 
+
+Harold Bae, Stefano Monti, Monty Montano, Martin H Steinberg, Thomas T Perls, and Paola Sebastiani. Learning Bayesian networks from correlated data. Scientific Reports , 6, 2016. Albert-László Barabási and Réka Albert. Emergence of scaling in random networks. Science ,286(5439):509–512, 1999. Kevin Bello, Bryon Aragam, and Pradeep Ravikumar. DAGMA: Learning DAGs via M-matrices and a log-determinant acyclicity characterization. In Advances in Neural Information Processing Systems , volume 35, pages 8226–8239, 2022. Cristina Conati, Abigail S Gertner, Kurt Vanlehn, and Marek J Druzdzel. On-line stu-dent modeling for coached problem solving using bayesian networks. In User Modeling: Proceedings of the Sixth International Conference , pages 231–242, 1997. Chang Deng, Kevin Bello, Bryon Aragam, and Pradeep Ravikumar. Optimizing NOTEARS objectives via topological swaps. In Proceedings of the 40th International Conference on Machine Learning , volume 202, pages 7563–7595, 2023a. Chang Deng, Kevin Bello, Pradeep Ravikumar, and Bryon Aragam. Global optimality in bivariate gradient-based DAG learning. In Advances in Neural Information Processing Systems , volume 36, pages 17929–17968, 2023b. Chang Deng, Kevin Bello, Pradeep Ravikumar, and Bryon Aragam. Markov equivalence and consistency in differentiable structure learning. In Advances in Neural Information Processing Systems , volume 37, pages 91756–91797, 2024. P Erdős and A Rényi. On random graphs. I. Publicationes Mathematicae Debrecen , 6(3-4): 290–297, 1959. Yingying Fan and Runze Li. Variable selection in linear mixed effects models. Annals of Statistics , 40(4):2043–2068, 2012. E Michael Foster. Causal inference and developmental psychology. Developmental Psychology ,46(6):1454–1480, 2010. David A Harville. Matrix Algebra From a Statistician’s Perspective . Springer, New York, NY, USA, 1997. Trevor Hastie, Robert Tibshirani, and Ryan Tibshirani. Best subset, forward stepwise or lasso? Analysis and recommendations based on extensive comparisons. Statistical Science ,35(4):579–592, 2020. Biwei Huang, Kun Zhang, Jiji Zhang, Joseph Ramsey, Ruben Sanchez-Romero, Clark Glymour, and Bernhard Schölkopf. Causal discovery from heterogeneous/nonstationary data. Journal of Machine Learning Research , 21:1–53, 2020. 
+
+> 43 Thompson, Wand, and Baladandayuthapani
+
+Guido W Imbens. Potential outcome and directed acyclic graph approaches to causality: Relevance for empirical practice in economics. Journal of Economic Literature , 58(4): 1129–1179, 2020. Jiming Jiang and Thuan Nguyen. Linear and Generalized Linear Mixed Models and Their Applications . Springer, New York, NY, USA, 2nd edition, 2021. Neville Kenneth Kitson, Anthony C Constantinou, Zhigao Guo, Yang Liu, and Kiattikun Chobtham. A survey of Bayesian network structure learning. Artificial Intelligence Review ,56(8):8721–8814, 2023. S L Lauritzen and D J Spiegelhalter. Local computations with probabilities on graphical structures and their application to expert systems. Journal of the Royal Statistical Society: Series B (Methodological) , 50(2):157–224, 1988. Xiang Li, Shanghong Xie, Peter McColgan, Sarah J Tabrizi, Rachael I Scahill, Donglin Zeng, and Yuanjia Wang. Learning subject-specific directed acyclic graphs with mixed effects structural equation models from observational data. Frontiers in Genetics , 9, 2018. Carl D Meyer. Matrix Analysis and Applied Linear Algebra . Society for Industrial and Applied Mathematics, Philadelphia, PA, USA, 2000. Whitney K Newey and Daniel McFadden. Large sample estimation and hypothesis testing. In Handbook of Econometrics , volume 4, pages 2111–2245. Elsevier, 1994. Yang Ni, Francesco C Stingo, and Veerabhadran Baladandayuthapani. Bayesian graphical regression. Journal of the American Statistical Association , 114(525):184–197, 2019. Chris J Oates, Jim Q Smith, Sach Mukherjee, and James Cussens. Exact estimation of multiple directed acyclic graphs. Statistics and Computing , 26(4):797–811, 2016. Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, Alban Desmaison, Andreas Köpf, Edward Yang, Zach DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy, Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chintala. PyTorch: An imperative style, high-performance deep learning library. In Advances in Neural Information Processing Systems , volume 32, 2019. Judea Pearl. Probabilistic Reasoning in Intelligent Systems: Networks of Plausible Inference .Morgan Kaufmann, San Francisco, CA, USA, 1988. Judea Pearl. Causality: Models, Reasoning, and Inference . Cambridge University Press, New York, NY, USA, 2nd edition, 2009. J Peters and P Bühlmann. Identifiability of Gaussian structural equation models with equal error variances. Biometrika , 101(1):219–228, 2014. Nicholas G Polson, James G Scott, and Brandon T Willard. Proximal algorithms in statistics and machine learning. Statistical Science , 30(4):559–581, 2015. 
+
+> 44 Structure Learning on Clustered Data
+
+Basil Saeed, Snigdha Panigrahi, and Caroline Uhler. Causal structure discovery from distributions arising from mixtures of DAGs. In Proceedings of the 37th International Conference on Machine Learning , volume 119, pages 8336–8345, 2020. Ali Shojaie and George Michailidis. Penalized likelihood methods for estimation of sparse high-dimensional directed acyclic graphs. Biometrika , 97(3):519–538, 2010. Aleksei Sholokhov, James V Burke, Damian F Santomauro, Peng Zheng, and Aleksandr Aravkin. A relaxation approach to feature selection for linear mixed effects models. Journal of Computational and Graphical Statistics , 33(1):261–275, 2024. Giora Simchoni and Saharon Rosset. Using random effects to account for high-cardinality categorical features and repeated measures in deep neural networks. In Advances in Neural Information Processing Systems , volume 34, pages 25111–25122, 2021. Giora Simchoni and Saharon Rosset. Integrating random effects in deep neural networks. 
+
+Journal of Machine Learning Research , 24:1–57, 2023. Giora Simchoni and Saharon Rosset. Integrating random effects in variational autoencoders for dimensionality reduction of correlated data, 2024. arXiv:2412.16899. Giora Simchoni and Saharon Rosset. Flexible copula-based mixed models in deep learning: A scalable approach to arbitrary marginals. In Proceedings of the 28th International Conference on Artificial Intelligence and Statistics , volume 258, pages 91–99, 2025. Peter Spirtes, Clark Glymour, and Richard Scheines. Causation, Prediction, and Search .MIT Press, Cambridge, MA, USA, 2nd edition, 2000. Peter W G Tennant, Eleanor J Murray, Kellyn F Arnold, Laurie Berrie, Matthew P Fox, Sarah C Gadd, Wendy J Harrison, Claire Keeble, Lynsie R Ranker, Johannes Textor, Geor-gia D Tomova, Mark S Gilthorpe, and George T H Ellison. Use of directed acyclic graphs (DAGs) to identify confounders in applied health research: Review and recommendations. 
+
+International Journal of Epidemiology , 50(2):620–632, 2021. Ryan Thompson, Edwin V Bonilla, and Robert Kohn. Contextual directed acyclic graphs. In 
+
+Proceedings of the 27th International Conference on Artificial Intelligence and Statistics ,volume 238, pages 2872–2880, 2024. Ryan Thompson, Edwin V Bonilla, and Robert Kohn. ProDAG: Projected variational inference for directed acyclic graphs. In Advances in Neural Information Processing Systems , 2025a. In press. Ryan Thompson, Matt P Wand, and Joanna J J Wang. Scalable subset selection in linear mixed models, 2025b. arXiv:2506.20425. Matthew J Vowels, Necati Cihan Camgoz, and Richard Bowden. D’ya like DAGs? A survey on structure learning and causal discovery. ACM Computing Surveys , 55(4):1–36, 2022. Martin J Wainwright. Sharp thresholds for high-dimensional and noisy sparsity recovery using ℓ1-constrained quadratic programming (lasso). IEEE Transactions on Information Theory , 55(5):2183–2202, 2009. 
+
+> 45 Thompson, Wand, and Baladandayuthapani
+
+Yunyang Xiong, Hyunwoo J Kim, and Vikas Singh. Mixed effects neural networks (MeNets) with applications to gaze estimation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 7743–7752, 2019. Zhen Zhang, Ignavier Ng, Dong Gong, Yuhang Liu, Ehsan M Abbasnejad, Mingming Gong, Kun Zhang, and Javen Qinfeng Shi. Truncated matrix power iteration for differentiable DAG learning. In Advances in Neural Information Processing Systems , volume 35, pages 18390–18402, 2022. Zhen Zhang, Ignavier Ng, Dong Gong, Yuhang Liu, Mingming Gong, Biwei Huang, Kun Zhang, Anton van den Hengel, and Javen Qinfeng Shi. Analytic DAG constraints for differentiable DAG learning. In International Conference on Learning Representations ,2025. Peng Zhao and Bin Yu. On model selection consistency of lasso. Journal of Machine Learning Research , 7:2541–2563, 2006. Xun Zheng, Bryon Aragam, Pradeep Ravikumar, and Eric P Xing. DAGs with NO TEARS: Continuous optimization for structure learning. In Advances in Neural Information Processing Systems , volume 31, 2018. Xun Zheng, Chen Dan, Bryon Aragam, Pradeep Ravikumar, and Eric P Xing. Learning sparse nonparametric DAGs. In Proceedings of the 23rd International Conference on Artificial Intelligence and Statistics , volume 108, pages 3414–3425, 2020.
