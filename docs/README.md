@@ -6,56 +6,44 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-13
-- 运行时间：2026-07-13 21:27:59 UTC
+- 最新运行日期：2026-07-14
+- 运行时间：2026-07-14 20:08:23 UTC
 - 运行状态：成功
-- 本次总论文数：11
-- 精读区：0
-- 速读区：11
+- 本次总论文数：8
+- 精读区：2
+- 速读区：6
 
 ### 今日简报（AI）
-今日速读3篇7分论文，涵盖梯度提升解混、遗传交互检验与癌症热点突变预测。  
-最值得关注：Transformer模型在碱基对分辨率下识别非编码热点驱动突变，以及谱解混梯度提升的新方法。  
-建议优先精读上述两篇，掌握最新统计学习与基因组学交叉应用趋势。
-- 详情：[/202607/13/README](/202607/13/README)
+今日共读8篇论文，精读2篇、速读6篇。精读亮点包括AI科学家系统在高血压GWAS中的应用，以及iPSC衍生窦房结细胞揭示心率和房颤的共享调控因子。建议关注因果推断与基因组学在精准医学中的前沿探索。
+- 详情：[/202607/14/README](/202607/14/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [NVAITC AI Scientist: A Governed End-to-End Research System -- A Hypertension GWAS Case Study](/202607/14/2607.11084v1-nvaitc-ai-scientist-a-governed-end-to-end-research-system----a-hypertension-gwas-case-study)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：以GWAS为案例的智能体研究系统，同时涉及GWAS方法和医疗AI智能体
+2. [Functional Genomics in Human iPSC-Derived Sinoatrial Node Cells Reveals Shared Regulatory Determinants of Heart Rate and Atrial Fibrillation](/202607/14/biorxiv-10-1101-2023-07-01-547335-v3-functional-genomics-in-human-ipsc-derived-sinoatrial-node-cells-reveals-shared-regulatory-determinants-of-heart-rate-and-atrial-fibrillation)  
+   标签：评分：8.0/10、query:gwas
+   evidence：在iPSC来源的窦房结细胞中利用STARR-seq精细定位心律相关变异
 
 ### 速读区论文标签
-1. [Spectrally Deconfounded Gradient Boosting](/202607/13/2607.09371v1-spectrally-deconfounded-gradient-boosting)  
+1. [Bayesian DAG Structure Learning with Simultaneous Shrinkage Covariance Estimation under Scale-Mixture Error Distributions in the Proportional High-Dimensional Regime](/202607/14/2607.08428v1-bayesian-dag-structure-learning-with-simultaneous-shrinkage-covariance-estimation-under-scale-mixture-error-distributions-in-the-proportional-high-dimensional-regime)  
    标签：评分：7.0/10、query:gwas
-   evidence：谱去混杂提升方法处理隐藏混杂，适用于GWAS混杂控制
-2. [Global testing of SNP-methylation interactions on binary phenotypes via a logistic functional regression model](/202607/13/2607.09535v1-global-testing-of-snp-methylation-interactions-on-binary-phenotypes-via-a-logistic-functional-regression-model)  
+   evidence：高维DAG联合学习与精确矩阵估计，适用于基因组因果网络推断
+2. [Scalable Bayesian structure learning of directed acyclic graphs via Laplace approximation, with an application to breast cancer gene expression networks](/202607/14/2607.10222v1-scalable-bayesian-structure-learning-of-directed-acyclic-graphs-via-laplace-approximation-with-an-application-to-breast-cancer-gene-expression-networks)  
    标签：评分：7.0/10、query:gwas
-   evidence：提出逻辑函数回归模型用于SNP-甲基化交互作用的全局检验
-3. [Transformer models of mutation risk at base-pair resolution identify non-coding hotspot cancer driver mutations](/202607/13/biorxiv-10-64898-2026-07-07-736824-v1-transformer-models-of-mutation-risk-at-base-pair-resolution-identify-non-coding-hotspot-cancer-driver-mutations)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：用于突变风险的Transformer模型，适用于大规模基因组建模
-4. [Genomic Annotation Infrastructure (GAIn): Pipelines and Resource Repositories for Annotating Variants, Positions, and Regions](/202607/13/biorxiv-10-64898-2026-07-08-737273-v1-genomic-annotation-infrastructure-gain-pipelines-and-resource-repositories-for-annotating-variants-positions-and-regions)  
+   evidence：贝叶斯DAG结构学习方法，可应用于基因调控网络，与因果变异发现相关
+3. [When Screening Misleads: A Robust Mendelian Randomization Test for Reliable Causal Discovery](/202607/14/2607.10755v1-when-screening-misleads-a-robust-mendelian-randomization-test-for-reliable-causal-discovery)  
    标签：评分：7.0/10、query:gwas
-   evidence：用于GWAS功能整合的基因组注释框架
-5. [DeepPheno: A Deep Learning Framework for Linking Hyperspectral Imaging and SNP Genotypes in Lettuce](/202607/13/biorxiv-10-64898-2026-07-09-737449-v1-deeppheno-a-deep-learning-framework-for-linking-hyperspectral-imaging-and-snp-genotypes-in-lettuce)  
-   标签：评分：7.0/10、query:gwas
-   evidence：深度学习框架连接高光谱成像和SNP基因型
-6. [Integrating Neural Encoders in Bayesian Generalized Linear Mixed Models for Multimodal Data](/202607/13/2607.04647v1-integrating-neural-encoders-in-bayesian-generalized-linear-mixed-models-for-multimodal-data)  
+   evidence：用于因果发现的稳健孟德尔随机化检验
+4. [msPCA: An R Package for Sparse PCA with Multiple Components](/202607/14/2607.05229v1-mspca-an-r-package-for-sparse-pca-with-multiple-components)  
    标签：评分：6.0/10、query:gwas
-   evidence：神经网络编码器集成到贝叶斯GLMM中，为多模态数据提供可扩展方法，适用于GWAS
-7. [MAPLE: Mapper Based Localized Prediction with Data Driven Cover Selection for High dimensional Data](/202607/13/2607.06797v1-maple-mapper-based-localized-prediction-with-data-driven-cover-selection-for-high-dimensional-data)  
+   evidence：稀疏PCA方法可应用于GWAS变量选择
+5. [Does ensembling improve feature attributions from sequence-to-activity models?](/202607/14/biorxiv-10-64898-2026-07-08-737315-v1-does-ensembling-improve-feature-attributions-from-sequence-to-activity-models)  
    标签：评分：6.0/10、query:gwas
-   evidence：使用拓扑数据分析和局部预测的高维数据方法，可应用于GWAS分析
-8. [Structure Learning on Clustered Data](/202607/13/2607.08238v1-structure-learning-on-clustered-data)  
+   evidence：研究序列到活性模型中集成方法对可解释性的改进，有助于变异效应解读。
+6. [An overlooked distal regulatory signal on a shared haplotype drives the neuroinflammatory cascade underlying GBA1-associated Parkinson's disease](/202607/14/biorxiv-10-64898-2026-07-10-737850-v1-an-overlooked-distal-regulatory-signal-on-a-shared-haplotype-drives-the-neuroinflammatory-cascade-underlying-gba1-associated-parkinsons-disease)  
    标签：评分：6.0/10、query:gwas
-   evidence：用于因果发现的结构学习方法，可应用于因果变异精细定位
-9. [A Personalized Computational Framework for Assessing the Sufficiency of Partially Observed Data in Healthcare AI models](/202607/13/2607.09165v1-a-personalized-computational-framework-for-assessing-the-sufficiency-of-partially-observed-data-in-healthcare-ai-models)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：用于部分观测医疗数据的特征充分性分析
-10. [How demography shapes linkage disequilibrium with or without recombination](/202607/13/biorxiv-10-1101-2023-12-13-571342-v2-how-demography-shapes-linkage-disequilibrium-with-or-without-recombination)  
-   标签：评分：6.0/10、query:gwas
-   evidence：连锁不平衡统计的理论分析，是GWAS方法学的基础
-11. [Biological Network Organization, Not Generic Graph Topology, Drives Graph-Based Gene Essentiality Prediction](/202607/13/biorxiv-10-64898-2026-06-30-735480-v2-biological-network-organization-not-generic-graph-topology-drives-graph-based-gene-essentiality-prediction)  
-   标签：评分：6.0/10、query:gwas
-   evidence：图神经网络用于基因必需性预测，与GWAS分析中的机器学习应用相关
+   evidence：整合GWAS与多组学数据（eQTL、pQTL、染色质）识别帕金森病风险的远端调控信号
 
 
 <div class="dpr-home-promo-card">

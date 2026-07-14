@@ -1,0 +1,729 @@
+Title: msPCA: An R Package for Sparse PCA with Multiple Components
+
+URL Source: https://arxiv.org/pdf/2607.05229v1
+
+Published Time: Tue, 07 Jul 2026 03:31:15 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# msPCA: An R Package for Sparse PCA with Multiple Components 
+
+Ryan Cory-Wright r.cory-wright@imperial.ac.uk 
+
+Analytics, Marketing and Operations Imperial Business School 
+
+https: // ryancorywright. github. io 
+
+Jean Pauphilet jpauphilet@london.edu 
+
+Management Science and Operations London Business School 
+
+https: // jeanpauphilet. github. io 
+
+Abstract 
+
+We present msPCA : an open-source R package for sparse principal component analysis with multiple components. It implements an alternating maximization algorithm to generate a set of sparse loading vectors that collectively explain a large fraction of the variance in a dataset, while remaining non-redundant. The algorithm supports two definitions of non-redundancy: either orthogonality of the loading vectors or zero pairwise correlation between principal components (PCs). In the reported benchmarks, msPCA solves sparse PCA problems with thousands of features, achieving competitive runtimes while producing sparse components with controlled feasibility violations and a high fraction of variance explained. 
+
+Keywords: principal component analysis, sparsity, multiple components, msPCA, Rcpp, R
+
+1 Introduction 
+
+Principal component analysis (PCA; Pearson, 1901; Hotelling, 1933) reduces a p-dimensional dataset to r dimensions by projecting onto the leading eigenvectors of the empirical covari-ance matrix Σ. Effectively, each coordinate in the compressed dataset can be expressed as a linear combination of the original variables. Beyond interpretability challenges, sam-ple eigenvectors from dense PCA can be inconsistent in high-dimensional regimes when 
+
+p/n → α > 0 (Johnstone and Lu, 2009; Deshpande and Montanari, 2016), and including every feature in every component complicates downstream analysis (Rudin et al., 2022). Sparse PCA addresses both issues by constraining each loading vector to contain at most kt
+
+nonzero entries. The single-component case is well-studied (d’Aspremont et al., 2007; Yuan and Zhang, 2013; Bertsimas et al., 2022); we focus on the substantially harder r-component case, for which guaranteeing non-redundancy across loading vectors is the central challenge. We refer to Bertsimas et al. (2022) and Cory-Wright and Pauphilet (2026) for comprehensive reviews of the single- and multiple-component cases, respectively. The package msPCA implements a Lagrangian alternating maximization algorithm for sparse PCA with r > 1 components, similar to the one proposed by Cory-Wright and Pauphilet (2026). The algorithm attaches penalty parameters to the coupling constraints and progressively increases them until feasibility is attained or the iteration budget is  
+
+> ©2026 Ryan Cory-Wright and Jean Pauphilet. License: CC-BY 4.0, see https://creativecommons.org/licenses/by/4.0/ .
+> arXiv:2607.05229v1 [stat.ML] 6 Jul 2026 Cory-Wright and Pauphilet
+
+reached; at each iteration, the penalized problem decomposes into r independent single-component sparse PCA subproblems, each solved via the Truncated Power Method (Yuan and Zhang, 2013) against a perturbed covariance matrix that discourages redundancy or overlap between components (see Section 3). The algorithm resembles an iterative deflation scheme where a single-component sparse PCA problem on a surrogate matrix is solved at each iteration (Mackey, 2008). The key difference is that the deflated matrix is induced by an explicit penalty on the non-redundancy constraints, which is progressively increased throughout the algorithm. The package is implemented in C++ via Rcpp (Eddelbuettel and Fran¸ cois, 2011) and ships with diagnostic functions for evaluating and displaying solutions. Compared with Cory-Wright and Pauphilet (2026), msPCA carries two core software in-novations. First, this package supports two types of non-redundancy constraints: orthogonal loadings (u⊤ 
+
+> t
+
+ut′ = 0) and uncorrelated PCs (u⊤ 
+
+> t
+
+Σ ut′ = 0), whereas the algorithm of Cory-Wright and Pauphilet (2026) was originally developed for orthogonality constraints only. Among the existing packages considered here, msPCA is the only package to support both modeling options. Second, the package implements a version of the algorithm that works on the data matrix directly, without the need to compute and store the covariance or correlation matrix, leading to significant computational speed-ups for high-dimensional datasets. Pack-age msPCA is available from CRAN at https://CRAN.R-project.org/package=msPCA . A tutorial can be found at https://jeanpauphilet.github.io/msPCA .We now compare msPCA with the main packages available for sparse PCA with multiple components. Most of these packages are available in R or Python , with R offering the widest set of active and well-maintained packages for sparse PCA. These packages cover the main existing methodological approaches: elasticnet (Zou et al., 2006) in R and the library scikit-learn (Pedregosa et al., 2011) in Python implement elastic-net regularization and solve a sequence of single-component problems via a LARS-like algorithm; the Alternating Manifold Proximal Gradient (A-ManPG) algorithm of Chen et al. (2020), which minimizes a smooth loss with an ℓ1 penalty using Riemannian optimization and sequential deflation for multiple components, is implemented in the R package amanpg and the Python package sparsepca ;in R, PMA (Witten et al., 2009) uses a penalized matrix decomposition with a global ℓ1
+
+constraint and sequential deflation; sparsepca (Erichson et al., 2020) applies a variable-projection framework with an ℓ1 penalty; mixOmics (Rohart et al., 2017) implements the sparse PCA approach of Shen and Huang (2008) via regularized SVD; nsprcomp (Sigg, 2019) computes sparse PCs via the expectation-maximization algorithm of Sigg and Buhmann (2008) combined with deflation or a cumulative formulation. While msPCA is primarily intended for the R statistical computing ecosystem, sparse PCA is also available in Python via scikit-learn (Pedregosa et al., 2011), the dominant scien-tific machine-learning library for Python . To provide a broad comparison, we include two ad-ditional methods beyond the five core R packages. We compare msPCA against seven com-peting methods: elasticnet (Zou et al., 2006), PMA (Witten et al., 2009), sparsepca (Erich-son et al., 2020), mixOmics (Rohart et al., 2017), and nsprcomp (Sigg, 2019) (all R); amanpg 
+
+(Chen et al., 2020) ( R, A-ManPG algorithm); and sklearn.decomposition.SparsePCA 
+
+from scikit-learn (Pedregosa et al., 2011) ( Python , called from R via the reticulate package (Ushey et al., 2025)). These cover the main methodological approaches: elastic-net reg-ularization, penalized matrix decomposition, variable-projection optimization, regularized SVD, deflation, Riemannian proximal gradient, and dictionary learning. 
+
+> 2
+
+msPCA: Sparse PCA with Multiple Components in R 
+
+Regarding sparsity, msPCA allows the user to specify a hard sparsity constraint on each loading vector (of the form ∥ut∥0 ≤ kt), which is fairly common across existing packages. Many packages whose algorithms induce sparsity by introducing an ℓ1 penalty in the objec-tive, such as elasticnet (Zou et al., 2006) or mixOmics (Shen and Huang, 2008; Rohart et al., 2017), still allow the user to express their requirements in terms of cardinality constraints and automatically calibrate the ℓ1 penalty accordingly. The key distinguishing property of 
+
+msPCA relates to how overlapping or redundant PCs are discouraged, as summarized in Ta-ble 1. First, among the R packages considered here, msPCA is the only package to support both definitions, namely imposing orthogonal loading vectors or uncorrelated PCs. Second, among these packages, msPCA is the only method that provides the user with an explicit control parameter η over the violation of these constraints. Some of the algorithms, such as 
+
+elasticnet and sparsepca (Erichson et al., 2020), internally involve projections onto the set of orthogonal matrices, but these projections are not applied directly to the matrix of load-ing vectors. The approaches in PMA (Witten et al., 2009; Witten and Tibshirani, 2009), 
+
+mixOmics (Rohart et al., 2017), nsprcomp (Sigg and Buhmann, 2008; Sigg, 2019), and 
+
+amanpg apply update (or deflation) rules that guarantee orthogonality in the case of dense PCA but have no guarantees in the sparse PCA case. In contrast, the alternating maximiza-tion algorithm in msPCA assigns an increasing penalty on orthogonality/uncorrelatedness violation, theoretically ensuring asymptotic feasibility when subproblems are solved exactly (see Cory-Wright and Pauphilet, 2026, Section 3).                              
+
+> Package Package reference Non-redundancy Definition Control parameter
+> msPCA This paper orthogonality or uncorrelatedness tolerance η
+> elasticnet Zou et al. (2006) orthogonality None
+> scikit-learn Pedregosa et al. (2011) orthogonality None
+> PMA Witten et al. (2009) orthogonality None
+> sparsepca Erichson et al. (2020) orthogonality None
+> mixOmics Rohart et al. (2017) orthogonality None
+> nsprcomp Sigg (2019) orthogonality penalty parameter γ
+> amanpg Chen et al. (2020) orthogonality None
+
+Table 1: Main packages for sparse PCA with r > 1 components and their implementation of non-redundancy. For sparse PCA, non-redundancy can be expressed as having orthogonal loadings or uncorrelated PCs. The rest of the paper is organized as follows. Section 2 formalizes the sparse PCA problem with multiple components and introduces the two constraint types supported by 
+
+msPCA . Section 3 describes the algorithm, its implementation, and its computational com-plexity. Section 4 documents the package functions and illustrates the basic workflow on the 
+
+mtcars dataset. Section 5 presents a case study on S&P 500 returns comparing both con-straint types. Section 6 benchmarks msPCA against competing packages on real datasets. Section 7 concludes. 
+
+3Cory-Wright and Pauphilet 
+
+2 Sparse PCA with multiple components 
+
+2.1 Problem formulation 
+
+The goal of sparse PCA is to identify r loading vectors u1, . . . , ur ∈ Rp that collectively explain a large share of the variance in the data, while each vector involves only a small number of the p original features. In the single-component case ( r = 1), this corresponds to solving max  
+
+> u∈Rp
+
+u⊤Σ u s.t. ∥u∥2 = 1 , ∥u∥0 ≤ k, 
+
+for which many efficient algorithms have been proposed (d’Aspremont et al., 2007; Yuan and Zhang, 2013; Bertsimas et al., 2022). The challenge in the r-component case is coordinating the components so that they are non-redundant. In standard (dense) PCA, non-redundancy is ensured by requiring the r leading eigenvectors of Σ to be mutually orthogonal and their projections to be uncorrelated — two properties that hold simultaneously for eigenvectors but generally cannot both be enforced in the sparse setting. Package msPCA therefore supports either type of coupling constraint, controlled by the feasibilityConstraintType 
+
+argument: 
+
+• Orthogonality (feasibilityConstraintType = 0 , default): the loading vectors are required to be mutually orthogonal, u⊤ 
+
+> t
+
+ut′ = 0 for all t̸ = t′. This is the direct geometric analogue of standard PCA. 
+
+• Zero pairwise correlation (feasibilityConstraintType = 1 ): the projected com-ponents are required to be uncorrelated in the data, u⊤ 
+
+> t
+
+Σ ut′ = 0 for all t̸ = t′. This ensures that each component captures statistically distinct information. Defining C ∈ { I, Σ} to encode the constraint type, the r-component problem solved by 
+
+msPCA takes the unified form max  
+
+> U∈Rp×r
+> r
+
+X
+
+> t=1
+
+u⊤ 
+
+> t
+
+Σ ut s.t. u⊤ 
+
+> t
+
+C u t′ = 0 ∀ t̸ = t′,
+
+∥ut∥2 = 1 , ∥ut∥0 ≤ kt ∀ t ∈ [r],
+
+(1) where [ r] = {1, . . . , r }. The orthogonality constraint corresponds to C = I and the zero-correlation constraint to C = Σ; both reduce to standard PCA when the sparsity constraint is relaxed ( kt = p). The two options reflect different modeling priorities. Orthogonality (feasibilityConstraintType = 0 ) is the natural choice when the loading vectors will be used as a basis for projection. Zero pairwise correlation ( feasibilityConstraintType = 1) is preferable when the goal is to obtain statistically uncorrelated summaries of the data, for instance for downstream regression or classification. The two options are compared empirically on a real dataset in Section 5. The objective in (1) corresponds to the sum of per-component variances u⊤ 
+
+> t
+
+Σ ut. Most approaches for sparse PCA with multiple PCs use this objective (Zou et al., 2006; Journ´ ee et al., 2010; Lu and Zhang, 2012; Vu et al., 2013; Benidis et al., 2016; Cory-Wright and Pauphilet, 2026). It corresponds to the variance of the orthogonal projection onto the span of U only when loading vectors are orthogonal. In general, it corresponds to the sum of the marginal variances of the sparse components. 
+
+> 4msPCA: Sparse PCA with Multiple Components in R
+
+2.2 Evaluation metrics 
+
+When assessing the quality of a sparse PCA solution, two quantities are of primary interest. Package msPCA provides dedicated functions for each. 
+
+Variance explained. The cumulative fraction of total variance explained (FVE) by a set of loading vectors U = [ u1, . . . , ur] is FVE( U ) = 1tr( Σ)
+
+> r
+
+X
+
+> t=1
+
+u⊤ 
+
+> t
+
+Σ ut,
+
+computed by fraction variance explained() . Because loading vectors may not be or-thogonal, this quantity should be interpreted as a cumulative component-variance score rather than the variance of the orthogonal projection onto the span of U . The function 
+
+fraction variance explained perPC() can be used to return the contribution of each PC, u⊤ 
+
+> t
+
+Σ ut/tr( Σ), separately. 
+
+Feasibility. The constraint violation measures how far the returned solution is from satisfying the coupling constraints, viol off (C, U ) = X
+
+> t>t ′
+
+u⊤ 
+
+> t
+
+C u t′ ,
+
+and is computed by feasibility violation off() .A key shortcoming of many existing sparse PCA packages is that they optimize FVE or sparsity while inadequately enforcing the coupling constraint, so that the returned com-ponents are not truly non-redundant. As documented in Section 6, existing sparse PCA packages can return solutions with significant feasibility violations on standard benchmark datasets, although they may return perfectly orthogonal PCs in other cases. 
+
+3 Algorithm 
+
+3.1 Lagrangian alternating maximization 
+
+The key algorithmic idea is to handle the coupling constraints in Problem (1) via a quadratic penalty in the objective, which causes the problem to decompose into r independent single-component sparse PCA subproblems. Specifically, we introduce non-negative penalty pa-rameters λt,t ′ for each pair t̸ = t′ (with λt,t ′ = λt′,t ) and consider the penalized objective max 
+
+> U
+> r
+
+X
+
+> t=1
+
+u⊤ 
+
+> t
+
+Σ ut − X
+
+> t̸=t′
+
+λt,t ′
+
+
+
+u⊤ 
+
+> t
+
+C u t′
+
+2
+
+s.t. ∥ut∥2 = 1 , ∥ut∥0 ≤ kt ∀ t. (2) For fixed components ut′ , t′̸ = t, and fixed penalties λ, the subproblem for ut in (2) reduces to a non-convex single-component sparse PCA problem against the perturbed covariance matrix ˜Σt = Σ − X 
+
+> t′̸=t
+
+λt,t ′ C u t′ u⊤ 
+
+> t′
+
+C. (3) Most methods for computing the leading sparse eigenvector of a matrix require the matrix to be positive semidefinite. If the matrix ˜Σt is not positive semidefinite, we can add a diagonal 
+
+> 5Cory-Wright and Pauphilet
+
+shift λ0I to ˜Σt, which does not change the optimal solution because all feasible vectors have unit norm. We choose λ0 large enough so that ˜Σt ⪰ 0, e.g., λ0 ≥ λmax (C)2 P  
+
+> t′̸=t
+
+λt,t ′ .Iterating over t = 1 , . . . , r and progressively increasing the penalties λ to drive con-straint violations toward zero yields the Lagrangian alternating maximization scheme (or iterative deflation scheme) in Algorithm 1. Each single-component subproblem is solved via the Truncated Power Method (TPM, Yuan and Zhang, 2013) described in Algorithm 2, which alternates between a power step (multiplying by ˜Σt) and a truncation step (retaining only the kt largest-magnitude entries). In practice, TPM often finds high-quality solutions around two orders of magnitude faster than certifiably optimal methods (Berk and Bertsi-mas, 2019; Behdin and Mazumder, 2026). Our implementation uses the past iterate as the first starting point followed by multiple random restarts, which guard against poor local optima. 
+
+Algorithm 1 Lagrangian Alternating Maximization for Problem (1) 
+
+Require: Covariance matrix Σ, number of components r, sparsity budgets k1, . . . , k r, con-straint matrix C ∈ { I, Σ}, iterations L, feasibility tolerance η
+
+Initialize u(0)  
+
+> t
+
+← 0 for all t ∈ [r]; set λt,t ′ ← 0 for all t̸ = t′
+
+for ℓ = 1 , . . . , L do for t = 1 , . . . , r do 
+
+Compute ˜Σt ← Σ − X 
+
+> t′̸=t
+
+λt,t ′ C u (ℓ−1)  
+
+> t′
+
+u(ℓ−1) ⊤ 
+
+> t′
+
+C + λ0I
+
+Compute u(ℓ) 
+
+> t
+
+via Algorithm 2 applied to ( ˜Σt, k t)
+
+end for if X
+
+> t
+
+∥u(ℓ) 
+
+> t
+
+∥2 − 1 + X
+
+> t>t ′
+
+u(ℓ)⊤ 
+
+> t
+
+C u (ℓ) 
+
+> t′
+
+≤ η then 
+
+Record {u(ℓ) 
+
+> t
+
+} as feasible; update best solution if objective improves 
+
+end if 
+
+Increase λt,t ′ values (see Section 3.2) 
+
+end for return best feasible solution found (or least-infeasible solution if none found) 
+
+3.2 Implementation details Penalty update. The penalty parameters λt,t ′ are initialized to zero and increased progres-sively across outer iterations, allowing the algorithm to explore freely at first and gradually tighten the feasibility requirement. During the first 15% of iterations, the increment is proportional to the total constraint violation P 
+
+> t>t ′
+
+|u⊤ 
+
+> t
+
+C u t′ |; for the remaining iterations we switch to a ratio-based update proportional to the ratio of the current objective to the current constraint violation, which produces larger and more decisive increases; during the last 25% of iterations, the step-size coefficient is further increased by a factor of 5 to ac-celerate final convergence to feasibility. The initial scale of λt,t ′ is set proportionally to the variance explained by component t at the first iteration, so that all penalty terms are on a comparable scale regardless of the magnitude of Σ. We refer to Cory-Wright and Pauphilet (2026) for a full description and theoretical justification of the update rule. 
+
+> 6msPCA: Sparse PCA with Multiple Components in R
+
+Algorithm 2 Truncated Power Method with random restarts (Yuan and Zhang, 2013) 
+
+Require: Matrix ˜Σ, sparsity budget k, iteration limit LT P M , time limit T
+
+ubest ← 0repeat 
+
+Draw u ∼ N (0, I)
+
+repeat 
+
+u ← ˜Σu / ∥ ˜Σu∥2 (power step) 
+
+Zero out all but the k entries of u largest in absolute value (truncation step) 
+
+u ← u / ∥u∥2
+
+until u converges 
+
+if u⊤ ˜Σ u > u⊤ 
+
+> best
+
+˜Σ ubest then 
+
+ubest ← u; reset iteration count 
+
+end if until time limit T exceeded or no improvement after LT P M iterations 
+
+return ubest 
+
+Termination. Algorithm 1 stops when (i) the number of outer iterations reaches 
+
+maxIter (default: 200), or when (ii) the improvement in objective value between con-secutive feasible solutions falls below stallingTolerance (default: 10 −8). 
+
+Feasibility tracking. At each iteration, Algorithm 1 checks whether the current solu-tion satisfies the coupling constraint up to the tolerance feasibilityTolerance (default: 10 −4). The best feasible solution encountered across all iterations is returned. If no feasible solution is found within the iteration budget, the algorithm returns the solution with the smallest observed constraint violation. 
+
+Software implementation. All computations are carried out in C++ via the Rcpp 
+
+(Eddelbuettel and Fran¸ cois, 2011) and RcppEigen (Bates and Eddelbuettel, 2013) interfaces, with a lightweight R wrapper providing the user-facing API. To avoid materializing the p×p
+
+perturbed matrix ˜Σt at each inner-loop step, the C++ back-end represents it implicitly: each product ˜Σtβ is evaluated as Σβ−W (d⊙W ⊤β)+ λ0β, where W collects the previously computed components ( ut′ , t ′̸ = t for orthogonal loadings and Σut′ , t ′̸ = t for uncorrelated PCs) and d contains the corresponding scaled penalty coefficients. This eliminates the 
+
+O(rp 2) matrix-build cost per component update while keeping the per-step cost at O(p2). When the raw data matrix X is provided ( type = "X" ), the product Σβ is replaced by the two-pass evaluation X⊤(Xβ )/(n − 1) at cost O(np ) instead of O(p2), which is substantially more scalable when n ≪ p and avoids forming the p × p covariance matrix entirely. After the first outer iteration, the previous iterate u(ℓ−1)  
+
+> t
+
+serves as a warm start for Algorithm 2, substantially reducing the number of random restarts required in subsequent iterations. The package is available for Linux, macOS, and Windows. 
+
+3.3 Computational complexity 
+
+The dominant cost of Algorithm 1 per outer iteration is r calls to Algorithm 2. With the implicit mat-vec representation described in Section 3.2, applying ˜Σt to a vector costs 
+
+O(p2 + rp ) when using a covariance or correlation matrix Σ as an input ( type = "Sigma" )
+
+> 7Cory-Wright and Pauphilet
+
+and O(np + rp ) when the raw data matrix X is provided ( type = "X" ) instead. In both cases, the O(rp ) deflation term is negligible for moderate r. Each call to Algorithm 1 performs at most LTPM such products, giving a worst-case per-outer-iteration cost of 
+
+O(r min( n, p )p · LTPM ). In practice, warm-start initialization from the previous iterate and early convergence detection reduce the effective number of TPM iterations substantially, so the empirical cost is much closer to O(r min( n, p )p) per outer iteration. 
+
+4 The msPCA package 
+
+4.1 Installation 
+
+Package msPCA is available on the Comprehensive R Archive Network (CRAN) and can be installed and loaded in the usual way: 
+
+R> install.packages("msPCA") R> library("msPCA") 
+
+4.2 Main functions 
+
+mspca() : Multiple sparse PCA. The primary function mspca() solves Problem (1). Its signature is: 
+
+R> mspca(M, r, ks, type = c("Sigma", "X"), + feasibilityConstraintType = 0, + verbose = TRUE, maxIter = 200, + feasibilityTolerance = 1e-04, stallingTolerance = 1e-08, + timeLimitTPM = 20, maxRestartTPM = 30, minRestartTPM = 20, + center = TRUE, scale = TRUE, divisor = c("n-1", "n"), + checkPSD = TRUE, symTolerance = 1e-08, psdTolerance = 1e-08) 
+
+The three required arguments are M, the input matrix; r, the number of sparse PCs to compute; and ks , an integer vector of length r specifying the sparsity budget kt for each component. The interpretation of M is controlled by the type argument: "Sigma" 
+
+(the default) treats M as a p × p covariance or correlation matrix, while "X" treats M as an 
+
+n × p raw data matrix. With type = "X" the algorithm operates directly on the data via the products X⊤(Xβ ) and never forms the p × p covariance matrix, which is substantially more scalable when n ≪ p.The key optional arguments are feasibilityConstraintType (0 for orthogonality, 1
+
+for zero pairwise correlation), feasibilityTolerance (the threshold η), maxIter (maxi-mum outer iterations), stallingTolerance (early stopping threshold), and the inner TPM budget controls maxRestartTPM and minRestartTPM (random-restart counts for the first and subsequent outer iterations, respectively; see Section 3.2). When type = "X" , the arguments center , scale and divisor control preprocessing: center = TRUE (default) mean-centers the columns, scale = TRUE (default) scales them to unit variance (i.e., the algorithm operates on the correlation matrix), and divisor selects between the sample covariance ( "n-1" , default) and the population covariance ( "n" ). 
+
+> 8msPCA: Sparse PCA with Multiple Components in R
+
+The function returns seven fields: x best (a p×r matrix of loading vectors), objective value 
+
+(the sum of per-component variances P 
+
+> t
+
+u⊤ 
+
+> t
+
+Σut), feasibility violation (the constraint violation of the returned solution), runtime (elapsed time in seconds), variance explained 
+
+(per-PC explained variance), total variance (trace of the covariance), and inputType 
+
+(either "Sigma" or "X" ). With type = "X" the result additionally records center , scale ,
+
+divisor , nObs , and p.
+
+tpm() : Single sparse PC. The function tpm() solves the single-component problem via Algorithm 2 and is useful when only one sparse PC is needed, or as a diagnostic tool to assess the best achievable single-component FVE for a given sparsity budget. Like mspca() , it accepts either a covariance/correlation matrix or a raw data matrix via the type argument. 
+
+R> tpm(M, k, type = c("Sigma", "X"), maxIter = 200, verbose = TRUE, + timeLimit = 10, center = TRUE, scale = FALSE, divisor = c("n-1", "n"), + checkPSD = TRUE, symTolerance = 1e-08, psdTolerance = 1e-08) 
+
+4.3 Diagnostic functions 
+
+The package msPCA provides a set of built-in diagnostic functions for evaluating and dis-playing sparse PCA solutions. These are useful for assessing solution quality and for com-paring against solutions from other packages. 
+
+• fraction variance explained(C, U) : combined FVE of the loading matrix U, as a fraction of tr( Σ). 
+
+• fraction variance explained perPC(C, U) : vector of per-component FVE values. 
+
+• variance explained perPC(C, U) : vector of per-component variance explained (un-normalized). 
+
+• feasibility violation off(C, U, feasibilityConstraintType) : absolute feasi-bility violation, viol off (C, U ) with C = I if feasibilityConstraintType=0 and 
+
+C = Σ if feasibilityConstraintType=1 .
+
+• print(sol, C) : S3 print method for objects of class "mspca" . Displays the sparse loading matrix restricted to variables active in at least one component, together with the percentage of variance explained and the number of nonzero loadings per compo-nent. When the model was fit with type = "X" , C may be omitted and the figures stored inside the result object are used directly. 
+
+• summary(sol, C, feasibilityConstraintType) : S3 summary method. Prints a per-PC statistics table (number of nonzero loadings, variance explained, FVE, and cumulative FVE), the upper-triangular pairwise feasibility violation matrix, and the total solver runtime. Like print() , C may be omitted for type = "X" results. 
+
+4.4 Worked example 
+
+We illustrate the basic workflow on the mtcars dataset included in R. The code is available in the replication package. The dataset contains p = 11 measurements on 32 car models; we 
+
+> 9Cory-Wright and Pauphilet
+
+compute the correlation matrix and extract r = 2 sparse PCs, each with a sparsity budget of k = 4. 
+
+R> library("msPCA") R> Sigma <- cor(datasets::mtcars) R> set.seed(42) R> res <- mspca(Sigma, r = 2, ks = c(4, 4), verbose = FALSE) R> print(res, Sigma) msPCA solution: 2 sparse PCs Pct. variance explained: 32.5 28.0 Non-zero loadings per PC: 4 4 Sparse PCs [,1] [,2] mpg -0.499 0.000 cyl 0.495 0.000 disp 0.510 0.000 hp 0.000 -0.518 wt 0.495 0.000 qsec 0.000 0.506 vs 0.000 0.494 carb 0.000 -0.482 
+
+The print() output omits variables that have zero loadings across all components, making the nonzero loading pattern easy to inspect. For a richer diagnostic view, we can call summary() , which additionally reports the pairwise feasibility violation matrix and runtime: 
+
+R> summary(res, Sigma) 
+
+The cumulative FVE and feasibility violation can also be queried individually: 
+
+R> feasibility_violation_off(Sigma, res$x_best, 0) [1] 0 R> fraction_variance_explained(Sigma, res$x_best) [1] 0.6043866 
+
+For comparison, we compute the FVE of the first two dense PCs from prcomp() :
+
+R> pca_res <- prcomp(datasets::mtcars, scale. = TRUE) R> fraction_variance_explained(Sigma, pca_res$rotation[, 1:2]) [1] 0.8417153 
+
+The sparse solution captures a smaller fraction of variance than dense PCA (the price of sparsity), but each component loads on only 4 of the 11 variables, making it straightforward to assign physical or mechanical meaning to each PC. 
+
+> 10 msPCA: Sparse PCA with Multiple Components in R
+
+4.5 Guidance on parameter choices Choosing the sparsity budgets ks . The budgets k1, . . . , k r are the primary tuning parameters. A practical approach is to run mspca() for a range of values and plot the trade-off between FVE (via fraction variance explained() ) and sparsity. Domain knowledge often provides a natural guide: if each PC is expected to represent a distinct thematic cluster of features, setting kt to the anticipated cluster size is a good starting point. 
+
+Choosing the constraint type. Orthogonality ( feasibilityConstraintType = 0 ) is appropriate when the loading vectors are to be used as a projection basis, or when the geo-metric structure of the components matters. Zero pairwise correlation ( feasibilityConstraintType = 1 ) is preferable when the primary goal is statistical decorrelation of the projected data. In our experience, the two options yield similar results when Σ is close to the identity but can differ noticeably for strongly correlated datasets. Section 5 illustrates both options on financial return data. 
+
+5 Case study: factor analysis of S&P 500 returns 
+
+5.1 Data and preprocessing 
+
+We illustrate msPCA on daily returns of S&P 500 constituent stocks, made available under a CC0 1.0 license 1. The code and data for this case study are available in the replication package. The dataset comprises p = 423 stocks for which complete price histories are available over the period January 2010 to December 2019, yielding n = 2 ,515 trading days. Daily log-returns are computed from adjusted closing prices and stored in the 2 ,515 × 423 matrix X.S&P 500 returns are dominated by a “market factor” that loads positively on virtu-ally every stock and accounts for a disproportionate share of total variance. To focus on cross-sectional structure (sector and style effects) rather than market-wide movements, we remove the market component before applying msPCA . Specifically, we extract the lead-ing eigenvector v1 of the empirical correlation matrix and deflate the correlation matrix as described below: 
+
+R> library("msPCA") R> library("RSpectra") R> library("readr") R> df_returns <- read_csv("SnP_returns_cleaned.csv") |> + dplyr::filter(Date < "2020-01-01") R> X <- as.matrix(df_returns[, -1]) R> Sigma <- cor(X) R> v1 <- eigs_sym(Sigma, k = 1, which = "LA")$vectors[, 1] R> v1 <- v1 / sqrt(sum(v1^2)) R> P <- diag(length(v1)) - tcrossprod(v1) R> SigmaR <- crossprod(P, Sigma) %*% P  
+
+> 1. Data available from https://www.kaggle.com/datasets/yash16jr/s-and-p500-daily-update-dataset
+> 11
+
+Cory-Wright and Pauphilet 
+
+5.2 Sparse factor extraction 
+
+We extract r = 4 sparse factors using msPCA , with each factor allowed to load on at most k stocks. We vary k from 5 to 35 in steps of 5 and run the analysis under both constraint types. The following code produces results for the orthogonality constraint (feasibilityConstraintType = 0 ); setting feasibilityConstraintType = 1 instead gives the zero pairwise correlation results: 
+
+R> ks_grid <- seq(5, 35, by = 5) R> results <- lapply(ks_grid, function(k) { + set.seed(42) + res <- mspca(SigmaR, r = 4, ks = rep(k, 4), verbose = FALSE, + maxIter = 100, feasibilityConstraintType = 0) + data.frame( + k = k, + fve = fraction_variance_explained(SigmaR, res$x_best), + orth = feasibility_violation_off(SigmaR, res$x_best, 0), + pwcorr = feasibility_violation_off(SigmaR, res$x_best, 1) + )+ }) R> results_df <- do.call(rbind, results) 
+
+5.3 Comparing constraint types 
+
+Figure 1 reports FVE, orthogonality violation (viol off (I, U )), and uncorrelatedness violation (viol off (Σ, U )) as a function of k, for msPCA with each constraint type. We compare with the function nsprcomp::nsprcomp of the nsprcomp package (Sigg, 2019) at the same sparsity budgets. 0.025 0.050 0.075 0.100             
+
+> 10 20 30
+> Sparsity budget k
+> FVE
+> nsprcomp orthogonality zero−correlation 0.0 0.1 0.2 0.3 0.4 0.5
+> 10 20 30
+> Sparsity budget k
+> Orthogonality violation
+> nsprcomp orthogonality zero−correlation 0510 15 20
+> 10 20 30
+> Sparsity budget k
+> Zero−correlation violation
+> nsprcomp orthogonality zero−correlation
+
+Figure 1: S&P 500 case study. Left: fraction of variance explained vs. sparsity bud-get k. Center: orthogonality violation vs. k. Right: uncorrelatedness viola-tion vs. k. Results are shown for msPCA with orthogonality constraints (blue, solid), msPCA with zero pairwise correlation constraints (green, dashed), and 
+
+nsprcomp::nsprcomp (orange, dotted). All methods use r = 4 components. On this dataset, nsprcomp::nsprcomp() returns orthogonal loading vectors for small-to-moderate sparsity budgets ( k ≤ 20), reflecting the effectiveness of the deflation procedure in 
+
+12 msPCA: Sparse PCA with Multiple Components in R 
+
+producing orthogonal loadings when component supports are sufficiently disjoint. However, as k grows, the orthogonality violation increases, reaching 0 .20 for k = 35. In contrast, msPCA with orthogonality constraints maintains near-zero orthogonality violation across all values of k (at most 10 −4, the default feasibility tolerance), because the penalty on constraint violation is explicitly tightened throughout the algorithm. At the smallest budget ( k = 5) the violation is 2 .2 × 10 −4, marginally above the default tolerance. In terms of FVE, nsprcomp::nsprcomp() achieves comparable or slightly higher FVE for most sparsity budgets, with msPCA outperforming it only at the largest budget ( k = 35). Neither nsprcomp::nsprcomp() nor orthogonality-constrained msPCA yields uncorre-lated PCs in this case. To obtain uncorrelated PCs, we run msPCA with pairwise correlation constraints instead. Doing so yields PCs with near-zero pairwise correlation, though these are not mutually orthogonal. However, on this dataset, requiring zero pairwise correlation instead of orthogonality is possible only at the expense of a substantially lower FVE. As illustrated in this case study, these two constraints (orthogonality and zero pairwise correlation) correspond to different feasibility definitions and can lead to meaningfully dif-ferent factor compositions. msPCA enables the user to explicitly choose and enforce the constraint most relevant to their use case, with predictable behavior across the full range of sparsity levels. 
+
+5.4 Interpretation of sparse PCs 
+
+We fix k = 10 to illustrate the interpretability of sparse PCA and examine the impact of the feasibility constraints used. At this sparsity level each factor loads on 10 stocks out of 423, making it possible to associate each component with an economic theme; sector labels below follow the Global Industry Classification Standard (GICS; MSCI and S&P Dow Jones Indices, 2023). Figure 2 shows the nonzero loadings of the 4 PCs returned, depending on the feasibility constraints used. With orthogonality constraints, the four PCs concentrate entirely within the utility and REIT sectors, with no cross-sector loadings. PC1 loads on regulated electric utilities (AEP, DUK, ED, ES, EVRG, NI, PNW, SO, WEC, XEL). PC2 consolidates the REIT segment into a single component spanning residential apartments (AVB, CPT, EQR, ESS, MAA, UDR), healthcare REITs (DOC, WELL, VTR), and net-lease (O). PC3 captures a second, non-overlapping utility cluster (CNP, D, DTE, EIX, ETR, EXC, NEE, PEG, PPL). PC4 identifies a third utility subgroup (AEE, ATO, AWK, CMS, FE, LNT, SRE). Thus the orthogonality constraint fragments the market into three disjoint utility clusters and one diversified REIT basket, with each PC loading exclusively on one sector. The zero-correlation constraint, on the other hand, finds PCs that are more sector-diverse, each capturing a cross-sector contrast. PC1 consolidates the entire utility sector into a single broad component (AEP, CMS, DTE, DUK, ED, ES, PNW, SO, WEC, XEL), merging stocks that were split across three separate PCs by the orthogonality constraint. PC2 contrasts homebuilders and residential construction (DHI, LEN, NVR, PHM, positive loadings; MAS and MGM loading in the same direction) against financials (TFC, EG) and industrials (BA) with negative loadings, capturing the interest-rate sensitivity of the housing sector. PC3 identifies a managed-care and health-insurance theme: large health insurers and managed-care organizations (UNH, HUM, ELV, MOH, CNC, UHS) load positively alongside 
+
+> 13
+
+Cory-Wright and Pauphilet 
+
+diagnostics providers (DGX, LH), while American Express (AXP) carries a large negative loading, reflecting the contrast between healthcare spending and consumer credit. PC4 loads on oil and gas exploration (APA, COP, DVN, EOG) and oilfield-services companies (BKR, HAL, SLB) positively, against financial custodians (STT) and semiconductor-test equipment (TER) negatively, capturing the energy sector’s divergence from interest-rate-sensitive financials and technology. Orthogonal loadings Uncorrelated PCs        
+
+> PC1 PC2 PC3 PC4 PC1 PC2 PC3 PC4
+> STT TER DG SLB HAL DVN APA BKR COP EOG AXP CI LH UHS MOH CNC DGX ELV HUM UNH TFC EG BA BLDR MGM MAS NVR LEN PHM DHI SRE FE ATO AWK AEE LNT CMS CNP EIX EXC PPL DNEE PEG DTE ETR WELL AVB UDR ESS EQR CPT MAA DOC VTR OED XEL WEC SO DUK AEP ES PNW EVRG NI
+
+Loading −0.4 0.0 0.4 
+
+Figure 2: S&P 500 case study. Loadings of the 4 PCs (sparsity k = 10) returned by msPCA 
+
+with orthogonality (left side) or zero-correlation (right side) constraints. 
+
+6 Benchmarking 
+
+We compare msPCA against seven competing packages: elasticnet (Zou et al., 2006), PMA 
+
+(Witten et al., 2009), sparsepca (Erichson et al., 2020), mixOmics (Rohart et al., 2017), and nsprcomp (Sigg, 2019) (all R); amanpg (Chen et al., 2020) ( R, also available in Python 
+
+under the name sparsepca ); and sklearn.decomposition.SparsePCA from scikit-learn (Pe-dregosa et al., 2011) ( Python , called from R via the reticulate package (Ushey et al., 2025)). 
+
+14 msPCA: Sparse PCA with Multiple Components in R 
+
+These cover the main methodological approaches: elastic-net regularization, penalized ma-trix decomposition, variable-projection optimization, regularized SVD, deflation, Rieman-nian proximal gradient, and dictionary learning. Experiments were conducted on a MacBook Air with Apple M2 chip and 24 GB of RAM, with R version 4.6.0 (2026-04-24), msPCA v0.5.0, elasticnet v1.3, PMA v1.2.4, sparsepca 
+
+v0.1.2, mixOmics v6.36.0, nsprcomp v0.5.1.2, amanpg v0.1.0, reticulate v1.40.0, and scikit-learn v1.6.1 ( Python 3.11). 
+
+6.1 Implementation of each method 
+
+Comparing sparse PCA methods is complicated because different packages parameterize sparsity differently. Some methods accept a covariance/correlation matrix Σ, others apply only to the data matrix X, and some support both. We detail our implementation of each method: 
+
+• msPCA : We use mspca() with both type = "Sigma" and type = "X" on all four datasets. On the riboflavin dataset ( n ≪ p), the p × p covariance matrix is rank-deficient, making type = "X" the natural choice; we nonetheless report results for both modes to quantify the runtime gain. 
+
+• elasticnet : We use the spca() function, which takes a list of cardinality budgets (one per PC) as input, and can be applied interchangeably to Σ or X. We report results for both input modes on the mtcars, Pitprops, and breast cancer datasets. 
+
+• PMA : We use the SPC() function with the orth=TRUE option, which implements the method of Witten et al. (2009). It takes as inputs the covariance matrix Σ and a bound on Prt=1 ∥ut∥1, sumabsv , which we manually tune for each dataset to achieve a per-component sparsity as close as possible to the desired one. 
+
+• sparsepca : We use the function spca() applied to Σ, which only allows us to control the magnitude of the ℓ1 penalty parameter, alpha . We manually tune this parameter for each dataset to achieve a total sparsity Prt=1 kt as close as possible to the desired one 2.
+
+• mixOmics : We use the spca() function, which takes as input the data matrix X and the list of sparsity budgets. 
+
+• nsprcomp : The package provides two functions nsprcomp() and nscumcomp() . Both rely on the expectation-maximization algorithm of Sigg and Buhmann (2008). The function nsprcomp() uses this algorithm to compute the leading sparse PC and then applies the deflation procedure of Mackey (2008) to compute the subsequent PCs. It applies to the data matrix X and takes as input the list of sparsity levels. The function nscumcomp() applies expectation-maximization to simultaneously solve for the r PCs. It takes as input the total sparsity budget Prt=1 kt and a penalty parameter 
+
+γ on orthogonality violation (default γ = 0). 
+
+> 2. This method tends to return PCs with very unequal sparsity levels, the first PC typically being denser than the subsequent ones.
+> 15 Cory-Wright and Pauphilet
+
+• amanpg : We use the spca.amanpg() function applied to the correlation matrix Σ
+
+(type = 1 ). The function solves a single-component problem with an ℓ1 penalty parameter lambda1 and applies sequential deflation to compute r PCs. We manually tune lambda1 for each dataset to achieve a per-component sparsity as close as possible to the target. 
+
+• scikit-learn : We use the function sklearn.decomposition.SparsePCA() called from 
+
+R via the reticulate package (Ushey et al., 2025), which provides a seamless R/Python 
+
+interface. The SparsePCA class computes r components simultaneously using a dictionary-learning approach with an ℓ1 penalty alpha on the loadings. It applies to the data matrix X. We manually tune alpha for each dataset to achieve a per-component sparsity close to the target k.For the Pitprops dataset, only the correlation matrix is available, so we generate pseudo-data X via MASS::mvrnorm() with the Pitprops matrix as the population covariance ( n =500 observations) and use it as input to the methods that apply to X directly. For each method, we report the actual number of nonzero loadings for each PC, the FVE (on the original correlation matrix), and the orthogonality violation. We measure (and report) the runtime of each method (excluding hyperparameter tuning) using the 
+
+system.time() function. For each method and each dataset, metrics are computed on a single run (with all seeds fixed and provided in the replication scripts). 
+
+6.2 Comparison on real data 
+
+We benchmark these methods on four datasets. First, we use the datasets::mtcars dataset from base R (p = 11 variables, 32 obser-vations), which serves as a simple reproducible baseline. We extract r = 3 sparse PCs and target a sparsity of k = 4 per component. Results are presented in Table 2. Second, we use the Pitprops dataset (Jeffers, 1967) ( p = 13 physical measurements on 
+
+n = 180 timber specimens), a classic benchmark for sparse PCA methods (e.g., in Zou et al., 2006). We extract r = 6 sparse PCs and target k = 4 nonzero loadings per component as in Zou et al. (2006). We report our results in Table 3. Third, we use the breast cancer gene expression data from Chin et al. (2006) ( n = 89 tumor samples, 19 ,672 genes). Following the preprocessing of Witten et al. (2009), we retain the p = 500 genes with the highest marginal variance, yielding a high-dimensional ( p > n )benchmark for sparse PCA. We set r = 3 and target k = 20 nonzero loadings per component (a similar sparsity level as in Witten et al., 2009). Results are presented in Table 4. Finally, we use the riboflavin (vitamin B2) production dataset (B¨ uhlmann et al., 2014), comprising log-transformed expression levels of p = 4 ,088 genes in n = 71 samples of 
+
+Bacillus subtilis cultures. This is a challenging high-dimensional ( p ≫ n) benchmark: the empirical correlation matrix is rank-deficient (rank ≤ 70). We set r = 2 and target k = 20 nonzero loadings per component. Results are presented in Table 5. To avoid time-consuming parameter tuning, we only consider methods that accept exact cardinality budgets. 
+
+6.3 Discussion 
+
+The results across all four datasets point to several consistent patterns. 
+
+> 16 msPCA: Sparse PCA with Multiple Components in R
+
+Method (k1, k 2, k 3) FVE Orth. violation Runtime (s) 
+
+msPCA::mspca (Σ) (4,4,4) 0.829 9.4 × 10 −5 0.323 
+
+msPCA::mspca (X) (4,4,4) 0.829 9.4 × 10 −5 0.424 
+
+elasticnet::spca (Σ) (4,4,4) 0.753 0.117 0.165 
+
+elasticnet::spca (X) (4,4,4) 0.754 0.117 0.189 
+
+PMA::SPC (4,4,5) 0.552 0.283 0.008 
+
+sparsepca::spca (7,4,1) 0.585 0.045 0.053 
+
+mixOmics::spca (4,4,4) 0.633 0.133 0.003 
+
+nsprcomp::nsprcomp (4,4,4) 0.832 0.078 0.006 
+
+nsprcomp::nscumcomp (6,3,3) 0.772 0.245 0.033 
+
+amanpg::spca.amanpg (7,4,2) 0.649 0.041 0.004 
+
+sklearn.decomposition.SparsePCA (4,4,3) 0.827 < 10 −15 0.028 PCA (11,11,11) 0.899 < 10 −15 —Table 2: Comparative performance on the mtcars dataset ( p = 11, r = 3, k = 4). PMA 
+
+uses sumabsv = 1.69 (tuned to achieve 4 nonzeros per component); sparsepca uses 
+
+alpha = 0.004 ; amanpg uses lambda1 = c(10, 3, 0.01) (tuned per compo-nent); sklearn.decomposition.SparsePCA uses alpha = 3.2 (tuned to achieve approximately k = 4 nonzeros per component). Method (k1, . . . , k 6) FVE Orth. violation Runtime (s) 
+
+msPCA::mspca (Σ) (4,4,4,4,4,4) 0.786 9.7 × 10 −5 1.109 
+
+msPCA::mspca (X) (4,4,4,4,4,4) 0.801 9.5 × 10 −5 5.388 
+
+elasticnet::spca (Σ) (4,4,4,4,4,4) 0.792 0.241 0.070 
+
+elasticnet::spca (X) (4,4,4,4,4,4) 0.790 0.322 0.167 
+
+PMA::SPC (4,4,4,7,6,4) 0.660 0.857 0.011 
+
+sparsepca::spca (8,4,3,1,3,5) 0.762 0.376 0.024 
+
+mixOmics::spca (4,4,4,4,4,4) 0.788 0.215 0.008 
+
+nsprcomp::nsprcomp (4,4,4,4,4,4) 0.800 0.626 0.023 
+
+nsprcomp::nscumcomp (5,2,4,5,3,5) 0.737 1.691 1.072 
+
+amanpg::spca.amanpg (8,6,9,2,3,5) 0.760 1.763 0.008 
+
+sklearn.decomposition.SparsePCA (7,3,4,2,4,4) 0.895 0.733 0.043 PCA (13,13,13,13,13,13) 0.877 < 10 −15 —Table 3: Comparative performance on the Pitprops dataset (Jeffers, 1967) ( p = 13, 
+
+r = 6, target k = 4). PMA uses sumabsv = 1.727 ; sparsepca uses alpha = 0.004 ; nsprcomp::nscumcomp uses the default regularization ( gamma = 0 ); 
+
+amanpg uses lambda1 = c(1, 1, 5, 0.4, 0.4, 0) (tuned per component); 
+
+sklearn.decomposition.SparsePCA uses alpha = 3.1 .First, we find that PMA::SPC() , sparsepca::spca() , nsprcomp::nscumcomp() , amanpg::spca.amanpg() ,and sklearn.decomposition.SparsePCA() fail to provide satisfactory control over the 
+
+> 17 Cory-Wright and Pauphilet
+
+Method (k1, k 2, k 3) FVE Orth. violation Runtime (s) 
+
+msPCA::mspca (Σ) (20, 20, 20) 0.093 7.5 × 10 −5 27.472 
+
+msPCA::mspca (X) (20, 20, 20) 0.093 7.5 × 10 −5 13.382 
+
+elasticnet::spca (Σ) (20, 20, 20) 0.043 0.040 18.130 
+
+elasticnet::spca (X) (20, 20, 20) 0.043 0.021 0.904 
+
+PMA::SPC (14, 17, 27) 0.028 0.001 0.042 
+
+sparsepca::spca (46, 13, 8) 0.061 < 10 −15 4.752 
+
+mixOmics::spca (20, 20, 20) 0.077 < 10 −15 0.031 
+
+nsprcomp::nsprcomp (20, 20, 20) 0.084 < 10 −15 0.027 
+
+nsprcomp::nscumcomp (33, 22, 5) 0.082 < 10 −15 0.152 
+
+amanpg::spca.amanpg (96, 4, 2) 0.067 0.063 0.252 
+
+sklearn.decomposition.SparsePCA (56, 3, 6) 0.057 < 10 −15 0.180 PCA (500, 500, 500) 0.352 < 10 −15 —Table 4: Comparative performance on the breast cancer gene expression dataset (Chin et al., 2006) ( p = 500, n = 89, r = 3, target k = 20). PMA uses sumabsv = 2.92 ; sparsepca uses alpha = 0.004 but returns unequal sparsity levels across components. nsprcomp::nscumcomp receives a total budget of k = 60 and dis-tributes it unevenly across components. amanpg uses lambda1 = c(8.5, 2.5, 1.5) (tuned per component); sklearn.decomposition.SparsePCA uses alpha = 11.25 .Method (k1, k 2) FVE Orth. violation Runtime (s) 
+
+msPCA::mspca (Σ) (20, 20) 0.008 < 10 −15 71.986 
+
+msPCA::mspca (X) (20, 20) 0.008 < 10 −15 1.603 
+
+elasticnet::spca (X) (20, 20) 0.004 < 10 −15 5.952 
+
+mixOmics::spca (20, 20) 0.006 < 10 −15 0.241 
+
+nsprcomp::nsprcomp (20, 20) 0.009 < 10 −15 0.351 PCA (4088, 4088) 0.478 < 10 −15 0.045 Table 5: Comparative performance on the riboflavin dataset (B¨ uhlmann et al., 2014) ( p =4,088, n = 71, r = 2, target k = 20). msPCA is run with both type = "Sigma" 
+
+and type = "X" ; all other methods use the data matrix directly. We restricted 
+
+msPCA to maxIter = 100 .sparsity of each loading vector, making an apples-to-apples comparison with the other meth-ods difficult. PMA::SPC() and sklearn.decomposition.SparsePCA() control only a global 
+
+ℓ1 bound, while sparsepca::spca() , nsprcomp::nscumcomp() , and amanpg::spca.amanpg() 
+
+tend to produce unbalanced components with one PC carrying almost all of the spar-sity budget. It is difficult to calibrate these methods to achieve an exact target num-ber of nonzeros per component. We therefore focus our discussion on msPCA::mspca() ,
+
+elasticnet::spca() , mixOmics::spca() , and nsprcomp::nsprcomp() .
+
+> 18 msPCA: Sparse PCA with Multiple Components in R
+
+Second, among the packages considered here, msPCA::mspca() is the only method that consistently returns small orthogonality violations on all four datasets, around 10 −4 (the default feasibility tolerance for the method) or below. In contrast, all other packages can sometimes return substantially non-orthogonal components, especially when p is small rela-tive to the total sparsity budget, so trivially orthogonal disjoint-support solutions may not exist. On the Pitprops data, for example, we observe violations in the 0 .2–0 .6 range for the other three packages, elasticnet , mixOmics , and nsprcomp .In terms of FVE, msPCA::mspca() and nsprcomp::nsprcomp() are generally the best-performing methods, followed by mixOmics::spca() and elasticnet::spca() , though the relative ranking of these two varies across datasets. Our results suggest that the algorithm in msPCA does not necessarily sacrifice variance explained to achieve orthogonality. Finally, our experiments demonstrate that msPCA::mspca() scales to datasets with p in the thousands in a reasonable amount of time. The type = "X" interface, which replaces the 
+
+O(p2) product Σβ with the O(np ) two-pass product X⊤(Xβ )/(n−1), can yield substantial runtime gains when n ≪ p, as illustrated on the riboflavin dataset ( p = 4 ,088, n = 71). Using type = "X" reduces the msPCA runtime from about 72 seconds ( type = "Sigma" ) to under 2 seconds ( type = "X" ), making it faster than elasticnet::spca() on this dataset. 
+
+7 Conclusion 
+
+The package msPCA implements and extends an algorithm for sparse PCA with r > 1components proposed in Cory-Wright and Pauphilet (2026), whose main design feature is that the coupling constraints are explicitly modeled and penalized rather than handled heuristically. The Lagrangian alternating maximization algorithm resembles an iterative deflation procedure where the deflation step depends on increasing penalty parameters that progressively drive constraint violations toward zero across iterations, yielding loading matrices that are simultaneously sparse, high-variance, and designed to be non-redundant. A distinguishing feature is the support for two notions of non-redundancy. Orthogonality (u⊤ 
+
+> t
+
+ut′ = 0) is appropriate when loading vectors serve as a projection basis; zero pairwise correlation ( u⊤ 
+
+> t
+
+Σ ut′ = 0) is preferable when the goal is to obtain statistically uncorrelated scores. The S&P 500 case study illustrates that the two constraints can yield meaningfully different factor compositions on strongly correlated data, and msPCA allows the user to choose explicitly based on their use case rather than relying on an implicit approximation. The package has several limitations that point to future work. First, because of the heuristic nature of the penalty increase scheme, a small fraction of runs may fail to find a feasible solution, though feasibility tracking mitigates this in practice. Second, the package does not yet support online or streaming settings where observations arrive sequentially. Future extensions could include robust covariance variants for outlier-contaminated data and a streaming update scheme for sequentially arriving observations. The package msPCA and its vignette are available at https://CRAN.R-project.org/ package=msPCA . All scripts and data required to reproduce the examples, figures, and tables are provided in the replication materials. 
+
+> 19
+
+Cory-Wright and Pauphilet 
+
+References 
+
+Douglas Bates and Dirk Eddelbuettel. Fast and elegant numerical linear algebra using the rcppeigen package. 
+
+Journal of Statistical Software , 52:1–24, 2013. Kayhan Behdin and Rahul Mazumder. Sparse pca: A new scalable estimator based on integer programming. 
+
+Annals of Statistics (to appear) , 2026. Konstantinos Benidis, Ying Sun, Prabhu Babu, and Daniel P Palomar. Orthogonal sparse PCA and covari-ance estimation via procrustes reformulation. IEEE Transactions on Signal Processing , 64(23):6211–6226, 2016. Lauren Berk and Dimitris Bertsimas. Certifiably optimal sparse principal component analysis. Mathematical Programming Computation , 11(3):381–420, 2019. Dimitris Bertsimas, Ryan Cory-Wright, and Jean Pauphilet. Solving large-scale sparse pca to certifiable (near) optimality. Journal of Machine Learning Research , 23(13):1–35, 2022. Peter B¨ uhlmann, Markus Kalisch, and Lukas Meier. High-dimensional statistics with a view toward appli-cations in biology. Annual Review of Statistics and Its Application , 1(1):255–278, 2014. Shixiang Chen, Shiqian Ma, Anthony Man-Cho So, and Tong Zhang. Proximal gradient method for nons-mooth optimization over the Stiefel manifold. SIAM Journal on Optimization , 30(1):210–239, 2020. Koei Chin, Sandy DeVries, Jane Fridlyand, Paul T Spellman, Ritu Roydasgupta, Wen-Lin Kuo, Anna Lapuk, Richard M Neve, Zuhal Bhatt, David Rabuka, et al. Genomic and transcriptional aberrations linked to breast cancer pathophysiologies. Cancer Cell , 10(6):529–541, 2006. Ryan Cory-Wright and Jean Pauphilet. Sparse pca with multiple components. Operations Research , 2026. URL https://doi.org/10.1287/opre.2023.0598 .Alexandre d’Aspremont, Laurent El Ghaoui, Michael I Jordan, and Gert RG Lanckriet. A direct formulation for sparse PCA using semidefinite programming. SIAM Review , 49(3):434–448, 2007. Yash Deshpande and Andrea Montanari. Sparse pca via covariance thresholding. Journal of Machine Learning Research , 17(141):1–41, 2016. Dirk Eddelbuettel and Romain Fran¸ cois. Rcpp: Seamless r and c++ integration. Journal of Statistical Software , 40(8):1–18, 2011. N Benjamin Erichson, Peng Zheng, Krithika Manohar, Steven L Brunton, J Nathan Kutz, and Aleksandr Y Aravkin. Sparse principal component analysis via variable projection. SIAM Journal on Applied Mathe-matics , 80(2):977–1002, 2020. Harold Hotelling. Analysis of a complex of statistical variables into principal components. Journal of Educational Psychology , 24(6):417–441, 1933. J. N. R. Jeffers. Two case studies in the application of principal component analysis. Applied Statistics , 16 (3):225–236, 1967. Iain M Johnstone and Arthur Yu Lu. On consistency and sparsity for principal components analysis in high dimensions. Journal of the American Statistical Association , 104(486):682–693, 2009. Michel Journ´ ee, Yurii Nesterov, Peter Richt´ arik, and Rodolphe Sepulchre. Generalized power method for sparse principal component analysis. Journal of Machine Learning Research , 11(2), 2010. Zhaosong Lu and Yong Zhang. An augmented lagrangian approach for sparse principal component analysis. 
+
+Mathematical Programming , 135:149–193, 2012. 
+
+20 msPCA: Sparse PCA with Multiple Components in R 
+
+Lester Mackey. Deflation methods for sparse pca. Advances in Neural Information Processing Systems , 21, 2008. MSCI and S&P Dow Jones Indices. The Global Industry Classification Standard (GICS). https://www. msci.com/our-solutions/indexes/gics , 2023. Accessed: 2024. Karl Pearson. Liii. on lines and planes of closest fit to systems of points in space. The London, Edinburgh, and Dublin Philosophical Magazine and Journal of Science , 2(11):559–572, 1901. Fabian Pedregosa, Ga¨ el Varoquaux, Alexandre Gramfort, Vincent Michel, Bertrand Thirion, Olivier Grisel, Mathieu Blondel, Peter Prettenhofer, Ron Weiss, Vincent Dubourg, et al. Scikit-learn: Machine learning in Python. Journal of Machine Learning Research , 12:2825–2830, 2011. Florian Rohart, Benoˆ ıt Gautier, Amrit Singh, and Kim-Anh Lˆ e Cao. mixOmics: An R package for ‘omics feature selection and multiple data integration. PLOS Computational Biology , 13(11):e1005752, 2017. Cynthia Rudin, Chaofan Chen, Zhi Chen, Haiyang Huang, Lesia Semenova, and Chudi Zhong. Interpretable machine learning: Fundamental principles and 10 grand challenges. Statistics Surveys , 16:1–85, 2022. Haipeng Shen and Jianhua Z Huang. Sparse principal component analysis via regularized low rank matrix approximation. Journal of Multivariate Analysis , 99(6):1015–1034, 2008. Christian D. Sigg. nsprcomp: Non-Negative and Sparse PCA , 2019. URL https://CRAN.R-project.org/ package=nsprcomp . R package version 0.7.3.1. Christian D Sigg and Joachim M Buhmann. Expectation-maximization for sparse and non-negative pca. In 
+
+Proceedings of the 25th International Conference on Machine Learning , pages 960–967, 2008. Kevin Ushey, J.J. Allaire, and Yuan Tang. reticulate : Interface to Python , 2025. URL https://CRAN. R-project.org/package=reticulate . R package version 1.40.0. Vincent Q Vu, Juhee Cho, Jing Lei, and Karl Rohe. Fantope projection and selection: A near-optimal convex relaxation of sparse PCA. Advances in Neural Information Processing Systems , 26, 2013. Daniela M Witten and Robert J Tibshirani. Extensions of sparse canonical correlation analysis with appli-cations to genomic data. Statistical Applications in Genetics and Molecular Biology , 8(1):28, 2009. Daniela M Witten, Robert Tibshirani, and Trevor Hastie. A penalized matrix decomposition, with appli-cations to sparse principal components and canonical correlation analysis. Biostatistics , 10(3):515–534, 2009. Xiao-Tong Yuan and Tong Zhang. Truncated power method for sparse eigenvalue problems. Journal of Machine Learning Research , 14(4):899–925, 2013. Hui Zou, Trevor Hastie, and Robert Tibshirani. Sparse principal component analysis. Journal of Computa-tional and Graphical Statistics , 15(2):265–286, 2006. 
+
+21
