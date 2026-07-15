@@ -6,44 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-14
-- 运行时间：2026-07-14 20:08:23 UTC
+- 最新运行日期：2026-07-15
+- 运行时间：2026-07-15 19:54:14 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：2
-- 速读区：6
+- 本次总论文数：5
+- 精读区：1
+- 速读区：4
 
 ### 今日简报（AI）
-今日共读8篇论文，精读2篇、速读6篇。精读亮点包括AI科学家系统在高血压GWAS中的应用，以及iPSC衍生窦房结细胞揭示心率和房颤的共享调控因子。建议关注因果推断与基因组学在精准医学中的前沿探索。
-- 详情：[/202607/14/README](/202607/14/README)
+今日聚焦高血压GWAS的AI全流程研究系统，并速读了HLA关联分析、医疗AI数据充分性及影像特征校正等论文。最值得关注的是精读文章《NVAITC AI Scientist》（9.0分），其受控端到端框架为AI科研治理提供范式；速读中《Empirical estimation of multiple-testing burden for HLA association studies》（7.0分）对群体遗传学多重检验校正有实用参考。建议优先精读AI Scientist文章，理解科研自动化与治理平衡，再结合HLA方法辅助后续遗传研究。
+- 详情：[/202607/15/README](/202607/15/README)
 
 ### 精读区论文标签
-1. [NVAITC AI Scientist: A Governed End-to-End Research System -- A Hypertension GWAS Case Study](/202607/14/2607.11084v1-nvaitc-ai-scientist-a-governed-end-to-end-research-system----a-hypertension-gwas-case-study)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：以GWAS为案例的智能体研究系统，同时涉及GWAS方法和医疗AI智能体
-2. [Functional Genomics in Human iPSC-Derived Sinoatrial Node Cells Reveals Shared Regulatory Determinants of Heart Rate and Atrial Fibrillation](/202607/14/biorxiv-10-1101-2023-07-01-547335-v3-functional-genomics-in-human-ipsc-derived-sinoatrial-node-cells-reveals-shared-regulatory-determinants-of-heart-rate-and-atrial-fibrillation)  
-   标签：评分：8.0/10、query:gwas
-   evidence：在iPSC来源的窦房结细胞中利用STARR-seq精细定位心律相关变异
+1. [NVAITC AI Scientist: A Governed End-to-End Research System -- A Hypertension GWAS Case Study](/202607/15/2607.11084v1-nvaitc-ai-scientist-a-governed-end-to-end-research-system----a-hypertension-gwas-case-study)  
+   标签：评分：9.0/10、query:med-ai
+   evidence：受治理的端到端智能体研究系统，以GWAS案例研究，整合大语言模型和智能体
 
 ### 速读区论文标签
-1. [Bayesian DAG Structure Learning with Simultaneous Shrinkage Covariance Estimation under Scale-Mixture Error Distributions in the Proportional High-Dimensional Regime](/202607/14/2607.08428v1-bayesian-dag-structure-learning-with-simultaneous-shrinkage-covariance-estimation-under-scale-mixture-error-distributions-in-the-proportional-high-dimensional-regime)  
+1. [Empirical estimation of multiple-testing burden for population-based HLA association studies using sequencing-derived HLA alleles across genetic ancestries](/202607/15/biorxiv-10-64898-2026-07-12-738059-v1-empirical-estimation-of-multiple-testing-burden-for-population-based-hla-association-studies-using-sequencing-derived-hla-alleles-across-genetic-ancestries)  
    标签：评分：7.0/10、query:gwas
-   evidence：高维DAG联合学习与精确矩阵估计，适用于基因组因果网络推断
-2. [Scalable Bayesian structure learning of directed acyclic graphs via Laplace approximation, with an application to breast cancer gene expression networks](/202607/14/2607.10222v1-scalable-bayesian-structure-learning-of-directed-acyclic-graphs-via-laplace-approximation-with-an-application-to-breast-cancer-gene-expression-networks)  
-   标签：评分：7.0/10、query:gwas
-   evidence：贝叶斯DAG结构学习方法，可应用于基因调控网络，与因果变异发现相关
-3. [When Screening Misleads: A Robust Mendelian Randomization Test for Reliable Causal Discovery](/202607/14/2607.10755v1-when-screening-misleads-a-robust-mendelian-randomization-test-for-reliable-causal-discovery)  
-   标签：评分：7.0/10、query:gwas
-   evidence：用于因果发现的稳健孟德尔随机化检验
-4. [msPCA: An R Package for Sparse PCA with Multiple Components](/202607/14/2607.05229v1-mspca-an-r-package-for-sparse-pca-with-multiple-components)  
-   标签：评分：6.0/10、query:gwas
-   evidence：稀疏PCA方法可应用于GWAS变量选择
-5. [Does ensembling improve feature attributions from sequence-to-activity models?](/202607/14/biorxiv-10-64898-2026-07-08-737315-v1-does-ensembling-improve-feature-attributions-from-sequence-to-activity-models)  
-   标签：评分：6.0/10、query:gwas
-   evidence：研究序列到活性模型中集成方法对可解释性的改进，有助于变异效应解读。
-6. [An overlooked distal regulatory signal on a shared haplotype drives the neuroinflammatory cascade underlying GBA1-associated Parkinson's disease](/202607/14/biorxiv-10-64898-2026-07-10-737850-v1-an-overlooked-distal-regulatory-signal-on-a-shared-haplotype-drives-the-neuroinflammatory-cascade-underlying-gba1-associated-parkinsons-disease)  
-   标签：评分：6.0/10、query:gwas
-   evidence：整合GWAS与多组学数据（eQTL、pQTL、染色质）识别帕金森病风险的远端调控信号
+   evidence：HLA关联研究的多重检验负担估计，扩展GWAS统计方法
+2. [A Personalized Computational Framework for Assessing the Sufficiency of Partially Observed Data in Healthcare AI models](/202607/15/2607.09165v1-a-personalized-computational-framework-for-assessing-the-sufficiency-of-partially-observed-data-in-healthcare-ai-models)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：面向部分观测数据的医疗AI特征充分性分析
+3. [FEATMAP: Targeted Correction of Acquisition Signatures Harmonizes Medical Foundation Model Embeddings and Enables Robust Task Generalization](/202607/15/biorxiv-10-64898-2026-07-02-736184-v1-featmap-targeted-correction-of-acquisition-signatures-harmonizes-medical-foundation-model-embeddings-and-enables-robust-task-generalization)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：医学基础模型嵌入的校正方法，增强任务泛化能力
+4. [Transformer models of mutation risk at base-pair resolution identify non-coding hotspot cancer driver mutations](/202607/15/biorxiv-10-64898-2026-07-07-736824-v1-transformer-models-of-mutation-risk-at-base-pair-resolution-identify-non-coding-hotspot-cancer-driver-mutations)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：Transformer模型从DNA序列预测碱基分辨率突变风险，与大规模基因组模型相关
 
 
 <div class="dpr-home-promo-card">
