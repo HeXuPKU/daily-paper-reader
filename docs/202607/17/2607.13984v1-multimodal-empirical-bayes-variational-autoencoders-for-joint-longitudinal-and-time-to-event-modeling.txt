@@ -1,0 +1,1494 @@
+Title: Multimodal Empirical Bayes Variational Autoencoders for Joint Longitudinal and Time-to-Event Modeling
+
+URL Source: https://arxiv.org/pdf/2607.13984v1
+
+Published Time: Thu, 16 Jul 2026 01:30:04 GMT
+
+Number of Pages: 33
+
+Markdown Content:
+# Multimodal Empirical Bayes Variational Autoencoders for Joint Longitudinal and Time-to-Event Modeling 
+
+Anders Sj¨ oberg 1,2 *†, Nils Olsson 1*, Marcus Baaz 1*, Mats Jirstrand 1,2 
+
+1 Fraunhofer-Chalmers Centre, Gothenburg, SE-412 88, Sweden 
+
+2 Department of Electrical Engineering, Chalmers University of Technology, Gothenburg, SE-412 96, Sweden * Equal Contribution 
+
+† Corresponding author: andsjob@chalmers.se 
+
+Abstract 
+
+Longitudinal tumor measurements, dropout information, and genetic covariates provide complementary information about treatment response, but integrating these data sources within a single population modeling framework remains challenging. We extend the empirical Bayes variational autoencoder (EB-VAE) framework to joint longitudinal and time-to-event modeling and evaluate it on tumor growth data. The framework represents inter-individual variability using latent individual effects regularized by a covariate-conditioned empirical Bayes prior, while a decoder maps these latent effects to tumor-volume trajectories. To account for informative dropout, the decoder was augmented with a hazard model, yielding joint predictions of tumor growth and time to dropout. We further compared fully neural and hybrid semi-mechanistic decoder formulations and incorporated genomic covariates through a genetics-conditioned prior adaptation. The hybrid decoder recovered treatment-effect parameters broadly consistent with previously reported nonlinear mixed-effects estimates, while achieving prior predictive performance comparable to the neural decoder. The joint model reproduced both tumor-volume distributions and dropout patterns in held-out individuals, and genetic conditioning improved individual-level prior predictions in both cutaneous melanoma and breast cancer experiments. Stability selection identified several biologically plausible genetic indicators, including alterations in BRAF, NRAS, NF1, and MDM2. These results demonstrate that EB-VAE provides a flexible probabilistic framework for combining neural dynamics, mechanistic structure, time-to-event modeling, and high-dimensional covariates in pharmacometric applications. 
+
+Keywords— Empirical Bayes; variational autoencoder; pharmacometrics; joint longitudinal and time-to-event modeling; neural ordinary differential equations; nonlinear mixed-effects modeling; genomic covariates 
+
+# 1 Introduction 
+
+Longitudinal measurements and time-to-event outcomes constitute two of the most important data modalities in pharmacometrics and quantitative systems pharmacology. Longitudinal biomarkers 
+
+1arXiv:2607.13984v1 [stat.ML] 15 Jul 2026 provide insight into disease progression and treatment response over time, whereas event outcomes such as dropout, progression, or survival capture clinically relevant endpoints that are often strongly associated with the underlying disease trajectory. Joint modeling approaches aim to integrate these complementary sources of information within a unified statistical framework, enabling improved inference and prediction while accounting for informative event processes [1 –3]. At the same time, modern biomedical studies increasingly collect data from heterogeneous sources of information beyond longitudinal observations alone, including genomic profiling, molecular biomarkers, treatment histories, and other patient-specific covariates [4, 5]. These data sources provide additional context that may explain variability in treatment response and disease progression. Incorporating such multimodal information into longitudinal and time-to-event models remains a challenging problem, particularly when complex nonlinear relationships are present. Traditional nonlinear mixed-effects (NLME) models provide a well-established framework for analyzing longitudinal and time-to-event data, allowing population-level trends to be separated from individual-specific variability [6, 7]. However, extending such models to incorporate high-dimensional covariates and flexible nonlinear representations can be challenging, often requiring substantial model development effort and computationally intensive inference procedures [8, 9]. Machine learning methods have gained increasing attention in pharmacometrics and pharma-cological modeling [10 –14]. In this context, neural ordinary differential equations (NODE) provide a natural way to combine neural network flexibility with continuous-time dynamical systems modeling [15], while variational autoencoders provide scalable amortized inference for latent-variable models [16, 17]. However, integrating these ideas with covariate-conditioned population structure, time-to-event outcomes, and high-dimensional covariates (e.g., genomic information, images) remains an open methodological challenge. In previous work, we introduced the empirical Bayes variational autoencoder (EB-VAE) [18], a probabilistic latent-variable framework that shares several structural analogies with NLME modeling. The framework represents inter-individual variability (IIV) through latent individual effects regularized by a covariate-conditioned empirical Bayes prior, enabling scalable inference while retaining connections to classical population modeling concepts. Although EB-VAE models typically contain substantially more parameters than classical parametric population models, their effective complexity is controlled through variational and prior-based regularization, allowing them to remain flexible while mitigating overfitting. The EB-VAE framework is intentionally modular. Individual-specific latent effects are inferred through amortized variational inference, and the model components can incorporate a broad range of formulations, including fully neural representations, parametric models, or hybrid approaches. Additional outcome processes and heterogeneous data modalities can be integrated within the same probabilistic framework. In this work, we further validate the EB-VAE framework by applying it to a substantially larger dataset, now consisting of patient-derived xenograft (PDX) tumor growth data. We further extend the framework to jointly model longitudinal tumor growth and time-to-event outcomes. Specifically, we incorporate a hazard-based time-to-event model to jointly describe tumor growth trajectories and time-to-dropout, investigate alternative decoder formulations including both fully neural and hybrid parametric–neural dynamics, and integrate genomic information through a dedicated feature extraction module. For the hybrid model, we obtain interpretable tumor dynamics parameters that are compared with values reported in the literature [19]. 
+
+22 Methods 
+
+## 2.1 Data 
+
+The analyses in this work are based on a large-scale PDX dataset comprising longitudinal tumor growth measurements, treatment information, and genomic data from 135 treatment regimens spanning multiple solid tumor types [5]. We focus our analyses on cutaneous melanoma (CM) and breast cancer (BC), consisting of 1342 tumor growth trajectories across 39 treatment regimens. The genomic data are available for most PDX models and include gene-level mutations, copy-number alterations, and RNA expression profiles. We constructed a set of task-specific analysis datasets, summarized in Table 1, to evaluate different aspects of the proposed framework. The 60-day 6-treatment CM dataset comprises all CM PDXs from the untreated control group, as well as those treated with binimetinib, LEE001, encorafenib, or LEE011 in combination with either encorafenib or binimetinib. Tumor trajectories were truncated at day 60 to match the observation window used in a closely related NLME study [19], which modeled this subset of the data using an exponential tumor growth model with an additive drug effect. This dataset therefore provides a direct reference point for comparison with the proposed framework and the previously established NLME approach. For the remaining datasets, only individuals with genetic data are kept, and the cutoffs are chosen to separate short-horizon (21 days) and longer-horizon (100 days) prediction settings. For all datasets, measurements after the specified cutoff are excluded. Individuals with measurements beyond the cutoff are treated as administratively censored at the cutoff time. 
+
+Table 1. Datasets used in the experimental evaluation. Cutoff refers to the last day for which observations were included. N denotes the number of individuals included in the dataset, Tx denotes the number of treatment groups, and Obs. denotes the average number of observations per individual, with the minimum and maximum numbers of observations given in brackets. The 60-day 6-treatment CM dataset contained the untreated, binimetinib, encorafenib, LEE011, LEE011 plus encorafenib, and LEE011 plus binimetinib treatment groups, whereas the remaining datasets contained all treatment groups available for the corresponding tumor type. 
+
+Dataset Tumor Cutoff N Tx Obs. 
+
+60-day 6-treatment CM CM 60 days 183 6 11.0 [3, 19] 
+
+21-day CM CM 21 days 516 17 6.2 [3, 9] 
+
+100-day CM CM 100 days 516 17 11.6 [3, 29] 
+
+21-day BC BC 21 days 826 22 6.4 [2, 10] 
+
+100-day BC BC 100 days 826 22 14.4 [2, 30] 
+
+## 2.2 Empirical Bayes VAE Framework 
+
+To model the data, we use the EB-VAE framework [18], which employs an encoder–decoder architecture to model both the dynamics and IIV in observed data. IIV is represented through latent variables ki, which play a role analogous to individual-level parameters in traditional NLME models. Given longitudinal observations yi (the full observed time series for individual i), and individual covariates xi the encoder network approximates the posterior distribution 
+
+qϕ(ki | yi, x i),
+
+3enabling inference of individual-specific latent effects. The resulting amortized inference procedure provides a scalable alternative to classical NLME estimation methods such as stochastic approx-imation expectation-maximization (SAEM) [20]. Once trained, the encoder maps individual observations and covariates directly to an approximate posterior distribution over latent effects. The latent variables are regularized through a covariate-conditioned prior distribution, 
+
+pψ (ki | xi).
+
+The latent representation consists of covariate-explained structure and residual unexplained variation. The prior accounts for the former via a covariate-conditioned distribution, while the encoder captures the remaining variability. The inferred latent variables are provided as individual-specific inputs to the decoder, which maps these latent representations to longitudinal tumor-volume trajectories. In the EB-VAE framework, the decoder defines the temporal evolution of a latent state zi(t) and its mapping to the longitudinal observations, 
+
+zi(0) = gθ (z0, k i),
+
+˙zi(t) = fθ (zi(t), k i, u i(t)) ,
+
+ˆyi(t) = hθ (zi(t)) .
+
+Here, ui(t) denotes treatment information when provided directly to the decoder, and ˆyi(t) denotes the predicted longitudinal measurement, here corresponding to tumor volume. The functions 
+
+gθ , fθ , and hθ may represent neural networks, mechanistic models, or hybrid formulations, with parameters θ shared across individuals. Depending on the decoder formulation, ki may either modulate a neural dynamical system or correspond directly to individual-level parameters in a mechanistic tumor-growth model. The model is trained by maximizing the evidence lower bound (ELBO) [21], jointly learning the encoder, decoder, and prior components within a unified probabilistic framework. A detailed description of the framework and training procedure is provided in [18]. 
+
+## 2.3 Joint Modeling 
+
+We extend the framework to enable joint modeling of longitudinal (tumor volume) trajectories and the time-to-event processes (dropout). Let Cmax denote the administrative censoring time and let ti, last be the last available tumor measurement time for individual i. The observed follow-up time and event indicator are defined as 
+
+τi = min( ti, last , C max ),δi = 1{ti, last < C max }.
+
+Here, δi = 1 indicates dropout before the end of the analysis window, while δi = 0 indicates administrative right censoring. Given ki and ui, the longitudinal and dropout processes are assumed conditionally independent, 
+
+pθ (yi, τ i, δ i | ki, u i) = pθ (yi | ki, u i) pθ (τi, δ i | ki, u i),
+
+but remain coupled through the shared latent representation and decoder state. The event process is modeled through a time-dependent hazard function λθ (zi(t), u i(t), k i). The corresponding cumulative hazard is defined as 
+
+Hi(t) = 
+
+Z t
+
+> 0
+
+λθ (zi(s), u i(s), k i) ds. 
+
+4This allows the cumulative hazard to be introduced as an additional state variable within the decoder dynamics. The augmented system, therefore, becomes 
+
+ddt 
+
+ zi(t)
+
+Hi(t)
+
+
+
+=
+
+fθ (zi(t), k i, u i(t)) 
+
+λθ (zi(t), k i, u i(t)) 
+
+
+
+.
+
+The probability of remaining under observation up to time t is given by 
+
+Si(t) = exp ( −Hi(t)) .
+
+The resulting log-likelihood contribution for the time-to-event process is log pθ (τi, δ i | ki, u i) = −Hi(τi) + δi log λθ (zi(τi), k i, u i(τi)) .
+
+This likelihood term is incorporated directly into the EB-VAE objective, yielding a joint proba-bilistic model over both tumor trajectories and the time-to-event endpoint. Consequently, the latent variables are encouraged to capture factors associated with both disease progression and the duration of longitudinal follow-up. An overview of our framework can be seen in Figure 1. Data  Prediction 
+
+> 𝑡 𝑙𝑎𝑠𝑡
+> 𝑦
+> External
+> input
+
+Parameter 
+
+Encoder 
+
+Ω𝜙  
+
+> 𝑧 𝑡
+
+Sample  𝑘 
+
+# Decoder Encoder 
+
+𝜇 𝜙                      
+
+> 𝑢 𝑡
+> 𝑞 𝜙 𝑘 |𝑦 ,𝑥 𝑓 𝜃 𝑧 𝑡 ,𝑘 ,𝑢 𝑡 ሶ𝑧 𝑡 =
+> 𝑔 𝜃 𝑧 0,𝑘 𝑧 0=
+> 𝑝 𝜓 𝑘 |𝑥
+> KL 𝑞 𝜙 |𝑝 𝜓
+> Covariate
+
+𝑥 
+
+> 𝑡
+> ො𝑦 (𝑡 )
+> 𝑡
+> 𝑆 (𝑡 )
+> 𝑡 𝑙𝑎𝑠𝑡
+> 0.0
+> 1.0
+
+Dynamics 
+
+Model 
+
+Observation 
+
+Model              
+
+> ℎ𝜃 𝑧 (𝑡 )ො𝑦 𝑡 =
+> 𝜆 𝜃 𝑧 𝑡 ,𝑘 ,𝑢 𝑡 ሶ𝐻 𝑡 =
+> 𝑒 −𝐻 (𝑡 )𝑆 𝑡 =
+
+Hazard Model      
+
+> 𝑝 𝜃 𝑦 ,𝜏 ,𝛿 |𝑘 ,𝑢 𝑡
+
+Figure 1. Overview of the empirical Bayes variational autoencoder framework for joint longitudinal and time-to-event modeling. Longitudinal tumor observations, treatment information, and optional covariates are used by the encoder to infer individual-specific latent effects ki. A covariate-conditioned empirical Bayes prior pψ(ki | xi) captures systematic population-level variability, including differences between treatment groups. Samples from the latent distribution are passed to a decoder that defines the longitudinal dynamics and predicts tumor volume trajectories. The decoder may be implemented either as a fully neural ODE model or as a mechanistic dynamical model. For joint modeling, the decoder is augmented with a hazard component that defines the cumulative event risk and survival probability over time. 52.4 Decoder Formulations and Treatment-Effect Interpretation 
+
+The first formulation (Neural-EB-VAE) uses a fully neural decoder based on NODEs. In this setting, the functions gθ , fθ , and hθ are parameterized by neural networks, providing a flexible data-driven representation. The second formulation (Hybrid-EB-VAE) uses a hybrid decoder where the tumor dynamics are based on exponential tumor growth, whilst the hazard function is a NODE. In this formulation, the latent state corresponds directly to tumor volume and the observation model reduces to the identity mapping. The tumor dynamics are then given by, 
+
+dz i(t)
+
+dt = kizi(t).ki in this formulation corresponds to an individual treatment-conditioned effective growth rate. Consequently, the population distribution of the latent growth parameter may vary between vehicle, monotherapy, and combination-treatment groups. To enable comparison with classical tumor growth models, we translate the treatment-conditioned prior means into treatment-effect parameters. Let μa denote the prior mean of ki for treatment arm a. The vehicle group defines the baseline growth-rate parameter as 
+
+kg = μveh .
+
+For each treatment arm, the corresponding prior mean is parameterized as 
+
+μa = kg −
+
+> M
+
+X
+
+> j=1
+
+aj Ij (a) −
+
+> M
+
+X
+
+> j=1
+> M
+
+X
+
+> l>j
+
+ajl Ij (a)Il(a), (1) where Ij (a) indicates whether treatment j, with j = 1 , . . . , M , is present in treatment arm a.The parameters aj represent the monotherapy effect of each drug, while ajl captures deviations from additivity (synergistic or antagonistic) of drug j and l. Since each treatment arm consists of at most two drugs, higher-order interaction terms are not considered. Importantly, these treatment-effect parameters are not explicit decoder parameters during training. They are instead obtained post hoc by solving the linear system implied by Eq. 1 using the treatment-specific prior means. This provides a direct way to compare the hybrid decoder with classical nonlinear mixed-effects tumor growth models while retaining the EB-VAE formulation in which treatment effects are represented through the covariate-conditioned prior. 
+
+## 2.5 Genetic Covariate Representation and Prior Adaptation 
+
+This section describes how genetic covariates were represented and incorporated into the EB-VAE prior. The available genetic annotations were sparse and heterogeneous and could therefore not be used directly as model inputs. We mapped them to a fixed-dimensional binary representation for each PDX tumor model and used this representation to condition the prior, allowing genetic information to influence prior predictions without retraining the learned longitudinal decoder dynamics. Protein-changing mutations, amplifications, and deletions were encoded as binary indicators. Protein-changing mutations were represented at multiple levels of specificity, including exact protein changes, gene-level mutation indicators, missense indicators, and truncating-mutation indicators, whereas amplifications and deletions were represented as copy-number alteration indicators. The indicators were not mutually exclusive; for example, a specific amino-acid 
+
+6substitution could activate both an exact protein-change indicator and broader gene-level indicators for the same gene. To obtain a sufficiently broad set of genetic variables, we combined literature-based selection, ChatGPT-assisted candidate generation, and random sampling. This procedure resulted in 463 genetic indicators that varied across PDX tumor models. Candidate generation was informed by the COSMIC Cancer Gene Census [22], alterations highlighted by Gao et al. [5], and literature on genes and alterations related to tumor biology, treatment response, and resistance mechanisms. Random sampling was used to broaden the candidate set and evaluate whether the model could identify informative features beyond the biologically informed candidates. The genetic input was high-dimensional, with many more candidate genetic indicators than distinct PDX tumor models. Direct end-to-end training with genetic covariates could therefore lead to unstable learning and overfitting. We therefore incorporated genetic information using a two-stage training procedure. In the first stage, the longitudinal encoder–decoder model and the treatment-conditioned empirical Bayes prior were trained, while the prior was not conditioned on genetic covariates. This step established the latent individual-effect space. In the second stage, the encoder, decoder, and treatment-conditioned prior were kept fixed, and only a neural shift model conditioned on genetic covariates and treatment was trained. The shift model modified the empirical Bayes prior in the learned latent space, thereby defining a genetics-conditioned empirical Bayes prior and allowing genetic effects to depend on treatment context. The shift model was optimized through the Kullback–Leibler divergence (KL) term between the fixed encoder and the genetics-conditioned empirical Bayes prior, without changing the learned decoder dynamics. Stability selection was used as an exploratory tool for ranking genetic indicators associated with the genetics-conditioned prior [23]. In this framework, genetic indicators can be ranked by perturbing individual indicators and measuring the resulting change in the validation KL divergence between the encoder and the genetics-conditioned prior. Repeating this procedure over perturbed datasets provides a stability score for each indicator, interpreted as a model-based and hypothesis-generating measure of how consistently the indicator influences the learned prior distribution. 
+
+## 2.6 Evaluation Metrics and Visual Diagnostics 
+
+Visual predictive checks (VPCs), Kaplan–Meier VPCs (KM–VPCs), and prediction corrected VPCs (pcVPCs) [24] were used to qualitatively assess whether prior predictive simulations repro-duced the observed tumor volume and dropout distributions over time. Moreover, individual-level root mean squared error (RMSE) between observed tumor volumes and the median prior/posterior predictive trajectory of held-out individuals was used to quantify predictive performance. RMSE was computed per individual and then aggregated across individuals, giving each individual equal weight. To assess prediction performance over different follow-up horizons, cumulative RMSE curves were computed by progressively including later observation times. Detailed definitions of the RMSE metrics and visual diagnostic procedures are provided in the Supporting Information. 
+
+## 2.7 Experiments 
+
+We conduct four experiments to evaluate complementary aspects of the proposed framework. 
+
+Experiment 1: Mechanistic interpretation and decoder comparison. 
+
+The first experiment evaluates both the interpretability of the Hybrid-EB-VAE and its predictive performance relative to the Neural-EB-VAE using the 60-day 6-treatment CM dataset. 
+
+7First, the Hybrid-EB-VAE is trained five times with the full dataset and the learned treatment-specific prior means are mapped onto the treatment-effect decomposition in Eq. 1. The resulting parameters are compared across runs and the means are compared with literature values. Model adequacy is assessed using treatment-stratified VPCs and KM VPCs. Secondly, the predictive performance of both models is evaluated using five-fold cross-validation with the 60-day 6-treatment CM dataset. 
+
+Experiment 2: Population prediction and treatment generalization. 
+
+The second experiment evaluates the ability of the Neural-EB-VAE to generalize to unseen individuals and treatment groups in the 100-day CM and 100-day BC datasets. Individual-holdout prediction was evaluated using five-fold cross-validation. Predictive performance was assessed using pcVPCs constructed by pooling held-out individuals across treatment groups, together with pooled KM VPCs for the dropout process. As a reference, we also evaluated a na¨ ıve dropout rule in which dropout occurred when the simulated tumor volume reached 1500 mm 3. In addition, treatment-holdout prediction was performed by excluding one treatment group during training and using it only for evaluation. The held-out treatment group was either the untreated group or a treatment selected such that the drug was represented elsewhere in the training data, either as a monotherapy or as part of a combination therapy. Performance on excluded treatments was assessed using treatment-specific VPCs. 
+
+Experiment 3: Genetic covariates and feature stability analysis. 
+
+The third experiment investigated whether genetic covariates improved predictive performance and which genetic indicators contributed most consistently to the genetics-aware prior. Models were compared before and after including the genetic covariates. The comparison was performed on both 21-day and 100-day datasets. Individual-level RMSE was used to quantify overall predictive accuracy, while cumulative individual RMSE was used to evaluate how the benefit of genetic conditioning changed as longer follow-up horizons were included. Stability selection was used to characterize the robustness of the identified genetic indicators. 
+
+Experiment 4: Benefit of multi-treatment training. 
+
+The fourth experiment assessed whether jointly modeling multiple treatment groups improved prediction for individual treatment groups. This experiment used the 21-day datasets. For each selected treatment group, a treatment-specific model was trained using only individuals from that group, while another model was trained using the same treatment-specific individuals together with individuals from the remaining treatment groups. Both models were evaluated on the same held-out individuals from the selected treatment group to directly compare the benefit of multi-treatment training. 
+
+# 3 Results 
+
+## 3.1 Mechanistic interpretation and decoder comparison 
+
+For the Hybrid-EB-VAE, the baseline (untreated) growth rate was estimated with limited variation across the five runs [0 .0820 , 0.0844]. The mean value was kg = 0 .0830, which is slightly higher than the reference value ( kg = 0 .06) reported by [19]. The estimated monotherapy parameter for LEE011, encorafenib, and binimetinib were 0 .0372, 0 .0340, and 0 .0212, respectively, compared with reference values of 0 .0444, 0 .0393, and 0 .0090. Overall, the estimates are fairly close to the reference values. However, it should also be noted that the reference model did not account for the dropout process and explicitly modeled the impact of mutations in the BRAF-gene, 
+
+8which may contribute to differences in the estimated growth dynamics. Furthermore, the learned combination-deviation terms were small, indicating limited interaction effects, consistent with the reference model. The treatment-stratified VPCs in Figure 2 show that the hybrid model reproduced the main tumor-volume patterns across treatment groups. Supplementary KM-VPCs showed that the learned dropout component also captured the treatment-specific probability of remaining under observation over time. Treatment-stratified VPC for the Hybrid-EB-VAE 0 5 10 15 20 25                       
+
+> Time (Days)
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3) untreated
+> 010 20 30 40 50
+> Time (Days)
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3) binimetinib
+> 010 20 30 40
+> Time (Days)
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3) encorafenib
+> 010 20 30
+> Time (Days)
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3) LEE011
+> 010 20 30 40 50
+> Time (Days)
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3) LEE011 + encorafenib
+> 010 20 30 40 50
+> Time (Days)
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3) LEE011 + binimetinib Observed 10th/90th percentiles
+> Predicted 10th/90th percentiles
+> Observed 50th percentile
+> Predicted 50th percentile
+> Observed data
+> 95% CI for predicted percentiles
+
+Figure 2. Treatment-stratified VPCs for the Hybrid-EB-VAE, illustrating model fit to the observed tumor-volume data. Observed percentiles are shown in black/gray and predicted percentiles in blue/orange, with shaded regions indicating 95% confidence intervals for the predicted percentiles. Simulated trajectories were censored according to the learned dropout process, and VPCs were truncated once fewer than 10 individuals remained under observation within a treatment group to avoid unstable empirical percentile estimates at late time points. 
+
+In the comparison between the Hybrid-EB-VAE and the Neural-EB-VAE, the two models showed nearly identical performance for prior predictions on held-out individuals, with mean RMSE values of 195 for the Hybrid-EB-VAE and 196 for the Neural-EB-VAE. For posterior predictions, the Neural-EB-VAE achieved the lowest mean RMSE (68 versus 97). These results suggest that the mean tumor growth dynamics are well approximated by a simple exponential growth model, despite the more complex and heterogeneous trajectories observed at the individual level. We therefore use the Neural-EB-VAE in the remaining population-level prediction experiments, as it provides greater modeling flexibility and does not require separate mechanistic assumptions for different treatment settings or treatment combinations. 
+
+93.2 Population prediction and treatment generalization 
+
+Figure 7 compares the population-level prior predictive performance of the Neural-EB-VAE and the na¨ ıve threshold-based dropout model for held-out individuals in one representative cross-validation split of the 100-day CM dataset. The figure shows KM-VPCs for dropout and pcVPCs for tumor volume. The remaining cross-validation splits exhibited similar behavior and are provided in the supplementary material, together with the corresponding results for the 
+
+100-day BR dataset. The Neural-EB-VAE accurately captured the observed dropout pattern, and its pcVPC showed good agreement between the observed and simulated tumor-volume distributions. In contrast, the na¨ ıve threshold-based dropout model produced biased dropout predictions, resulting in noticeable discrepancies in the tumor-volume pcVPC. Figure 4 shows the population-level prediction performance for held-out treatment groups using the Neural-EB-VAE. The model was able to reproduce the main longitudinal patterns for several unseen treatments and more examples are provided in the supplementary information. 
+
+## 3.3 Genetic covariates and feature stability analysis 
+
+We next evaluated whether conditioning the model on genetic covariates improved prior prediction for held-out individuals. Figure 5 shows the cumulative individual RMSE for the 100-day CM experiment. Genetic conditioning reduced RMSE throughout the follow-up period, with the largest differences occurring early and remaining relatively stable thereafter. For the 21-day datasets genetic conditioning resulted in improved individual-level predictions (Fig 5). Across five runs with genetics and five runs without genetics, mean individual RMSE decreased from 161 to 140 (13% reduction) and of the 516 held-out individuals, 325 showed improved predictions when genetic covariates were included. The results for the 21-day BC dataset showed a similar trend (Fig 5). Full results are provided in the Supplementary Information. The top-ranked indicators from the stability selection included BRAF V600E, which is a known melanoma-associated alteration [25]. Several other highly selected indicators, including NRAS, NF1, and MDM2 missense indicators, were also consistent with genes involved in growth signaling, cell-cycle regulation, or growth inhibition [26, 27]. A complete list of the top 10 ranked indicators is provided in the Supplementary Information. 
+
+## 3.4 Benefit of multi-treatment training 
+
+Figure 6 shows the effect of jointly training across treatment groups on prior predictive performance for individual CM treatment groups. For each treatment group, we compared a treatment-specific model trained exclusively on individuals from that group with a jointly trained model that additionally incorporated individuals from the remaining treatment groups. Both models were evaluated on the same held-out individuals from the corresponding treatment group. Joint training improved prediction across almost all treatment groups. The largest improvements were observed for the untreated group, dacarbazine, and encorafenib, whereas the LEE011–binimetinib group showed only a minor improvement. CGM097 was the only group that did not benfit from joint training. 
+
+# 4 Discussion 
+
+In this work, we evaluated the EB-VAE framework across a broader range of oncology modeling tasks, demonstrating its flexibility for joint longitudinal and time-to-event modeling, genetic 
+
+10 (a) 0 20 40 60 80 100 
+
+Time (Days)  
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Survival probability
+
+(b) 0 20 40 60 80 100 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)
+
+(c) 0 20 40 60 80 100 
+
+Time (Days)  
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Survival probability
+
+(d) 0 20 40 60 80 100 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)Observed KM
+> Predicted median KM
+> 95% simulation interval Observed 50th percentile
+> Observed 10th/90th percentiles
+> Observed data
+> Predicted 50th percentile
+> Predicted 10th/90th percentiles
+> 95% CI for predicted percentiles
+
+Figure 3. Kaplan–Meier visual predictive checks (KM-VPCs; panels a,c) and prediction-corrected visual predictive checks (pcVPCs; panels b,d) for a representative cross-validation split of the cutaneous melanoma dataset, with test individuals pooled across treatment groups. Observed percentiles (not used for training) are shown in black and gray, while predicted percentiles are shown in blue and orange. Shaded regions indicate 95% confidence intervals for the predicted percentiles. (a) KM-VPC using the learned survival-model dropout mechanism. (b) pcVPC using the learned survival-model dropout mechanism. (c) KM-VPC using the na¨ ıve threshold-based dropout mechanism. (d) pcVPC using the na¨ ıve threshold-based dropout mechanism. 11 Cutaneous Melanoma 0 5 10 15 20 25 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+untreated 0 20 40 60 80 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+encorafenib + binimetinib 0 20 40 60 80 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+LEE011 + encorafenib 
+
+## Breast Cancer 0 10 20 30 40 50 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+untreated 0 20 40 60 80 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+LEE011 0 20 40 60 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+LJM716 + trastuzumab Observed 10th/90th percentiles 
+
+Predicted 10th/90th percentiles 
+
+Observed 50th percentile 
+
+Predicted 50th percentile 
+
+Observed data 
+
+95% CI for predicted percentiles Figure 4. Treatment-holdout VPCs for the cutaneous melanoma (first row) and breast cancer (second row) datasets. Each panel evaluates prior predictive performance for a treatment group excluded during training. For each cancer type, panels were selected to show the untreated group, the poorest-fitting held-out treatment group, and the best-fitting held-out treatment group among the evaluated treatment-holdout experiments. 12 (a) 0 20 40 60 80 100  
+
+> Time (Days)
+> 0%
+> 2%
+> 4%
+> 6%
+> RMSE improvement
+
+(b) 0 20 40 60 80 100 
+
+> Time (days)
+> 50
+> 100
+> 150
+> 200
+> RMSE
+> Without genetics
+> With genetics
+
+(c) 100 50 0 50 100  
+
+> RMSE without genetics - RMSE with genetics
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> Number of subjects
+> No change
+
+(d) −75 −50 −25 0 25 50 75 
+
+> RMSE without genetics - RMSE with genetics
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> Number of subjects
+> No change
+
+Figure 5. Comparison of prior predictive performance with and without genetic conditioning. (a) Cumulative mean individual RMSE improvement for the 100-day CM experiment, expressed as percent improvement from conditioning the prior on genetic information. (b) Cumulative mean individual RMSE with and without genetic conditioning for the 100-day CM experiment. (c) Distribution of individual RMSE improvements for the experiment based on the 21-day CM dataset. (d) Distribution of individual RMSE improvements for the experiment based on the 21-day BC dataset. The histograms in panels (c) and (d) had the 5% smallest and largest values removed before plotting. Individual RMSE values were averaged over five runs with genetics and five runs without genetics. 13 untreated 
+
+> CGM097
+> LDE225
+> LDK378
+> LGW813
+> TAS266
+> WNT974
+> dacarbazine
+> CLR457
+> LEE011
+> binimetinib
+> encorafenib
+> BKM120
+> BKM120 + encorafenib
+> encorafenib + binimetinib
+> LEE011 + encorafenib
+> LEE011 + binimetinib
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> RMSE
+> All treatments
+> Same treatment only
+
+Figure 6. Mean individual prior RMSE for selected cutaneous melanoma treatment groups under two training regimes. “Same treatment only” denotes models trained only on individuals from the evaluated treatment group. “All treatments” denotes models trained on the same treatment-specific training individuals together with individuals from the remaining treatment groups. Both models were evaluated on the same held-out individuals from the treatment group shown on the x-axis. 
+
+covariate integration, and alternative decoder formulations. A key extension was the incorporation of a joint longitudinal and time-to-event decoder that links tumor growth and dropout through a shared latent representation and NODE-based hazard function. In the Neural-EB-VAE, tumor growth was modeled using a NODE, whereas the Hybrid-EB-VAE combined an interpretable exponential tumor-growth model with the same NODE-based hazard formulation. Trained on the 60-day 6-treatment CM data the Hybrid-EB-VAE recovered tumor-growth parameters broadly consistent with previously reported NLME estimates [19], while the Neural-EB-VAE achieved improved overall predictive performance for the cross-validation. Together, these results demonstrate that the EB-VAE framework provides a modular approach for integrating mechanistic and data-driven components within a unified latent-variable model. The incorporation of genomic information further demonstrated the ability of the EB-VAE framework to leverage high-dimensional patient-specific data. In the present study, the genetic feature model was evaluated together with the Neural-EB-VAE, where it improved predictive performance on held-out individuals by up to 13% in terms of RMSE. Examination of individual prediction errors indicated that these improvements were observed across the majority of individuals. Most of the improvement was observed at the earlier time points, indicating that the model was able to effectively leverage the larger amount of available longitudinal information to learn how genomic features influence tumor growth dynamics. At later time points, the benefits of genomic information were reduced, likely due to increasing data sparsity resulting from dropout, which limits the amount of observed information available for learning and prediction. Moreover, the genetic representation used in this work was limited to a subset of the available genomic information, and incorporating additional genetic indicators would require further feature processing and model development. Therefore, these results should be viewed as a proof-of-concept demonstrating the potential of integrating genomic covariates within the EB-VAE framework. As larger and more comprehensive genomic datasets become available, enabling the inclusion of additional relevant markers, further improvements in predictive performance may be expected. One could also imagine using a pre-trained network to generate more informative genomic embeddings, similar to approaches used in other high-dimensional biological data domains, where learned representations capture complex patterns beyond manually selected features. The two-stage genetic adaptation used here was introduced to stabilize learning in a setting 
+
+14 with many candidate genetic indicators and comparatively few distinct PDX tumor models. With substantially larger datasets, the empirical Bayes prior could instead be conditioned jointly on treatment and genetic covariates during end-to-end training. Beyond improving predictive performance, the proposed stability-selection procedure provides a means of identifying genetic features that are consistently utilized by the model across repeated training runs. In this sense, the genomic feature model serves not only as a mechanism for incorporating high-dimensional molecular data, but also as a data-driven covariate selection approach that may help prioritize candidate biomarkers for further biological investigation. To further assess generalization performance, we considered a leave-one-treatment-arm-out cross-validation setup, in which the Neural-EB-VAE was trained on all but one treatment regimen and evaluated on the held-out arm. This setting requires extrapolation to an unseen therapeutic condition rather than interpolation within the observed treatment distribution. The results show that the framework is able to produce reasonable predictions for previously unseen treatment arms, indicating that the learned treatment representations capture structured effects that can transfer beyond the observed combinations. This suggests that, with sufficiently diverse training data covering a broad range of monotherapies and combination therapies, the framework may be capable of supporting extrapolation to new treatment regimens. While the proposed framework demonstrates strong performance across a range of experimental settings, its current evaluation is primarily based on two of the six available tumor types, and therefore represents a proof-of-concept rather than a fully comprehensive model trained across all available data. The experiments in which we jointly modeled several treatment arms yielded promising results, suggesting that pooling data across related experimental conditions can improve the learned representations. This idea could naturally be extended to jointly model several cancer types, for example through a shared or hierarchical structure, which is expected to further improve the robustness of the learned representations and may lead to enhanced predictive performance across tumor types. In this broader setting, the genomic feature extraction component will likely require further development to ensure that it can generalize effectively when learning from multiple tumor types simultaneously. 
+
+# Study Highlights 
+
+What is the current knowledge on the topic? Population models are widely used to de-scribe tumor growth and treatment response, but conventional nonlinear mixed-effects approaches can be difficult to extend to complex longitudinal dynamics, informative dropout, and high-dimensional covariates such as genomic data. Machine learning methods offer flexible alternatives, but their integration with pharmacometric population modeling remains challenging. 
+
+What question did this study address? We asked whether the empirical Bayes variational autoencoder (EB-VAE) framework could be extended to jointly model longitudinal tumor growth, dropout, alternative decoder formulations, and genomic covariates in patient-derived xenograft studies. 
+
+What does this study add to our knowledge? The study shows that EB-VAE can combine neural and hybrid tumor-growth models within the same population modeling framework, jointly describe tumor growth and dropout, and use genomic covariates to improve individual-level prior predictions. The framework also enabled exploratory identification of genetic indicators associated with the learned prior adaptation. 
+
+15 How might this change drug discovery, development, and/or therapeutics? This ap-proach may support more flexible analysis of preclinical oncology studies by integrating tumor-growth dynamics, dropout, treatment information, and molecular covariates in a single probabilistic framework. Such models could help prioritize treatment-response hypotheses and guide future model-informed drug discovery and development. 
+
+# Acknowledgments 
+
+ChatGPT was used to improve wording and readability; the authors have reviewed all content and take full responsibility for the final text. Cancer gene annotations were obtained from the COSMIC Cancer Gene Census (CGC), COSMIC v103, accessed 12 May 2026. The downloaded CGC table was used to annotate genes according to their curated cancer relevance. 
+
+# Funding 
+
+No funding was received for this work. 
+
+# Conflicts of Interest 
+
+The authors declare no conflicts of interest. 
+
+# Author Contributions 
+
+AS, NO, MB, and MJ wrote the manuscript; AS, NO, and MB designed the research; NO performed the research; AS, NO, and MB analyzed the data. 
+
+# References 
+
+1. C. Mbogning, K. Bleakley, and M. Lavielle, “Joint modelling of longitudinal and repeated time-to-event data using nonlinear mixed-effects models and the stochastic approximation expectation–maximization algorithm,” Journal of Statistical Computation and Simulation ,vol. 85, no. 8, pp. 1512–1528, 2015. 2. A. Lindauer, C. R. Valiathan, K. Mehta, et al. , “Translational pharmacoki-netic/pharmacodynamic modeling of tumor growth inhibition supports dose-range se-lection of the anti–pd-1 antibody pembrolizumab,” CPT: Pharmacometrics & Systems Pharmacology , vol. 6, no. 1, pp. 11–20, 2017. 3. L. Claret, P. Girard, P. M. Hoff, et al. , “Model-based prediction of phase iii overall survival in colorectal cancer on the basis of phase ii tumor dynamics,” Journal of Clinical Oncology ,vol. 27, no. 25, pp. 4103–4108, 2009. 4. Y. Hasin, M. Seldin, and A. Lusis, “Multi-omics approaches to disease,” Genome biology ,vol. 18, no. 1, p. 83, 2017. 
+
+16 5. H. Gao, J. M. Korn, S. Ferretti, J. E. Monahan, Y. Wang, M. Singh, C. Zhang, C. Schnell, G. Yang, Y. Zhang, et al. , “High-throughput screening using patient-derived tumor xenografts to predict clinical trial drug response,” Nature medicine , vol. 21, no. 11, pp. 1318– 1325, 2015. 6. M. J. Lindstrom and D. M. Bates, “Nonlinear mixed effects models for repeated measures data,” Biometrics , vol. 46, no. 3, pp. 673–687, 1990. 7. B. Ribba, N. H. Holford, P. Magni, et al. , “A review of mixed-effects models of tumor growth and effects of anticancer drug treatment used in population analysis,” CPT: Pharmacometrics & Systems Pharmacology , vol. 3, no. 5, p. e113, 2014. 8. G. Ayral, J.-F. Si Abdallah, C. Magnard, and J. Chauvin, “A novel method based on unbiased correlations tests for covariate selection in nonlinear mixed effects models: the COSSAC approach,” CPT: Pharmacometrics & Systems Pharmacology , vol. 10, no. 4, pp. 318–329, 2021. 9. K. Sanghavi, J. Ribbing, J. A. Rogers, M. A. Ahmed, M. O. Karlsson, N. Holford, E. Chasseloup, M. Ahamadi, K. G. Kowalski, S. Cole, et al. , “Covariate modeling in pharmacometrics: general points for consideration,” CPT: Pharmacometrics & Systems Pharmacology , vol. 13, no. 5, pp. 710–728, 2024. 10. J. Lu, K. Deng, X. Zhang, G. Liu, and Y. Guan, “Neural-ODE for pharmacokinetics modeling and its advantage to alternative machine learning models in predicting new dosing regimens,” iScience , vol. 24, no. 7, 2021. 11. D. S. Br¨ am, B. Steiert, M. Pfister, B. Steffens, and G. Koch, “Low-dimensional neural ordinary differential equations accounting for inter-individual variability implemented in Monolix and NONMEM,” CPT: Pharmacometrics & Systems Pharmacology , vol. 14, no. 1, pp. 5–16, 2025. 12. Z. Li, M. Prague, R. Thi´ ebaut, and Q. Clairon, “Variational autoencoder for inference of nonlinear mixed effect models based on ordinary differential equations,” arXiv preprint arXiv:2601.17400 , 2026. 13. G. Koch, M. Pfister, I. Daunhawer, M. Wilbaux, S. Wellmann, and J. E. Vogt, “Phar-macometrics and machine learning partner to advance clinical data analysis,” Clinical Pharmacology & Therapeutics , vol. 107, no. 4, pp. 926–933, 2020. 14. J. Rohleff, G. Koch, and J. Schropp, “The evolution of nonlinear mixed effects modeling in pharmacometrics: toward AI-based variational autoencoders,” Journal of Pharmacokinetics and Pharmacodynamics , vol. 53, p. 37, 2026. 15. R. T. Chen, Y. Rubanova, J. Bettencourt, and D. K. Duvenaud, “Neural ordinary differential equations,” Advances in Neural Information Processing Systems , vol. 31, 2018. 16. D. P. Kingma and M. Welling, “Auto-encoding variational Bayes,” arXiv preprint arXiv:1312.6114 , 2013. 17. D. P. Kingma and M. Welling, “An introduction to variational autoencoders,” Foundations and Trends in Machine Learning , vol. 12, no. 4, pp. 307–392, 2019. 18. M. Baaz, A. Sj¨ oberg, and M. Jirstrand, “The empirical Bayes variational autoencoder – a neural ODE approach for population modeling in pharmacology,” CPT: Pharmacometrics & Systems Pharmacology , vol. 15, no. 7, p. e70280, 2026. 
+
+17 19. M. Baaz, T. Cardilin, F. Lignet, and M. Jirstrand, “Optimized scaling of translational factors in oncology: from xenografts to RECIST,” Cancer Chemotherapy and Pharmacology ,vol. 90, no. 3, pp. 239–250, 2022. 20. B. Delyon, M. Lavielle, and E. Moulines, “Convergence of a stochastic approximation version of the em algorithm,” The Annals of Statistics , vol. 27, no. 1, pp. 94–128, 1999. 21. C. M. Bishop, Pattern Recognition and Machine Learning . New York: Springer, 2006. 22. Z. Sondka, S. Bamford, C. G. Cole, S. A. Ward, I. Dunham, and S. A. Forbes, “The COSMIC cancer gene census: describing genetic dysfunction across all human cancers,” 
+
+Nature Reviews Cancer , vol. 18, no. 11, pp. 696–705, 2018. 23. N. Meinshausen and P. B¨ uhlmann, “Stability selection,” Journal of the Royal Statistical Society Series B: Statistical Methodology , vol. 72, no. 4, pp. 417–473, 2010. 24. M. Bergstrand, A. C. Hooker, J. E. Wallin, and M. O. Karlsson, “Prediction-corrected visual predictive checks for diagnosing nonlinear mixed-effects models,” The AAPS Journal ,vol. 13, pp. 143–151, 2011. 25. J. Bharti, P. Gogu, S. K. Pandey, A. Verma, J. P. Yadav, A. K. Singh, P. Kumar, A. R. Dwivedi, and P. Pathak, “BRAF V600E in cancer: Exploring structural complexities, mutation profiles, and pathway dysregulation,” Experimental Cell Research , vol. 446, no. 1, p. 114440, 2025. 26. T. E. Arnoff and W. S. El-Deiry, “MDM2/MDM4 amplification and CDKN2A deletion in metastatic melanoma and glioblastoma multiforme may have implications for targeted therapeutics and immunotherapy,” American Journal of Cancer Research , vol. 12, no. 5, p. 2102, 2022. 27. W. Guo, H. Wang, and C. Li, “Signal pathways of melanoma and targeted therapy,” Signal transduction and targeted therapy , vol. 6, no. 1, p. 424, 2021. 
+
+# Appendix A Detailed Evaluation Procedures 
+
+Models were evaluated using both prior and posterior predictive simulations, depending on the objective of the analysis. Prior predictive simulations were used to assess population-level predictive performance for held-out individuals based only on covariates and treatment information. Posterior predictive simulations were used to assess the ability of each model to individualize tumor-growth trajectories after conditioning on the observed longitudinal data for a given individual. Thus, prior predictions evaluate population-level generalization, whereas posterior predictions provide a reconstruction and individualization diagnostic. RMSE-based metrics were used to quantify predictive performance, while visual diagnostics were used to assess whether simulated trajectories reproduced the observed tumor-volume and dropout patterns. Unless otherwise stated, evaluations were performed on held-out individuals from the corresponding experiment. For posterior predictive evaluations, the held-out individual was not used during model training, but the individual’s observed data were used at evaluation time to infer the corresponding latent representation through the encoder. For a given split s of a dataset D, let i ∈ D (s)test denote a held-out test individual, and let 
+
+Ti = {ti1, . . . , t in i } denote the corresponding ordered observation times. For each predictive 
+
+18 replicate r = 1 , . . . , R , latent variables were sampled either from the covariate-conditioned prior or from the approximate posterior. In prior predictive evaluations, samples were drawn as 
+
+k(r) 
+
+> i
+
+∼ pψ (ki | xi),
+
+whereas in posterior predictive evaluations, samples were drawn from the encoder distribution, 
+
+k(r) 
+
+> i
+
+∼ qϕ(ki | yi, x i).
+
+The sampled latent variables were then propagated through the decoder to obtain a simulated tumor-volume trajectory ˜ y(r) 
+
+> i
+
+(t). For joint models with a time-to-event component, the dropout process was simulated from the learned hazard model in each predictive replicate. This produced a simulated dropout time for each individual and replicate. We let 
+
+R(r) 
+
+> i
+
+(t) ∈ { 0, 1}
+
+indicate whether individual i has not dropped out by time t in predictive replicate r. Thus, 
+
+R(r) 
+
+> i
+
+(t) = 1 before the simulated dropout time and R(r) 
+
+> i
+
+(t) = 0 after dropout. For models without a time-to-event component, R(r) 
+
+> i
+
+(t) = 1 for all t.The retention-aware pointwise median predictive trajectory was computed from the simulated trajectories that remained under observation at each time point, ˜yi, med (t) = median 
+
+n
+
+˜y(r) 
+
+> i
+
+(t) : R(r) 
+
+> i
+
+(t) = 1 
+
+o
+
+.
+
+This definition ensures that tumor-volume predictions are summarized for the simulated population still under observation, matching the observation process represented in the data. The following subsections define the specific evaluation metrics and visual diagnostics used in the experiments. Some quantitative metrics, such as RMSE, naturally aggregate across cross-validation folds. Let S denote the set of splits used in a given experiment, and define the set of held-out individual–split pairs as 
+
+Itest =
+
+n
+
+(s, i ) : s ∈ S , i ∈ D (s)test 
+
+o
+
+.
+
+In the cross-validation experiments, each individual appears in the test set exactly once, so aggregating over Itest corresponds to aggregating over the individuals in the dataset. 
+
+## Individual-level RMSE 
+
+Individual-level RMSE was used to quantify out-of-sample prediction error for held-out individuals while giving each individual equal weight, rather than weighting individuals in proportion to their number of observations. To evaluate prediction performance over different follow-up horizons, we define the metric using a cutoff time tc.For individual i, let 
+
+Ti(tc) = {t ∈ T i : t ≤ tc}
+
+denote the observed measurement times up to the cutoff, and let 
+
+ni(tc) = |T i(tc)|.
+
+19 For individuals with at least one observation up to tc, the cutoff-specific individual RMSE for individual i in split s was defined as RMSE (s) 
+
+> i
+
+(tc) = 
+
+vuut 1
+
+ni(tc)
+
+X
+
+> t∈T i(tc)
+
+
+
+yi(t) − ˜y(s)
+
+> i, med
+
+(t)
+
+2
+
+.
+
+To aggregate across cross-validation splits, we defined the cutoff-specific set of evaluable held-out individual–split pairs as 
+
+Itest (tc) = {(s, i ) ∈ I test : ni(tc) > 0} .
+
+Overall performance at cutoff tc was summarized by the mean individual RMSE, RMSE( tc) = 1
+
+|I test (tc)|
+
+X
+
+> (s,i )∈I test (tc)
+
+RMSE (s) 
+
+> i
+
+(tc),
+
+and by the median individual RMSE, median RMSE( tc) = median 
+
+n
+
+RMSE (s) 
+
+> i
+
+(tc) : ( s, i ) ∈ I test (tc)
+
+o
+
+.
+
+Evaluating these quantities over a sequence of increasing cutoff times gives a cumulative individual RMSE curve, showing how prediction error changes as progressively later observations are included. 
+
+## Visual Predictive Checks 
+
+Visual predictive checks were used to assess whether the prior predictive distribution reproduced the observed distribution of tumor volumes over time. To avoid repeating the same construction for standard and prediction-corrected visual predictive checks, we define the diagnostic in terms of generic observed and simulated values. Let vi(t) denote the observed value used in the diagnostic and let ˜v(r) 
+
+> i
+
+(t) denote the corresponding simulated value in replicate r. For a standard visual predictive check, 
+
+vi(t) = yi(t), ˜v(r) 
+
+> i
+
+(t) = ˜ y(r) 
+
+> i
+
+(t).
+
+For prediction-corrected visual predictive checks, vi(t) and ˜v(r) 
+
+> i
+
+(t) instead denote the corresponding prediction-corrected observed and simulated values. Let Deval denote the individuals included in the diagnostic. For treatment-stratified visual predictive checks, let a index treatment groups and let xtreat  
+
+> i
+
+denote the treatment group of individual i. The follow-up interval was divided into non-overlapping time bins 
+
+B = {B1, . . . , B K }.
+
+For treatment group a and time bin Bb, the observed values were collected as 
+
+Vobs  
+
+> a,b
+
+= vi(t) : i ∈ D eval , x treat  
+
+> i
+
+= a, t ∈ T i, t ∈ Bb .
+
+Observed values are included only at recorded measurement times and therefore already reflect the observed dropout process. 
+
+20 For each prior predictive replicate r, the corresponding simulated values were collected as 
+
+V(r) 
+
+> a,b
+
+=
+
+n
+
+˜v(r) 
+
+> i
+
+(t) : i ∈ D eval , x treat  
+
+> i
+
+= a, t ∈ Bb, R (r) 
+
+> i
+
+(t) = 1 
+
+o
+
+.
+
+Thus, for joint models, simulated values were included only for individuals that had not dropped out in the corresponding predictive replicate. For a percentile level p, the observed percentile in treatment group a and bin Bb was computed as 
+
+qobs  
+
+> p,a,b
+
+= Qp
+
+ Vobs 
+
+> a,b
+
+ ,
+
+where Qp(·) denotes the empirical p-th percentile. The corresponding simulated percentile was computed separately for each replicate, 
+
+q(r) 
+
+> p,a,b
+
+= Qp
+
+
+
+V(r)
+
+> a,b
+
+
+
+.
+
+The visual predictive check displays the observed percentiles together with the median simulated percentiles, ˜qp,a,b = median 
+
+n
+
+q(r) 
+
+> p,a,b
+
+: r = 1 , . . . , R 
+
+o
+
+,
+
+and simulation intervals obtained from the empirical quantiles of 
+
+n
+
+q(r) 
+
+> p,a,b
+
+: r = 1 , . . . , R 
+
+o
+
+.
+
+Bins with too few observed individuals were excluded from the diagnostic. In treatment-stratified visual predictive checks, panels were truncated once fewer than 10 observed individuals remained before dropout in the corresponding treatment group, to avoid interpreting empirical percentiles based on very small sample sizes at late time points. In this work, standard uncorrected visual predictive checks were used as treatment-stratified training-data model-adequacy diagnostics. For out-of-sample diagnostics in which treatment groups were pooled, prediction-corrected visual predictive checks were used. 
+
+## Kaplan–Meier Visual Predictive Checks for Dropout 
+
+Kaplan–Meier visual predictive checks were used to assess whether the simulated dropout process reproduced the observed probability of not having dropped out over time. For each individual i,let τi denote the observed follow-up time and let δi ∈ { 0, 1} denote the dropout indicator, where 
+
+δi = 1 indicates observed dropout and δi = 0 indicates administrative censoring. Let Deval denote the individuals included in the diagnostic. Depending on the experiment, 
+
+Deval was either the fitted training dataset or the pooled held-out test individuals across cross-validation splits. For treatment-stratified diagnostics, let a index treatment groups. The observed Kaplan–Meier curve for treatment group a was estimated from 
+
+(τi, δ i) : i ∈ D eval , x treat  
+
+> i
+
+= a .
+
+For each prior predictive replicate r, dropout times were simulated from the learned cumulative hazard. Specifically, an exponential threshold was sampled as 
+
+E(r) 
+
+> i
+
+∼ Exp(1) ,
+
+21 and the simulated dropout time was defined as the first time at which the cumulative hazard exceeded this threshold. The simulated dropout process was then converted into a simulated follow-up time τ (r) 
+
+> i
+
+and event indicator δ(r) 
+
+> i
+
+. If simulated dropout occurred during the follow-up interval, τ (r) 
+
+> i
+
+was set to the simulated dropout time and δ(r) 
+
+> i
+
+= 1. If no simulated dropout occurred before the end of follow-up, the individual was treated as censored at the end of follow-up and 
+
+δ(r) 
+
+> i
+
+= 0. The simulated Kaplan–Meier curve for replicate r and treatment group a was estimated from 
+
+n
+
+(τ (r) 
+
+> i
+
+, δ (r) 
+
+> i
+
+) : i ∈ D eval , x treat  
+
+> i
+
+= a
+
+o
+
+.
+
+Across simulation replicates, the diagnostic displays the observed Kaplan–Meier curve together with the median simulated curve and a simulation interval obtained from the empirical quantiles of the simulated Kaplan–Meier curves at each time point. This diagnostic was used to evaluate whether the learned time-to-event component reproduced the observed dropout dynamics. 
+
+## Prediction-Corrected Visual Predictive Checks 
+
+Prediction-corrected visual predictive checks were used for population-level visual diagnostics when multiple treatment groups were pooled. Since different treatment groups can have different expected tumor-volume trajectories, direct pooling may obscure whether discrepancies are due to model misspecification or simply due to differences in treatment-specific dynamics. Following the prediction-corrected visual predictive check framework, tumor-volume values were therefore rescaled before pooling. Correction factors were computed within each treatment group and time bin using noise-free prior predictive reference trajectories. Let a index treatment groups, and let Bb denote a time bin. The treatment-specific prior predictive median was defined as 
+
+mpp  
+
+> a,b
+
+= median 
+
+n
+
+ˆy(r) 
+
+> i
+
+(t) : i ∈ D eval , x treat  
+
+> i
+
+= a, t ∈ Bb, R (r) 
+
+> i
+
+(t) = 1 
+
+o
+
+,
+
+where ˆy(r) 
+
+> i
+
+(t) denotes the noise-free prior predictive trajectory. The corresponding pooled reference median was defined as 
+
+mpp ref ,b = median 
+
+n
+
+ˆy(r) 
+
+> i
+
+(t) : i ∈ D eval , t ∈ Bb, R (r) 
+
+> i
+
+(t) = 1 
+
+o
+
+.
+
+Thus, the correction factors were computed using the simulated population that had not dropped out at each time point. Using zero as the lower bound for tumor volume, the prediction-correction operator for treatment group a and bin Bb was defined as 
+
+Pa,b (v) = v mpp ref ,b 
+
+mpp 
+
+> a,b
+
+.
+
+Let b(t) denote the time-bin index such that t ∈ Bb(t), and let ai = xtreat  
+
+> i
+
+denote the treatment group for individual i. Observed and simulated tumor volumes were corrected as 
+
+vpc  
+
+> i
+
+(t) = Pai,b (t) (yi(t)) ,
+
+˜v(r),pc  
+
+> i
+
+(t) = Pai,b (t)
+
+
+
+˜y(r) 
+
+> i
+
+(t)
+
+
+
+.
+
+22 After correction, values from all treatment groups were pooled and the visual predictive check construction described above was applied to vpc  
+
+> i
+
+(t) and ˜v(r),pc  
+
+> i
+
+(t). The resulting dropout-aware prediction-corrected visual predictive check assesses whether the model reproduces the longitudinal tumor-volume distribution after accounting for treatment-specific expected dynamics and dropout-induced selection. 
+
+# B Supplementary Results 
+
+This supplementary section provides additional results supporting the analyses presented in the main Results section. The material is organized using the same subsection structure as the main Results section. For each experiment, we include additional quantitative summaries or visual diagnostics that were not shown in the main text. 
+
+## Mechanistic interpretation and decoder comparison 
+
+Table 2. Hybrid-EB-VAE parameter estimates. Parameter estimates are reported as mean [min, max] across five runs. Parameter Estimate Reference value* 
+
+kg 0.0830 [0.0820, 0.0844] 0.06 
+
+aLEE011 0.0458 [0.0445, 0.0464] 0.0156 
+
+aencorafenib 0.0490 [0.0479, 0.0502] 0.0138 
+
+abinimetinib 0.0618 [0.0610, 0.0630] 0.051 
+
+aLEE011 ,encorafenib -0.0050 [-0.0067, -0.0037] –
+
+aLEE011 ,binimetinib 0.0040 [0.0021, 0.0058] –
+
+Table 3. Mean net growth rates for monotherapy treatment groups in the Hybrid-EB-VAE model. Net growth rates were calculated using the mean parameter estimates as kg − ai.Treatment Estimate Reference value* Untreated 0.0830 0.0600 LEE011 0.0372 0.0444 Encorafenib 0.0340 0.0462 Binimetinib 0.0212 0.0090 
+
+## Population prediction and treatment generalization 
+
+23 (a) 0 20 40 60 80 100 
+
+Time (Days)  
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Survival probability
+
+(b) 0 20 40 60 80 100 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)
+
+(c) 0 20 40 60 80 100 
+
+Time (Days)  
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Survival probability
+
+(d) 0 20 40 60 80 100 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)Observed KM
+> Predicted median KM
+> 95% simulation interval Observed 50th percentile
+> Observed 10th/90th percentiles
+> Observed data
+> Predicted 50th percentile
+> Predicted 10th/90th percentiles
+> 95% CI for predicted percentiles
+
+Figure 7. (left) KM-VPCs (right) pcVPCs for one representative cross-validation split of the breast cancer dataset with test individuals pooled across treatment groups. Observed percentiles (not used for training) are shown in black/gray and predicted percentiles in blue/orange, with shaded regions indicating 95% confidence intervals for the predicted percentiles. (a) KM-VPC using the learned survival-model dropout mechanism. (b) pcVPC using the learned survival-model dropout mechanism. (c) KM-VPC using naive threshold-based dropout. (d) pcVPC using naive threshold-based dropout. The KM-VPC legend applies to panels (a,c), and the pcVPC legend applies to panels (b,d). 24 Fold 1 0 20 40 60 80 100 
+
+Time (Days)  
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)
+
+Fold 2 0 20 40 60 80 100 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)
+
+Fold 3 0 20 40 60 80 100 
+
+Time (Days)  
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)
+
+Fold 4 0 20 40 60 80 100 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)Observed 10th/90th percentiles
+> Predicted 10th/90th percentiles
+> Observed 50th percentile
+> Predicted 50th percentile
+> Observed data
+> 95% CI for predicted percentiles
+
+Figure 8. Prediction-corrected visual predictive checks for the remaining cross-validation folds of the cutaneous melanoma dataset. Panels show held-out test individuals pooled across treatment groups for folds 1–4. Observed percentiles are shown in black/gray and predicted percentiles in blue/orange, with shaded regions indicating 95% confidence intervals for the predicted percentiles. These diagnostics complement the representative fold shown in the main text. 25 Fold 1 0 20 40 60 80 100 
+
+Time (Days)  
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)
+
+Fold 2 0 20 40 60 80 100 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)
+
+Fold 3 0 20 40 60 80 100 
+
+Time (Days)  
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)
+
+Fold 4 0 20 40 60 80 100 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> pc tumor volume (mm 3)Observed 10th/90th percentiles
+> Predicted 10th/90th percentiles
+> Observed 50th percentile
+> Predicted 50th percentile
+> Observed data
+> 95% CI for predicted percentiles
+
+Figure 9. Prediction-corrected visual predictive checks for the remaining cross-validation folds of the breast cancer dataset. Panels show held-out test individuals pooled across treatment groups for folds 1–4. Observed percentiles are shown in black/gray and predicted percentiles in blue/orange, with shaded regions indicating 95% confidence intervals for the predicted percentiles. 26 Cutaneous Melanoma 0 10 20 30 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+BKM120 0 20 40 60 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+binimetinib 0 10 20 30 40 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+encorafenib 0 10 20 30 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+LEE011 0 20 40 60 80 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+LEE011 + binimetinib Observed 10th/90th percentiles 
+
+Predicted 10th/90th percentiles 
+
+Observed 50th percentile 
+
+Predicted 50th percentile 
+
+Observed data 
+
+95% CI for predicted percentiles Figure 10. Additional treatment-holdout visual predictive checks for the CM dataset. Each panel evaluates prior predictive performance for a treatment group that was excluded during training. These panels show the remaining held-out treatment groups not included in the main treatment-holdout figure. 27 Breast Cancer 0 20 40 60 80 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+BYL719 0 10 20 30 40 50 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+LJM716 0 10 20 30 40 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+trastuzumab 0 20 40 60 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+BYL719 + LJM716 0 20 40 60 
+
+Time (Days) 
+
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Tumor volume (mm 3)
+
+BYL719 + LEE011 Observed 10th/90th percentiles 
+
+Predicted 10th/90th percentiles 
+
+Observed 50th percentile 
+
+Predicted 50th percentile 
+
+Observed data 
+
+95% CI for predicted percentiles Figure 11. Additional treatment-holdout visual predictive checks for the BC dataset. Each panel evaluates prior predictive performance for a treatment group that was excluded during training. These panels show the remaining held-out treatment groups not included in the main treatment-holdout figure. 28 Genetic covariates and feature stability analysis 
+
+Table 4. Effect of genetic conditioning on RMSE for the 21-day datasets. ∆ denotes the absolute RMSE improvement, computed as the treatment-only RMSE minus the RMSE from the model conditioned on genetic covariates. Percent improvement is computed relative to the treatment-only model. 
+
+Cancer type Statistic Without With ∆ ∆ (%) CM Mean 161.387 139.980 21.407 13.264 CM Median 106.416 93.513 12.903 12.125 BC Mean 131.531 117.086 14.445 10.982 BC Median 79.443 71.535 7.908 9.954 
+
+Table 5. Top genetic indicators from the stability-selection analysis. Selection frequency denotes the percentage of stability selection runs in which the indicator appeared among the top 10 features ranked by permutation-based increase in test KL. The procedure was repeated across five cross-validation folds with 100 runs per fold, using 50 permutations per feature-importance calculation. 
+
+Rank Gene Indicator Source Selection frequency 1 NRAS Missense mutation COSMIC 65.0% 2 BRAF V600E protein change Gao et al. 62.0% 3 NRAS Q61K protein change ChatGPT 52.4% 4 SIRPA Any protein-changing mutation Random 39.4% 5 NRAS Any protein-changing mutation COSMIC 32.4% 6 NF1 Truncating mutation ChatGPT 26.4% 7 MDM2 Amplification COSMIC 24.0% 8 BRAF Missense mutation COSMIC 23.0% 9 TBC1D1 Missense mutation Random 20.4% 10 SET Any protein-changing mutation Random 20.4% 
+
+# C Implementation Details 
+
+## Data Representation and Normalization 
+
+Each PDX mouse was represented as one longitudinal trajectory containing tumor-volume measurements, observation times, treatment information, dosing records, dropout time, and censoring status. Since trajectories have different numbers of observations, minibatches were padded and masks were used so that padded values did not contribute to the training objective. 
+
+Time and dose standardization. 
+
+Time and dose variables were standardized using constants computed from the training split. Observation times, dosing times, and dropout times were scaled by the maximum training follow-up time, while dose amounts were scaled by the maximum training dose. The same 
+
+29 transformations were then applied to validation and test individuals, so preprocessing did not use information from held-out data. 
+
+Tumor-volume normalization. 
+
+Tumor volumes were normalized relative to each individual’s initial tumor volume. This reduces differences in baseline tumor burden and makes the model focus on relative growth or shrinkage after treatment start. Predictions were transformed back to the original tumor-volume scale for evaluation and plotting. 
+
+Encoder normalization. 
+
+For the encoder, we also used a treatment-specific baseline normalization. Tumor observations were divided by the corresponding median-model prediction before being passed to the encoder. This made the encoder input have a more similar scale across treatment groups, so that the encoder could focus on individual deviations from the typical treatment response rather than on treatment-level differences in magnitude. 
+
+Genetic covariate linking. 
+
+For experiments with genetic covariates, each trajectory also retained the underlying PDX model identifier. This identifier was used to link the trajectory to the corresponding binary genetic indicator vector constructed from the genomic annotations associated with that PDX model. 
+
+## Model Architecture 
+
+Posterior encoder. 
+
+The posterior encoder represented each individual trajectory as a variable-length sequence of normalized observation pairs ( t, y ). The sequence was processed using a transformer-based encoder with masking for padded observations, followed by attention pooling to obtain one individual-level representation. In the main Joint-VAE experiments, the encoder used a transformer dimension of 32, three transformer layers, four attention heads, dropout probability 0.1, and hidden dimension 16 in the feed-forward projection and posterior heads. The pooled representation was mapped to the mean and covariance of a Gaussian approximate posterior over the individual latent parameters. 
+
+Treatment conditioning. 
+
+Treatment information entered the model through learned treatment-conditioning networks. In the CM and BC experiments, treatment was represented by an active-drug vector indicating which drugs were present for the individual. This vector was passed through a treatment encoder consisting of a linear skip connection and a shallow nonlinear correction with one SELU hidden layer. The nonlinear correction was initialized close to zero, so treatment effects were initially close to linear but could become nonlinear during training. Treatment-conditioned outputs were used both as shifts to the posterior mean and to define the empirical Bayes prior mean. Aseparate treatment-conditioning path also scaled the prior covariance, allowing uncertainty in the individual latent parameters to depend on treatment group. 
+
+30 Genetic conditioning. 
+
+For experiments involving genetic covariates, the same trajectory encoder and decoder structure was retained, but additional genetic-conditioning modules were added to the encoder. The binary genetic indicator vector was projected to a small set of learned genetic programs; in the implemented genetics experiments, six genetic programs were used. Program scores were normalized and passed through a bounded nonlinearity, then multiplied by treatment-dependent gates computed from the active-drug vector. The resulting genetic representation was mapped to the latent-parameter dimension and combined with a learned PDX-model embedding. Genetic conditioning was used to shift the posterior mean, shift the prior mean, and scale the prior covariance. 
+
+Latent dimensionality. 
+
+The dimension of the individual latent parameter vector ki varied across experiments. Shorter follow-up experiments generally used one latent parameter, while longer follow-up and treatment-holdout experiments used two latent parameters. This allowed the model capacity to be increased in settings where longer trajectories required more flexible individual-level variation. 
+
+Neural ODE decoder. 
+
+The main Joint-VAE decoder was a neural ODE decoder. Individual latent parameters sampled from the posterior or prior were held fixed during integration and used to condition the latent dynamics. Treatment entered the decoder through a constant dose signal: for each individual, the dosing records were reduced to one treatment input vector containing the active drugs and their scaled dose amounts. This treatment vector was then used as a fixed covariate in the ODE dynamics over the prediction interval. The ODE function used a feed-forward network with hidden dimension 512, SELU activations, and a linear skip path. After solving the ODE on the dense prediction grid, a linear readout mapped the latent state to tumor volume. The decoder also included a positive hazard head for dropout modeling, and cumulative dropout hazard was obtained by integrating the hazard along the predicted trajectory. 
+
+Hybrid decoder. 
+
+For the hybrid decoder comparison, the neural ODE tumor-growth decoder was replaced by an analytic exponential growth decoder. In this model, the individual latent parameter directly controlled the exponential growth rate, while treatment effects were represented through learned global drug-effect parameters. 
+
+Observation model. 
+
+The observation model used trainable Gaussian noise with additive and proportional components. The same noise model was used for the reconstruction likelihood during training and when sampling noisy predictive trajectories. 
+
+Median model. 
+
+A separate median model was trained before the VAE in experiments using baseline normalization. This model used a deterministic treatment-conditioned encoder rather than a variational trajectory encoder. Its role was to learn typical treatment-level trajectories, which were then used to 
+
+31 normalize encoder inputs so that the VAE encoder saw trajectories on a more comparable scale across treatment groups. 
+
+## Training Procedure 
+
+Training was performed separately for each experimental split. For each fold, preprocessing statistics were computed from the training set and then applied to the training, validation, and test sets. The initial-value normalizer was constructed first, after which a median model was trained. The trained median model was then used to construct the median-model encoder normalizer, and the final VAE was trained using this encoder normalization. 
+
+Median model training. 
+
+The median model was trained before the VAE using an L1 reconstruction loss and did not include the survival/dropout loss. In the main CM and BC experiments, the median model was trained for at most 200 epochs using Adam, with early stopping based on validation loss. Its purpose was to learn treatment-level typical trajectories used for encoder normalization. 
+
+VAE training objective. 
+
+The VAE was trained using posterior samples of the individual latent parameters. For each minibatch, the encoder produced the approximate posterior qϕ(ki | yi, x i) and the empirical Bayes prior pψ (ki | xi). A sample from the posterior was passed through the decoder, and the resulting dense trajectory was interpolated to the observed measurement times. The training objective combined the observation negative log-likelihood, the Gaussian KL divergence between posterior and prior, and the dropout survival loss. The observation term used the trainable Gaussian noise model described above. The survival term used the decoder-predicted cumulative hazard and hazard at the observed dropout or censoring time. 
+
+Validation and checkpointing. 
+
+Validation metrics were evaluated after each epoch and used for checkpoint selection and early stopping. Test metrics were logged during training for diagnostics only and were not used for model selection. During evaluation, posterior means were used instead of posterior samples to reduce Monte Carlo variation. Model checkpoints were selected using validation performance after an initial burn-in period, and each phase was reset to the best validation checkpoint before continuing. For the main VAE phase, validation checkpointing started after 225 epochs and early stopping used patience 100. For the median model, checkpointing started after 75 epochs and early stopping used patience 50. 
+
+Optimization settings. 
+
+For the main non-genetic Joint-VAE experiments, the VAE phase was trained for at most 1200 epochs using Adam. The posterior, decoder, and default parameter groups used learning rate 10 −3, while the prior mean and prior covariance parameter groups used learning rate 10 −2. The observation-noise parameters were frozen for the first 150 epochs and then optimized with learning rate 2 × 10 −3. Learning rates were reduced on plateau, and gradients were clipped to norm 0.5. 
+
+32 Genetic prior training. 
+
+For experiments with genetic covariates, training used an additional prior-training phase. During the main VAE phase, the genetic prior parameters were kept frozen. After this phase, the posterior and non-genetic prior components were held fixed, and the genetic prior was trained using a KL-only objective. This phase trained the genetics-conditioned prior to match the already learned posterior distribution, using learning rate 3 × 10 −4, weight decay 10 −4, and a warmup-cosine learning-rate schedule. 
+
+33

@@ -1,0 +1,25 @@
+---
+title: Assessing the Role of Marker Density and Minor Allele Frequency on Machine Learning Driven Genomic Selection Accuracy in Grapevine
+title_zh: 评估标记密度和次要等位基因频率对机器学习驱动的葡萄基因选择准确性的影响
+authors: "Francisco, F. R., de Oliveira, G. L., Niederauer, G. F., Fritsche-Neto, R., Souza, A. P. d., Furlan, M. F. M."
+date: 2026-07-17
+pdf: "https://www.biorxiv.org/content/10.64898/2026.07.11.737951v1.full.pdf"
+tags: ["query:gwas"]
+score: 7.0
+evidence: 机器学习用于基因组选择，类似于PRS预测
+tldr: 葡萄育种周期长、表型评估困难，基因组选择（GS）可加速进程，但标记密度和最小等位基因频率（MAF）影响预测准确性。本研究对比四种机器学习模型（ElasticNet、KNN、SVR、XGBoost）与传统gBLUP，在不同MAF过滤的SNP数据集上测试六个性状。结果显示ML模型对MAF降维不敏感，而gBLUP性能显著下降；形态性状预测力优于化学性状；GS较传统育种遗传增益提升2.86-8.90倍。表明ML方法在特征降维时更灵活，整合GS可显著提高葡萄育种效率。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-11-737951-v1/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1670, \"height\": 1449, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-11-737951-v1/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1671, \"height\": 1402, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-11-737951-v1/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 1596, \"height\": 957, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-07-11-737951-v1/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1422, \"height\": 385, \"label\": \"Table\"}]"
+motivation: 传统葡萄育种周期长，GS可缩短世代间隔，但标记密度和MAF等参数对预测模型影响未知，需评估其适应性。
+method: "使用四种机器学习模型（ElasticNet, KNN, SVR, XGBoost）和gBLUP，基于MAF阈值（0.05,0.1,0.2）过滤SNP，预测六种遗传性状。"
+result: ML模型在不同MAF密度下预测精度稳定，gBLUP对降维敏感；形态性状预测力优于化学性状；GS遗传增益为传统育种的2.86-8.90倍。
+conclusion: 相比依赖亲缘矩阵的gBLUP，ML方法在特征降维时更具灵活性；GS整合可大幅提升葡萄育种效率。
+---
+
+## 摘要
+尽管葡萄（Vitis spp.）是全球最古老且经济上最重要的水果物种之一，但由于其漫长的幼年期和表型评估周期长，遗传改良面临重大瓶颈。在此背景下，基因组选择（GS）已成为传统选择的有效替代方案，通过显著缩短世代间隔并提高早期世代的预测准确性（PA）和预期遗传增益（EGG），为优化育种计划提供了稳健的框架。然而，次要等位基因频率（MAF）和群体规模等因素可能显著影响预测模型，甚至使其在育种计划中不可行。为此，本研究通过基于MAF阈值选择单核苷酸多态性（SNP）来评估数据降维对GS准确性的影响。实验设计测试了四种机器学习（ML）算法（ElasticNet、K-Neighbors、支持向量机回归和XGBoost）以及传统基因组最佳线性无偏预测（gBLUP）模型的预测能力。这些模型使用三个SNP数据集（11,115、9,494和6,100个标记）进行验证，这些数据集根据MAF水平（0.05、0.1和0.2）进行过滤，涵盖六个遗传性状，并通过育种者方程比较传统育种与GS的EGG。结果显示，ML模型表现出显著的稳定性，在不同MAF的SNP密度下PA无显著差异，但浆果长度除外，其在MAF为0.2时与XGBoost存在显著差异。相反，gBLUP对降维高度敏感，其性能在所有性状上都受到MAF过滤的显著影响。这些结果表明，与传统依赖基因组亲缘关系矩阵的GS模型相比，基于ML的方法在特征降维方面更具灵活性。此外，与化学性状相比，形态性状通常具有更强的预测能力。进一步地，每个GS模型提供的估计遗传增益均优于传统育种，改进范围从浆果长度的8.90倍到总可溶性固形物的2.86倍，证实了GS整合在提高葡萄育种效率方面具有广阔前景。
+
+## Abstract
+Although grapevine (Vitis spp.) is among the oldest and most economically significant fruit species globally, its genetic improvement faces major bottlenecks due to long juvenile periods and extended cycles for phenotypic evaluation. In this context, genomic selection (GS) has emerged as an effective alternative to traditional selection, offering a robust framework to optimize breeding programs by significantly reducing generation intervals while enhancing predictive accuracy (PA) in early generations and expected genetic gains (EGGs). Nevertheless, factors such as minor allele frequency (MAF) and population size can significantly affect predictive models, even to the point of making their use unfeasible in breeding programs. In this context, this study evaluated the effect of data dimensionality reduction on GS accuracy by selecting single-nucleotide polymorphisms (SNPs) based on MAF thresholds. The experimental design tested the predictive capacities of four machine learning (ML) algorithms (ElasticNet, K-Neighbors, Support Vector Machine Regression, and XGBoost) alongside the conventional Genomic Best Linear Unbiased Prediction (gBLUP) model. These were validated using three SNP datasets (11,115, 9,494, and 6,100 markers) filtered by MAF levels of 0.05, 0.1, and 0.2 across six genetic traits, and EGGs were compared between conventional breeding and GS via the breeders` equation. The results revealed that the ML models exhibited remarkable stability, with no significant differences in PA across the different MAF-based SNP densities, except for berry length, which showed a substantial difference with XGBoost at an MAF of 0.2. Conversely, gBLUP demonstrated high sensitivity to dimensionality reduction, with its performance significantly impacted by MAF filtering across all the traits. These results suggest that compared with traditional GS models that rely on a genomic kinship matrix, ML-based approaches offer greater flexibility in feature reduction. Additionally, compared with chemical traits, morphological traits generally had greater predictive ability. Furthermore, every GS model provided estimated genetic gains superior to traditional breeding, with improvements ranging from an 8.90-fold increase in berry length to a 2.86-fold increase in total soluble solids, confirming that GS integration is promising for enhancing breeding efficiency in grapevines.

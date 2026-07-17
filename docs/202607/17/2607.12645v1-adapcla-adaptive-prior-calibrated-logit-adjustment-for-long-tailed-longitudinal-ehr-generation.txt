@@ -1,0 +1,1172 @@
+Title: AdaPCLA: Adaptive Prior-Calibrated Logit Adjustment for Long-Tailed Longitudinal EHR Generation
+
+URL Source: https://arxiv.org/pdf/2607.12645v1
+
+Published Time: Wed, 15 Jul 2026 12:01:46 GMT
+
+Number of Pages: 40
+
+Markdown Content:
+# AdaPCLA : Adaptive Prior-Calibrated Logit Adjustment for Long-Tailed Longitudinal EHR Generation 
+
+Shuai Cui 1 Chen Wenxuan 1 Wenjie Du 1 Jian Lou 2 Dan Li 2 Wenjie Feng 1,* 1University of Science and Technology of China 
+
+> 2
+
+Sun Yat-sen University 
+
+Abstract 
+
+Generative modeling of longitudinal Electronic Health Records is increasingly important for privacy-preserving research, yet standard autoregressive models tend to underrepresent the co-occurrence structure of tail events (i.e., diseases, symptoms), reducing the fidelity and faith-fulness of generated data for rare subpopulations. To this end, we propose AdaPCLA frame-work, which enables generative models to adaptively fit and generate EHR data through a data distribution-aware training strategy; this is achieved by internalizing data knowledge parameters by simulated annealing training. It also supports training-free adaptation to a diverse clinical population for generation through zero-shot distribution control. Moreover, our theoretical anal-ysis characterizes rare-code logit updates through the label-wise empirical NTK and derives a prior-internalization bound for how annealing speed and NTK conditioning affect retained prior signals. Experiments on real-world data show that AdaPCLA achieves consistent gains in tail plausibility, downstream utility, and zero-shot control; in particular, it improves TailPairSeen over HALO by 114.2% on MIMIC-III and 65.1% on MIMIC-IV, outperforms GPT-style gener-ation by 3.5% F1 for zero-shot cross-population adaptation. 
+
+# 1 Introduction 
+
+Longitudinal Electronic Health Records (EHR) provide a rich view of patient trajectories, capturing diagnoses, treatments, medications, and clinical events over time. They are central to a wide range of clinical applications, including risk prediction [1–3], medication recommendation [4, 5], and decision support systems [6, 7]. However, data sensitivity and privacy regulations hinder the sharing of real-world EHR data, limiting research and development in related intelligent technologies. High-quality synthetic EHR generation is therefore crucial for privacy-preserving research [8]. Longitudinal EHRs are challenging to model due to their high dimensionality, temporal sparsity, and heterogeneity. Moreover, a few common clinical patterns coexist alongside numerous rare but clinically significant conditions, and they usually exhibit a long-tailed pattern in the empirical marginal distribution of medical codes for symptoms, indicating that few codes occur frequently while most clinically relevant codes are rare. During the training process of generative models, such rare codes provide limited positive evidence and weak stable learning signals for their temporal, contextual, and co-occurrence dependencies. If a model captures only the dominant head patterns while underrepresenting rare pathological dependencies, the resulting synthetic data may appear    
+
+> *Corresponding author: fengwenjie@ustc.edu.cn .Code availability: https://github.com/worldcs27/worldcs27.github.io/tree/main/AdaPCLA_anonymous_ code .
+
+1arXiv:2607.12645v1 [cs.LG] 14 Jul 2026 realistic on average but become unreliable for the very subpopulations that matter most clinically. Therefore, the key challenge for synthetic EHR generation is twofold: generated records should match the overall real EHR distribution, while also preserving the temporal and co-occurrence dependencies involving rare clinical events to facilitate downstream clinical modeling and cross-population adaptation. Existing generative models attempt to solve this problem from different aspects, but none fully resolves the long-tail difficulty. GAN and VAE-based methods [9, 10] improved privacy-preserving generation but often struggled to preserve longitudinal dependency structure. Autoregressive and hierarchical models [11] capture sequential patterns better, while diffusion-style approaches [12, 13] improve sample quality and distributional coverage. Nevertheless, across these families, a common difficulty remains: optimization is dominated by frequent and easy-to-learn clinical patterns, whereas rare but clinically important dependencies receive weak and unstable learning signals [14, 15]. As a result, synthetic EHR generators may fit common clinical patterns yet fail to preserve rare-event plausibility, downstream utility, and controllable cross-population adaptation. To this end, we propose AdaPCLA , a curriculum prior-calibrated framework for long-tailed EHR generation. AdaPCLA applies prior-aware logit adjustment early in training to maintain effective rare-code updates, then gradually anneals this correction so that rare-code temporal and co-occurrence dependencies are internalized into the model parameters. This design supports clean inference without an external bias after training, and it also enables zero-shot distribution control 
+
+by applying target-prior corrections without retraining. Our theoretical analysis gives two messages: the label-wise empirical NTK characterizes how prior-induced residuals update rare-code intrinsic logits, while the prior-internalization bound identifies annealing speed and NTK conditioning as theoretical factors for retaining prior signals after scaffold removal. We conduct a comprehensive evaluation over large real-world datasets. Experimental results show that rather than only improving aggregate scores, AdaPCLA achieves the largest gains on tail structure: compared with HALO, it improves TailPairSeen by 114.2% on MIMIC-III and 65.1% on MIMIC-IV. For the zero-shot generation setting based on MIMIC-IV training to MIMIC-III inference, AdaPCLA reaches AUPRC of 0.922 without retraining, outperforming GPT-style gen-eration by 3.5% F1, which verifies the effectiveness of the learned structure for cross-population adaptation. In summary, this paper makes the following contributions: 
+
+• We propose AdaPCLA , a prior-guided curriculum framework that strengthens rare-code learning while supporting bias-free inference and zero-shot distribution control. 
+
+• We analyze AdaPCLA with label-wise empirical NTK dynamics and govern the prior-internalization bound by annealing speed and the empirical NTK. 
+
+• AdaPCLA achieves significant gains in tail plausibility, downstream utility, and zero-shot cross-population adaptation tasks based on the experiments on real-world datasets. 
+
+# 2 Related Work 
+
+Longitudinal EHR generation. Synthetic EHR generation has progressed from GAN-, VAE-, and correlation-aware models for discrete or tabular medical records [9, 10, 16] to temporal struc-tured simulators and longitudinal mixed-type generators [15, 17, 18]. Recent work further improves high-dimensional visit modeling, privacy-preserving synthesis, multimodal diffusion, and LLM-based generation without direct patient-level access [8, 11–13]. These models improve temporal depen-dency modeling and sample realism. However, because these generators are usually trained to fit the overall distribution of the majority of diseases, rare disease codes contribute sparse learning sig-nals, motivating a generation objective that gives tail codes stronger optimization support without 2weakening longitudinal dependency modeling. 
+
+Long-tailed learning and zero-shot control. Long-tailed learning methods such as resampling, focal loss, class-balanced loss, margin-based objectives, decoupled training, and logit adjustment re-shape training under imbalanced labels [14, 19–24]. These methods are effective for discriminative classification, but direct use in longitudinal multi-label EHR generation is less straightforward: resampling can disrupt patient trajectories, fixed reweighting can destabilize sparse multi-label optimization, and static prior biases can leave the generator dependent on external correction at in-ference time. Meanwhile, clinical code frequencies vary across hospitals and cohorts [25], motivating generation methods that can adapt to target priors without retraining while preserving longitudinal dependencies and co-occurrence structure. Although label-shift correction and controllable tabu-lar/EHR synthesis study related forms of occurrence frequency adaptation [10, 26–28], they do not directly address zero-shot control for long-tailed longitudinal EHR generators. A detailed discussion about closely related work is deferred to Appendix A. 
+
+# 3 Problem Formulation 
+
+3.1 Preliminaries 
+
+Notions. Consider a structured EHR as a sequence of patient visits. Let V be a |V| -size vocabulary of clinical events, i.e., medical codes. A patient’s T -visit record forms a chronological trajectory 
+
+X = ( x1, . . . , xT ), where each visit xt ∈ { 0, 1}|V| is a multi-hot vector indicating the presence of codes at step t; x<t denotes the trajectory history of this patient before time step t. We assume that observed trajectories are independent and identically distributed samples drawn from an unknown underlying distribution P(X), which we aim to approximate. 
+
+Logit Adjustment (LA). Logit adjustment can be used to guide the model’s learning under class imbalance by modifying the relative margins between a target class and its competing classes [24, 29, 30]. For a given sample (x, y ) with y ∈ { 1, . . . , K }, consider a multiclass classifier with logits 
+
+Ck(x) for k = 1 , . . . , K . The logit-adjusted softmax loss can be written as 
+
+LLA (x, y ) = log 
+
+1 + X 
+
+> y′̸=y
+
+δ(y, y ′) exp  Cy′ (x) − Cy(x) ,
+
+where Cy′ (x) is the logit of a competing class y′, and δ(y, y ′) is a prior-dependent adjustment weight. Larger δ(y, y ′) increases the penalty when the prediction value for the competing class y′ approaches or exceeds the target class y, thereby changing the optimization pressure across imbalanced classes. In prior logit-adjustment methods for imbalanced classification, δ(y, y ′) is typically chosen as a function of empirical class priors, yielding a prior-calibrated decision boundary. In the longitudinal EHR generation, the prediction target at each visit corresponds to a multi-hot vector for all medical codes. Let y ∈ { 0, 1}V denote the multi-label target over V and yc = 1 
+
+when event c occurs in the target visit; let πc = P(yc = 1) be the empirical frequency of c at the visit level. Given the intrinsic model logit zc(x), we denote the effective logit after adjustment by ˜zc(x).A natural multi-label analogue applies a prior-dependent shift element-wise, ˜zc(x) = zc(x) + bc,where bc is a bias term determined by the empirical frequency of event c.However, a fixed prior-dependent bias can make the generator depend on this external correction and prevent it from capturing the rare-event temporal and co-occurrence structure and internalizing 3them in its own parameters. AdaPCLA therefore treats the prior bias as a temporary optimization scaffold: it preserves rare-event learning signals early in training and is gradually annealed away, so that inference relies on model-encoded rare-event dependencies rather than an external correction. 
+
+3.2 Problem Formulation and Requirements 
+
+In general, longitudinal EHR generation is a sequential generative modeling task. Its goal is to learn a parametric generative model M (·; θ) that approximates P(X). For a training set of N patient trajectories D = {Xi}Ni=1 , the maximum-likelihood objective can be written as 
+
+θ⋆ = arg max 
+
+> θ
+
+1
+
+N
+
+X  
+
+> X=( x1,..., xT)∈D
+> T−1
+
+X
+
+> t=1
+
+log M (xt+1 | x1: t; θ). (1) However, real-world EHRs data are high-dimensional and sparse, and most medical codes in V
+
+form an extreme long-tailed distribution. This poses a substantial challenge for learning a model 
+
+M (·; θ) in Eq. (1) that faithfully characterizes the real data distribution P(X). In particular, under the binary cross-entropy loss, the gradient contributions associated with tail codes are severely overwhelmed by the large number of head samples. As a result, optimization becomes biased toward a head-dominated solution: for tail codes, gradients from the many non-occurrence labels (yc = 0 ) can dominate the sparse gradients from occurrence labels ( yc = 1 ), pushing their logits downward and suppressing their generation probabilities. Such behavior leads the model to disregard the complex conditional dependencies of rare pathologies, ultimately fails to capture the intrinsic structure of the clinical data and to generate realistic EHR records faithfully. Consequently, an optimal model M (·; θ∗) should accurately approximate P(X) over the support of the data distribution, encompassing a comprehensive spectrum of medical codes and faithfully generating high-fidelity long-tailed patterns at inference time. In practice, particularly in low-resource and rare-disease settings, inadequate long-tail modeling can cause synthetic generators to miss clinically important rare-event patterns, reducing the usefulness of synthetic EHRs for downstream prediction and adapting generation to populations with different code frequencies. Moreover, owing to the privacy constraints and the inherent difficulty of accessing and sharing large-scale real EHR datasets, the learned model is expected to be readily transferable to a new, typically small-scale dataset ˆD, which may be drawn from a distinct distribution P′(X), thereby enabling the efficient construction of generative models that are well adapted to the target data. 
+
+# 4 Proposed Model 
+
+In this section, we propose AdaPCLA , an Adaptive Prior-Calibrated Logit Adjustment method designed to capture the full-spectrum medical code distribution, generate realistic EHR data, and can adapt to new datasets in a zero-shot manner. It treats empirical label priors as a temporary op-timization scaffold and encourages the model to internalize this structural information by gradually removing the scaffold through annealing. Figure 1 illustrates the overall framework of AdaPCLA .
+
+AdaPCLA consists of three core modules: (i) an EHR Generator Backbone , an autoregres-sive Transformer that captures longitudinal clinical dependencies; (ii) Statistical Prior Model-ing , which converts long-tailed empirical prevalences into a label-wise logit scaffold bstat ; and (iii) 
+
+Curriculum Prior Injection , which anneals this scaffold so that early rare-event updates are protected while the final generator can operate without an external bias. 4Figure 1: Overall architecture of AdaPCLA framework. 
+
+4.1 EHR Generator Backbone 
+
+AdaPCLA uses an autoregressive Transformer backbone to model longitudinal EHR trajectories. Given historical visits x<t , the backbone embeds the visit events and processes the visit sequence with autoregressive masked self-attention, so that the hidden state used for predicting t-th step visit depends only on previous records and respects the temporal order: 
+
+H<t = Transformer θ(x<t ), zt = WoHt−1 + bo ∈ RV ,
+
+where zt denotes the intrinsic logits over the clinical-event vocabulary for the next visit. These logits are produced by the backbone parameters alone and constitute the logit space on which AdaPCLA 
+
+performs prior-calibrated training during the annealing process. Based on the shared representation Ht−1, the next visit is modeled with Bernoulli output heads: 
+
+pθ(xt | x<t ) = 
+
+> V
+
+Y
+
+> c=1
+
+Bernoulli( xt,c ; σ(zt,c )) .
+
+Equivalently, the visit-level training objective is the Binary Cross-Entropy loss over clinical events: 
+
+LBCE (xt, z t) = −
+
+> V
+
+X
+
+> c=1
+
+[xt,c log σ(zt,c ) + (1 − xt,c ) log(1 − σ(zt,c ))] .
+
+The factorization is imposed only at the output layer; temporal and cross-event dependencies are captured by the shared Transformer representation. 
+
+4.2 Optimization Scaffold: Statistical Prior 
+
+For the long-tailed EHR generation, a main difficulty lies in rare medical codes, which represent clinical events such as diagnoses, procedures, and medications, contribute far fewer positive updates than the common codes. Even when a positive occurrence of a rare code produces a large local BCE residual, its aggregate effect can be overwhelmed by gradients from high-frequency codes and from 5the many non-occurrence labels, i.e., yc = 0 , induced by the large code vocabulary. To make early training easier, we build a label-wise bias from empirical marginal frequencies. Considering numerical stability, we use the smoothed marginal probability ˆπϵ(c) = ˆπ(c)+ ϵ 
+
+> 1+2 ϵ
+
+for event c, then we define the statistical bias used in the scaffold as 
+
+bstat (c) = −logit  ˆπϵ(c) = log 
+
+ 1 − ˆπ(c) + ϵ
+
+ˆπ(c) + ϵ
+
+
+
+.
+
+At the start of training, the model logit for c is close to its empirical log-odds, z0,c (x) ≈ logit  ˆπϵ(c).After adding bstat (c), the effective logit becomes ˜z0,c (x) = z0,c (x) + bstat (c) ≈ 0. Thus, when the annealing coefficient is large early in training, the prior bias shifts the effective logit toward zero. Since σ′(u) = σ(u)(1 − σ(u)) is maximized at u = 0 , centering the early effective logit ˜z0,c near zero places rare-code predictions in the high-sensitivity region of the sigmoid. When the logit is close to zero, a small parameter update can change the predicted probability more easily. When the logit has a large magnitude, the sigmoid becomes saturated and its derivative becomes small. Therefore, bstat is used to make early optimization more sensitive, especially for rare codes. We use bstat only during training, rather than in the inference phase. At the beginning of training, many rare codes have low logits and receive logit-increasing gradients only from sparse occurrence labels (yc = 1) . Adding bstat moves the effective logits closer to zero and amplifies the influence of these sparse rare-event observations relative to the dominant head-code updates. By reducing bstat to zero gradually, the model learns to capture rare-event dependencies from the patient history rather than relying on a fixed external bias when rare events should appear. At inference time, the model will use its own logits alone for data generation. 
+
+4.3 Curriculum Prior Injection 
+
+Retaining a fixed source-prior bias during the inference phase causes generation to remain perpet-ually dependent on an external correction term, which will introduce computational inefficiencies and can miscalibrate outputs when the target population has a different code distribution. There-fore, AdaPCLA utilizes the prior bias only as a training scaffold and anneals to zero gradually, encouraging rare-code dependencies to be encoded in the model parameters for bias-free inference. During training, we use the modified logits ˜zτ (x) = zτ (x) + α(τ )bstat , where zτ (x) is the intrinsic logit produced by the backbone, bstat is the statistical prior bias, and α(τ ) ∈ [0 , 1] controls the proportion of the prior bias used at step τ . The schedule starts from α(0) = 1 and ends at 
+
+α(T ) = 0 .The training loss is the BCE loss computed with the effective logits: 
+
+LAdaPCLA = LBCE 
+
+ y, σ (˜ zτ (x)) .
+
+At the beginning, α(τ ) is large, so rare-event observations exert a stronger effect on the update direction. During training, α(τ ) becomes smaller, the model then has to rely more on the patient history and less on the external bias. At the end of training, α(T ) = 0 , so the generator uses only its own logits, ˜zT (x) = zT (x). Thus, AdaPCLA uses the prior bias as a temporary training aid, but inference is performed without any external bias. 
+
+4.4 Zero-Shot Cross-Population Adaptation 
+
+Data from different scenarios, such as different hospitals, populations, or regions, exhibits varying degrees of statistical differences and biases. Therefore, a model trained on one patient population 6would be used to generate data for another population with different code occurrence frequency. 
+
+AdaPCLA adaptively supports such cross-population adaptation by introducing a target-prior correction difference at inference time, without retraining. Let ˆπ(c) be source prevalence used during training and πtarget (c) be target occurrence frequency for event c. We define the logit difference between source and target population distribution as 
+
+∆b(c) = logit  πtarget (c) − logit  ˆπ(c),
+
+and modify the logits as z′ 
+
+> t
+
+= zt(θ) + λ∆b for inference, where λ ∈ [0 , 1] controls the strength of the adjustment. λ = 1 applies the full prior correction and λ = 0 recovers the original model. This correction follows the standard label-wise prior-shift rule: if the conditional distribution of patient context given event c is unchanged across the source and target populations, i.e., PS (x |
+
+yc) = PT (x | yc), then the Bayes-optimal logit changes by 
+
+z⋆T,c (x) = z⋆S,c (x) + logit  πT (c) − logit  πS (c).
+
+See Appendix D for the detailed proof. This correction is applied independently to each code at each next-visit prediction step. Under the label-wise prior-shift assumption, it steers label-wise occurrence probabilities toward the target population while reusing the longitudinal and co-occurrence structure learned by the backbone, without requiring target-domain retraining. 
+
+# 5 Theoretical Analysis 
+
+In this section, we analyze the training dynamics of AdaPCLA and give theoretical insights into why it can retain rare-code learning signals after the prior scaffold is digested. First, the prior scaffold changes the BCE residuals, so the SGD update induced by these residuals is written into the intrinsic logits through the shared Transformer backbone. This happens because the scaffold is fixed and independent of the backbone parameters, i.e., ∇θ(αkbstat ) = 0 , and therefore 
+
+∇θ ˜zk(x) = ∇θzk(x). This yields a label-wise gradient-transfer relationship: the residual of one code can influence the intrinsic logit of another code through the corresponding entry of the label-wise empirical NTK. Second, under standard lazy-training assumptions [31], we analyze how the effect of the annealed scaffold α(τ )bstat can be absorbed into the intrinsic logits as α(τ ) decays to zero. Together, these results justify that the prior bias can be injected to create an early rare-code learning signal, and the annealing schedule controls whether this signal is retained in the model parameters after the external bias is digested. 
+
+5.1 Gradient Transfer through the Shared Backbone 
+
+We identify how the prior scaffold affects rare-code intrinsic-logit updates through the label-wise empirical NTK. At training step k, the effective logits are ˜zk(x) = zk(x) + αkbstat , and the BCE residual is G(k)Ada (x) = σ(˜ zk(x)) − y which affects the SGD update direction as the scaffold. The additive term αkbstat is fixed with respect to the backbone parameters, so ∇θ(αkbstat ) = 0 and 
+
+∇θ ˜zk(x) = ∇θzk(x). The adjusted logits ˜zk(x) determine the BCE residuals, and the fixed-scaffold property ensures that the corresponding parameter update changes the intrinsic logits zk(x). For a one-step SGD update with step size η > 0, the first-order intrinsic-logit update for code c is 
+
+∆zk(c; x) = −η
+
+> V
+
+X
+
+> j=1
+
+[K(k)]c,j G(k)Ada ,j (x) + O(η2),
+
+7Table 1: Tail clinical plausibility results (mean ±std over 3 independent generations).                                                                                                                                       
+
+> Method MIMIC-III MIMIC-IV PairSeen ↑TailPairSeen ↑TailCtxJSD ↓TailTopKJac ↑PairSeen ↑TailPairSeen ↑TailCtxJSD ↓TailTopKJac ↑
+> GPT-style 0.7977 ±0.0002 0.0384 ±0.0005 0.6621 ±0.0002 0.01131 ±0.00019 0.8851 ±0.0008 0.0500 ±0.0054 0.6675 ±0.0019 0.00151 ±0.00013
+> LSTM 0.7272 ±0.0001 0.0297 ±0.0002 0.6414 ±0.0003 0.04905 ±0.00098 0.8339 ±0.0003 0.0355 ±0.0006 0.6464 ±0.0006 0.01729 ±0.00046
+> EVA 0.0260 ±0.0000 0.0023 ±0.0000 0.6905 ±0.0000 0.00083 ±0.00004 0.9042 ±0.0001 0.0482 ±0.0015 0.6691 ±0.0014 0.01159 ±0.00055
+> SynTEG 0.0373 ±0.0000 0.0019 ±0.0000 0.6903 ±0.0001 0.00002 ±0.00000 0.2177 ±0.0001 0.0072 ±0.0001 0.6725 ±0.0008 0.00006 ±0.00000
+> HALO 0.8263 ±0.0003 0.0520 ±0.0010 0.6558 ±0.0003 0.01967 ±0.00028 0.8768 ±0.0010 0.0498 ±0.0042 0.6652 ±0.0022 0.01050 ±0.00094
+> AdaPCLA 0.7983 ±0.0271 0.1114 ±0.0109 0.5981 ±0.0040 0.0345 ±0.0020 0.9478 ±0.0032 0.0822 ±0.0022 0.6313 ±0.0033 0.0187 ±0.0013
+
+where [K(k)]i,j = ⟨∇ θzk(i; x), ∇θzk(j; x)⟩ . K(k) is the label-wise empirical NTK for context x.Therefore, the residual of code j changes the intrinsic-logit update of code c through the cor-responding entry [K(k)]c,j of the label-wise empirical NTK. This relationship shows that the prior scaffold affects intrinsic logits by reshaping BCE residuals, whose effects are then transferred through backbone parameter updates. For each code c, the update is determined by BCE residuals weighted by the corresponding row of K(k). Thus, AdaPCLA strengthens early rare-code learning signals only when those residuals can be transferred through the empirical-NTK structure. 
+
+5.2 Prior-Internalization Bound 
+
+For a fixed context x, define the expected BCE risk as 
+
+Fτ (z; x) = EY ∼P(·| x)
+
+LBCE 
+
+ Y, σ (z + α(τ )bstat ) .
+
+Let ˜z⋆(x) be the effective-logit minimizer of the conditional expected BCE risk for the fixed context 
+
+x. Because the effective logits are z + α(τ )bstat , the corresponding target in intrinsic-logit coordi-nates is z⋆τ (x) = ˜ z⋆(x) − α(τ )bstat . Since AdaPCLA removes the scaffold at inference time, prior internalization requires the learned intrinsic logits zτ (x) to follow the target as α(τ ) decays to zero. Under the assumptions stated the internalization error eτ (x) = zτ (x) − z⋆τ (x) satisfies 
+
+∥eτ (x)∥K−1 ≤ e−μλ min (K)τ ∥e0(x)∥K−1 + B⋆(x)
+
+μλ min (K) sup  
+
+> s∈[0 ,T]
+
+| ˙α(s)|. (2) This prior-internalization bound gives two design implications. First, smoother annealing re-duces sup s | ˙α(s)|, which lowers the internalization error caused by a moving scaffold. Second, a larger minimum eigenvalue λmin (K) of the label-wise empirical NTK reduces the bound, meaning that the intrinsic logits can stay closer to the moving target. Because α(0) = 1 and α(T ) = 0 , the moving target in intrinsic-logit coordinates shifts by z⋆ 
+
+> T
+
+(x) − z⋆ 
+
+> 0
+
+(x) = bstat . When the internalization error eτ (x) remains small along the annealing path, the learned intrinsic logits inherit this shift, so zT (x) − z0(x) ≈ bstat . This supports the intended internalization property of AdaPCLA : the prior signal introduced by the training scaffold is absorbed into the model’s own logits through the annealing trajectory, enabling inference without an external prior correction. 
+
+# 6 Experiments 
+
+6.1 Experimental Setting 
+
+Datasets and preprocessing. We evaluate on MIMIC-III [32] and MIMIC-IV [33]. Each patient is represented as a sequence of visits, where each visit is a deduplicated set of International Classification of Diseases (ICD) diagnosis codes. We use patient-level train/validation/test splits and apply the same preprocessing and vocabulary mapping to all methods. 8Table 2: Complete downstream utility results (mean ±std over 3 independent generations). Metrics: accuracy (Acc), F1, and AUPRC from 25-label diagnosis classification.                                                                                                                                       
+
+> Method MIMIC-III MIMIC-IV Acc ↑F1 ↑AUPRC ↑Acc ↑F1 ↑AUPRC ↑
+> Baselines
+> GPT-style 0.8256 ±0.0023 0.8304 ±0.0021 0.8902 ±0.0020 0.8856 ±0.0101 0.8912 ±0.0059 0.9270 ±0.0021
+> LSTM 0.5145 ±0.0087 0.5017 ±0.0274 0.5563 ±0.0115 0.5441 ±0.0143 0.5518 ±0.0264 0.5967 ±0.0120
+> EVA 0.5243 ±0.0127 0.5167 ±0.0108 0.5607 ±0.0061 0.4829 ±0.0227 0.3969 ±0.0135 0.4896 ±0.0080
+> SynTEG 0.5095 ±0.0157 0.4016 ±0.0449 0.5721 ±0.0130 0.5333 ±0.0061 0.5583 ±0.0215 0.6602 ±0.0097
+> HALO 0.8761 ±0.0017 0.8779 ±0.0016 0.9295 ±0.0009 0.8592 ±0.0030 0.8631 ±0.0028 0.8962 ±0.0015
+> Ours
+> Static-PCLA (Fixed Bias) 0.9019 ±0.0028 0.9023 ±0.0027 0.9455 ±0.0019 0.8914 ±0.0219 0.8912 ±0.0316 0.9309 ±0.0135
+> AdaPCLA (Annealing) 0.9040 ±0.0074 0.9051 ±0.0067 0.9514 ±0.0038 0.9130 ±0.0030 0.9104 ±0.0032 0.9449 ±0.0027
+
+Baselines. We compare AdaPCLA with representative EHR generators, including LSTM [34], 
+
+EVA [15], SynTEG [17], GPT-style [13], and HALO (hierarchical autoregressive EHR genera-tor) [11]. For each baseline, we follow the model architecture and training recipe described in the original paper, and use the same training cohort and evaluation protocol as AdaPCLA .
+
+Metrics. We evaluate the quanlity of synthetic EHR data. For distributional fidelity, we examine occurrence frequency and visit-level code co-occurrence statistics. For tail clinical plausibility, we report PairSeen/TailPairSeen, TailCtxJSD, and TailTopKJac. For downstream utility, we use the 
+
+Train-on-Synthetic, Test-on-Real (TSTR) protocol and report Accuracy, F1, and AUPRC. 
+
+6.2 Experimental Results 
+
+Tail clinical plausibility. Table 1 reports tail clinical plausibility on MIMIC-III/-IV. AdaP-CLA gives the strongest overall tail-focused performance across the two datasets. On MIMIC-IV, 
+
+AdaPCLA ranks first on all four metrics: PairSeen, TailPairSeen, TailCtxJSD, and TailTopKJac. In particular, it improves TailPairSeen from 0.0498 with HALO to 0.0822 , a relative gain of 65 .1% ;and also reduces TailCtxJSD from 0.6652 to 0.6313 , showing better tail-context consistency. On MIMIC-III, AdaPCLA achieves the best TailPairSeen and TailCtxJSD. Compared with HALO, it improves TailPairSeen from 0.0520 to 0.1114 , and reduces TailCtxJSD from 0.6558 to 
+
+0.5981 . Although HALO has a higher overall PairSeen and LSTM has a higher TailTopKJac, 
+
+AdaPCLA provides a better balance between tail support and tail-context consistency. Overall, these results show that AdaPCLA better preserves rare-event co-occurrence structure than other baselines. EVA and SynTEG show unstable tail plausibility. On MIMIC-III, their PairSeen and Tail-PairSeen scores are close to zero, which means that many generated intra-visit pairs are not sup-ported by the training corpus. A likely reason is that VAE- and GAN-based generators often produce dense multi-hot visits after thresholding. When a visit contains too many events, the number of intra-visit pairs grows quickly, and this increases the chance of unseen co-occurrences. This also hurts tail-context metrics because the local neighborhood of tail events can deviate from the real data distribution. 
+
+AdaPCLA uses conditional code probabilities together with sampling-time control over the number of generated codes in each visit. This design better preserves the natural sparsity of clinical visits and reduces implausible tail-code co-occurrences. 9Table 3: Compact model analysis. (a) Internalization ablation on MIMIC-III. (b) Zero-shot distri-bution control from MIMIC-IV to MIMIC-III.                                           
+
+> (a) Dependency →Internalization (MIMIC-III seed1)
+> Variant PairSeen ↑TailPairSeen ↑TailCtxJSD ↓TailTopKJac ↑
+> HALO 0.8261 0.0549 0.6549 0.0200 Static-PCLA (Consistent) 0.8526 0.0755 0.6392 0.0256 Static-PCLA (Train-only) 0.9992 ––0.0000
+> AdaPCLA (Ours) 0.8175 0.1239 0.5940 0.0356 (b) Zero-shot controllability (IV →III)
+> Method Acc ↑F1 ↑AUPRC ↑
+> LSTM 0.523 0.557 0.565 EVA 0.489 0.282 0.445 SynTEG 0.517 0.459 0.603 GPT-style 0.822 0.836 0.895
+> AdaPCLA (Ours) 0.865 0.865 0.922
+
+6.3 Model Analysis 
+
+We evaluate the properties and performance of AdaPCLA based on the following aspects: inter-nalization ablation study, downstream utility, and zero-shot distribution control adaptations. 
+
+Ablation study. Table 3(a) compares different variants of AdaPCLA and HALO based on how prior-bias is used for the generative model training. HALO is the backbone generator without any prior bias. Static-PCLA (Consistent) uses the fixed prior bias both during training and inference, which tests whether a permanent bias can improve generation if it is always available. Static-PCLA (Train-only) uses the same fixed bias during training but removes it at inference, which tests whether the model still work after the external bias is taken away. AdaPCLA uses the bias only during training and gradually anneals to zero, and inference is performed without any external bias. The results show a clear difference between using a fixed bias and annealing it. Static-PCLA (Consistent) improves over HALO on several tail metrics, which means that the prior bias is useful when it is kept at inference. However, Static-PCLA (Train-only) fails after the bias is removed: TailPairSeen and TailCtxJSD cannot be computed, and TailTopKJac drops to 0.0000 . This means that a fixed training bias alone does not make the model learn the rare-event structure. 
+
+AdaPCLA does not use an external bias at inference, but still achieves the best metrics in this ablation. It obtains the highest TailPairSeen 0.1239 and TailTopKJac 0.0356 , and the lowest TailCtxJSD 0.5940 , outperforming all the baselines. This suggests that dynamic annealing helps the backbone learn useful prior information in its own logits, instead of depending on a fixed external correction. Figure 2 further visualizes this annealing process by tracking how selected probe-code probabil-ities change over training checkpoints. A probe code is a candidate code evaluated under a fixed patient-history context, and the probes are grouped into related rare, unrelated rare, and wrong codes. The similar trajectory patterns under 30 and 100 contexts suggest that annealing produces stable internalization dynamics as the probing set is enlarged. 
+
+Downstream predictive utility. We use the TSTR protocol to test whether synthetic data supports real downstream prediction. For each generator, we train a 25-label diagnosis classifier only on synthetic data and evaluate it on the held-out real test set. As shown in Table 2, AdaPCLA 
+
+achieves the best Accuracy, F1, and AUPRC on both MIMIC-III and MIMIC-IV. These results indicate that AdaPCLA preserves predictive signals that transfer from synthetic data to real-data. 
+
+Zero-shot distribution control. We also test whether AdaPCLA can adapt to cross-population generation without retraining. The model is trained on the source population and then applied to the target population using only the target code occurrence rates through the delta-bias correction in Sec. 4.4. Table 3(b) reports the zero-shot transfer results from MIMIC-IV to MIMIC-III. These 10 (a) Annealing dynamics under 30 contexts (b) Annealing dynamics under 100 contexts 
+
+Figure 2: Annealing dynamics of selected probe-code probabilities under 30 and 100 contexts. The qualitative trends remain stable when the probing set is enlarged. results show that AdaPCLA can use the target prior to adjust generated code frequencies, while retaining longitudinal dependencies and co-occurrence patterns learned from the source population. 
+
+# 7 Conclusion 
+
+In this paper, we proposed AdaPCLA , a curriculum prior-guided framework for long-tailed lon-gitudinal EHR generation. By using empirical priors as a temporary training scaffold and gradu-ally annealing them away, AdaPCLA strengthens rare-code learning during optimization without requiring an external bias during inference. Experiments on real-world dataset show that AdaP-CLA improves tail plausibility, downstream utility, and zero-shot distribution control over strong EHR generation baselines. Finally, AdaPCLA supports zero-shot generation adaptation for cross-population setting in a training-free manner. 
+
+Limitations. The current evaluation limited to diagnosis-code sequences from two public EHR benchmarks. More validation for AdaPCLA over diverse hospitals and richer EHR modalities beyond diagnosis codes is expected as future work. 11 References 
+
+[1] Kim-Anh-Nhi Nguyen, Dhavalkumar Patel, Masoud Edalati, Maria Sevillano, Prem Timsina, Robert Freeman, Matthew A. Levin, David L. Reich, and Arash Kia. Electronic-medical-record-driven machine learning predictive model for hospital-acquired pressure injuries: Development and external validation. Journal of Clinical Medicine , 14(4), 2025. ISSN 2077-0383. doi: 10.3390/jcm14041175. URL https://www.mdpi.com/2077-0383/14/4/1175 .[2] Tianyi Liu, Andrew Krentz, Lei Lu, and Vasa Curcin. Machine learning based prediction models for cardiovascular disease risk using electronic health records data: systematic review and meta-analysis. European Heart Journal - Digital Health , 6(1):7–22, 10 2024. ISSN 2634-3916. doi: 10.1093/ehjdh/ztae080. URL https://doi.org/10.1093/ehjdh/ztae080 .[3] Norah Hamad Alhumaidi, Doni Dermawan, Hanin Farhana Kamaruzaman, and Nasser Alotaiq. The use of machine learning for analyzing real-world data in disease prediction and manage-ment: Systematic review. JMIR Medical Informatics , 13:e68898, June 2025. ISSN 2291-9694. doi: 10.2196/68898. URL https://medinform.jmir.org/2025/1/e68898 .[4] Feiyan Liu, Wenhao Wang, Jiawei Zheng, Yibo Xie, Xiaoli Wang, and Dongxiang Zhang. EDRMM: enhancing drug recommendation via multi-granularity and multi-attribute rep-resentation. BMC Bioinform. , 26(1):173, 2025. doi: 10.1186/S12859-025-06167-4. URL 
+
+https://doi.org/10.1186/s12859-025-06167-4 .[5] Juntao Li, Haobin Yuan, Ling Luo, Tengxiao Lv, Yan Jiang, Fan Wang, Ping Zhang, Huiyi Lv, Jian Wang, Yuanyuan Sun, and Hongfei Lin. Overview of CHIP 2025 shared task 2: Discharge medication recommendation for metabolic diseases based on chinese electronic health records. 
+
+CoRR , abs/2511.06230, 2025. doi: 10.48550/ARXIV.2511.06230. URL https://doi.org/10. 48550/arXiv.2511.06230 .[6] Yu-Chen Liu, Guan-Ling Lin, Jeremiah Scholl, Yi-Chun Hung, Yu-Jing Lin, Yu-Chuan Li, and Hsuan-Chia Yang. Evaluation of diagnostic recommendations embedded in medication alerts: Prospective single-arm interventional study. Journal of Medical Internet Research , 27: e70731, May 2025. ISSN 1438-8871. doi: 10.2196/70731. URL https://www.jmir.org/2025/ 1/e70731 . PMID 40424063. [7] Huang Huang, Wei Lyu, Md Mahmud Hasan, and Shannon H Houser. Adoption of machine learning in us hospital electronic health record systems: Retrospective observational study. 
+
+Journal of Medical Internet Research , 27:e76126, December 2025. ISSN 1438-8871. doi: 10. 2196/76126. URL https://www.jmir.org/2025/1/e76126 .[8] Jinsung Yoon, Michel J. Mizrahi, Nahid Farhady Ghalaty, Thomas Jarvinen, Ashwin S. Ravi, Peter Brune, Fanyu Kong, Dave Anderson, George Lee, Arie Meir, Farhana Bandukwala, Elli Kanal, Sercan Ö. Arik, and Tomas Pfister. Ehr-safe: generating high-fidelity and privacy-preserving synthetic electronic health records. npj Digit. Medicine , 6, 2023. doi: 10.1038/ S41746-023-00888-7. URL https://doi.org/10.1038/s41746-023-00888-7 .[9] Edward Choi, Siddharth Biswal, Bradley A. Malin, Jon Duke, Walter F. Stewart, and Jimeng Sun. Generating multi-label discrete patient records using generative adversarial networks. In Finale Doshi-Velez, Jim Fackler, David C. Kale, Rajesh Ranganath, Byron C. Wallace, and Jenna Wiens, editors, Proceedings of the Machine Learning for Health Care Conference, MLHC 
+
+12 2017, Boston, Massachusetts, USA, 18-19 August 2017 , Proceedings of Machine Learning Re-search, pages 286–305. PMLR, 2017. URL http://proceedings.mlr.press/v68/choi17a. html .[10] Lei Xu, Maria Skoularidou, Alfredo Cuesta-Infante, and Kalyan Veeramachaneni. Mod-eling tabular data using conditional GAN. In Hanna M. Wallach, Hugo Larochelle, Alina Beygelzimer, Florence d’Alché-Buc, Emily B. Fox, and Roman Garnett, editors, Ad-vances in Neural Information Processing Systems 32: Annual Conference on Neural In-formation Processing Systems 2019, NeurIPS 2019, December 8-14, 2019, Vancouver, BC, Canada , pages 7333–7343, 2019. URL https://proceedings.neurips.cc/paper/2019/hash/ 254ed7d2de3b23ab10936522dd547b78-Abstract.html .[11] Brandon Theodorou, Cao Xiao, and Jimeng Sun. Synthesize extremely high-dimensional lon-gitudinal electronic health records via hierarchical autoregressive language model. CoRR ,abs/2304.02169, 2023. doi: 10.48550/ARXIV.2304.02169. URL https://doi.org/10.48550/ arXiv.2304.02169 .[12] Yuan Zhong, Xiaochen Wang, Jiaqi Wang, Xiaokun Zhang, Yaqing Wang, Mengdi Huai, Cao Xiao, and Fenglong Ma. Synthesizing multimodal electronic health records via predictive dif-fusion models. In Ricardo Baeza-Yates and Francesco Bonchi, editors, Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining, KDD 2024, Barcelona, Spain, August 25-29, 2024 , pages 4607–4618. ACM, 2024. doi: 10.1145/3637528.3671836. URL 
+
+https://doi.org/10.1145/3637528.3671836 .[13] Yijie Hao, Huan He, and Joyce C. Ho. LLMSYN: generating synthetic electronic health records without patient-level data. In Kaivalya Deshpande, Madalina Fiterau, Shalmali Joshi, Zachary C. Lipton, Rajesh Ranganath, and Iñigo Urteaga, editors, Machine Learning for Healthcare Conference, 16-17 August 2024, Toronto, Canada , volume 252 of Proceedings of Ma-chine Learning Research , pages 1–27. PMLR, 2024. URL https://proceedings.mlr.press/ v252/hao24a.html .[14] Jiawei Ren, Cunjun Yu, Shunan Sheng, Xiao Ma, Haiyu Zhao, Shuai Yi, and Hongsheng Li. Balanced meta-softmax for long-tailed visual recognition. In Hugo Larochelle, Marc’Aurelio Ranzato, Raia Hadsell, Maria-Florina Balcan, and Hsuan-Tien Lin, editors, Advances in Neural Information Processing Systems 33: Annual Conference on Neural Information Processing Sys-tems 2020, NeurIPS 2020, December 6-12, 2020, virtual , 2020. URL https://proceedings. neurips.cc/paper/2020/hash/2ba61cc3a8f44143e1f2f13b2b729ab3-Abstract.html .[15] Jin Li, Benjamin J. Cairns, Jingsong Li, and Tingting Zhu. Generating synthetic mixed-type longitudinal electronic health records for artificial intelligent applications. npj Digit. Medicine , 6, 2023. doi: 10.1038/S41746-023-00834-7. URL https://doi.org/10.1038/ s41746-023-00834-7 .[16] Amirsina Torfi and Edward A. Fox. Corgan: Correlation-capturing convolutional generative adversarial networks for generating synthetic healthcare records. In Roman Barták and Eric Bell, editors, Proceedings of the Thirty-Third International Florida Artificial Intelligence Re-search Society Conference, Originally to be held in North Miami Beach, Florida, USA, May 17-20, 2020 , pages 335–340. AAAI Press, 2020. URL https://aaai.org/ocs/index.php/ FLAIRS/FLAIRS20/paper/view/18458 .13 [17] Ziqi Zhang, Chao Yan, Thomas A. Lasko, Jimeng Sun, and Bradley A. Malin. SynTEG: a framework for temporal structured electronic health data simulation. Journal of the American Medical Informatics Association , 28(3):596–604, 2021. doi: 10.1093/jamia/ocaa262. URL 
+
+https://doi.org/10.1093/jamia/ocaa262 .[18] Hojjat Karami, David Atienza, and Anisoara Ionescu. Synehrgy: Synthesizing mixed-type structured electronic health records using decoder-only transformers. CoRR , abs/2411.13428, 2024. doi: 10.48550/ARXIV.2411.13428. URL https://doi.org/10.48550/arXiv.2411. 13428 .[19] Nitesh V. Chawla, Kevin W. Bowyer, Lawrence O. Hall, and W. Philip Kegelmeyer. SMOTE: synthetic minority over-sampling technique. J. Artif. Intell. Res. , 16:321–357, 2002. doi: 10. 1613/JAIR.953. URL https://doi.org/10.1613/jair.953 .[20] Tsung-Yi Lin, Priya Goyal, Ross B. Girshick, Kaiming He, and Piotr Dollár. Focal loss for dense object detection. In IEEE International Conference on Computer Vision, ICCV 2017, Venice, Italy, October 22-29, 2017 , pages 2999–3007. IEEE Computer Society, 2017. doi: 10.1109/ICCV.2017.324. URL https://doi.org/10.1109/ICCV.2017.324 .[21] Yin Cui, Menglin Jia, Tsung-Yi Lin, Yang Song, and Serge J. Belongie. Class-balanced loss based on effective number of samples. In IEEE Conference on Com-puter Vision and Pattern Recognition, CVPR 2019, Long Beach, CA, USA, June 16-20, 2019 , pages 9268–9277. Computer Vision Foundation / IEEE, 2019. doi: 10.1109/ CVPR.2019.00949. URL http://openaccess.thecvf.com/content_CVPR_2019/html/Cui_ Class-Balanced_Loss_Based_on_Effective_Number_of_Samples_CVPR_2019_paper.html .[22] Kaidi Cao, Colin Wei, Adrien Gaidon, Nikos Aréchiga, and Tengyu Ma. Learning im-balanced datasets with label-distribution-aware margin loss. In Hanna M. Wallach, Hugo Larochelle, Alina Beygelzimer, Florence d’Alché-Buc, Emily B. Fox, and Roman Garnett, ed-itors, Advances in Neural Information Processing Systems 32: Annual Conference on Neural Information Processing Systems 2019, NeurIPS 2019, December 8-14, 2019, Vancouver, BC, Canada , pages 1565–1576, 2019. URL https://proceedings.neurips.cc/paper/2019/hash/ 621461af90cadfdaf0e8d4cc25129f91-Abstract.html .[23] Bingyi Kang, Saining Xie, Marcus Rohrbach, Zhicheng Yan, Albert Gordo, Jiashi Feng, and Yannis Kalantidis. Decoupling representation and classifier for long-tailed recognition. In 8th International Conference on Learning Representations, ICLR 2020, Addis Ababa, Ethiopia, April 26-30, 2020 . OpenReview.net, 2020. URL https://openreview.net/forum? id=r1gRTCVFvB .[24] Aditya Krishna Menon, Sadeep Jayasumana, Ankit Singh Rawat, Himanshu Jain, Andreas Veit, and Sanjiv Kumar. Long-tail learning via logit adjustment. In 9th International Conference on Learning Representations, ICLR 2021, Virtual Event, Austria, May 3-7, 2021 . OpenRe-view.net, 2021. URL https://openreview.net/forum?id=37nvvqkCo5 .[25] Joaquin Quionero-Candela, Masashi Sugiyama, Anton Schwaighofer, and Neil D. Lawrence. 
+
+Dataset Shift in Machine Learning . MIT Press, 2009. URL https://api.semanticscholar. org/CorpusID:61294087 .[26] Zachary C. Lipton, Yu-Xiang Wang, and Alexander J. Smola. Detecting and correcting for label shift with black box predictors. In Jennifer G. Dy and Andreas Krause, editors, Proceedings 
+
+14 of the 35th International Conference on Machine Learning, ICML 2018, Stockholmsmässan, Stockholm, Sweden, July 10-15, 2018 , Proceedings of Machine Learning Research, pages 3128– 3136. PMLR, 2018. URL http://proceedings.mlr.press/v80/lipton18a.html .[27] Saurabh Garg, Yifan Wu, Sivaraman Balakrishnan, and Zachary C. Lipton. A unified view of label shift estimation. In Hugo Larochelle, Marc’Aurelio Ranzato, Raia Hadsell, Maria-Florina Balcan, and Hsuan-Tien Lin, editors, Advances in Neural Information Processing Systems 33: Annual Conference on Neural Information Processing Systems 2020, NeurIPS 2020, Decem-ber 6-12, 2020, virtual , 2020. URL https://proceedings.neurips.cc/paper/2020/hash/ 219e052492f4008818b8adb6366c7ed6-Abstract.html .[28] Xiangjian Jiang, Nikola Simidjievski, and Mateja Jamnik. TabStruct: Measuring structural fidelity of tabular data. CoRR , abs/2509.11950, 2025. doi: 10.48550/ARXIV.2509.11950. URL 
+
+https://doi.org/10.48550/arXiv.2509.11950 .[29] Enhao Zhang, Chuanxing Geng, Chaohua Li, and Songcan Chen. Dynamic learnable logit adjustment for long-tailed visual recognition. IEEE Trans. Cir. and Sys. for Video Technol. ,34(9):7986–7997, September 2024. ISSN 1051-8215. doi: 10.1109/TCSVT.2024.3383962. URL 
+
+https://doi.org/10.1109/TCSVT.2024.3383962 . Issue date September 2024. [30] Haofeng Zhang, Philip H.S. Torr, Dubing Chen, and Yuming Shen. Zero-shot logit adjustment, 2022. URL https://arxiv.org/abs/2204.11822 .[31] Lénaïc Chizat, Edouard Oyallon, and Francis R. Bach. On lazy training in differentiable pro-gramming. In Hanna M. Wallach, Hugo Larochelle, Alina Beygelzimer, Florence d’Alché-Buc, Emily B. Fox, and Roman Garnett, editors, Advances in Neural Information Processing Systems 32: Annual Conference on Neural Information Processing Systems 2019, NeurIPS 2019, Decem-ber 8-14, 2019, Vancouver, BC, Canada , pages 2933–2943, 2019. URL https://proceedings. neurips.cc/paper/2019/hash/ae614c557843b1df326cb29c57225459-Abstract.html .[32] Alistair E. W. Johnson, Tom J. Pollard, Lu Shen, Li-wei H. Lehman, Mengling Feng, Mo-hammad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G. Mark. MIMIC-III, a freely accessible critical care database. Scientific Data , 3(1):160035, 2016. doi: 10.1038/sdata.2016.35. URL https://doi.org/10.1038/sdata.2016.35 .[33] Alistair E. W. Johnson, Lucas Bulgarelli, Lu Shen, Alvin Gayles, Ayad Shammout, Steven Horng, Tom J. Pollard, Sicheng Hao, Benjamin Moody, Brian Gow, Li-wei H. Lehman, Leo A. Celi, and Roger G. Mark. MIMIC-IV, a freely accessible electronic health record dataset. 
+
+Scientific Data , 10(1):1, 2023. doi: 10.1038/s41597-022-01899-x. URL https://doi.org/10. 1038/s41597-022-01899-x .[34] Edward Choi, Mohammad Taha Bahadori, Andy Schuetz, Walter F. Stewart, and Jimeng Sun. Doctor AI: Predicting clinical events via recurrent neural networks. In Proceedings of the 1st Machine Learning for Healthcare Conference , volume 56 of Proceedings of Machine Learning Research , pages 301–318. PMLR, 2016. URL http://proceedings.mlr.press/v56/Choi16. html .[35] Joseph Enguehard, Dan Busbridge, Adam Bozson, Claire Woodcock, and Nils Hammerla. Neural temporal point processes for modelling electronic health records. In Emily Alsentzer, Matthew B. A. McDermott, Fabian Falck, Suproteem K. Sarkar, Subhrajit Roy, and Stephanie L. Hyland, editors, Machine Learning for Health Workshop, ML4H@NeurIPS 2020, 
+
+15 Virtual Event, 11 December 2020 , Proceedings of Machine Learning Research, pages 85–113. PMLR, 2020. URL http://proceedings.mlr.press/v136/enguehard20a.html .[36] Feng Xie, Han Yuan, Yilin Ning, Marcus Eng Hock Ong, Mengling Feng, Wynne Hsu, Bibhas Chakraborty, and Nan Liu. Deep learning for temporal data representation in electronic health records: A systematic review of challenges and methodologies. J. Biomed. Informatics , 126: 103980, 2022. doi: 10.1016/J.JBI.2021.103980. URL https://doi.org/10.1016/j.jbi.2021. 103980 .[37] Tong Wu, Qingqiu Huang, Ziwei Liu, Yu Wang, and Dahua Lin. Distribution-balanced loss for multi-label classification in long-tailed datasets. In Andrea Vedaldi, Horst Bischof, Thomas Brox, and Jan-Michael Frahm, editors, Computer Vision - ECCV 2020 - 16th European Con-ference, Glasgow, UK, August 23-28, 2020, Proceedings, Part IV , Lecture Notes in Com-puter Science, pages 162–178. Springer, 2020. doi: 10.1007/978-3-030-58548-8\_10. URL 
+
+https://doi.org/10.1007/978-3-030-58548-8_10 .[38] Dekun Lin. Probability guided loss for long-tailed multi-label image classification. In Brian Williams, Yiling Chen, and Jennifer Neville, editors, Thirty-Seventh AAAI Conference on Arti-ficial Intelligence, AAAI 2023, Thirty-Fifth Conference on Innovative Applications of Artificial Intelligence, IAAI 2023, Thirteenth Symposium on Educational Advances in Artificial Intelli-gence, EAAI 2023, Washington, DC, USA, February 7-14, 2023 , pages 1577–1585. AAAI Press, 2023. doi: 10.1609/AAAI.V37I2.25244. URL https://doi.org/10.1609/aaai.v37i2.25244 .[39] Naoya Hasegawa and Issei Sato. Multiplicative logit adjustment approximates neural-collapse-aware decision boundary adjustment. In The Thirteenth International Conference on Learn-ing Representations, ICLR 2025, Singapore, April 24-28, 2025 . OpenReview.net, 2025. URL 
+
+https://openreview.net/forum?id=II81zQUS1x .[40] Yue Cheng, Jiajun Zhang, Xiaohui Gao, Weiwei Xing, and Zhanxing Zhu. Learning dynamics of logits debiasing for long-tailed semi-supervised learning. In The Fourteenth International Conference on Learning Representations , 2026. URL https://openreview.net/forum?id= e15SYMcsTs .[41] Yoshua Bengio, Jérôme Louradour, Ronan Collobert, and Jason Weston. Curriculum learn-ing. In Proceedings of the 26th Annual International Conference on Machine Learning , ICML ’09, pages 41–48, New York, NY, USA, 2009. Association for Computing Machinery. ISBN 9781605585161. doi: 10.1145/1553374.1553380. URL https://doi.org/10.1145/1553374. 1553380 .[42] Kamyar Azizzadenesheli, Anqi Liu, Fanny Yang, and Animashree Anandkumar. Regularized learning for domain adaptation under label shifts. In 7th International Conference on Learning Representations, ICLR 2019, New Orleans, LA, USA, May 6-9, 2019 . OpenReview.net, 2019. URL https://openreview.net/forum?id=rJl0r3R9KX .[43] Kun Zhang, Bernhard Schölkopf, Krikamol Muandet, and Zhikun Wang. Domain adaptation under target and conditional shift. In Proceedings of the 30th International Conference on Machine Learning, ICML 2013, Atlanta, GA, USA, 16-21 June 2013 , JMLR Workshop and Conference Proceedings, pages 819–827. JMLR.org, 2013. URL http://proceedings.mlr. press/v28/zhang13d.html .16 [44] Huan He, Owen Queen, Teddy Koker, Consuelo Cuevas, Theodoros Tsiligkaridis, and Marinka Zitnik. Domain adaptation for time series under feature and label shifts. In Andreas Krause, Emma Brunskill, Kyunghyun Cho, Barbara Engelhardt, Sivan Sabato, and Jonathan Scarlett, editors, International Conference on Machine Learning, ICML 2023, 23-29 July 2023, Hon-olulu, Hawaii, USA , Proceedings of Machine Learning Research, pages 12746–12774. PMLR, 2023. URL https://proceedings.mlr.press/v202/he23b.html .17 Appendix A Extended Related Work 
+
+A.1 Generative Modeling for Electronic Health Records 
+
+Synthetic EHR generation builds on a broader clinical sequence modeling literature, where recurrent and temporal point-process models show that diagnoses, procedures, medications, and other clinical events cannot be treated as independent observations [34–36]. This temporal view is especially im-portant for longitudinal synthesis: a realistic generator should preserve visit-level ordering, delayed comorbidities, and clinically meaningful code co-occurrences, rather than only matching aggregate code counts. Synthetic EHR generation has progressed from GAN-, VAE-, and correlation-aware models for discrete or tabular medical records [9, 10, 16] to temporal structured simulators and longitudinal mixed-type generators [15, 17, 18]. Hierarchical autoregressive frameworks further improve high-dimensional visit modeling by directly modeling long-span patient trajectories [11]. Recent systems also study privacy-preserving synthesis, multimodal diffusion, and LLM-based generation without direct patient-level access [8, 12, 13], improving temporal dependency modeling and sample realism. Despite this progress, most existing generators are still trained to fit the overall distribution of the majority of diseases. In long-tailed EHR data, rare disease codes contribute sparse and unstable learning signals for their temporal, contextual, and co-occurrence dependencies. As a result, a generator may improve average realism while underrepresenting rare-event plausibility and rare-code context consistency. AdaPCLA follows the motivation stated in the main text: it gives tail codes stronger optimization support through a temporary prior scaffold, while preserving longitudinal dependency modeling and enabling bias-free inference after annealing. 
+
+A.2 Long-Tailed Learning in EHR 
+
+Long-tailed learning methods reshape training under imbalanced labels, with most canonical meth-ods developed for discriminative classification. Resampling methods rebalance the empirical dis-tribution by constructing or selecting minority examples [19]. Loss-level methods, including focal loss [20] and class-balanced loss [21], change the gradient contribution of different labels. Margin-based objectives enlarge rare-class margins [22], decoupled training separates representation learning from classifier calibration [23], and logit adjustment adds label-frequency terms to logits to obtain a prior-calibrated decision boundary [14, 24]. Later variants further study dynamic or learnable adjustments [29]. These methods are effective for classification, but direct use in longitudinal multi-label EHR generation is less straightforward. Resampling can disrupt patient trajectories, fixed reweighting can destabilize sparse multi-label optimization, and static prior biases can leave the generator dependent on external correction at inference time. Multi-label long-tail methods [37, 38] further show that label co-occurrence and label-frequency imbalance interact, which is precisely the setting faced by longitudinal EHR synthesis. Recent studies also analyze long-tailed learning through learning dynamics and optimization trajectories. Neural-collapse-based analyses study how imbalanced training affects decision bound-aries [39], while probing-based methods use training dynamics to guide data pruning or bias mit-igation [40]. However, these interventions can rely on heuristic data dropping, which may discard informative tail samples, or maintain a permanent dependency on external priors. In contrast, AdaPCLA uses a curriculum-learning strategy [41]. By treating the statistical prior 18 as a temporary optimization scaffold and annealing it over time, AdaPCLA strengthens rare-code learning signals while encouraging the backbone to encode prior information into its own logits. This improves tail fidelity without discarding patient trajectories or requiring a fixed inference-time bias. 
+
+A.3 Distribution Shift and Zero-Shot Adaptation 
+
+Clinical code frequencies vary across hospitals, populations, and regions due to dataset shift [25]. Standard approaches for handling such shifts typically rely on domain adaptation or fine-tuning, which require target-domain data access and additional retraining. This motivates generation meth-ods that can adapt to target priors without retraining while preserving longitudinal dependencies and co-occurrence structure. One relevant setting is label shift or target-prior shift, where label prevalences change while the conditional structure is assumed to be comparatively stable. Classical and modern work es-timates or corrects such shifts using black-box predictors, regularized target-prior estimation, or unified label-shift estimators [26, 27, 42]. Related domain-adaptation work studies target and con-ditional shift [43], and recent time-series adaptation considers feature and label shifts in sequential data [44]. These studies motivate a label-wise prior-shift view for clinical synthesis: when target code occurrence frequencies change, a generator should adjust label-wise occurrence probabilities while retaining useful conditional dependencies. Controllable tabular and EHR synthesis provides a related perspective. Conditional tabular generators [10] and synthetic EHR frameworks [8, 13] can condition generation on available at-tributes or external summaries. However, they are not primarily designed for zero-shot control of long-tailed longitudinal EHR generators through target-prior correction over thousands of sparse medical codes. Recent work on structural fidelity further emphasizes that preserving causal or conditional dependencies is different from matching marginal distributions [28]. This distinction is important for cross-population generation, where occurrence frequencies may shift while clinically meaningful co-occurrence structure should remain reusable. 
+
+AdaPCLA follows this direction by separating the learned longitudinal structure from marginal occurrence frequency. After the source prior is absorbed during training, the target-prior correc-tion in Sec. 4.4 provides a lightweight mechanism for zero-shot cross-population adaptation: the generator steers label-wise occurrence probabilities toward the target population without retraining the backbone. The intended benefit is controlled occurrence frequency adaptation while reusing the longitudinal and co-occurrence structure learned from source EHR data. 
+
+# B Complete Model Analysis and Additional Main-Text Analyses 
+
+B.1 Model Analysis 
+
+In this section, we conduct a deep-dive analysis to examine the core theoretical claims of AdaPCLA :(1) the internalization of prior knowledge, (2) the translation of tail fidelity into downstream utility, and (3) the disentanglement of structure and occurrence frequency for zero-shot control. 
+
+B.1.1 Prior-Internalization Ablation 
+
+To examine whether the prior bias is absorbed into the model or remains an external correction, we compare dynamic annealing against static-bias variants in Table 3. This analysis follows the curriculum construction in Sec. 4.3 and focuses on whether the backbone can preserve rare-event structure during bias-free inference. 19 Effect of Removing a Fixed Bias The ablation shows a clear difference between using a fixed bias and annealing it. The Static-PCLA (Train-only) variant applies the fixed bias during training but removes it at inference. After this bias is removed, TailPairSeen and TailCtxJSD cannot be computed, and TailTopKJac drops to 0.0000 . This negative control indicates that a fixed training bias alone does not make the backbone encode rare-event structure into its own logits. Instead, the model remains dependent on the fixed correction and fails to preserve tail plausibility once the correction is removed at inference time. 
+
+Evidence of Prior Internalization AdaPCLA does not use an external bias at inference, but still achieves the best tail metrics in this ablation. It obtains the highest TailPairSeen 0.1239 and TailTopKJac 0.0356 , and the lowest TailCtxJSD 0.5940 . This result is consistent with the gradient dynamics analyzed in Sec. 4.3: the prior scaffold changes BCE residuals during training, and the resulting updates are written into the intrinsic logits through the shared Transformer backbone. It suggests that dynamic annealing helps the backbone learn useful prior information in its own logits, instead of depending on a fixed external correction during sampling. 
+
+Probability Dynamics during Annealing Beyond the ablation table, we further examine how selected code probabilities change as the annealing coefficient α(τ ) decays. Figure 3 reports four complementary views, from global tail statistics to a single clinical context. As Fig. 3(a) shows, the average last-step log-probability of a broad set of tail codes steadily increases across checkpoints, indicating that the curriculum increases tail-code probabilities as a whole. On the micro-probing set, Fig. 3(b) shows systematic differences across probe types (related_rare / unrelated_rare / wrong), while Fig. 3(c) is consistent with the label-wise empirical NTK analysis in Sec. 4.3: probability gains ∆ log p grow with the initial gradient similarity between a disease and its context bundle. Finally, Fig. 3(d) evaluates the context of Case A (cardiovascular patient, Sec. B.2). Anticoagulant 
+
+(V5861), the clinically correct tail medication for Atrial Fibrillation, rises and converges to the Oracle line, whereas Traffic accident (E8192), the hallucination produced by HALO, remains at the bottom. This is consistent with the Case Study: AdaPCLA later generates Anticoagulant because its probability is selectively elevated during annealing. Additional robustness checks for micro-probing are provided in Appendix J. 20 (a) Global tail trend: aver-age last-step log-probability of a broad set of tail codes over 100 checkpoints.                  
+
+> (b) Micro-probe dynamics: average ∆ log pover 100 probing contexts for re-lated, unrelated, and wrong probes.
+> (c) eNTK Gradient Bridge: initial eNTK similarity vs.
+> ∆ log p;higher similarity implies larger probability gains.
+> (d) Case Aprobe: Anti-coagulant (V5861) vs. Traf-fic accident (E8192) in the cardiovascular context; see Sec. B.2.
+
+Figure 3: Dynamics of curriculum prior internalization. (a) Global average tail log-probability in-creases across checkpoints. (b) Micro-probe probability trajectories highlight type-dependent gains across related, unrelated, and wrong probes. (c) eNTK similarity correlates with per-item ∆ log p,consistent with the gradient-bridge mechanism. (d) Single-context probe for Case A: Anticoagulant rises to the Oracle target, while Traffic accident remains low. 
+
+B.1.2 Annealing Schedule Effects on Related-Rare Probes 
+
+We compare different annealing schedules by analyzing probability trajectories on tail-relevant probe codes. We do not use a global logit-difference norm such as ∥zT − z0 − bstat ∥ as the main empirical measure. First, the fixed scaffold bstat has a much larger norm than the logit changes induced by training, making schedule-dependent changes difficult to isolate. Second, the norm aggregates over the entire vocabulary and does not focus on rare-code dimensions that are relevant to a fixed patient-history context. To measure these schedule effects, we use related_rare gain and AUC summaries based on micro-probe trajectories. Following the micro-probe setting in the main text, we focus on pairs 
+
+(x, c ) labeled as related_rare, where c is a tail code clinically related to the patient-history context 
+
+x. For each pair, we record the last-step log-probability trajectory {log pt}Tt=0 over 100 micro-probe checkpoints and define three summaries: 
+
+• Final gain : ∆ log p = log pT − log p0, measuring the net log-probability change at the end of annealing for each related_rare code. 
+
+• AUC :
+
+AUC = 
+
+> T
+
+X
+
+> t=1
+
+max  0, log pt − log p0
+
+,
+
+which sums the positive log-probability changes along the annealing trajectory. 
+
+• Normalized AUC :
+
+AUC norm = AUC (T − 1) max t max  0, log pt − log p0
+
+ ,
+
+which rescales AUC to approximately [0 , 1] and summarizes the distribution of log-probability gains across checkpoints relative to the final checkpoint. 21 These summaries depend only on increments of log pt and do not explicitly involve the global bias 
+
+bstat . They measure the magnitude and consistency of log-probability increases for tail-relevant related_rare codes along the annealing trajectory. On the related_rare micro-probes, we compute final gain, AUC, and normalized AUC for four annealing schedules: slow , base , cosine , and fast . For final gain ∆ log p, the mean values follow base < cosine < fast < slow ,
+
+but the differences are small compared to the standard deviations (gain_std ≈ 1.0). We therefore do not interpret final gain alone as providing a robust ordering across schedules. AUC and normalized AUC show a clearer ordering. For both raw AUC and normalized AUC, we observe slow ≪ base ≈ cosine < fast ,
+
+where the fast schedule has the largest related_rare AUC, while the slow schedule has the smallest AUC. The normalized AUC values follow the same ordering, indicating that fast annealing increases related_rare log-probabilities earlier and more steadily than slow annealing. We therefore use AUC and normalized AUC as the main schedule-dependent summaries for Experiment 3, and use final gain as a supporting quantity. Table 4: Schedule-dependent probability changes on related_rare micro-probes. We report the mean (and standard deviation) of final gain ∆ log p, AUC, and normalized AUC over all related_rare pairs. Larger AUC / AUC norm indicate larger and more sustained log-probability gains for tail-relevant codes.                 
+
+> Schedule ∆ log pAUC AUC norm
+> slow 1.04 ( ±1.09) 44 .5 ( ±32 .2) 0.195 ( ±0.101)
+> base 0.99 ( ±1.06) 68 .3 ( ±44 .0) 0.290 ( ±0.141)
+> cosine 1.02 ( ±1.05) 71 .4 ( ±46 .5) 0.289 ( ±0.149)
+> fast 1.04 ( ±1.05) 101 .4 ( ±59 .6) 0.401 ( ±0.178)
+
+These related_rare gain and AUC summaries should not be interpreted as direct numerical estimates of the theoretical prior-internalization error ∥eτ (x)∥K−1 . They summarize log-probability changes for selected related_rare codes, rather than reconstructing the label-wise empirical NTK flow or the moving target z⋆τ (x). Accordingly, this experiment provides an empirical analysis of schedule-dependent probability trajectories on tail-relevant codes. Taken together, the results show that annealing speed affects the timing and magnitude of related_rare probability increases during training. Fast annealing produces earlier and more sus-tained log-probability gains, whereas slow annealing produces later and weaker accumulated gains. We use these findings as the schedule-dependent mechanism analysis for Experiment 3, not as a strict numerical validation of the prior-internalization bound. 
+
+B.2 Qualitative Analysis: Clinical Case Study 
+
+To move beyond aggregate statistics, we examine the Clinical Coherence of synthetic patient trajectories. We present two complementary case studies on MIMIC-IV to illustrate how AdaPCLA 
+
+captures complex dependencies that baselines miss. 22 Case A: Longitudinal Trajectory Consistency. We select a real patient with a complex history of Cardiovascular and Metabolic disorders . As detailed in Table 5, given the context of Visits 1–2 (containing Hyperlipidemia, Atrial Fibrillation, and Hypertension), we compare the generated third visit across models. 
+
+• Ground Truth Logic: The patient’s condition progresses logically: chronic cardiovascular issues persist, requiring continued medication (Anticoagulants) and monitoring. 
+
+• Baseline Failure (Hallucination): The HALO baseline captures generic codes (Hyperten-sion) but suffers from severe semantic hallucination . It predicts "Traffic accident (E8192)" ,a completely irrelevant external cause disconnected from the patient’s medical history. This typifies the "Gradient Domination" failure: without the scaffold, the model’s attention is scattered by noise. LSTM and GPT similarly fail to recall the specific comorbidity structure (e.g., predicting unrelated HIV or Pneumonia codes). 
+
+• AdaPCLA Success (Coherence): In contrast, AdaPCLA correctly recovers the sophis-ticated treatment logic. It successfully predicts "Long-term use of anticoagulants (V5861)" , a critical medication strictly tied to the history of Atrial Fibrillation (42731) . Furthermore, it generates "Chest pain" , a clinically plausible symptom given the cardiac history. This illus-trates that AdaPCLA has internalized the causal link: Atrial Fib → Anticoagulant Use ,a dependency that requires looking past marginal frequencies. 
+
+Case B: Tail Co-occurrence Topology In Table 6 (Appendix), we investigate the local neigh-borhood of a specific tail code: Squamous cell carcinoma of skin (17322) . We examine the top-10 co-occurring codes generated by each model. 
+
+• Manifold Reconstruction: AdaPCLA successfully reconstructs the correct disease man-ifold. It identifies 5 out of the top 10 true comorbidities, including specific procedures like 
+
+Aortocoronary bypass (V4581) and chronic conditions like Hyperlipidemia .
+
+• Baseline Scattering: HALO’s predictions are scattered and generic (e.g., Dizziness, Chronic pain), lacking disease-specific correlation. LSTM and GPT fail to generate any meaningful co-occurrences for this rare code, indicating Mode Collapse in the tail region. These cases qualitatively illustrate that AdaPCLA ’s superior quantitative metrics (e.g., Tail-PairSeen) translate into tangible clinical validity. 23 Table 5: Qualitative Comparison on MIMIC-IV (Case A) — Full version. Generated Visit 3 codes conditioned on the same patient history (Real Visit 1–2 above). Teal = correct; Orange 
+
+= rare/tail; Red = hallucination. 
+
+Model /Source Medical Codes (Visit) Real Visit 1 
+
+(Context) 
+
+Hyperlipidemia (2724), AV block (42613), Anemia (2851), Thoracic aortic aneurysm (4412), Atrial fib (42731), Fluid overload (27669), Chr pulmon heart (4168), Dvrtclo colon (56210), Valvular dis (3963/3970), Hypertension (4019). 
+
+Real Visit 2 
+
+(Context) 
+
+Post-proc (V4589), Hyperlipidemia (2724), Atrial fib (42731), Dvrtclo colon (56210), Hyposmolality (2761), Hypertension (4019). 
+
+Ground Truth 
+
+(Real Visit 3) 
+
+Core: Hypertension (4019), Hyperlipidemia (2724). 
+
+Target tail structure: Atrial fib (42731), Long-term anticoagul (V5861), Acute cholecystitis (5750), Dvrtclo colon (56210). 
+
+AdaPCLA 
+
+(Ours) 
+
+✓ Hypertension (4019), ✓ Hyperlipidemia (2724) 
+
+Captured logic: ✓ Atrial fib (42731) , ✓ Long-term anticoagul (V5861) 
+
+Others: ✗ Chest pain (78659); (Missed: 5750, 56210) 
+
+HALO 
+
+(Baseline) 
+
+✓ Hypertension (4019), ✓ Hyperlipidemia (2724), ✓ Dvrtclo colon (56210) 
+
+Hallucinations: ✗ Traffic acc motcycl (E8192), ✗ Esophageal reflux (53081) 
+
+(Missed: Atrial fib, Anticoagulants, Cholecystitis) 
+
+LSTM 
+
+(Baseline) 
+
+✗ Lumbar disc (72210), ✗ HIV status (V08), ✗ Pneumonia (486), ✗ Sleep apnea (78057) 
+
+(Missed: Failed to capture any meaningful patient-specific codes.) 
+
+GPT-style 
+
+(Baseline) 
+
+✓ Hypertension (4019); ✗ CHF (4280), ✗ Juv osteochondrosis (7324), ✗ Hx brain injury (V1552) 
+
+Analysis: Generic prediction mixed with unrelated codes. 
+
+24 Table 6: Case B: Top-10 co-occurring codes — Full version. Tail code: Squamous cell carcinoma of skin (17322). LSTM and GPT omitted (no tail co-occurrence). Teal = overlap Real & AdaPCLA ; Red = HALO scattered; Gray = none.                                                     
+
+> Rank Real HALO AdaPCLA
+> 1Atrial fibrillation (42731) ✗Dizziness and giddiness (7804)
+> ✓Cor ath unsp vsl ntv/gft (41400) 2✓Aortocoronary bypass (V4581)
+> ✗Chronic pain NEC (33829) Syncope and collapse (7802) 3Gout NOS (2749) ✗Somatization disorder (30081) Trnspl status-pancreas (V4283) 4Joint replaced knee (V4365) –✓Aortocoronary bypass (V4581) 5✓Hyperlipidemia NEC/NOS (2724) –✓Hypertension NOS (4019) 6✓Long-term use antico-agul (V5861) –DMI wo cmp nt st uncntrl (25001) 7✓Cor ath unsp vsl ntv/gft (41400) –Kidney transplant status (V420) 8✓Hypertension NOS (4019) –✓Hyperlipidemia NEC/NOS (2724) 9Polycystic kidney NOS (75312) –✓Long-term use anticoagul (V5861) 10 Crnry athrscl natve vssl (41401) ––
+
+B.3 Prediction Reliability and Internalization Consistency 
+
+Beyond transferability and controllability, we investigate two complementary aspects: (1) the relia-bility of predicted probabilities, especially in the long tail; and (2) the consistency between observed curriculum dynamics and the theory in Sec. 4.3. 
+
+Prediction Confidence Reliability We evaluate predicted probabilities on a held-out real test set with ECE , Brier Score , and NLL , reporting both overall and tail-only subsets. AdaPCLA 
+
+consistently outperforms GPT-style and HALO in both settings; complete numbers and reliability diagrams are reported in the detailed results section. 
+
+Expanded Probing Analysis We further enlarge the probing set from 30 to 100 contexts and recompute related_rare / unrelated_rare / wrong probe trajectories. Table 8 and Figure 2 show that the trajectory scale and type separation remain qualitatively consistent under the larger probe set. 
+
+Summary of Outputs Together, confidence metrics and expanded probing provide empirical support by examining probability reliability and curriculum dynamics. Exploratory λmin (K) corre-lation analysis is reported in Appendix G and treated as non-conclusive evidence. 25 C Prior-Internalization Error Bound Under Lazy Training 
+
+We analyze the curriculum-induced logit dynamics for a fixed input context x. Recall the effective logits ˜zτ (x) = zτ (x) + α(τ )bstat , where α : [0 , T ] → [0 , 1] is continuously differentiable with α(0) = 1 
+
+and α(T ) = 0 .
+
+Why we use an expected-risk surrogate A pointwise BCE loss with a single hard multi-label target y ∈ { 0, 1}V generally does not admit a finite minimizer in logit space, because the minimizer is attained only in the limit zc → ±∞ . To obtain a well-posed moving optimum, we work with the conditional expected BCE risk at a fixed context x:
+
+Fτ (z; x) = EY ∼P(·| x)
+
+h
+
+LBCE 
+
+ Y, σ (z + α(τ )bstat )i
+
+.
+
+We suppress the explicit dependence on x in what follows. Under the lazy-training approximation, we assume that the label-wise empirical NTK remains approximately constant along the trajectory. Because we analyze the dynamics of different labels for the same context x, the kernel here is the label-wise coupling matrix 
+
+Ki,j = ⟨∇ θz(i; x), ∇θz(j; x)⟩ ,
+
+rather than the usual sample–sample NTK. On the active label subspace we assume K is positive definite, so that K−1 is well-defined there. We write ∥v∥K−1 := √v⊤K−1v.The kernel-induced gradient flow in intrinsic-logit coordinates is ˙zτ = −K∇ Fτ (zτ ).
+
+Assumptions 
+
+• A1 (Local strong monotonicity / local strong convexity type condition). There exists a convex neighborhood D ⊂ RV and a constant μ > 0 such that, for all τ ∈ [0 , T ] and all u, v ∈ D ,
+
+⟨u − v, ∇Fτ (u) − ∇ Fτ (v)⟩ ≥ μ∥u − v∥2.
+
+This is the standard first-order formulation of strong monotonicity of ∇Fτ on D; when Fτ is twice differentiable, it is implied by the local Hessian lower bound ∇2Fτ (z) ⪰ μI on D.
+
+• A2 (Smoothness of the objective–curriculum pair and endpoint schedule). The joint map (τ, z ) 7 → ∇ Fτ (z) is continuously differentiable on [0 , T ] × D , and α : [0 , T ] → [0 , 1] 
+
+is continuously differentiable with the endpoint conditions α(0) = 1 and α(T ) = 0 (matching the curriculum construction in the main text). 
+
+• A3 (Constant, nondegenerate kernel on the active subspace). The label-wise kernel 
+
+K is constant and symmetric on the active label subspace, and is positive definite there with 
+
+λmin (K) > 0. In particular, the K−1–inner product and the induced norm ∥ · ∥ K−1 used below are well-defined on that subspace. 
+
+Lemma A.1 (Regularity of the moving minimizer) Suppose that for each τ ∈ [0 , T ],there exists a unique point z⋆τ ∈ D such that ∇Fτ (z⋆τ ) = 0 . Under Assumptions A1–A2 and the existence/uniqueness hypothesis above, the path τ 7 → z⋆τ is continuously differentiable. Moreover, there exists a finite constant B⋆ > 0 such that 
+
+∥ ˙z⋆τ ∥K−1 ≤ B⋆| ˙α(τ )|, ∀τ ∈ [0 , T ]. (3) 
+
+Proof. Under A1–A2, the Hessian ∇2Fτ (z⋆τ ) is nonsingular at each minimizer (as in the standard link between strong monotonicity and positive definiteness of the Jacobian of the gradient). The 26 implicit function theorem therefore yields a local C1 branch of solutions to ∇Fτ (z) = 0 near each 
+
+(τ, z ⋆τ ). Together with the assumed uniqueness of z⋆τ in D for every τ , these local branches glue to a globally defined C1 path τ 7 → z⋆τ on [0 , T ].Differentiating the optimality condition ∇Fτ (z⋆τ ) = 0 along this path gives 
+
+∇2Fτ (z⋆τ ) ˙ z⋆τ + ∂τ ∇Fτ (z⋆τ ) = 0 .
+
+Hence 
+
+˙z⋆τ = − ∇2Fτ (z⋆τ )−1∂τ ∇Fτ (z⋆τ ).
+
+Because the τ -dependence enters through α(τ ), ∂τ ∇Fτ (z⋆τ ) = ˙ α(τ ) ∂α∇Fτ (z⋆τ ). Therefore 
+
+˙z⋆τ = − ˙α(τ ) ∇2Fτ (z⋆τ )−1∂α∇Fτ (z⋆τ ).
+
+The map 
+
+τ 7 →  ∇2Fτ (z⋆τ )−1∂α∇Fτ (z⋆τ )
+
+is continuous on [0 , T ] (smoothness of the data along the minimizer path), hence bounded on this compact interval. Taking the ∥ · ∥ K−1 –operator norm of the displayed expression and absorbing 
+
+| ˙α(τ )| yields a finite uniform constant B⋆ such that Eq. (3) holds for all τ ∈ [0 , T ]. ■
+
+Theorem A.2 (Prior-internalization error in the K−1-norm). Define the internalization error eτ = zτ − z⋆τ and rτ = ∥eτ ∥K−1 . Assume additionally that zτ , z ⋆τ ∈ D for all τ ∈ [0 , T ]. Under Assumptions A1–A3 together with this invariant-neighborhood condition, for all τ ∈ [0 , T ],
+
+rτ ≤ e−μλ min (K)τ r0 + B⋆
+
+μλ min (K) sup  
+
+> s∈[0 ,T]
+
+| ˙α(s)|. (4) 
+
+Proof We follow three steps: (i) define the internalization error and a Lyapunov function; (ii) derive a scalar differential inequality for the radius rτ ; (iii) apply Grönwall to close the bound. 
+
+Step 1: internalization error and Lyapunov function. Because ˙zτ = −K∇ Fτ (zτ ) and 
+
+∇Fτ (z⋆τ ) = 0 , we have 
+
+˙eτ = −K  ∇Fτ (zτ ) − ∇ Fτ (z⋆τ ) − ˙z⋆τ .
+
+Define the Lyapunov function Vτ = 12 ∥eτ ∥2 
+
+> K−1
+
+= 12 e⊤ 
+
+> τ
+
+K−1eτ . Since K is constant and symmetric, 
+
+˙Vτ = e⊤ 
+
+> τ
+
+K−1 ˙eτ
+
+= −e⊤
+
+> τ
+
+ ∇Fτ (zτ ) − ∇ Fτ (z⋆τ ) − e⊤ 
+
+> τ
+
+K−1 ˙z⋆τ .
+
+Step 2: Lyapunov bound and the radius reduction (Lyapunov-to-r bridge) Since zτ , z ⋆τ ∈D for all τ ∈ [0 , T ], Assumption A1 with u = zτ and v = z⋆τ gives 
+
+e⊤
+
+> τ
+
+ ∇Fτ (zτ ) − ∇ Fτ (z⋆τ ) ≥ μ∥eτ ∥2.
+
+Moreover, since K ⪰ λmin (K)I on the active subspace, 
+
+∥eτ ∥2 ≥ λmin (K)∥eτ ∥2 
+
+> K−1
+
+= λmin (K)r2 
+
+> τ
+
+.
+
+Using Cauchy–Schwarz in the K−1 inner product together with Lemma A.1, 
+
+|e⊤ 
+
+> τ
+
+K−1 ˙z⋆τ | ≤ ∥ eτ ∥K−1 ∥ ˙z⋆τ ∥K−1 ≤ B⋆| ˙α(τ )| rτ .
+
+27 Combining the above inequalities yields the Lyapunov inequality 
+
+˙Vτ ≤ − μλ min (K)r2 
+
+> τ
+
++ B⋆| ˙α(τ )| rτ . (5) We now isolate the key reduction from ˙Vτ to a scalar inequality for rτ . Because Vτ = 12 r2 
+
+> τ
+
+and 
+
+rτ ≥ 0, the chain rule gives ˙Vτ = rτ ˙rτ at points where rτ > 0; substituting into (5) and dividing by 
+
+rτ yields 
+
+˙rτ ≤ − μλ min (K)rτ + B⋆| ˙α(τ )|. (6) (At instants with rτ = 0 , the same inequality follows by continuity of the underlying quantities along the trajectory.) We refer to the passage from (5) to (6) as the radius reduction step .
+
+Step 3: Grönwall closure Applying Grönwall’s inequality to Eq. (6) gives 
+
+rτ ≤ e−μλ min (K)τ r0 + B⋆
+
+Z τ
+
+> 0
+
+e−μλ min (K)( τ −s)| ˙α(s)| ds. 
+
+Finally, Z τ
+
+> 0
+
+e−μλ min (K)( τ −s)ds ≤ 1
+
+μλ min (K) ,
+
+which yields Eq. (4). ■
+
+Corollary (Prior internalization: structural identity vs. realized endpoint deviation) 
+
+Structural assumption (ideal moving optimum) Assume additionally that the effective-risk minimizer 
+
+˜z⋆(x) depends only on the conditional distribution P(Y | x) and is therefore independent of α(τ ).Then the quasi-static intrinsic minimizer admits the affine representation z⋆τ = ˜ z⋆ − α(τ )bstat , and, together with the schedule endpoints α(0) = 1 and α(T ) = 0 , the ideal endpoint shift identity 
+
+z⋆ 
+
+> T
+
+− z⋆ 
+
+> 0
+
+= bstat holds. Without this structural assumption, one should not treat z⋆ 
+
+> T
+
+− z⋆ 
+
+> 0
+
+= bstat as automatic. 
+
+Realized logits vs. internalization error. Under the ideal endpoint identity z⋆ 
+
+> T
+
+− z⋆ 
+
+> 0
+
+= bstat , the exact algebraic decomposition zT − z0 − bstat = eT − e0 rewrites the realized endpoint deviation from bstat into a difference of internalization errors at τ = T and τ = 0 .Using Theorem A.2 to control ∥eτ ∥K−1 and the triangle inequality ∥eT − e0∥K−1 ≤ ∥ eT ∥K−1 +
+
+∥e0∥K−1 , with a = μλ min (K),
+
+∥zT − z0 − bstat ∥K−1 ≤  1 + e−aT ∥e0∥K−1 + B⋆
+
+a sup  
+
+> s∈[0 ,T]
+
+| ˙α(s)|.
+
+Thus the endpoint identity is exact up to a transient initialization term and an annealing-induced internalization term. In particular, if e0 = 0 or ∥e0∥K−1 = O(sup s | ˙α(s)|), then 
+
+∥zT − z0 − bstat ∥K−1 = O sup  
+
+> s∈[0 ,T]
+
+| ˙α(s)|
+
+!
+
+.
+
+# D Proof of Zero-Shot Transfer 
+
+Proof. Fix a prediction step and a code c. Let DS and DT denote the source and target domains. Under the label-wise prior-shift assumption, PS (x | yc) = PT (x | yc), while only the class prior changes from πS (c) to πT (c).28 The Bayes-optimal per-code logit in domain D ∈ {D S , DT } is 
+
+z⋆
+
+> D,c
+
+(x) = log PD(yc = 1 | x)
+
+PD(yc = 0 | x) .
+
+Applying Bayes’ rule gives 
+
+z⋆
+
+> D,c
+
+(x) = log PD(x | yc = 1) 
+
+PD(x | yc = 0) + log πD(c)1 − πD(c) .
+
+The first term is invariant across domains by assumption, so subtracting the source and target expressions yields 
+
+z⋆T,c (x) − z⋆S,c (x) = logit  πT (c) − logit  πS (c).
+
+Hence the exact label-wise Bayes correction is obtained by adding the delta bias ∆b(c) = logit  πT (c)−
+
+logit  πS (c). This proves the claim. The main-text interpolation parameter λ is exact when λ = 1 ;values λ ∈ [0 , 1) correspond to a practical interpolation heuristic rather than to the exact Bayes identity. ■
+
+Remark. This observation is deliberately label-wise and step-wise. It justifies marginal prior correction for each code at a fixed prediction step, but it does not by itself imply exact matching of the full autoregressive joint distribution after rollout. 
+
+# E Theoretical Analysis and Proofs 
+
+In this section, we provide supporting proofs for the claims used in the main text. 
+
+E.1 Proof of the Static Centering Property 
+
+We prove a local centering statement rather than a global optimality claim. 
+
+Bayesian decomposition For a fixed medical code c, the Bayes-optimal effective logit un-der BCE is the posterior log-odds ˜z⋆c (x) = log P(yc=1 |x) 
+
+> P(yc=0 |x)
+
+. Applying Bayes’ rule gives the standard decomposition 
+
+˜z⋆c (x) = log P(x | yc = 1) 
+
+P(x | yc = 0) 
+
+| {z }
+
+> Sc(x)
+
++ log π(c)1 − π(c)
+
+| {z }
+
+> logit( π(c))
+
+. (7) Here Sc(x) is the structural term, while logit( π(c)) is the prevalence term. 
+
+Prior-centered initialization Let ˆπϵ(c) = ˆπ(c)+ ϵ 
+
+> 1+2 ϵ
+
+and bstat (c) = −logit  ˆπϵ(c). Assume that, near initialization, the intrinsic logits satisfy z0,c (x) = logit  ˆπϵ(c) + rc(x), with |rc(x)| ≪ 1. Then for any static additive shift b(c) the initial effective logit is ˜z0,c (x) = z0,c (x) + b(c) = logit  ˆπϵ(c) +
+
+rc(x) + b(c). The unique shift that centers the nominal operating point (the case rc(x) = 0 ) at zero is b(c) = −logit  ˆπϵ(c) = bstat (c), for which ˜z0,c (x) = rc(x) ≈ 0.
+
+Local sensitivity maximization For BCE with sigmoid link, the local logit-to-probability sensitivity and the pointwise curvature are both σ′(u) = σ(u)(1 − σ(u)) . This quantity is uniquely maximized at u = 0 . Therefore, among additive shifts depending only on ˆπϵ(c), the choice bstat (c)
+
+is the unique shift that centers the local operating point at the maximal-sensitivity region of the sigmoid. This establishes the centering claim used in the main text. Finally, because the scaffold is an x-independent additive term, it translates the logit coordinate without changing the structural component Sc(x) in Eq. (7). Thus it acts as a local optimization scaffold rather than as a modification of the underlying structure. ■
+
+29 E.2 Lemma: NTK Gradient Flow under BCE Loss 
+
+Before analyzing the curriculum dynamics, we formalize the continuous-time gradient flow of neural network outputs under Binary Cross-Entropy (BCE) loss. 
+
+Lemma 1 (BCE-NTK Gradient Flow) . Let D = {(xi, y i)}ni=1 be the training dataset. Let f (t) = [fθ(t)(x1), . . . , f θ(t)(xn)] ⊤ ∈ Rn denote the intrinsic logits of the neural network at time t, and 
+
+y = [ y1, . . . , y n]⊤ ∈ { 0, 1}n be the corresponding labels. Under continuous-time gradient descent on the BCE loss, the evolution of the network outputs follows the non-linear Ordinary Differential Equation (ODE) 
+
+df (t)
+
+dt = −H(t) · (σ(f (t)) − y),
+
+where H(t) ∈ Rn×n is the empirical NTK matrix with entries 
+
+Hi,j (t) = ∇θfθ(t)(xi), ∇θfθ(t)(xj ) .
+
+Proof. The parameter trajectory under gradient flow satisfies 
+
+dθ (t)
+
+dt = −∇ θL(θ(t)) = −∇ θ
+
+> n
+
+X
+
+> i=1
+
+ℓBCE (yi, σ (fθ(t)(xi))) 
+
+!
+
+.
+
+Applying the chain rule gives 
+
+dθ (t)
+
+dt = −
+
+> n
+
+X
+
+> i=1
+
+ σ(fθ(t)(xi)) − yi
+
+∇θfθ(t)(xi).
+
+For any xk,
+
+df θ(t)(xk)
+
+dt =
+
+
+
+∇θfθ(t)(xk), dθ (t)
+
+dt 
+
+
+
+= −
+
+> n
+
+X
+
+> i=1
+
+ σ(fθ(t)(xi)) − yi
+
+ ∇θfθ(t)(xk), ∇θfθ(t)(xi) .
+
+Stacking these equations over k = 1 , . . . , n yields the claimed matrix form. ■
+
+Remark. Under AdaPCLA , the same identity applies to the effective logits ˜fθ(t)(x) = fθ(t)(x) + 
+
+α(t)bstat , because the scaffold is independent of θ and therefore ∇θ ˜fθ(t)(x) = ∇θfθ(t)(x).
+
+# F Proof of Learning Dynamics under Multi-Label Conditional Fac-torization 
+
+We now write the discrete first-order update under the actual AdaPCLA training objective. Fix one SGD step and condition on the current annealing value αt as constant during that step. Define the effective logits ˜zt(x) = zt(x) + αtbstat , where zt(x) = fθt (x) ∈ RV denotes the intrinsic logits. Let xo be an observing example and (xu, y u) an updating example. We study the change in the log-probability vector log σ(˜ zt(xo)) . A first-order Taylor expansion gives 
+
+log σ(˜ zt+1 (xo)) = log σ(˜ zt(xo)) + ∇θ log σ(˜ zt(xo)) θt , θ t+1 − θt + O(∥θt+1 − θt∥2).
+
+30 Therefore, 
+
+∆ log σ(˜ zt(xo)) = ∇θ log σ(˜ zt(xo)) θt (θt+1 − θt) + O(∥θt+1 − θt∥2). (8) Under SGD on the AdaPCLA BCE loss, 
+
+θt+1 − θt = −η  ∇θLBCE 
+
+ yu, σ (˜ zt(xu))  ⊤ .
+
+Because αtbstat is independent of θ within this step, ∇θ ˜zt(x) = ∇θzt(x). Applying the chain rule on both factors in Eq. (8) yields the following compact decomposition. For readability, write 
+
+Dto := ∇˜z log σ(˜ zt(xo)) ˜zt ,Jto := ∇θzt(xo) θt ,Jtu := ∇θzt(xu) θt ,Rtu := ∇˜z LBCE (yu, σ (˜ zt(xu))) ˜zt .
+
+Then 
+
+∇θ log σ(˜ zt(xo)) θt (θt+1 − θt)= −η D toJto(Jtu)⊤(Rtu)⊤
+
+= −η At
+
+> Ada
+
+(xo)Kt(xo, x u)Gt
+
+> Ada
+
+(xu, y u), (9) where 
+
+At
+
+> Ada
+
+(xo) = diag  1 − σ(˜ zt(xo)) ,
+
+Kt(xo, x u) = ∇θzt(xo) θt
+
+ ∇θzt(xu) θt
+
+⊤ ,
+
+and 
+
+Gt
+
+> Ada
+
+(xu, y u) =  ∇˜z LBCE (yu, σ (˜ zt(xu))) ˜zt
+
+⊤ = σ(˜ zt(xu)) − yu.
+
+Substituting Eq. (9) into Eq. (8) gives 
+
+∆ log σ(˜ zt(xo)) = −η At
+
+> Ada
+
+(xo)Kt(xo, x u)Gt
+
+> Ada
+
+(xu, y u) + O(η2).
+
+The matrix At
+
+> Ada
+
+(xo) is diagonal because sigmoid factorizes across labels: 
+
+∂ log σ(˜ zc)
+
+∂ ˜zk
+
+=
+
+(
+
+1 − σ(˜ zc), c = k, 
+
+0, c̸ = k. 
+
+Therefore, as in independent BCE, the output nonlinearity does not introduce explicit cross-label terms. Any cross-label effect is determined by the shared-backbone kernel Kt(xo, x u).Finally, because ˜zt(x) = zt(x) + αtbstat differs from zt(x) by a θ-independent constant, the intrinsic-logit increment obeys 
+
+∆zt(xo) = −η Kt(xo, x u)Gt
+
+> Ada
+
+(xu, y u) + O(η2),
+
+which is the form used in the main text. The deterministic effect induced by changes in αt across optimization steps is analyzed separately in Appendix C. ■
+
+31 G Exploratory Analysis of λmin (K) and Related-Rare Gain/AUC 
+
+The prior-internalization bound in Appendix C and Sec. 4.3 identifies the minimum eigenvalue 
+
+λmin (K) of the label-wise empirical NTK as a factor that reduces the internalization-error bound. As an exploratory analysis, we compute λmin (Kx) at the initial checkpoint for each probing context and compare it with the empirical related-rare AUC and final gain. The label-wise empirical NTK is restricted to the related-rare codes of the same context. 
+
+30-context results: On the 30-context micro-probe set, the Spearman correlations are positive but weak: Spearman( λmin (Kinit ), related-rare AUC) ≈ 0.30 (p ≈ 0.11 ) and Spearman( λmin (Kinit ),related-rare gain) ≈ 0.16 (p ≈ 0.40 ). The signs are consistent with the bound, but the correlations do not reach conventional significance. 
+
+100-context robustness check: We extend the analysis to 100 probing contexts. The correla-tions become close to zero: Spearman( λmin (Kinit ), AUC) ≈ 0.02 (p ≈ 0.86 ) and Spearman( λmin (Kinit ),gain) ≈ − 0.06 (p ≈ 0.53 ). The final-gain correlation is negative under this larger probing set. 
+
+Conclusion: We do not treat the λmin (K) and related-rare AUC/gain analysis as empirical validation of the bound. The 30-context result is statistically modest, and the 100-context extension shows that the correlation is not robust. We report this analysis for completeness as non-conclusive evidence. 
+
+# H Prediction Reliability Details and Additional Results 
+
+This section provides detailed prediction-reliability statistics for the downstream 25-label Diagno-sisModel evaluated on the real MIMIC-IV test split. We report ECE, Brier Score, and Negative Log-Likelihood (NLL) for AdaPCLA , HALO, and GPT-style under two scopes: (i) overall (all labels), and (ii) tail-only (bottom-1/3 labels by training-set frequency). Table 7: Prediction reliability on the real MIMIC-IV test split. Lower is better for all metrics. Tail-only results focus on the rare-label subset used throughout our analysis. AdaPCLA 
+
+achieves the best overall and tail-only scores, while GPT-style and HALO have larger confidence errors.                                    
+
+> Model Scope ECE Brier NLL #Pairs
+> AdaPCLA overall 0.13 0.06 0.27 446,925 GPT-style overall 0.27 0.14 0.55 1,117,275 HALO overall 0.37 0.20 0.65 1,117,275
+> AdaPCLA tail 0.19 0.08 0.34 143,016 GPT-style tail 0.31 0.16 0.60 357,528 HALO tail 0.44 0.24 0.73 357,528
+
+Figure 4 shows the corresponding reliability diagrams for both the overall and tail-only scopes. Across confidence bins, AdaPCLA has the smallest deviation from the identity line, especially in the high-confidence region. GPT-style and HALO show larger confidence errors, particularly on rare labels. 32 (a) AdaPCLA (overall) (b) HALO (overall) (c) GPT-style (overall)     
+
+> (d) AdaPCLA (tail-only) (e) HALO (tail-only) (f) GPT-style (tail-only)
+
+Figure 4: Reliability diagrams on the real MIMIC-IV test split. Top row: overall results across all 25 labels; bottom row: tail-only results restricted to the rare-label subset. AdaPCLA has the smallest deviation from the identity line, whereas GPT-style and HALO have larger confidence errors, particularly on tail labels. 33 I Bias-Free Inference Algorithm 
+
+Algorithm 1 Bias-free inference process of AdaPCLA  
+
+> 1:
+
+Input: trained generator fθ∗ after annealing; maximum number of visits Tmax ; Bernoulli sam-pling rule S. 
+
+> 2:
+
+Output: synthetic visit sequence ˜X = (˜ x1, . . . , ˜x ˜T ). 
+
+> 3:
+
+Initialize ˜X ← ∅ . 
+
+> 4:
+
+for t = 1 to Tmax do  
+
+> 5:
+
+Compute intrinsic logits without an external bias: zt ← fθ∗ (˜ x<t ) ∈ RV . 
+
+> 6:
+
+Map to probabilities: pt ← σ(zt). 
+
+> 7:
+
+Sample the next visit: ˜xt ← S (pt) (independent Bernoulli over the clinical-event vocabulary).  
+
+> 8:
+
+Apply the stopping rule for an empty visit or termination criterion.  
+
+> 9:
+
+if stopping rule is triggered then  
+
+> 10:
+
+break  
+
+> 11:
+
+end if  
+
+> 12:
+
+Append ˜xt to ˜X. 
+
+> 13:
+
+end for  
+
+> 14:
+
+return ˜X.
+
+# J Micro-Probing Results under 30 and 100 Contexts 
+
+This section reports quantitative summaries for the micro-probing experiments with 30 and 100 patient-history contexts. For each context and probe type (related_rare / unrelated_rare / wrong), we compute the AUC of ∆ log p(τ ) over annealing checkpoints and the final ∆ log p at the end of annealing. We then report the mean and standard deviation across contexts. Table 8: Micro-probing summaries under 30 and 100 contexts. For each probe type, we report the number of contexts, the mean and standard deviation of the AUC of ∆ log p(τ ), and the mean and standard deviation of the final ∆ log p at the end of annealing. The 100-context setting keeps the trajectory scale similar to the 30-context setting and provides a larger probing set for the robustness check.                                                 
+
+> Setting Type #Ctx AUC mean AUC std Final ∆ log pmean Final ∆ log pstd
+> 30-context related_rare 30 5.28 5.84 0.92 1.10 30-context unrelated_rare 30 6.06 5.28 1.12 0.98 30-context wrong 30 5.85 8.12 0.66 1.25 100-context related_rare 100 5.80 6.02 1.05 1.11 100-context unrelated_rare 100 5.66 4.96 0.98 0.93 100-context wrong 100 4.32 7.30 0.50 1.19
+
+Figure 2 in the main text tracks selected probe-code probabilities under 30 and 100 probing contexts. Table 8 reports the corresponding AUC of ∆ log p(τ ) and final ∆ log p for each probe type. 34 K Dependency Versions (Experimental Environment) 
+
+All experiments reported in this paper were run in the sft_lab virtual environment on a server with 8 ×NVIDIA RTX 4090 GPUs. Table 9 lists the main software and dependency versions used for training and evaluation. We recommend using compatible versions for reproduction. Table 9: Main dependency versions used in our experiments for reproducibility. 
+
+Component Version Python 3.10.x PyTorch (with CUDA) 2.0.x / 2.1.x CUDA (driver / toolkit) 11.8 or 12.x NumPy ≥1.24 SciPy ≥1.10 matplotlib ≥3.7 
+
+# L Frequency–Rank Plots 
+
+This section reports frequency–rank plots for MIMIC-III and MIMIC-IV, comparing Real train-ing data with synthetic data generated by HALO, LSTM, GPT-style, and AdaPCLA . These plots summarize the ranked marginal occurrence-frequency distribution of medical codes. They do not evaluate code-set support, tail clinical plausibility, rare-code context consistency, or downstream pre-dictive utility. Therefore, we use them only as supplementary distributional-fidelity views. Model comparison should rely on Table 1 for PairSeen, TailPairSeen, TailCtxJSD, and TailTopKJac, Ta-ble 2 for downstream utility, and Sec. B.2 for qualitative clinical examples.                                 
+
+> (a) Frequency–rank distri-bution (full range, log-scaled rank) on MIMIC-IV: Real, HALO, LSTM, GPT-style, and AdaPCLA .
+> (b) Frequency–rank dis-tribution (tail range, rank
+> ≥5000 , raw frequency) on MIMIC-IV: Real, HALO, LSTM, GPT-style, and
+> AdaPCLA .
+> (c) Frequency–rank distri-bution (full range, log-scaled rank) on MIMIC-III: Real, HALO, LSTM, GPT-style, and AdaPCLA .
+> (d) Frequency–rank dis-tribution (tail range, rank
+> ≥5000 , raw frequency) on MIMIC-III: Real, HALO, LSTM, GPT-style, and
+> AdaPCLA .
+
+Figure 5: Frequency–rank plots for the full range and tail range on MIMIC-IV and MIMIC-III. These plots summarize marginal occurrence-frequency distributions only. 
+
+# M Frequency–Frequency and Rank–Rank Scatters 
+
+This section reports per-code marginal occurrence-frequency views that complement the frequency– rank plots in Sec. L. Each point corresponds to one medical code present in the Real training set. 
+
+Frequency–frequency scatter: For each code c, the horizontal axis is its visit-level frequency in Real and the vertical axis is its visit-level frequency in a given model (one subplot per model: HALO, LSTM, GPT-style, AdaPCLA ). Both axes use a symmetric log scale. Points near the 35 diagonal y = x indicate that the model’s marginal frequency for that code is close to Real; points above or below the diagonal indicate higher or lower generated frequency than Real. These plots evaluate code-level marginal occurrence frequencies, but they do not measure tail clinical plausibility or rare-event co-occurrence structure. 
+
+Rank–rank scatter: For each code c, the horizontal axis is its rank in Real (1 = most frequent) and the vertical axis is its rank in the model’s synthetic data; both axes are log-scaled. Points near the diagonal indicate agreement between the Real code rank and the synthetic code rank. Codes never generated by a model are assigned a rank beyond the maximum. Together, the frequency– frequency and rank–rank figures report per-code marginal alignment with the training distribution. 36 (a) Frequency–frequency scatter (full range) on MIMIC-IV: each subplot compares Real with one model (HALO, LSTM, GPT-style, AdaPCLA ). Axes: visit-level fre-quency (symlog). Points near the diagonal indicate code-level marginal-frequency alignment. 
+
+(b) Frequency–frequency scatter (full range) on MIMIC-III: Real compared with HALO, LSTM, GPT-style, and 
+
+AdaPCLA . Axes: visit-level frequency (symlog). 
+
+(c) Rank–rank scatter (full range) on MIMIC-IV: each subplot shows Real rank and model rank per code (log scale). Points near the diagonal indicate agreement in code ordering. 
+
+(d) Rank–rank scatter (full range) on MIMIC-III: Real rank and model rank per code. 
+
+Figure 6: Per-code marginal occurrence-frequency alignment between Real and synthetic generators, shown with frequency–frequency and rank–rank scatter plots. 37 N Code Co-occurrence Block Structure 
+
+This section reports code–code co-occurrence matrices for the top-200 most frequent medical codes on MIMIC-IV. We compute visit-level co-occurrence counts for Real, HALO, LSTM, and 
+
+AdaPCLA , and then apply a PPMI (Positive Pointwise Mutual Information) transform. To keep the panels comparable, we perform hierarchical clustering on the Real PPMI matrix using average linkage and apply the resulting code order to all models. The visualization compares how well each generator preserves frequent-code co-occurrence patterns learned from the Real training data. 
+
+Figure 7: PPMI-transformed code–code co-occurrence heatmaps for the top-200 most frequent codes on MIMIC-IV. All panels use the same Real-based hierarchical clustering order along both axes. 
+
+AdaPCLA better preserves the frequent-code co-occurrence structure of Real than HALO and LSTM. 38 O Additional Experimental Figures  
+
+> (a)
+
+# Acc (b) F1 (c) AUPRC  
+
+> (d)
+
+# Real (e) HALO (f) AdaPCLA 
+
+Figure 8: Downstream utility and code co-occurrence summaries on MIMIC-IV. Row 1: Accuracy, F1, and AUPRC under the TSTR protocol. Row 2: code–code co-occurrence heatmaps for Real, HALO, and AdaPCLA .
+
+Figure 9: Medical code frequency versus rank for Real training data on MIMIC-III and MIMIC-IV. 
+
+# P Code-Bucket Conditional Distributions 
+
+This section reports the full P (code | label ) heatmaps referenced in Sec. 6. We partition medical codes into three frequency buckets: head (most frequent), mid, and tail (long tail). For each bucket, we compute the conditional distribution of codes given the bucket label. The heatmaps use a 3 × 4 layout: each row corresponds to one bucket, and each column corresponds to one 39 data source (Real training data, HALO, LSTM, or AdaPCLA ) on MIMIC-IV. These plots provide supplementary distributional-fidelity views for code-level probability structure within each frequency regime. AdaPCLA shows closer alignment with Real across the three buckets than HALO and LSTM, which is consistent with the tail plausibility and co-occurrence results in Table 1. 
+
+Figure 10: P (code | label ) heatmaps for head, mid, and tail code buckets on MIMIC-IV. Each row corresponds to one frequency bucket, and each column corresponds to Real, HALO, LSTM, or 
+
+AdaPCLA . AdaPCLA shows closer code-level distribution alignment with Real across the three buckets. 40
