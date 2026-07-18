@@ -1,0 +1,25 @@
+---
+title: "MARiO: predicting cancer variant pathogenicity by integrating in silico evaluation and patient-level mutational contexts"
+title_zh: MARiO：整合计算机评估与患者层面突变背景预测癌症变异致病性
+authors: "Nakagawa, H., Kamatani, T., Ishibashi, N., Aoyama, S., Morioka, M., Miya, F., Ikeda, S."
+date: 2026-07-10
+pdf: "https://www.biorxiv.org/content/10.64898/2026.07.07.736919v1.full.pdf"
+tags: ["query:gwas"]
+score: 6.0
+evidence: 整合变异功能特征和患者层面数据的机器学习模型用于致病性预测，辅助精细定位
+tldr: 现有计算工具仅依赖变异特征，忽略患者临床背景，导致癌症错义变异致病性预测不准确。本研究提出MARiO模型，整合in silico功能预测、人群等位基因频率、变异等位基因频率和肿瘤突变负荷等变异及患者水平特征，使用XGBoost处理真实数据缺失值。在1271名患者的10642个变异上，AUC达0.942，泛化性能优于现有工具，并与真实分子治疗建议一致。该模型通过整合患者级上下文提升预测的临床相关性，为精准肿瘤学决策提供有力支持。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-07-736919-v1/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 543, \"height\": 177, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-07-736919-v1/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 527, \"height\": 435, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-07-736919-v1/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 382, \"height\": 483, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-07-736919-v1/fig-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 474, \"height\": 513, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-07-736919-v1/fig-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 1272, \"height\": 506, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-07-736919-v1/fig-006.webp\", \"caption\": \"\", \"page\": 0, \"index\": 6, \"width\": 478, \"height\": 501, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-07-07-736919-v1/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 251, \"height\": 87, \"label\": \"Table\"}, {\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-07-07-736919-v1/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1044, \"height\": 2250, \"label\": \"Table\"}]"
+motivation: 现有癌症错义变异致病性预测工具仅依赖变异特征，忽略患者临床和基因组背景，导致预测准确性不足且缺乏临床适用性。
+method: 收集1271名患者的10642个错义变异，筛选in silico功能预测、人群频率、变异频率和肿瘤突变负荷等特征，采用XGBoost构建MARiO模型，并处理缺失值。
+result: MARiO的AUC达0.942，在多个外部数据集上泛化能力优于现有工具，且预测结果与真实分子治疗建议高度一致。
+conclusion: MARiO通过整合变异和患者水平特征，提供了一种稳健、临床相关的错义变异致病性评估方法，可辅助癌症精准治疗决策。
+---
+
+## 摘要
+全面基因组分析（CGP）支持癌症治疗中的精准医学，但对错义变异致病性的准确评估，尤其是对尚未达成共识的变异，仍然具有挑战性。目前已开发出多种用于变异功能预测的计算工具，但大多数现有工具仅依赖变异层面的特征，未能捕捉个体患者的临床背景。为解决这一局限性，我们开发了MARiO（错义变异致癌风险评估模型），这是一种机器学习模型，整合了变异层面特征与患者层面的临床和基因组背景，以有效预测癌症中错义变异的致病性。我们从1271名患者中收集了总计10,642个错义变异，并评估了候选特征与变异致病性的关联，识别出信息性特征，包括计算机功能预测、群体等位基因频率、变异等位基因频率和肿瘤突变负荷。利用这些选定的特征，通过极端梯度提升方法开发了MARiO。该模型整合了多种计算机预测工具和患者特异性基因组背景，同时能够处理真实世界CGP数据集中常见的缺失值。MARiO的性能优于现有工具，受试者工作特征曲线下面积达到0.942。该模型在多个外部数据集中表现出强大的泛化能力，并与真实世界的分子治疗建议具有一致性。MARiO通过整合变异层面和患者层面的特征，为错义变异致病性评估提供了一种稳健且临床相关的方法，并作为支持临床决策的宝贵工具。
+
+## Abstract
+Comprehensive genomic profiling (CGP) supports precision medicine in cancer care, but accurate assessment of missense variant pathogenicity, especially for variants without established consensus, remains challenging. Various computational tools have been developed for variant functional prediction, but most current tools rely solely on variant-level features and do not capture the clinical context of individual patients. To address this limitation, we developed MARiO (Missense Alteration Risk for Oncogenicity), a machine-learning model that integrates variant-level features and patient-level clinical and genomic contexts to effectively predict the pathogenicity of missense variants in cancer. We collected a total of 10,642 missense variants from 1271 patients, and evaluated candidate features for their association with variant pathogenicity, identifying informative features including in silico functional predictions, population allele frequency, variant allele frequency, and tumor mutational burden. Using these selected features, MARiO was developed with extreme gradient boosting. The model integrates multiple in silico prediction tools and patient-specific genomic contexts while accommodating missing values frequently observed in real-world CGP datasets. MARiO outperformed existing tools, achieving an area under the receiver operating characteristic curve of 0.942. The model demonstrated strong generalizability across multiple external datasets and showed consistency with real-world molecular treatment proposals. MARiO offers a robust and clinically relevant approach for missense variant pathogenicity assessment by integrating variant- and patient-level features and serves as a valuable tool to support clinical decision-making.
