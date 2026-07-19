@@ -1,0 +1,25 @@
+---
+title: "Large-scale, interpretable gene regulatory network inference through biologically informed matrix factorization"
+title_zh: 大规模、可解释的基因调控网络推断：基于生物信息矩阵分解
+authors: "Micheletti, S., Fanfani, V., Vogt, J., Quackenbush, J., Fischer, J., Marx, A., Mandros, P."
+date: 2026-07-16
+pdf: "https://www.biorxiv.org/content/10.64898/2026.07.15.738791v1.full.pdf"
+tags: ["query:gwas"]
+score: 7.0
+evidence: 利用生物信息矩阵分解进行基因调控网络推断，整合功能基因组学
+tldr: 基因调控网络推断对于理解细胞身份和表型至关重要。现有方法如PANDA通过整合表达和基序信息重建调控网络，但难以区分激活与抑制调控。GIRAFFE提出一种生物信息矩阵分解框架，联合估计转录因子活性和调控网络，输出带符号的部分调控效应。在合成数据、六个人体组织、酵母扰动实验和肝癌数据中，GIRAFFE准确重建调控交互并高精度区分激活/抑制调控，揭示了组织特异性调控和疾病相关变化。该方法提供了机制可解释的互补视角，促进生物学假设生成。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-15-738791-v1/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1461, \"height\": 876, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-15-738791-v1/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1219, \"height\": 777, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-15-738791-v1/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 1397, \"height\": 1612, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-07-15-738791-v1/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1419, \"height\": 504, \"label\": \"Table\"}, {\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-07-15-738791-v1/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1430, \"height\": 576, \"label\": \"Table\"}]"
+motivation: 现有基因调控网络推断方法难以同时估计调控方向（激活/抑制），限制了机制理解。
+method: 提出GIRAFFE，一种基于生物信息矩阵分解的框架，整合表达、基序先验和蛋白互作，联合估计转录因子活性与带符号的调控效应。
+result: 在合成基准、六个人体组织、酵母扰动实验和肝癌数据中，准确重建调控交互并高精度区分激活/抑制，恢复组织特异性和疾病相关调控变化。
+conclusion: GIRAFFE提供了一种可扩展、高效且机制可解释的基因调控网络推断方法，有助于生物学发现。
+---
+
+## 摘要
+基因调控网络（GRN）为理解转录因子如何协调基因表达以建立细胞身份和表型提供了机制性框架。将基因表达与基于基序的调控先验及其他生物信息来源相结合的方法，通过重建条件特异性的调控架构，显著推动了基因调控网络的推断。这些方法评估支持调控相互作用的证据，并在广泛的生物学应用中取得了显著成功。然而，调控网络的互补视角试图估计这些相互作用对基因表达本身的影响，从而提供一个将调控边解释为对转录的激活或抑制影响的框架。我们开发了GIRAFFE，这是一个基于生物信息矩阵分解的框架，通过整合基因表达、基于基序的调控先验和转录因子蛋白质-蛋白质相互作用，联合估计转录因子活性和基因调控网络。GIRAFFE估计带符号的部分调控效应，其大小和符号可解释为转录调控的强度和方向。直接建立在PANDA等方法建立的生物学框架之上，GIRAFFE提供了基因调控网络的互补表示，强调机制性解释，同时保持可扩展性、灵活性和计算效率。在合成基准、六种人类组织、酵母转录因子扰动实验和肝细胞癌中，GIRAFFE准确重建了调控相互作用，同时以高精度区分激活性和抑制性调控。推断的网络恢复了组织特异性调控的已知特征，正确分类了转录因子扰动实验中的调控效应，并识别了与肝癌相关的调控程序中生物学上一致的变化。这些结果共同表明，估计转录调控的方向为基因调控网络提供了互补视角，有助于生物学解释和假说生成。
+
+## Abstract
+Gene regulatory networks (GRNs) provide a mechanistic framework for understanding how transcription factors coordinate gene expression to establish cellular identity and phenotype. Methods that integrate gene expression with motif-derived regulatory priors and other sources of biological information have substantially advanced gene regulatory network inference by reconstructing condition-specific regulatory architecture. These approaches estimate the evidence supporting regulatory interactions and have proven remarkably successful in a wide range of biological applications. A complementary view of regulatory networks, however, seeks to estimate the effect of those interactions on gene expression itself, providing a framework in which regulatory edges can be interpreted as activating or inhibitory influences on transcription. We developed GIRAFFE, a biologically informed matrix factorization framework that jointly estimates transcription factor activities and gene regulatory networks by integrating gene expression, motif-based regulatory priors, and transcription factor protein-protein interactions. GIRAFFE estimates signed partial regulatory effects whose magnitude and sign can be interpreted as the strength and direction of transcriptional regulation. Building directly on the biological framework established by methods such as PANDA, GIRAFFE provides a complementary representation of gene regulatory networks that emphasizes mechanistic interpretation while remaining scalable, flexible, and computationally efficient. Across synthetic benchmarks, six human tissues, yeast transcription factor perturbation experiments, and liver hepatocellular carcinoma, GIRAFFE accurately reconstructs regulatory interactions while distinguishing activating from inhibitory regulation with high accuracy. The inferred networks recover known features of tissue-specific regulation, correctly classify regulatory effects in transcription factor perturbation experiments, and identify biologically coherent changes in regulatory programs associated with liver cancer. Together, these results demonstrate that estimating the direction of transcriptional regulation provides a complementary perspective on gene regulatory networks that facilitates biological interpretation and hypothesis generation.
