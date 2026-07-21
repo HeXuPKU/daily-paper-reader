@@ -6,43 +6,52 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-20
-- 运行时间：2026-07-20 21:43:58 UTC
+- 最新运行日期：2026-07-21
+- 运行时间：2026-07-21 21:27:44 UTC
 - 运行状态：成功
-- 本次总论文数：7
+- 本次总论文数：10
 - 精读区：5
-- 速读区：2
+- 速读区：5
 
 ### 今日简报（AI）
-今日共7篇，精读5篇，重点推荐GWAS精细定位R包PanvaR与AI科研系统NVAITC。  
-核心看点：PanvaR包（10分）提供GWAS精细定位与可视化，NVAITC（8分）展示受治理的AI辅助高血压GWAS研究流程。  
-建议读者优先关注PanvaR工具在遗传分析中的实用价值，以及NVAITC系统对规范科研流程的启示。
-- 详情：[/202607/20/README](/202607/20/README)
+今日精读两篇GWAS研究，分别提出全自动AI科研系统及GWAS-单细胞转录组关联框架；速读涵盖长尾电子病历生成、多次检验校正方法及阿尔茨海默病预测模型。  
+最值得关注方向：GWAS与单细胞转录组整合分析（DPCGS框架）及AI驱动的全自动科研流程（NVAITC系统），两者均显著提升复杂疾病关联分析效能。  
+建议优先精读《DPCGS》学习跨模态关联方法，再参考《NVAITC AI Scientist》了解可重复的自动化研究流程，这对基因组学实战极有启发。
+- 详情：[/202607/21/README](/202607/21/README)
 
 ### 精读区论文标签
-1. [PanvaR: An R package for fine-mapping and visualizing results from genome-wide association studies](/202607/20/biorxiv-10-64898-2026-07-15-738769-v1-panvar-an-r-package-for-fine-mapping-and-visualizing-results-from-genome-wide-association-studies)  
-   标签：评分：10.0/10、query:gwas
-   evidence：用于GWAS精细映射和结果可视化的R包
-2. [NVAITC AI Scientist: A Governed End-to-End Research System -- A Hypertension GWAS Case Study](/202607/20/2607.11084v1-nvaitc-ai-scientist-a-governed-end-to-end-research-system----a-hypertension-gwas-case-study)  
+1. [NVAITC AI Scientist: A Governed End-to-End Research System -- A Hypertension GWAS Case Study](/202607/21/2607.11084v1-nvaitc-ai-scientist-a-governed-end-to-end-research-system----a-hypertension-gwas-case-study)  
+   标签：评分：9.0/10、query:med-ai
+   evidence：将AI代理系统应用于高血压GWAS案例，集成治理和可重复性
+2. [DPCGS: a computational framework for linking GWAS to single-cell transcriptomics in complex traits and diseases](/202607/21/biorxiv-10-64898-2026-07-14-738331-v1-dpcgs-a-computational-framework-for-linking-gwas-to-single-cell-transcriptomics-in-complex-traits-and-diseases)  
+   标签：评分：9.0/10、query:gwas
+   evidence：整合GWAS与单细胞转录组的框架
+3. [BaiZe: A Multi-View Dynamic Framework for Simulating and Interpreting Cellular Responses Across Perturbation Contexts](/202607/21/biorxiv-10-64898-2026-07-15-738608-v1-baize-a-multi-view-dynamic-framework-for-simulating-and-interpreting-cellular-responses-across-perturbation-contexts)  
    标签：评分：8.0/10、query:med-ai
-   evidence：用于高血压GWAS的智能体研究系统，符合医疗智能体及GWAS整合需求
-3. [Imputation-free transformer learning enables robust Alzheimer's disease prediction and calibrated uncertainty quantification across heterogeneous clinical cohorts](/202607/20/2607.11656v1-imputation-free-transformer-learning-enables-robust-alzheimers-disease-prediction-and-calibrated-uncertainty-quantification-across-heterogeneous-clinical-cohorts)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：在异质性临床队列上使用免插补transformer进行阿尔茨海默病预测
-4. [Improving Mendelian Randomization Analysis by Instrument Borrowing from Auxiliary Outcome Traits](/202607/20/2607.16086v1-improving-mendelian-randomization-analysis-by-instrument-borrowing-from-auxiliary-outcome-traits)  
+   evidence：虚拟细胞模型模拟扰动响应
+4. [Leveraging multiplicity in biologically informed neural networks to uncover disease heterogeneity](/202607/21/biorxiv-10-64898-2026-07-15-738681-v1-leveraging-multiplicity-in-biologically-informed-neural-networks-to-uncover-disease-heterogeneity)  
    标签：评分：8.0/10、query:gwas
-   evidence：提出工具借用策略改进孟德尔随机化，增强因果推断鲁棒性
-5. [Predicting phenotypes with one step genetic decision trees](/202607/20/biorxiv-10-1101-2025-05-29-656727-v2-predicting-phenotypes-with-one-step-genetic-decision-trees)  
+   evidence：利用基因型数据的生物信息神经网络疾病预测
+5. [snpXplorer: an interactive platform for haplotype-aware exploration and integrated annotation of GWAS data](/202607/21/biorxiv-10-64898-2026-07-20-739485-v1-snpxplorer-an-interactive-platform-for-haplotype-aware-exploration-and-integrated-annotation-of-gwas-data)  
    标签：评分：8.0/10、query:gwas
-   evidence：遗传决策树用于表型预测，与PRS/GS预测算法相关
+   evidence：单倍型感知的GWAS数据探索与功能注释
 
 ### 速读区论文标签
-1. [Epigenetic profile drives accurate survival prediction in breast cancer via a multi-omics machine learning model](/202607/20/biorxiv-10-1101-2025-07-31-667894-v6-epigenetic-profile-drives-accurate-survival-prediction-in-breast-cancer-via-a-multi-omics-machine-learning-model)  
+1. [AdaPCLA: Adaptive Prior-Calibrated Logit Adjustment for Long-Tailed Longitudinal EHR Generation](/202607/21/2607.12645v1-adapcla-adaptive-prior-calibrated-logit-adjustment-for-long-tailed-longitudinal-ehr-generation)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：纵向电子健康记录生成模型，解决长尾分布问题
+2. [The All Window-Size Search method for improved statistical power in multiple comparisons correction](/202607/21/biorxiv-10-64898-2026-07-14-738000-v1-the-all-window-size-search-method-for-improved-statistical-power-in-multiple-comparisons-correction)  
    标签：评分：7.0/10、query:gwas
-   evidence：整合基因组、转录组、蛋白质组、表观遗传特征的多组学生存预测
-2. [Tabular Foundation Models Are Competitive Cellular Perturbation Predictors Across Biological Scales](/202607/20/biorxiv-10-64898-2026-06-28-735106-v3-tabular-foundation-models-are-competitive-cellular-perturbation-predictors-across-biological-scales)  
+   evidence：适用于GWAS的多重比较校正方法
+3. [Imputation-free transformer learning enables robust Alzheimer's disease prediction and calibrated uncertainty quantification across heterogeneous clinical cohorts](/202607/21/2607.11656v2-imputation-free-transformer-learning-enables-robust-alzheimers-disease-prediction-and-calibrated-uncertainty-quantification-across-heterogeneous-clinical-cohorts)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：用于临床数据疾病预测的Transformer模型
+4. [CardioMeta: Calibrated Multi-Task Prediction of Diabetes, Hypertension, and Cardiovascular Disease Across Population and EHR Data](/202607/21/2607.15721v1-cardiometa-calibrated-multi-task-prediction-of-diabetes-hypertension-and-cardiovascular-disease-across-population-and-ehr-data)  
+   标签：评分：6.0/10、query:med-ai
+   evidence：基于EHR和人群数据的心血管代谢疾病多任务机器学习
+5. [De-floored Principal Component Regression: When Rank Selection Alone Is Insufficient for Prediction](/202607/21/2607.16638v1-de-floored-principal-component-regression-when-rank-selection-alone-is-insufficient-for-prediction)  
    标签：评分：6.0/10、query:gwas
-   evidence：机器学习（表格基础模型）应用于细胞扰动预测，可迁移至GWAS分析
+   evidence：高维预测方法可应用于多基因风险评分计算
 
 
 <div class="dpr-home-promo-card">
