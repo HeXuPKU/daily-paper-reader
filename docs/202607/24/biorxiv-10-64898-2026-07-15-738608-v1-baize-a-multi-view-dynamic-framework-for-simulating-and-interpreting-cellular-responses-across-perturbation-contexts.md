@@ -1,0 +1,24 @@
+---
+title: "BaiZe: A Multi-View Dynamic Framework for Simulating and Interpreting Cellular Responses Across Perturbation Contexts"
+title_zh: BaiZe：一个用于模拟和解释不同扰动背景下细胞响应的多视角动态框架
+authors: "Zeng, Q., Cai, W., Tian, R., Wang, Q., Zhou, D., Pan, M., Yang, H., Liu, Z., Lin, G. N., Wang, Z."
+date: 2026-07-20
+pdf: "https://www.biorxiv.org/content/10.64898/2026.07.15.738608v1.full.pdf"
+tags: ["query:med-ai"]
+score: 6.0
+evidence: 虚拟细胞模型用于细胞响应预测
+tldr: 现有模型局限在特定扰动类型，无法统一预测细胞响应。BaiZe提出多视角条件状态转换框架，整合转录组、遗传、化学、时间及染色质信息，预测扰动后转录组。在跨细胞状态、多基因组合、化学结构等未见条件下有效恢复转录程序，ATAC-seq增强预测并归因染色质区域，支持人鼠跨物种迁移。该框架结合可追溯的扰动记录，为理解细胞调控和实验优先排序提供通用工具。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-15-738608-v1/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1514, \"height\": 1870, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-15-738608-v1/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1458, \"height\": 1864, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-15-738608-v1/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 1514, \"height\": 1994, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-15-738608-v1/fig-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 1460, \"height\": 1026, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-15-738608-v1/fig-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 1469, \"height\": 491, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-15-738608-v1/fig-006.webp\", \"caption\": \"\", \"page\": 0, \"index\": 6, \"width\": 1522, \"height\": 1912, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-15-738608-v1/fig-007.webp\", \"caption\": \"\", \"page\": 0, \"index\": 7, \"width\": 1451, \"height\": 1859, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-15-738608-v1/fig-008.webp\", \"caption\": \"\", \"page\": 0, \"index\": 8, \"width\": 1496, \"height\": 1189, \"label\": \"Figure\"}]"
+motivation: 现有模型只能处理特定扰动类型，缺乏跨上下文预测能力，亟需统一框架。
+method: BaiZe构建多视角条件状态转换模型，以对照转录组为起点，结合遗传、化学、时间、染色质信息预测扰动后状态。
+result: 在多种未见条件下准确预测转录响应，ATAC-seq提升准确性，实现人鼠跨物种少样本迁移并连接形态表型。
+conclusion: BaiZe为预测和解释上下文依赖的细胞响应提供通用框架，助力假说优先排序。
+---
+
+## 摘要
+准确预测细胞对扰动的响应对于理解细胞调控和优先安排实验干预至关重要，然而现有模型通常针对特定扰动类型或生物学背景而设计。在此，我们提出BaiZe，一个多视角条件状态转换框架，它从对照状态转录组以及遗传、化学、时间和可选的染色质可及性信息预测扰动后的转录组。BaiZe将扰动响应建模为细胞状态之间依赖于上下文的转换。BaiZe支持对未见过的细胞状态和遗传扰动、未观察到的多基因组合、化学结构和剂量、时间阶段以及物种背景进行预测。跨多种扰动设置的基准测试表明，BaiZe在先前未见过的条件下有效恢复了主要的转录响应程序。整合匹配的ATAC-seq背景进一步改进了选定状态转换的预测，并实现了对染色质区域与响应相关基因和通路的基于模型的归因。BaiZe还支持从人类到小鼠细胞系统的扰动响应的小样本迁移，并将预测的转录组连接到候选形态学投影。为便于解释和使用，BaiZe-Agent将响应基因、通路、染色质证据、跨物种预测和投影表型组织成可追溯、可查询的扰动记录。总之，BaiZe提供了一个广泛适用的框架，用于预测和解释依赖于上下文的细胞响应，并在不同扰动设置中优先安排假设。
+
+## Abstract
+Accurately predicting how cells respond to perturbations is important for understanding cellular regulation and prioritizing experimental interventions, yet existing models are often designed for specific perturbation types or biological contexts. Here we present BaiZe, a multi-view conditional state-transition framework that predicts the post-perturbation transcriptome from a control-state transcriptome together with genetic, chemical, temporal and optional chromatin-accessibility information. BaiZe models perturbation responses as context-dependent transitions between cellular states. BaiZe supports prediction across held-out cell states and genetic perturbations, unseen multi-gene combinations, chemical structures and doses, temporal stages and species contexts. Benchmarking across diverse perturbation settings demonstrates that BaiZe effectively recovers major transcriptional response programs under previously unseen conditions. Incorporating matched ATAC-seq context further improves selected state-transition predictions and enables model-based attribution of chromatin regions to response-associated genes and pathways. BaiZe also supports few-shot transfer of perturbation responses from human to mouse cellular systems and connects predicted transcriptomes to candidate morphology projections. To facilitate interpretation and use, BaiZe-Agent organizes response genes, pathways, chromatin evidence, cross-species predictions and projected phenotypes into traceable, queryable perturbation records. Together, BaiZe provides a broadly applicable framework for predicting and interpreting context-dependent cellular responses and for prioritizing hypotheses across diverse perturbation settings.
