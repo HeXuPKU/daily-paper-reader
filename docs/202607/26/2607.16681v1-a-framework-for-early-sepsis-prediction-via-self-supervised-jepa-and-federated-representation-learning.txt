@@ -1,0 +1,476 @@
+Title: A Framework for Early Sepsis Prediction via Self-Supervised (JEPA) and Federated Representation Learning
+
+URL Source: https://arxiv.org/pdf/2607.16681v1
+
+Published Time: Tue, 21 Jul 2026 00:28:44 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+> 1
+
+# A Framework for Early Sepsis Prediction via Self-Supervised (JEPA) and Federated Representation Learning 
+
+Umair bin Mansoor 1∗, Dr. Munaf Rashid 2†, Dr. Roomi Naqvi 3†
+
+1Electrical Engg. Department, DHA Suffa University, Karachi, Pakistan 
+
+2Salim Habib University, Karachi, Sindh, Pakistan 
+
+3Intel Foundry Services, Intel, Tempe, Arizona, United States 
+
+∗Corresponding author: umair.mansoor@dsu.edu.pk 
+
+†These authors contributed equally to this work. Emails: sheikh.munaf@shu.edu.pk (M. Rashid), syed.naqvi@intel.com (R. Naqvi) 
+
+Abstract —Early sepsis prediction from electronic health records is challenged by irregular sampling, high missingness, and class imbalance. We systematically compare four modeling paradigms—self-supervised Joint Embedding Predictive Archi-tecture (JEPA) via masked latent prediction, self-supervised VI-CReg (variance-invariance-covariance regularization) with two-view augmentation, semi-supervised fine-tuning of a VICReg-pretrained encoder, and supervised Temporal Convolutional Net-work (TCN)—alongside raw-feature baselines. All models share a common preprocessing pipeline of hourly binning with forward-fill imputation applied to 7 biomarkers selected via sparsity analysis from the MIMIC-III dataset. Our best model (JEPA + XGBoost + mean pooling) achieves AUPRC 0.636 at the time of onset (H0), approaching the SupMix benchmark (0.667) while using 83% fewer biomarkers. The Tier 1 pipeline—VICReg pre-training followed by semi-supervised fine-tuning and XGBoost— achieves AUPRC 0.510 at H0, a 3.1 × improvement over the raw-feature baseline (0.165) and a 7.6% improvement over the end-to-end supervised TCN (0.474). Crucially, the fine-tuned VICReg encoder exhibits the most temporally persistent representations, degrading only 16.8% from H0 to H10 compared to 47.5% for supervised TCN and 65.3% for JEPA, demonstrating that self-supervised pretraining with task-aware fine-tuning yields features that are both sharp near onset and robust across prediction horizons. 
+
+I. I NTRODUCTION 
+
+Sepsis is a life-threatening organ dysfunction caused by a dysregulated host response to infection, affecting approxi-mately 49 million people annually worldwide with mortality rates of 20–50% [1]. Early detection and intervention are critical, as each hour of delayed antibiotic administration is associated with a 7.6% increase in mortality [2]. Machine learning models operating on electronic health record (EHR) data offer a promising avenue for early sepsis prediction. However, EHR time series present several challenges: (1) irregular sampling intervals, (2) high rates of missingness (often exceeding 70% for laboratory values), (3) varying 
+
+https://orcid.org/0000-0002-6986-3774 https://orcid.org/0000-0003-2063-4513 ORCID placeholder 
+
+clinical practices across institutions, and (4) class imbalance (sepsis prevalence is typically 5–15% in ICU populations). Prior work has explored various architectural choices for this task. Futoma et al. [3] proposed a multi-output Gaus-sian process recurrent neural network (MGP-RNN) achieving AUPRC ∼0.50–0.55 on Duke EHR data, using 34 physi-ological variables with end-to-end MGP imputation and an LSTM classifier. Moor et al. [4] introduced the MGP-TCN on MIMIC-III data with 44 biomarkers, achieving AUPRC 0.35 at 7 hours before onset. Wanyan et al. [5] achieved AUROC 0.883 and AP 0.667 on the PhysioNet 2019 dataset using sub-categorical supervised pretraining (SupMix) with XGBoost. However, all of these prior works used 34–44 biomarkers, many with extreme sparsity ( <5% observation rate). Desautels et al. [6] demonstrated that even a minimal set of vital signs and age can provide clinically useful sepsis predictions with their InSight system on MIMIC-III, supporting the premise that sparse but carefully selected inputs retain discriminative power. In this work, we take a deliberately different approach: we restrict our analysis to only 7 biomarkers selected through a systematic sparsity analysis. This strategy ensures that each biomarker contributes meaningful signal rather than noise from imputation. We systematically compare four modeling paradigms applied to the same preprocessed data: (1) a self-supervised JEPA trained via masked latent prediction, (2) a self-supervised VICReg with two-view augmentation, (3) semi-supervised fine-tuning of the VICReg-pretrained encoder with a BCE classification head, (4) an end-to-end supervised TCN, and (5) raw feature baselines with conventional classi-fiers. We investigate the impact of pooling strategy (mean vs. last-timestep) and classifier choice (Logistic Regression vs. XGBoost). We evaluate all models across prediction horizons 
+
+H = {0, 1, . . . , 10 } hours before sepsis onset. II. R ELATED WORK 
+
+A. Clinical Early Warning Scores 
+
+Traditional clinical scoring systems such as NEWS, MEWS, SIRS, and qSOFA have been widely deployed [7], [8]. These arXiv:2607.16681v1 [cs.LG] 18 Jul 2026 2
+
+scores compare a small number of physiological variables to fixed thresholds and assign independent scores, ignoring complex temporal interactions. Futoma et al. [3] showed that NEWS produced 2.5 false alarms per true alarm at sensitivity 0.85, compared to 0.5 for their MGP-RNN. 
+
+B. Deep Learning for Sepsis Detection 
+
+Futoma et al. [3] proposed the MGP-RNN framework, which uses a Multi-task Gaussian Process (MGP) to interpo-late irregularly sampled multivariate time series onto a regular grid, then feeds the imputed values into an LSTM classifier. The model is trained end-to-end using the Lanczos method for scalable GP sampling. On a cohort of 49,312 inpatient admis-sions with 34 physiological variables, 35 baseline covariates, and 8 medication classes, they achieved 19.4% AUROC and 55.5% AUPRC improvement over NEWS. Moor et al. [4] replaced the LSTM with a TCN, producing the MGP-TCN. On MIMIC-III data [9] with 44 biomarkers, they extracted Sepsis-3 labels at hourly resolution. After case-control matching (570 cases, 5,618 controls), MGP-TCN achieved AUPRC 0.35 at 7 hours before onset, while their DTW-KNN ensemble reached 0.40. Lee et al. [10] later improved upon MGP-TCN by incorporating GRU-D impu-tation, achieving AUPRC 0.710 on a Korean ICU cohort. Separately, Apalak and Kiasaleh [11] demonstrated that TCNs can also leverage ECG-derived heart rate variability features for sepsis prediction, broadening the range of physiological signals amenable to temporal convolution-based approaches. Wang and Yao [12] proposed a Multi-Branching TCN (MB-TCN) that handles missing values via a learned mask and ad-dresses class imbalance through multiple balanced branching outputs with a shared core TCN. On the PhysioNet 2019 Chal-lenge dataset with 40 clinical variables, MB-TCN achieved AUROC 0.892 and AUPRC 0.527, outperforming LSTM-based baselines by 7% in AUROC and 27% in AUPRC. Our approach achieves higher AUPRC (0.636 vs. 0.527) despite using 83% fewer biomarkers, though their higher AUROC (0.892 vs. 0.838) highlights the remaining value of dense laboratory features for discriminative calibration. Separately, Dai et al. [13] proposed PoEMS, a deep rein-forcement learning framework that augments an LSTM-based sepsis predictor with a policy network that decides adaptively when to issue a warning. On the PhysioNet 2019 dataset, PoEMS achieved AUROC 0.911 and AUPRC 0.675, with a tunable parameter α controlling the earliness–accuracy trade-off at inference time. Unlike their RL-based adaptive stopping, our work systematically evaluates fixed prediction horizons (H0–H10) and investigates whether self-supervised pretraining can produce temporally persistent representations across all horizons simultaneously. Wanyan et al. [5] proposed SupMix, a sub-categorical supervised pretraining strategy. Using XGBoost on the learned representations, they achieved AUROC 0.883 and AP 0.667 on PhysioNet 2019. D¨ using and Cimiano [14] proposed a federated attention-enhanced LSTM with variable prediction horizons, demon-strating that collaborative training across institutions is partic-ularly beneficial for long-horizon sepsis prediction. Beyond retrospective studies, Boussina et al. [15] deployed the COMPOSER deep-learning model across two emergency departments at UC San Diego, achieving AUROC 0.938– 0.945 for 4-hour-ahead sepsis prediction. In a before-and-after quasi-experimental study of 6,217 septic patients, deployment was associated with a 1.9% absolute mortality reduction and a 5.0% increase in sepsis bundle compliance. Subse-quently, Shashikumar et al. [16] extended COMPOSER with an LLM-based pipeline (COMPOSER-LLM) that processes unstructured clinical notes, achieving sensitivity 72.1% and PPV 52.9% with only 0.0087 false alarms per patient-hour, demonstrating the complementary value of unstructured data for sepsis prediction. 
+
+C. Self-Supervised Learning for Time Series 
+
+Contrastive Predictive Coding (CPC) [17] learns representa-tions by predicting future latents. VICReg [18] avoids negative samples by combining invariance, variance, and covariance regularization on two augmented views of the same input. Tonekaboni et al. [19] proposed temporal neighborhood coding for clinical time series. Yang et al. [20] developed MSTCL, a multi-scale temporal-aware contrastive learning model using only six vital signs, achieving AUROC 88.34% for online sepsis prediction. Chen et al. [21] proposed SCMCLR, a cross-modal contrastive learning framework that transfers knowledge from laboratory tests to vital sign representations, enabling accurate prediction using only vital signs. Most recently, Wu et al. [22] showed that VICReg’s covariance term captures only second-order statistics and proposed VISReg, which replaces it with a Sliced-Wasserstein sketching objective for full distributional alignment, yielding improved representation quality across diverse data regimes. III. M ETHODOLOGY 
+
+A. MIMIC-III Dataset and PhysioNet 2019 Challenge 1) The MIMIC-III Database: The Multiparameter Intelli-gent Monitoring in Intensive Care (MIMIC-III) database [9] comprises de-identified clinical data from over 58,000 hos-pital admissions of 46,520 patients admitted to the Beth Israel Deaconess Medical Center (BIDMC) between 2001 and 2012. The database is organized into multiple rela-tional tables: ADMISSIONS (demographic and admission details), ICUSTAYS (ICU episode start and end times), 
+
+CHARTEVENTS (bedside vital sign measurements recorded approximately hourly), LABEVENTS (laboratory test results drawn at clinician-determined intervals), PRESCRIPTIONS 
+
+(medication orders), PROCEDURES_ICD (ICD-9 procedure codes), and DIAGNOSES_ICD (ICD-9 diagnosis codes). MIMIC-III is a publicly available de-identified database hosted on PhysioNet (https://doi.org/10.13026/C2XW26). The origi-nal data collection was approved by the Institutional Review Board of the Massachusetts Institute of Technology (MIT IRB), and all patient records were de-identified in accordance with the Health Insurance Portability and Accountability Act (HIPAA) safe harbor provisions. 3
+
+2) The PhysioNet 2019 Challenge Dataset: The Phys-ioNet/Computing in Cardiology Challenge 2019 [23] pro-cessed a subset of MIMIC-III data (augmented with data from Emory University Hospital) into a standardized, hourly-resolution format for sepsis prediction. The preprocessing pipeline involved: extracting all ICU stays from MIMIC-III; querying CHARTEVENTS for vital signs (heart rate, blood pressure, temperature, respiratory rate, SpO2) and 
+
+LABEVENTS for laboratory tests (WBC, creatinine, lactate, bilirubin, etc.); aligning all measurements to hour boundaries relative to ICU admission; and computing hourly aggregates. The final dataset contains 40,336 ICU stays with 34 physio-logical variables, patient demographics (age, gender), hospital admission timing, and a binary SepsisLabel per hour. Sepsis is defined according to Sepsis-3 criteria [8]: a sus-pected infection (blood culture draw and antibiotic adminis-tration within ±24 hours) accompanied by a Sequential Organ Failure Assessment (SOFA) [24] score increase of at least 2 points within the window [−48 , +24] hours around the suspicion of infection. The SOFA score is computed from six components: respiratory (PaO2/FiO2 or SpO2/FiO2 ratio), coagulation (platelet count), hepatic (bilirubin), cardiovascular (mean arterial pressure and vasopressor requirement), neu-rological (Glasgow Coma Scale), and renal (creatinine and urine output). Each component contributes 0–4 points, and the baseline SOFA score is taken as the minimum in the 48 hours preceding the suspicion of infection. 
+
+3) Per-Patient Temporal Window Construction: For each patient encounter, the time series is anchored to the ICU admission time (t = 0). Measurements are available as irregularly timed observations {(tij , v ij )} where tij is the clock time of the j-th observation of variable i and vij is its value. The challenge dataset resamples these into hourly bins indexed by h = 0, 1, . . . , H max , where h = ⌊t⌋ is the integer hour since admission. If multiple observations of the same variable fall within a single hourly bin, they are reduced to summary statistics (mean, minimum, maximum, etc.). SepsisLabel yh ∈ { 0, 1} is assigned per hour, where 
+
+yh = 1 for all hours after sepsis onset. The training/validation split follows a chronological protocol: admissions are ordered by admission time, with the first 37,897 stays allocated to training and the remaining 2,439 to validation, ensuring no temporal leakage. For the prediction task, we extract for each patient a 72-hour lookback window Wp = [ t − 72 , t ) preceding the prediction time t. This window is divided into T = 72 hourly bins. At prediction horizon H, the input is restricted to the first 72 −H
+
+bins (i.e., data up to H hours before the prediction point). This protocol, illustrated in Fig. 1, follows the evaluation methodology of Moor et al. [4]. 
+
+4) Biomarker Selection and Sparsity Analysis: The Phy-sioNet 2019 dataset contains 34 physiological variables. We computed the fraction of hourly bins with at least one non-missing observation for each variable. Table I presents the results. Several observations guide our selection. First, the six vital signs (HR, SBP, DBP, Temp, RR, SpO2) are observed in 34– 91% of hourly bins because they are measured continuously or near-continuously at the bedside. Mean Arterial Pressure (MAP) is observed at 87.9%, offering near-continuous blood pressure monitoring. Although MAP is a linear combination of SBP and DBP (MAP ≈ DBP + (SBP − DBP)/3) and thus collinear, our 5-descriptor-per-biomarker representation (particularly the binary missingness flag) allows the TCN to learn the underlying linear relationship directly from data. Including MAP as a separate channel ensures the model receives the most complete blood-pressure signal possible even when SBP or DBP are transiently unrecorded. Second, laboratory values have substantially lower obser-vation rates because they depend on clinician-ordered blood draws. White Blood Cell Count (WBC, 6.4%) is the most common sepsis-related laboratory test, but a 6.4% hourly observation rate means that in 72-hour windows, a typical patient has WBC measurements in only 4–5 hours on average. The remaining 67 hours would contain the zero-descriptor placeholder [0 , 0, 0, 0, 0] , making the WBC channel noise-dominated and degrading overall representation quality. No other laboratory marker (creatinine 6.2%, lactate 3.1%, biliru-bin 1.7%) exceeds 10% observation, and all are therefore excluded. Third, biomarkers with observation rates below 5% (lactate, PTT, troponin, fibrinogen, bilirubin, etc.) are excluded because they would require >95% synthetic imputation, introducing more noise than signal. Thus, our final feature set comprises 7 biomarkers: HR, SBP, DBP, Temp, RR, SpO2, and MAP. These cover the cardiovas-cular (HR, SBP, DBP, MAP), respiratory (RR, SpO2), and metabolic (Temp) domains while avoiding extreme sparsity. The choice prioritizes near-continuous physiological monitor-ing over sparse laboratory signals, ensuring that each of the 42 hourly descriptors carries meaningful variance. 
+
+B. Preprocessing: Absolute-Time Hourly Binning with Forward-Fill 
+
+For each patient and each hourly bin, we compute 6statistical descriptors for each of the 7 biomarkers, producing a 42-dimensional feature vector: 
+
+xh = [ μ1, σ 1, n 1, l 1, m 1, t 1, . . . , μ 7, σ 7, n 7, l 7, m 7, t 7] ∈ R42 
+
+(1) where for biomarker b at hour h: μb =
+
+mean of observed values (or last observed mean if forward-filled), σb = standard deviation (0 if forward-filled), nb = count of observations (0 if forward-filled), 
+
+lb = last observed value, mb = observed flag (1 if at least one actual measurement in this hour, 0 if carried forward), and 
+
+tb = hours since last measurement (0 if measured this hour). For hours with no new data, descriptors for each biomarker are forward-filled from the most recent hour containing an actual measurement. Biomarkers never observed during the window remain as zero vectors with mb = 0 and tb = h
+
+(elapsed hours since window start). For the prediction task, we use a 72-hour lookback window. 4             
+
+> Fig. 1. Sliding-window prediction protocol. The 72-hour lookback window preceding the prediction time tis progressively truncated as the horizon H
+> increases. At H0, all 72 hours are used; at H10, only the first 62 hours remain. TABLE I HOURLY OBSERVATION RATES FOR ALL 34 BIOMARKERS . T HE 7SELECTED BIOMARKERS (BOLD )HAVE RATES SUFFICIENT FOR RELIABLE HOURLY BINNING . MAP (87.9%) IS INCLUDED BECAUSE ITS NEAR -CONTINUOUS AVAILABILITY COMPLEMENTS SBP/DBP; WBC (6.4%) IS EXCLUDED DUE TO SPARSITY .
+
+Biomarker Rate Biomarker Rate Biomarker Rate HR 90.6% BUN 7.0% Chloride 4.5% 
+
+SBP 85.7% Hgb 7.4% Phosphate 4.2% 
+
+DBP 69.0% pH 7.4% HCO3 4.4% 
+
+Temp 34.0% Creatinine 6.2% EtCO2 3.9% 
+
+RR / Resp 85.3% Magnesium 6.5% SaO2 3.9% 
+
+SpO2/O2Sat 87.8% WBC 6.4% Lactate 3.1% 
+
+MAP 87.9% Calcium 6.0% PTT 3.1% Glucose 16.5% Platelets 5.9% BaseExcess 5.9% Potassium 9.3% PaCO2 6.1% TroponinI 1.1% Hct 9.0% AST 1.9% Fibrinogen 0.7% FiO2 8.5% Alkalinephos 1.8% Bilirubin dir. 0.2% Bilirubin total 1.7% 
+
+C. Temporal Convolutional Network (TCN) Encoder 
+
+All models share a causal TCN encoder [25], which has been successfully applied to sepsis prediction in recent work [10], [11]. The dilated convolution is: 
+
+F (s) = ( x ∗d f )( s) = 
+
+> k−1
+
+X
+
+> i=0
+
+f (i) · xs−d·i (2) Each layer uses a residual block: 
+
+z(ℓ+1) = ReLU  z(ℓ)+Conv1D(ReLU(Conv1D( z(ℓ))))  (3) Our configuration: 5 residual blocks, channels [32, 64, 128, 256, 512], kernel size 3, dropout 0.2, dilation factors [1, 2, 4, 8, 16], latent dimension 128. 
+
+D. Self-Supervised Pretraining via Masked Latent Prediction (JEPA) 
+
+Our first self-supervised approach follows a masked autoen-coder (MAE) paradigm applied to the latent space of the TCN encoder. For each 72-hour input sequence, we randomly select a contiguous block of M hours as the target to be predicted: 
+
+M = max(2 , ⌊ρ · T ⌋), ρ = 0 .4 (4) where T = 72 is the sequence length. The encoder processes the full sequence to produce latents Z = {z1, . . . , zT }. A predictor network then reconstructs the latent representations of the masked block from the context (unmasked) latents. The predictor is a 2-layer MLP with residual connections, augmented with learnable positional embeddings and horizon embeddings: 
+
+zpred  
+
+> t
+
+= fθ
+
+ zctx  
+
+> t
+
++ epos  
+
+> t
+
++ ehor 
+
+> h
+
+ for masked t (5) Masked positions are replaced with a learnable mask to-ken [17]. The pretraining objective combines prediction (MSE), variance, and covariance regularization on the pre-dicted latents [18]: 
+
+LJEPA = 1
+
+n
+
+X
+
+> i
+
+∥zpred  
+
+> i
+
+− ztarget  
+
+> i
+
+∥2
+
++ λv
+
+1
+
+d
+
+X
+
+> j
+
+max(0 , γ − Std( zpred  
+
+> j
+
+) + ϵ)+ λc
+
+1
+
+d
+
+X
+
+> i̸=j
+
+[C(Zpred )] 2 
+
+> ij
+
+(6) where λv = 1.0, λc = 0.04 , γ = 1.0. Training: Adam optimizer, learning rate 5 × 10 −4, batch size 64, warmup 10 epochs, early stopping patience 30. 5
+
+E. Self-Supervised Pretraining via VICReg (Tier 1) 
+
+Our second self-supervised approach uses VICReg [18], which learns representations by maximizing agreement be-tween two augmented views of the same input while prevent-ing representational collapse through variance and covariance regularization. Unlike the masked autoencoder approach, VI-CReg does not require a predictor network or masking, making it computationally simpler. For each input sequence x with mask m, we generate two augmented views using a stochastic augmentation pipeline: 
+
+(x1, m1) = A(x, m), (x2, m2) = A(x, m) (7) where A applies three augmentations: (1) temporal shift : the input window is randomly shifted by up to ±6 hours with zero-padding at boundaries; (2) biomarker dropout : each biomarker channel is independently dropped with probability 0.3 (re-placed with zero descriptors); (3) Gaussian noise : independent noise N (0 , 0.02) is added to non-masked features. Each view is encoded by the shared TCN encoder and pooled via masked mean pooling: 
+
+zk =
+
+PTt=1 zk,t · ⊮[mk,t ]
+
+PTt=1 ⊮[mk,t ] , k ∈ { 1, 2} (8) The VICReg objective has three components: 
+
+LVICReg = λi ∥z1 − z2∥2
+
+| {z }
+
+> invariance
+
++ λvdX
+
+> j=1
+
+max(0 , γ − Std( zj ) + ϵ)
+
+| {z }
+
+> variance
+
++ λc
+
+1
+
+d
+
+X
+
+> i̸=j
+
+[C(Z)] 2
+
+> ij
+
+| {z }
+
+> covariance
+
+(9) where invariance encourages the two views to map to the same representation, variance prevents dimensional collapse by pushing each dimension’s standard deviation toward γ =1.0, and covariance decorrelates dimensions to prevent infor-mational collapse. The covariance term enforces decorrelation but captures only second-order statistics, which recent work has identified as a limitation—VISReg [22] addresses this by replacing the covariance penalty with a Sliced-Wasserstein sketching objective that enforces full distributional shape, though we retain the standard VICReg objective for this study. We use λi = 1 .0, λv = 1 .0, λc = 0 .04 . Training: AdamW optimizer, learning rate 5 × 10 −4, batch size 64, weight decay 
+
+1 × 10 −5, cosine annealing schedule, early stopping patience 30. 
+
+F. Semi-Supervised Fine-Tuning (Tier 1) 
+
+After VICReg pretraining, we fine-tune the encoder for sepsis prediction by attaching a linear classification head: 
+
+ˆy = σ(Wz pooled + b) (10) where zpooled is the masked mean-pooled latent. The classi-fication head is a single linear layer (128 →1) with dropout (0.2). The entire model (encoder + head) is fine-tuned with binary cross-entropy loss: 
+
+LBCE = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+yi log(ˆ yi) + (1 − yi) log(1 − ˆyi) (11) We use a lower learning rate ( 1 × 10 −5) with AdamW, weight decay 1×10 −5, and early stopping with patience 15 to prevent catastrophic forgetting of the pretrained representations. The best checkpoint is selected based on validation loss. After fine-tuning, the encoder is frozen and latents are extracted for downstream classification with XGBoost and Logistic Regression, following the same protocol as other models. 
+
+G. Supervised TCN Training 
+
+Binary cross-entropy loss: 
+
+LBCE = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+yi log(ˆ yi) + (1 − yi) log(1 − ˆyi) (12) The classification head applies global mean pooling followed by a linear layer (128 →1) with sigmoid. Training: Adam, learning rate 5 × 10 −4, batch size 64, warmup 10 epochs, early stopping patience 30. 
+
+H. Classification Heads 
+
+After representation learning, latents are pooled. Mean pooling: zmean = 1
+
+> T
+
+PTt=1 zt. Last-timestep pooling uses zT
+
+directly. Logistic Regression with L2 regularization ( C = 1 .0): 
+
+P (y = 1 |x) = σ(wT x + b) = 11 + e−(wT x+b) (13) XGBoost [26]: 
+
+L(t) =
+
+> n
+
+X
+
+> i=1
+
+ℓ yi, ˆy(t−1)  
+
+> i
+
++ ft(xi) + γT + 12 λ
+
+> T
+
+X
+
+> j=1
+
+w2 
+
+> j
+
+(14) Configuration: 200 trees, max depth 4, learning rate 0.1, scale pos weight for imbalance. 
+
+I. Evaluation Metrics 
+
+AUPRC is the primary metric due to class imbalance [27]: 
+
+AUPRC = 
+
+Z 10
+
+Precision( r) dr (15) where Precision = T P/ (T P + F P ), r = Recall =
+
+T P/ (T P +F N ). We also report sensitivity at 90% specificity. 
+
+J. Federated Learning Setup 
+
+We further investigate federated learning (FL) variants of the supervised TCN to simulate a decentralized clinical setting where patient data cannot be pooled due to privacy constraints. The training dataset is partitioned among 5 clients using La-tent Dirichlet Allocation (LDA) with concentration parameter 
+
+α = 0 .5, producing a heterogeneous label distribution: Client 0 (48.6% positive, 346 samples), Client 1 (2.7%, 915 samples), 6
+
+Client 2 (0.1%, 1013 samples), Client 3 (0.5%, 987 samples), and Client 4 (28.7%, 470 samples). The two largest clients (1 and 2) contain the vast majority of negative-class samples, while Clients 0 and 4 carry most of the positive signal. We implement and compare four FL aggregation strategies: 1) FedAvg [28]: Server aggregates client model parameters via weighted averaging: w(t+1) = PKk=1  
+
+> nk
+> N
+
+w(t) 
+
+> k
+
+, where 
+
+nk is the number of samples on client k and N is the total. 2) FedProx [29]: Adds a proximal penalty μ 
+
+> 2
+
+∥wk − w(t)∥2
+
+to the local loss, limiting per-client drift. We use μ =0.01 .3) FedDyn [30]: Maintains a per-client dynamic state 
+
+hk that corrects the local gradient: Llocal  
+
+> k
+
+= LBCE  
+
+> k
+
++
+
+⟨hk, wk⟩ + α 
+
+> 2
+
+∥wk − w(t)∥2, with hk ← hk − α(w(t) −
+
+wk) after each round. We use α = 0 .01 .4) FedAvgM [31]: Applies server-side momentum: 
+
+v(t+1) = βv(t) + P 
+
+> knk
+> N
+
+(wk − w(t)),
+
+w(t+1) = w(t) + ηv(t+1) , with β = 0 .9, η = 0 .3.All FL variants use the same architecture, optimizer (AdamW, 
+
+lr = 5 × 10 −4), local epochs (1), and total communication rounds (50) for fair comparison. However, note that the FL experiments use a reduced architecture (encoder channels [16, 32], latent dimension 32) whereas the main results use the full architecture described in Section III-C. IV. E XPERIMENTAL SETUP 
+
+Experiments were conducted on CPU. JEPA pretraining: up to 100 epochs with early stopping (patience 30), learning rate 
+
+5 × 10 −4. VICReg pretraining: up to 100 epochs with early stopping (patience 30), AdamW optimizer, cosine annealing scheduler. Fine-tuning: up to 100 epochs with early stopping (patience 15), learning rate 1 × 10 −5, AdamW optimizer. Su-pervised TCN: up to 100 epochs with early stopping (patience 30), learning rate 5 × 10 −4. For horizon analysis, each model was trained once on available training data and evaluated at each H ∈ { 0, . . . , 10 } by restricting the input window per the protocol of Moor et al. [4]. V. R ESULTS AND DISCUSSION 
+
+A. Performance Summary 
+
+Table III presents AUROC and AUPRC for all experiments at horizons H0–H10 on the validation set (618 patients). 
+
+B. Key Findings 
+
+Classifier Effect: XGBoost dramatically outperforms Lo-gistic Regression across all encoders. For JEPA, XGBoost improves AUPRC from 0.171 to 0.636 at H0 (+272%). For the fine-tuned VICReg encoder, XGBoost improves from 0.282 to 0.510 (+81%). For supervised TCN, from 0.256 to 0.474 (+85%). This confirms that tree-based classifiers are substantially more effective than linear models at predicting sepsis from temporal latent representations. 
+
+Three-Tier Comparison: The JEPA encoder achieves the highest H0 AUPRC (0.636), followed by the fine-tuned VI-CReg encoder (0.510, +7.6% over the supervised TCN), then                           
+
+> TABLE II AUPRC DEGRADATION FROM H0 TO H10. T HE FINE -TUNED VICR EG ENCODER IS THE MOST HORIZON -ROBUST LEARNED REPRESENTATION .
+> Model H0 AUPRC H10 AUPRC Drop
+> FT+XGB (mean) 0.510 0.425 −16.8%
+> SupTCN+XGB (mean) 0.474 0.249 −47.5% JEPA+XGB (mean) 0.636 0.221 −65.3% JEPA+XGB (last) 0.459 0.126 −72.5% SupTCN+LR (mean) 0.256 0.240 −6.2% Raw+LR 0.165 0.152 −7.9%
+
+the supervised TCN (0.474), and finally the raw features (0.165). The Tier 1 pipeline—VICReg pretraining followed by semi-supervised fine-tuning—provides a meaningful inter-mediate between purely self-supervised (JEPA) and purely supervised (TCN) approaches, improving AUPRC by 7.6% over end-to-end supervised training. 
+
+Horizon Robustness: The fine-tuned VICReg encoder ex-hibits the most stable performance across horizons. Its AUPRC drops only 16.8% from H0 (0.510) to H10 (0.425), compared to 47.5% for supervised TCN (0.474 →0.249), and 65.3% for JEPA with XGBoost mean (0.636 →0.221). This suggests that the combination of self-supervised pretraining (which learns general physiological structure) and task-aware fine-tuning (which optimizes for discriminative features) produces representations that are both sharp near onset and persistent across horizons. 
+
+C. Degradation Analysis Across Prediction Horizons 
+
+We interpret the degradation hierarchy as follows. The self-supervised JEPA is optimized for masked latent reconstruction, which excels at capturing acute, localized temporal structure— the sharp physiological deterioration immediately preceding sepsis diagnosis. At H0, these acute signatures provide strong discriminative signal. However, as the horizon recedes, the acute signals fade and JEPA’s representations, lacking task-aware pressure to learn subtle persistent patterns, degrade catastrophically. Table II quantifies the degradation asymmetry. The fine-tuned VICReg encoder loses only 16.8% AUPRC from H0 to H10, making it the most horizon-robust learned representation. The supervised TCN loses 47.5%, while the self-supervised JEPA loses 65.3%. The supervised TCN, trained end-to-end with BCE loss over the full 72-hour window, develops features under gradient pressure from each time step equally. This forces the encoder to identify patterns that remain discriminative regardless of their position relative to the prediction point, producing more temporally persistent features (47.5% vs. 65.3% drop). The fine-tuned VICReg encoder achieves the best of both worlds: VICReg pretraining captures the general physiological structure through the two-view invariance objective, while the subsequent fine-tuning phase provides task-aware pressure that selects for discriminative patterns. The result is representations that are sharper at H0 than supervised TCN (0.510 vs. 0.474) and more robust across horizons than JEPA (16.8% vs. 65.3% drop). This suggests that self-supervised pretraining followed by lightweight task-aware fine-tuning is the most effective 7       
+
+> TABLE III PERFORMANCE METRICS ACROSS ALL EXPERIMENTS AND HORIZONS  H0–H10. C LASSIFIERS : LR, XGB OOST  (XGB). P OOLING : MEAN  (M),  LAST -TIMESTEP  (L). B EST RESULT IN BOLD .H Raw+LR  JEPA+LR  JEPA+XGB m  JEPA+XGB l  SupTCN+LR m  SupTCN+XGB m  FT+LR m  FT+XGB m AUROC  AUPRC  AUROC  AUPRC  AUROC  AUPRC  AUROC  AUPRC  AUROC  AUPRC  AUROC  AUPRC  AUROC  AUPRC  AUROC  AUPRC H0  0.713  0.165  0.709  0.171  0.838  0.636  0.798  0.459  0.759  0.256  0.801  0.474  0.800  0.282  0.850  0.510 H1  0.717  0.167  0.690  0.155  0.876  0.611  0.637  0.117  0.744  0.245  0.790  0.361  0.782  0.213  0.839  0.469 H2  0.719  0.171  0.685  0.149  0.858  0.562  0.680  0.134  0.739  0.243  0.771  0.311  0.780  0.211  0.839  0.470 H3  0.716  0.168  0.684  0.147  0.827  0.500  0.621  0.128  0.737  0.242  0.768  0.288  0.778  0.208  0.834  0.466 H4  0.716  0.166  0.674  0.146  0.819  0.429  0.614  0.109  0.733  0.241  0.759  0.261  0.775  0.204  0.831  0.464 H5  0.712  0.164  0.675  0.141  0.817  0.406  0.607  0.109  0.726  0.238  0.730  0.240  0.774  0.202  0.829  0.460 H6  0.703  0.160  0.659  0.137  0.800  0.392  0.534  0.094  0.725  0.240  0.710  0.220  0.771  0.198  0.833  0.467 H7  0.699  0.160  0.653  0.136  0.784  0.336  0.607  0.122  0.723  0.239  0.721  0.220  0.768  0.196  0.819  0.447 H8  0.697  0.160  0.649  0.137  0.759  0.286  0.501  0.077  0.718  0.238  0.728  0.227  0.765  0.192  0.826  0.434 H9  0.694  0.158  0.651  0.138  0.755  0.256  0.574  0.109  0.717  0.237  0.736  0.251  0.760  0.191  0.824  0.426 H10  0.692  0.152  0.666  0.150  0.722  0.221  0.626  0.126  0.719  0.240  0.739  0.249  0.764  0.201  0.827  0.425 8
+> Fig. 2. Best validation loss (BCE) for centralized training and four federated learning aggregation strategies across 5 clients with LDA( α= 0 .5) label distribution. FedDyn closes the gap to within 5.8% of the centralized baseline.
+> Fig. 3. AUROC vs Prediction Horizon. H= 0 (right) = imminent prediction;
+> H= 10 (left) = 10 hours before onset.
+
+strategy for producing clinically useful sepsis predictions across varying prediction windows. 
+
+D. Federated Learning Results 
+
+Table IV summarizes the FL results. FedDyn achieves the best validation loss (0.2480), degrading only 5.8% relative to the centralized baseline. FedAvg (0.2728, +16.3%) and Fed-Prox (0.2731, +16.5%) perform nearly identically, indicating that the static proximal penalty does not help when local drift is limited to a single epoch per round. FedAvgM (0.3578, +52.6%) underperforms because the momentum mechanism amplifies gradient noise rather than accelerating convergence when the number of local steps per round is small. Note that these FL experiments use a reduced architecture (encoder channels [16, 32], latent dimension 32) for computational efficiency, whereas the main results use the full architecture. 
+
+E. Comparison with Published Benchmarks 
+
+Table V provides a qualitative comparison. Direct numer-ical comparison is complicated by differences in datasets, biomarker sets, and evaluation protocols.       
+
+> Fig. 4. AUPRC vs Prediction Horizon across all evaluated models. H= 0
+> (right) = imminent prediction; H= 10 (left) = 10 hours before onset.
+
+VI. D ISCUSSION 
+
+A. Horizon Robustness of Self-Supervised vs. Supervised Rep-resentations 
+
+The degradation analysis (Table II) reveals a clear hierarchy of temporal persistence. The fine-tuned VICReg encoder is the most robust (16.8% H0 →H10 drop), followed by supervised TCN (47.5%), then JEPA (65.3%). This ordering directly reflects the degree of task supervision in the training objective. The JEPA objective—masked latent reconstruction with variance/covariance regularization—excels at modeling local temporal dynamics. The encoder learns to represent the acute physiological changes that immediately precede sepsis onset. At H0, these features are highly discriminative, yielding the overall best AUPRC (0.636). However, the objective does not incentivize the encoder to learn features that are useful at arbitrary distances from the prediction point. When the input window is truncated at H10, the acute signatures are absent and the JEPA features, optimized only for reconstruction fidelity, are poorly suited for classification. The supervised TCN, by contrast, receives a classification gradient at every time step. The BCE loss penalizes misclas-sifications based on the pooled representation of the entire window. To minimize this loss, the encoder must develop features that contribute to correct classification regardless of when in the window they occur. This task-aware pressure naturally produces temporally persistent features, reflected in the 47.5% AUPRC decline. The fine-tuned VICReg encoder achieves superior robust-ness (16.8% drop) because it benefits from both phases. The VICReg pretraining phase learns a rich, general-purpose representation of physiological dynamics through the two-view invariance objective, covering both acute and subtle patterns. The fine-tuning phase then selectively amplifies the discriminative dimensions while preserving the breadth of the pretrained representation. The lower learning rate ( 1×10 −5 vs. 
+
+5 × 10 −4 for supervised TCN) ensures that fine-tuning adjusts rather than overwrites the pretrained features, maintaining the encoder’s ability to represent diverse physiological states across the full window. 9       
+
+> TABLE IV FEDERATED LEARNING RESULTS :BEST VALIDATION LOSS (BCE) AND RELATIVE DEGRADATION FROM CENTRALIZED TRAINING . T HESE EXPERIMENTS USE A REDUCED ARCHITECTURE (CHANNELS [16, 32], LATENT DIM 32).
+
+Method Val Loss Abs. ∆ Rel. Deg. Key Characteristic 
+
+Centralized (Non-FL) 0.2345 — — Full data distribution FedDyn [30] 0.2480 +0.0135 +5.8% Per-client dynamic correction FedAvg [28] 0.2728 +0.0383 +16.3% Weighted parameter averaging FedProx [29] 0.2731 +0.0386 +16.5% Static proximal penalty FedAvgM [31] 0.3578 +0.1233 +52.6% Server momentum 
+
+> TABLE V QUALITATIVE COMPARISON WITH PUBLISHED SEPSIS DETECTION BENCHMARKS . A LL NUMBERS AS REPORTED IN RESPECTIVE PAPERS .
+
+Method Dataset Biomarkers AUROC AUPRC Horizon 
+
+Futoma MGP-RNN [3] Duke EHR 34 — ∼0.50–0.55 H4 Moor MGP-TCN [4] MIMIC-III 44 — 0.35 H7 Moor DTW-KNN [4] MIMIC-III 44 — 0.40 H7 Wang MB-TCN [12] PhysioNet 2019 40 0.892 0.527 Imminent Dai PoEMS [13] PhysioNet 2019 25 0.911 0.675 Imminent Wanyan SupMix [5] PhysioNet 2019 40 0.883 0.667 AP H0 
+
+Ours (JEPA+XGB+mean) MIMIC-III 7 0.838 0.636 H0 Ours (FT+XGB+mean) MIMIC-III 7 0.850 0.510 H0 
+
+> Fig. 5. Real-time sepsis prediction inference architecture deployed in an ICU setting. EHR data is binned hourly and passed through both the JEPA and fine-tuned VICReg encoders in parallel. Each encoder’s embedding is scored by its XGBoost classifier across all 11 horizons simultaneously. A horizon gate selects the appropriate model’s output based on the peak horizon (JEPA for H ≤3, FT for H ≥4). As the patient progresses through their ICU stay, the peak shifts leftward across the horizon profile, providing both an estimated time-to-onset and an escalating risk alert.
+
+B. Practical Implications 
+
+The three-tier comparison above identifies a clear perfor-mance trade-off across prediction horizons, but translating these results into a clinical deployment requires addressing a fundamental constraint: in an active ICU setting, the prediction horizon H is a retrospective label defined relative to a future sepsis onset that has not yet occurred. At any inference time t,we do not know how close the patient is to onset, and therefore cannot directly choose which horizon-specific model to apply. Our deployment architecture, illustrated in Fig. 5, handles this by processing the same hourly-binned 72-hour window through both the JEPA and fine-tuned VICReg encoders in parallel. Each encoder produces a latent representation of the patient’s current physiological state, which is then scored by its respective XGBoost classifier at all 11 horizons simulta-neously. The result is a full horizon profile {s0, s 1, . . . , s 10 }
+
+where sh is the risk score for horizon h. This profile answers a different question than the horizon-specific evaluation in earlier sections: rather than asking “what is this model’s per-formance at a known H?”, it asks “at what temporal distance from a potential onset does this patient’s physiology most resemble the training examples for each horizon?” The horizon with the highest score indicates the most likely temporal position of the patient relative to a future onset, and the magnitude of that peak provides the risk estimate. A critical design decision is the horizon gate that selects which encoder’s output to trust at each horizon. Our analysis shows that JEPA+XGB dominates at short horizons (H0–H3, mean AUPRC 0.577) because its masked latent prediction objective captures the acute physiological signatures that im-mediately precede onset. The fine-tuned encoder dominates at medium-to-long horizons (H4–H10, mean AUPRC 0.446) because the VICReg pretraining preserves broad physiological structure while fine-tuning selects for discriminative patterns that persist earlier in the time series. The gate applies the JEPA profile for H ≤3 and the FT profile for H ≥4, yielding a hybrid horizon profile that selects the best-performing model at each temporal distance. The temporal evolution of this profile provides an additional layer of clinical utility. As shown in the tracking table in Fig. 5, the peak horizon shifts leftward over sequential hourly evaluations, tracking the patient’s trajectory toward potential onset. A patient whose peak is at H10 at time t but shifts to H7 by t + 3 is signaling physiological deterioration that warrants increased monitoring, even if absolute risk scores remain below the alert threshold. We propose a three-tier alerting strategy: (i) a watch threshold (risk > 0.4) at any H ≥4triggers increased monitoring frequency; (ii) an alert threshold (risk > 0.5) at any H ≤3 triggers a clinical notification; and (iii) a peak shift of ≥2 horizons per hour triggers an escalation 10 
+
+review regardless of absolute score. This approach provides clinicians with both a calibrated risk estimate and an estimated time-to-onset window derived from the hybrid horizon profile. 
+
+C. Federated Learning Under Non-IID Data 
+
+The federated learning results demonstrate that privacy-preserving distributed training can approach centralized per-formance when the aggregation strategy accounts for client heterogeneity. FedDyn’s dynamic per-client correction ( hk
+
+vectors that track the accumulated gradient bias) effectively neutralizes the label skew in our LDA partition, achieving a validation loss of 0.2480—only 5.8% above the centralized baseline. This is consistent with Acar et al. [30], who reported FedDyn gaps of 3–10% on CIFAR-10 with Dirichlet( α =0.5) partition. The convergence trajectories of all aggregation strategies are shown in Fig. 6. FedProx’s static proximal term does not improve over FedAvg (0.2731 vs. 0.2728) because with only 1 local epoch per round, per-client drift is minimal. The proximal constraint becomes valuable only when clients take many local steps, which is common in cross-device FL but not in our cross-silo (5-hospital) scenario. FedAvgM underperforms dramatically (0.3578, +52.6%), as the server momentum mechanism ampli-fies the natural variance across heterogeneous client updates rather than smoothing it. Recent work has further advanced FL for sepsis prediction. Chang et al. [32] integrated FL with a medical knowledge graph and temporal transformer, achieving AUC 0.956 through meta-learning-based personalization across MIMIC-IV and eICU. Fuzail et al. [33] demonstrated that hybrid FL with XGBoost and explainable AI achieves strong predictive per-formance while preserving data privacy. These results suggest that for cross-silo clinical FL with small numbers of clients and strong label heterogeneity, Fed-Dyn is the most effective aggregation strategy. The 5.8% gap to centralized training is a modest price for the privacy and regulatory benefits of keeping patient data within institutional boundaries. 
+
+D. Future Work 
+
+Our results demonstrate that a JEPA encoder with forward-fill preprocessing + XGBoost + mean pooling achieves com-petitive sepsis prediction using only 7 biomarkers, with AUPRC 0.636 approaching the SupMix benchmark (AP 0.667) despite using 83% fewer markers. The Tier 1pipeline—VICReg pretraining followed by semi-supervised fine-tuning—achieves AUPRC 0.510 at H0, a 3.1 × improve-ment over raw features and 7.6% over supervised TCN, while exhibiting superior horizon robustness (16.8% H0 →H10 drop vs. 47.5% for supervised TCN and 65.3% for JEPA). The federated learning experiments confirm that FedDyn can close the gap to within 5.8% of centralized training under realistic label heterogeneity. Despite these encouraging findings, several promising di-rections remain for future investigation. First, expanding the biomarker set beyond 7 markers—potentially incorporating the full 34–44 biomarkers used in prior work—could be systematically evaluated with the same SSL pipelines to quantify the saturating returns of additional features. Second, replacing the fixed XGBoost classifier with an end-to-end temporal attention mechanism (e.g., cross-attention between the JEPA/VICReg embeddings and the raw time series) may better exploit the sequential structure that the current mean-pooling step discards. Third, validating the proposed pipelines on multi-center real-world ICU data—rather than simulated FL partitions—would reveal the impact of hardware variability, documentation practices, and population demographics on generalization. Fourth, incorporating uncertainty quantification into the horizon gate (e.g., conformal prediction intervals around each horizon score) could improve the reliability of the peak-horizon selection rule in deployment. Fifth, extending the self-supervised pretraining to a multi-task objective that jointly predicts sepsis onset, organ failure trajectories, and in-hospital mortality may yield representations that are simultaneously informative across related clinical endpoints. Sixth, adopting VISReg’s [22] sketching-based regulariza-tion in place of the covariance term in both JEPA and VICReg objectives may further improve representation quality by en-forcing stronger distributional alignment in the latent space. Seventh, integrating unstructured clinical notes via large language models—as demonstrated by the COMPOSER-LLM system [16]—could enrich our purely structured-vital-sign representations with contextual information from triage notes and progress reports. Additionally, extending our SSL pipeline to the cross-hospital transfer setting explored by Ding et al. [34], or to the trajectory-based deterioration prediction task of Zhang et al. [35], would test the generality of pretrained representations beyond binary sepsis onset classification. VII. C ONCLUSION 
+
+We presented a comparative methodology for sepsis early prediction comparing JEPA, VICReg with semi-supervised fine-tuning, supervised TCN, and raw feature approaches with LR and XGBoost classifiers. Using 7 carefully selected biomarkers with forward-fill preprocessing, our best model (JEPA + XGBoost + mean pooling) achieves AUPRC 0.636 at H0. The Tier 1 pipeline (VICReg → fine-tune → XG-Boost) achieves AUPRC 0.510, a 3.1 × improvement over raw features and 7.6% over supervised TCN. Key findings: (1) VICReg pretraining with semi-supervised fine-tuning produces the most horizon-robust representations (16.8% H0 →H10 drop vs. 47.5% supervised TCN and 65.3% JEPA); (2) XGBoost consistently outperforms LR; (3) mean pooling beats last-timestep pooling; (4) sparsity-aware biomarker selection (7 markers) achieves results competitive with prior work using 34–44 biomarkers; (5) FedDyn achieves a validation loss of 0.2480 in the federated setting, within 5.8% of the centralized baseline. REFERENCES [1] K. E. Rudd et al. , “Global, regional, and national sepsis incidence and mortality, 1990–2017: analysis for the Global Burden of Disease Study,” 
+
+> The Lancet , vol. 395, no. 10219, pp. 200–211, 2020. 11
+
+Fig. 6. Validation loss convergence curves for centralized training and four federated learning aggregation strategies (FedAvg, FedProx, FedAvgM, FedDyn) under LDA( α = 0 .5) label distribution across 5 clients. FedDyn consistently tracks the centralized baseline, while FedAvgM diverges due to server momentum amplifying client heterogeneity. [2] A. Kumar et al. , “Duration of hypotension before initiation of effective antimicrobial therapy is the critical determinant of survival in human septic shock,” Critical Care Medicine , vol. 34, no. 6, pp. 1589–1596, 2006. [3] J. Futoma, S. Hariharan, and K. Heller, “Learning to detect sepsis with a multitask Gaussian process RNN classifier,” in Proc. ICML , 2017, pp. 1174–1182. [4] M. Moor, M. Horn, B. Rieck, D. Roqueiro, and K. Borgwardt, “Early recognition of sepsis with Gaussian process temporal convolutional networks and dynamic time warping,” in Proc. MLHC , 2019. [5] T. Wanyan et al. , “Optimizing embedding space with sub-categorical supervised pre-training,” in Proc. IEEE ICHI , 2023, pp. 362–373. [6] T. Desautels et al. , “Prediction of sepsis in the intensive care unit with minimal electronic health record data: A machine learning approach,” 
+
+JMIR Med. Inform. , vol. 4, no. 3, e28, 2016. [7] G. B. Smith et al. , “The ability of the National Early Warning Score (NEWS) to discriminate patients at risk of early cardiac arrest, unantic-ipated intensive care unit admission, and death,” Resuscitation , vol. 84, no. 4, pp. 465–470, 2013. [8] M. Singer et al. , “The Third International Consensus Definitions for Sepsis and Septic Shock (Sepsis-3),” JAMA , vol. 315, no. 8, pp. 801– 810, 2016. [9] A. E. Johnson et al. , “MIMIC-III, a freely accessible critical care database,” Scientific Data , vol. 3, 2016. [10] S. Lee et al. , “Early prediction of sepsis in the intensive care unit using the GRU-D-MGP-TCN model,” IEEE Access , vol. 12, pp. 148291– 148304, 2024. [11] M. Apalak and K. Kiasaleh, “Advancing early detection of sepsis with temporal convolutional networks using ECG signals,” IEEE Access ,vol. 12, pp. 3417–3427, 2024. [12] Z. Wang and B. Yao, “Multi-branching temporal convolutional network for sepsis prediction,” IEEE J. Biomed. Health Inform. , vol. 26, no. 2, pp. 876–887, 2022. [13] H. Dai et al. , “PoEMS: Policy network-based early warning monitoring system for sepsis in intensive care units,” IEEE J. Biomed. Health Inform. , vol. 27, no. 7, pp. 3534–3545, 2023. [14] C. D¨ using and P. Cimiano, “Improving early sepsis onset prediction through federated learning,” in Proc. AIBio Workshop , 2025. [15] A. Boussina et al. , “Impact of a deep learning sepsis prediction model on quality of care and survival,” npj Digit. Med. , vol. 7, 14, 2024. [16] S. P. Shashikumar et al. , “Development and prospective implementation of a large language model based system for early sepsis prediction,” npj Digit. Med. , vol. 8, 290, 2025. [17] A. van den Oord, Y. Li, and O. Vinyals, “Representation learning with contrastive predictive coding,” arXiv:1807.03748, 2018. [18] A. Bardes, J. Ponce, and Y. LeCun, “VICReg: Variance-invariance-covariance regularization for self-supervised learning,” in Proc. ICLR ,2022. [19] S. Tonekaboni, D. Eytan, and A. Goldenberg, “Unsupervised represen-tation learning for time series with temporal neighborhood coding,” in 
+
+Proc. ICLR , 2021. [20] X. Yang et al. , “Online sepsis prediction using vital signs and multiscale temporal-aware contrastive learning: Model development and validation study,” JMIR Med. Inform. , vol. 14, e82762, 2026. [21] Y.-S. Chen, W.-H. Wang, C.-T. Hu, and I. You, “Cross-modal contrastive learning for predicting sepsis onset in Medical Internet of Things (MIoT),” Internet of Things , vol. 29, 101456, 2025. [22] H. Wu, R. Balestriero, and M. Levine, “VISReg: Variance-invariance-sketching regularization for JEPA training,” arXiv:2606.02572, 2026. [23] M. A. Reyna et al. , “Early prediction of sepsis from clinical data: The PhysioNet/Computing in Cardiology Challenge 2019,” Critical Care Medicine , vol. 48, no. 2, pp. 210–217, 2020. [24] J. L. Vincent et al. , “The SOFA (Sepsis-related Organ Failure As-sessment) score to describe organ dysfunction/failure,” Intensive Care Medicine , vol. 22, no. 7, pp. 707–710, 1996. [25] S. Bai, J. Z. Kolter, and V. Koltun, “An empirical evaluation of generic convolutional and recurrent networks for sequence modeling,” arXiv:1803.01271, 2018. [26] T. Chen and C. Guestrin, “XGBoost: A scalable tree boosting system,” in Proc. ACM SIGKDD , 2016, pp. 785–794. [27] T. Saito and M. Rehmsmeier, “The precision-recall plot is more informa-tive than the ROC plot when evaluating binary classifiers on imbalanced datasets,” PLoS ONE , vol. 10, no. 3, e0118432, 2015. [28] B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. A. y Arcas, “Communication-efficient learning of deep networks from decentralized data,” in Proc. AISTATS , 2017, pp. 1273–1282. [29] T. Li, A. K. Sahu, M. Zaheer, M. Sanjabi, A. Talwalkar, and V. Smith, “Federated optimization in heterogeneous networks,” in Proc. MLSys ,2020. [30] D. A. E. Acar, Y. Zhao, R. M. Navarro, M. Mattina, P. N. Whatmough, and V. Saligrama, “Federated learning based on dynamic regularization,” in Proc. ICLR , 2021. [31] T.-M. H. Hsu, H. Qi, and M. Brown, “Measuring the effects of non-identical data distribution for federated visual classification,” in Proc. ICLR Workshop , 2019. [32] Y. Chang, G. Lin, J. J. Chuang, S. Liu, X. Li, and Y. Li, “A federated learning framework with knowledge graph and temporal transformer for early sepsis prediction in multi-center ICUs,” arXiv:2603.15651, 2026. [33] M. Z. Fuzail, I. ud Din, S. Ahmed, A. Alhumam, and A. H. Khan, “Optimizing sepsis mortality prediction using hybrid federated learning and explainable AI framework,” Sci. Rep. , 2026. [34] R. Ding et al. , “Cross-hospital sepsis early detection via semi-supervised optimal transport with self-paced ensemble,” IEEE J. Biomed. Health Inform. , vol. 27, no. 6, pp. 3049–3060, 2023. [35] R. Zhang et al. , “Machine learning predicts sepsis deterioration trajec-tories,” npj Digit. Med. , vol. 9, 385, 2026.
