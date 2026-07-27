@@ -1,0 +1,1192 @@
+Title: GCM: metric-guided clustering by genetic algorithm for correlation-defined modules
+
+URL Source: https://www.biorxiv.org/content/10.64898/2026.07.15.738632v1.full.pdf
+
+Number of Pages: 18
+
+Markdown Content:
+# GCM: metric-guided clustering by genetic algorithm for correlation-defined modules 
+
+Luis Javier Madrigal-Roca 1* , John K. Kelly 1
+
+1 Department of Ecology and Evolutionary Biology, University of Kansas * madrigalrocalj@yahoo.com 
+
+KEYWORDS 
+
+clustering, genetic algorithm, gene co-expression, gene modules 
+
+# Abstract 
+
+Gene co-expression analyses identify “good” modules by a correlation criterion. However, standard pipelines detect modules with greedy algorithms that optimize other quantities and only measure correlation afterwards. We present a method called Genetic Clustering by Metric(GCM hereafter), an open-source Python tool that closes this gap by treating module detection as maximum-likelihood inference and solving it globally. In GCM, the correlation objective is, up to a constant and the sample-size factor, the profile log-likelihood of an explicit generative model: a block-diagonal one-factor Gaussian in which each module is a single regulator with equal-magnitude ± loadings. This bases model selection on a principled footing through a genuine BIC/AIC in correlation space. GCM maximizes this likelihood with a memetic genetic algorithm: a population-based search hybridized with a greedy local refinement that reassigns genes after the fact, a move the agglomerative clustering at the core of co-expression pipelines cannot make. Across a replicated noise sweep, GCM reproducibly surpasses hierarchical correlation clustering and k-means with the lowest variance, and an ablation shows the local-search step is responsible; the advantage persists when the number of modules is unknown and when unstructured genes must be ignored. GCM faithfully optimizes geometric indices on the Iris benchmark dataset. For a breast-cancer RNA-seq it recovers coherent modules that predict tumor-versus-normal status. GCM depends only on NumPy and SciPy and exposes one swappable-metric interface with single- and multi-objective modes. 
+
+# Author summary 
+
+When biologists group genes by how similarly they are expressed, they usually run a standard clustering method and then score the result with a separate quality measure. The method, however, was never trying to do well on that measure because it optimizes its own internal objective. We built a tool, GCM, that removes this gap: the user picks the quality measure they actually care about, and the tool searches directly for the grouping that scores best on it. The search is performed by a genetic algorithm, a population-based optimizer that mixes and mutates candidate groupings over many generations. GCM includes a purpose-built score for “modules” of co-expressed genes, as well as several widely used geometric scores, and it can balance two competing scores at once to choose how many groups the data support. We show on synthetic data with a known answer, on a textbook dataset, and on real expression data that the tool recovers the intended structure and lets researchers make explicit, and optimize for, their own definition of a good cluster. July 14, 2026 1/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+# Introduction 1
+
+High-throughput technologies for profiling gene expression have revolutionized the field of molecular biology, 2
+
+enabling researchers to capture the intricate patterns of gene regulation and unravel the underlying genetic 3
+
+networks. However, the sheer volume and complexity of gene expression data pose significant challenges in 4
+
+extracting meaningful insights [1]. One critical step in this process is the clustering of genes based on their 5
+
+expression profiles, which aims to group together genes exhibiting similar patterns of expression across 6
+
+various experimental conditions or time points [2]. Clustering is a foundational step in computational biology, 7
+
+from grouping co-expressed genes into putative regulatory modules [3, 4] to shedding light on regulatory 8
+
+pathways mechanisms [5], disease-associated genes [6], and potential therapeutic targets [7]. By partitioning 9
+
+a set of objects into groups based on similarity, cluster analysis identifies intrinsic structures in data to gain 10 
+
+insight [8, 9]. 11 
+
+The dominant practice has two stages. First, a fixed algorithm such as k-means [10] or hierarchical 12 
+
+clustering [3] produces a partition. Second,a cluster-validity index like the silhouette [11], the Davies–Bouldin 13 
+
+index [12], the Calinski–Harabasz criterion [13], or an information criterion such as BIC [14] is used to 14 
+
+evaluate that partition, often to choose the number of clusters. The objective the algorithm optimizes (for 15 
+
+k-means, within-cluster sum of squares) and the objective by which the result is ultimately judged are 16 
+
+therefore distinct. When the two disagree, the reported partition is optimal for neither the user’s stated 17 
+
+criterion nor, necessarily, the underlying biology. 18 
+
+This gap is particularly consequential in gene co-expression analysis. There, the notion of a good module 19 
+
+is intrinsically correlational: genes in a module should be strongly co-expressed across conditions, regardless 20 
+
+of their absolute expression levels or Euclidean geometry. Tools such as WGCNA [15], Clust [16], and 21 
+
+UNCLES [17] encode this intuition through correlation networks or consensus procedures, and comparative 22 
+
+studies show that module-detection performance depends strongly on how the objective is framed [18]. Yet 23 
+
+the correlation-based quality of the final modules is still, in most pipelines, assessed only after the clustering 24 
+
+algorithm has finished optimizing a different, geometric objective. 25 
+
+We argue for inverting the workflow by making the validity metric itself the optimization target. 26 
+
+Concretely, the user specifies the scalar criterion that defines a good partition for their problem, and a search 27 
+
+procedure evolves a partition to optimize that criterion directly. This is attractive whenever the criterion of 28 
+
+interest is (i) not what standard algorithms optimize, (ii) non-differentiable or combinatorial, or (iii) most 29 
+
+naturally expressed as a trade-off between competing concerns—fit versus parsimony, compactness versus 30 
+
+separation. Direct optimization of clustering criteria has a long history in evolutionary computation [19, 20], 31 
+
+but it is rarely packaged as a practical, dependency-light tool aimed at the co-expression use case and built 32 
+
+around a correlation objective. 33 
+
+While traditional numerical optimizers—such as Newton-Raphson, Powell’s method, or the Simplex 34 
+
+algorithm—are highly effective for continuous parameter estimation, they are fundamentally ill-suited for this 35 
+
+clustering framework. These methods require a continuous search space and differentiable objective functions 36 
+
+to calculate valid step directions. In contrast, identifying optimal partitions is an inherently discrete, 37 
+
+combinatorial problem. Our objective functions are highly discontinuous with respect to categorical cluster 38 
+
+labels, resulting in a rugged fitness landscape riddled with local optima where gradient-based methods 39 
+
+become trapped. Furthermore, while stochastic Bayesian approaches (such as Reversible Jump MCMC) 40 
+
+could theoretically navigate this discrete landscape by jumping between partition states, the computational 41 
+
+time cost of sufficiently sampling such a vast combinatorial space is prohibitive for large datasets. The 42 
+
+Genetic Algorithm provides the necessary robustness to directly evolve discrete partition vectors, efficiently 43 
+
+navigating the non-differentiable landscape via crossover and mutation without the extreme computational 44 
+
+overhead of exhaustive Bayesian sampling or the restrictive assumptions of gradient-based methods. 45 
+
+Here we present GCM (Genetic Clustering by Metric), an open-source Python package that clusters data 46 
+
+by directly optimizing a chosen cluster-validity metric with a memetic genetic algorithm (GA), which is an 47 
+
+evolutionary algorithm hybridized with a problem-specific local search that refines each candidate solution 48 
+
+within its own “lifetime,”. This strategy was introduced by Moscato [21] and surveyed by Neri and 49 
+
+Cotta [22]. Genetic algorithms (GAs) could be a promising solution for clustering tasks [23], particularly in 50 
+
+the context of gene expression data [9]. Other attempts have been made to use evolutionary algorithms in 51 
+
+this or similar contexts, with overall promising results [24 – 27]. GAs are optimization algorithms that mimic 52 
+
+2/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+the principles of natural selection and evolution, making them well-suited for complex, multi-objective 53 
+
+problems where traditional methods may struggle to find optimal solutions [28]. 54 
+
+GCM makes three contributions. First, we show that the project’s correlation objective is, up to a 55 
+
+constant and the sample-size factor, the profile log-likelihood of an explicit block-diagonal one-factor 56 
+
+Gaussian, in which each module is a single regulator with equal-magnitude ± loadings, so that module 57 
+
+detection becomes maximum-likelihood inference and the number of modules is chosen by a genuine 58 
+
+BIC/AIC in correlation space, not a heuristic. Second, we hybridize the GA with an efficient memetic local 59 
+
+search and show, with a replicated benchmark, that this global optimizer reproducibly surpasses the greedy 60 
+
+agglomerative clustering at the core of standard co-expression pipelines, with an ablation attributing the gain 61 
+
+to the local-search step. Third, the implementation is deliberately minimal—depending only on NumPy [29] 62 
+
+and SciPy [30], with internal k-means++ [31] and correlation-distance hierarchical seeders, behind one 63 
+
+swappable-metric interface that also exposes standard geometric indices and a multi-objective (NSGA-II [32]) 64 
+
+mode. We evaluate GCM on synthetic data across a noise sweep with replication, on the classic Iris 65 
+
+benchmark [33], and on a breast-cancer RNA-seq dataset. 66 
+
+# Materials and methods 67 
+
+## Overview and problem statement 68 
+
+GCM clusters n elements (the rows of a data matrix X ∈ Rn×d; in co-expression analysis, n genes measured 69 
+
+across d samples) by searching the space of partitions for one that optimizes a user-chosen validity metric. A 70 
+
+partition is represented as an integer label vector ℓ ∈ { 0, 1, . . . , K }n, where ℓi = c assigns element i to cluster 71 
+
+c and the optional label 0 marks an element as unassigned. The user fixes an upper bound gmax on the 72 
+
+number of clusters. Each candidate partition ℓ is scored by one or more metric functions m(ℓ) ∈ R; the GA 73 
+
+evolves a population of partitions to optimize these scores in their natural direction (maximize or minimize). 74 
+
+## Performance-target metrics 75 
+
+GCM treats every metric as an interchangeable “performance target” or fitness measure [28]. Table 1 lists 76 
+
+the built-in targets, the input format each one is design to work with, and its optimization direction. They 77 
+
+fall into two families: correlation-based objectives designed for modular data, and standard 78 
+
+geometric/probabilistic indices. 79 
+
+A generative model for correlation modules. The correlation objective is the maximum log-likelihood 80 
+
+of an explicit generative model, which we state here and derive in full in S1 Appendix. Let the data matrix 81 
+
+X ∈ Rn×d hold n genes measured over d samples, row-standardized. We model each sample (column) as an 82 
+
+independent draw from a multivariate Gaussian over genes, N (0, Σ), whose correlation matrix Σ is 83 
+
+block-diagonal by the partition ℓ: genes in the same module are correlated, genes in different modules 84 
+
+independent. Within a module s we adopt the canonical single-regulator (one-factor) structure with 85 
+
+equal-magnitude loadings of arbitrary sign, xg = σg fs + εg with σg ∈ {± λs}, so that any two genes in the 86 
+
+module share |corr | = ρs. This is exactly the core assumption of a co-expression module (one regulator, up- 87 
+
+or down-regulating its targets). 88 
+
+The likelihood reduces to the project’s objective. Let R be the Pearson correlation matrix between 89 
+
+genes and, for module s of size ns, let 90 
+
+Cs = X
+
+> i∈s
+
+X
+
+> j∈s
+
+|Rij | ∈ [ ns, n 2 
+
+> s
+
+] (1) (the unit diagonal is included). As shown in S1 Appendix, the maximum-likelihood common coherence of a 91 
+
+module is its mean absolute off-diagonal correlation, ˆ ρs = ( Cs − ns)/(n2 
+
+> s
+
+− ns), and at that estimate the 92 
+
+3/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+trace term of the Gaussian log-likelihood collapses to the module dimension. The profile log-likelihood of a 93 
+
+partition is therefore, up to a partition-independent constant, 94 
+
+ℓ(ℓ) = d L(ℓ), L(ℓ) = 12
+
+X  
+
+> s:ns>1
+
+
+
+log ns
+
+Cs
+
++ ( ns − 1) log n2 
+
+> s
+
+− ns
+
+n2 
+
+> s
+
+− Cs
+
+
+
+, (2) where L is precisely − 12
+
+P 
+
+> s
+
+log det Σ CS (ˆ ρs), the equicorrelation log-determinant. Maximizing L thus 95 
+
+maximizes the model likelihood. Each summand is monotone in module coherence: as Cs → n2 
+
+> s
+
+the cluster is 96 
+
+perfectly correlated (best fit) and as Cs → ns it is incoherent (contributing zero); singletons contribute 97 
+
+nothing. A perfectly correlated cluster is awarded a large finite reward rather than + ∞ for numerical 98 
+
+stability. 99 
+
+Model selection: information criteria. The raw likelihood favours more modules, since splitting a 100 
+
+coherent module into coherent sub-modules does not necessarily lower L. Because each module carries a 101 
+
+single coherence parameter ρs, the model with K modules has K free parameters, and the standard 102 
+
+information criteria over the d samples are 103 
+
+BIC( ℓ) = −2d L(ℓ) + K log d, AIC( ℓ) = −2d L(ℓ) + 2 K, (3) to be minimized (targets loglik bic , loglik aic ). The likelihood scales with the sample size d while the 104 
+
+penalty does not, so more samples correctly license more modules. This is distinct from the geometric 105 
+
+bic /aic targets, whose Euclidean-Gaussian assumption conflicts with the absolute-correlation objective 106 
+
+when modules contain anti-correlated members, which is precisely the regime in which the correlation criteria 107 
+
+are the right choice. 108 
+
+Geometric and probabilistic indices. For data whose clusters are defined geometrically, GCM provides 109 
+
+four standard indices computed on X: the mean silhouette coefficient [11] (maximize; range [ −1, 1]), the 110 
+
+Davies–Bouldin index [12] (minimize), the Calinski–Harabasz variance-ratio criterion [13] (maximize), and 111 
+
+the Bayesian and Akaike information criteria [14, 34] under a spherical-Gaussian-per-cluster model with 112 
+
+pooled variance (both minimize). The BIC/AIC log-likelihood follows the x-means formulation [35]; for a 113 
+
+partition with k clusters in d dimensions the model has p = kd + ( k − 1) + 1 free parameters (centroids, 114 
+
+mixture weights, and one pooled variance), and BIC = −2 log ˆL + p log n, AIC = −2 log ˆL + 2 p. Unlike the 115 
+
+correlation objective, BIC and AIC reward parsimony explicitly and so can be used for model selection on 116 
+
+geometrically compact data. 117 
+
+Table 1. The built-in performance-target metrics. 
+
+Target Direction Input Role 
+
+loglik maximize correlation matrix correlation coherence (modules) 
+
+loglik bic minimize correlation matrix coherence with cluster-count penalty 
+
+loglik aic minimize correlation matrix coherence with lighter penalty 
+
+silhouette maximize data matrix geometric separation 
+
+davies bouldin minimize data matrix compactness/separation ratio 
+
+calinski harabasz maximize data matrix variance-ratio criterion 
+
+bic minimize data matrix Gaussian-mixture parsimony 
+
+aic minimize data matrix Gaussian-mixture parsimony The correlation-based targets consume the element-by-element Pearson correlation matrix; the geometric/probabilistic indices are computed directly on the (standardized) data matrix. Any subset can be combined under multi-objective optimization. The penalized correlation criteria loglik bic and loglik aic 
+
+add a cluster-count penalty to loglik so that a single objective both fits and selects the number of modules (see below). 4/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+## Data preparation 118 
+
+Input is a numeric matrix (CSV/TSV or array) with rows as elements and columns as features; header rows 119 
+
+and index columns are auto-detected. By default the data are standardized to zero mean and unit variance. 120 
+
+For the correlation objective, standardization is applied per row (per element/gene), which is the regime 121 
+
+under which the Pearson correlation between rows is meaningful; for the geometric indices, per-feature 122 
+
+standardization is the appropriate choice. The element-by-element correlation matrix R is computed once 123 
+
+and reused across all evaluations of L. 124 
+
+## Dimensionality-reduction visualization 125 
+
+Visual inspection of clustering results is essential for communicating and sanity-checking a partition. GCM 126 
+
+provides built-in tools for projecting the clustered data into two (or three) dimensions, with the cluster labels 127 
+
+shown as colours. Two embedding methods are always available (no extra dependencies): principal 128 
+
+component analysis (PCA), a linear projection preserving maximal variance, and correlation 129 
+
+multidimensional scaling (correlation MDS), a classical MDS embedding [36] on the correlation distance 130 
+
+matrix 1 − | R|. The second method is particularly informative for the correlation objective because it 131 
+
+projects the elements into the same distance space the log-likelihood operates in: if modules are 132 
+
+well-separated in correlation, they appear well-separated in the MDS embedding. For users with additional 133 
+
+packages installed, t-SNE [37] and UMAP [38] are also supported and may better resolve local 134 
+
+neighbourhood structure in large or high-dimensional datasets. These tools are exposed both through the 135 
+
+Python API ( reduce dimensions and plot clusters ) and the command line ( gcmrk visualize ). 136 
+
+## Genetic algorithm 137 
+
+GCM evolves a population of partitions with a self-contained GA (Fig 3). The components are: 138 
+
+1. Initialization. The initial population is seeded with three kinds of partition across candidate cluster 139 
+
+counts k = 2 , . . . , g max : k-means++ partitions (a small internal NumPy k-means with multiple 140 
+
+restarts); correlation-aware partitions obtained by agglomerative (average- and complete-linkage) 141 
+
+hierarchical clustering of the correlation distance 1 − | R|, the classical co-expression clustering strategy; 142 
+
+and random partitions for diversity. User-supplied seeds (e.g. the output of WGCNA or Clust) can also 143 
+
+be injected. The correlation-aware seeds are important for the loglik objective: Euclidean k-means 144 
+
+splits strongly anti-correlated elements that are coherent under the absolute-correlation criterion, 145 
+
+whereas the correlation-distance seeds already respect the structure the GA is asked to optimize. 146 
+
+2. Evaluation. Each partition is scored on the chosen target(s); a cache keyed on the label vector avoids 147 
+
+recomputing identical partitions. 148 
+
+3. Selection and variation. In weighted mode the targets are combined into a single fitness through 149 
+
+direction-aware weights after a bounded squashing transform that places metrics of different scales on a 150 
+
+comparable footing, and elitist tournament selection is applied. In nsga2 mode the targets are treated 151 
+
+as competing objectives and NSGA-II [32] fast non-dominated sorting with crowding distance is used. 152 
+
+Variation is two-point crossover on label vectors plus a reassignment mutation that moves a small 153 
+
+fraction of elements to random clusters. 154 
+
+4. Repair. After every operator a partition is relabelled to consecutive integers and constrained to have 155 
+
+between 2 and gmax clusters, so that all validity metrics remain well defined (degenerate single-cluster 156 
+
+or empty-cluster partitions are repaired). 157 
+
+5. Memetic local search. For the correlation objective, the seed partitions and the elite of each 158 
+
+generation are refined by a greedy hill-climb that repeatedly applies the single element reassignment 159 
+
+most improving the objective until none remains (a memetic, Lamarckian GA). The gain of a move 160 
+
+touches only the source and target modules, so it is computed incrementally in O(module size) from 161 
+
+Cs (Eq (1)); a full sweep is O(n2). This step is decisive: it performs exactly the move that 162 
+
+5/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+agglomerative clustering—used here only for seeding—cannot, namely reassigning an element after an 163 
+
+early merge, and as shown in the Results it is what lets the optimizer surpass hierarchical clustering. 164 
+
+When the objective is a penalized criterion (Eq (3)) the hill-climb optimizes that criterion, so it also 165 
+
+merges spurious modules. 166 
+
+For multi-objective runs GCM returns the full Pareto front and, as a single representative partition, the 167 
+
+knee point that maximizes the sum of min–max normalized objectives across the front. Unless stated 168 
+
+otherwise, all experiments use a population of 200 evolved for 120 generations, two k-means restarts per 169 
+
+candidate k, crossover probability 0.8, mutation probability 0.2 with per-gene reassignment probability 0.05, 170 
+
+tournament size 3, and elitism 5, with a fixed random seed for reproducibility. 171 
+
+## Choosing the number of clusters 172 
+
+Because L (Eq (2) ) has no parsimony term (penalization against more clusters), GCM offers three routes to 173 
+
+the right number of clusters. (i) Constrain gmax to the expected number of modules. (ii) Optimize a 174 
+
+penalized correlation criterion (loglik aic or loglik bic , Eq (3) ) as a single objective under a loose gmax ; 175 
+
+this selects K within correlation space and is our recommended default when K is unknown. Equivalently, 176 
+
+one can scan gmax with loglik and pick the K that minimizes Eq (3) . (iii) Explore an explicit trade-off by 177 
+
+optimizing loglik jointly with a parsimony target under NSGA-II and reading the knee of the Pareto front; 178 
+
+pairing with the geometric bic is informative only when the modules are also geometrically compact, 179 
+
+whereas the penalized correlation criteria avoid that assumption. 180 
+
+## Benchmark datasets and evaluation 181 
+
+We evaluate on three datasets with known ground truth and one empirical expression dataset. 182 
+
+Synthetic-Easy and Synthetic-Hard are generated by GCM’s modular simulator: each module is driven by 183 
+
+a shared latent factor (with random ±1 loadings, so within-module genes are strongly correlated in absolute 184 
+
+value while genes in different modules are not), with per-entry Gaussian noise added and rows finally 185 
+
+standardized. Synthetic-Easy has three equal modules (75 genes across 80 samples) at low noise, giving 186 
+
+strong separation (mean within-module |r| = 0 .66 versus between-module 0 .07). Synthetic-Hard has five 187 
+
+unequal modules (15, 20, 25, 30, 10 genes; 100 genes across 50 samples) at higher noise, giving weak 188 
+
+separation (within 0 .33 versus between 0 .12). 189 
+
+Iris [33] is the classic 150-sample, 4-feature, 3-class benchmark; it is low-dimensional and geometric rather 190 
+
+than correlational, and we use it to show that the same engine, driven by geometric targets, faithfully 191 
+
+optimizes those indices on data outside the co-expression regime. 192 
+
+Empirical data. We apply GCM to GSE183947 [39], a breast cancer RNA-seq dataset of 60 samples (30 193 
+
+tumours and 30 patient-matched adjacent-normal tissues) with 20246 genes quantified as FPKM. After log 2 194 
+
+transformation we cluster the 200 most variable genes into co-expression modules, and assess each module 195 
+
+both by its internal correlation coherence and by whether its eigengene (the leading principal component of 196 
+
+the module’s expression across samples) distinguishes tumour from normal tissue (Welch t-test), linking the 197 
+
+recovered modules to the clinical phenotype. 198 
+
+Decisive benchmark. To test whether globally optimizing the block likelihood actually improves on greedy 199 
+
+alternatives, we run a replicated benchmark on the five-module design over a noise sweep 200 
+
+σ ∈ { 0.7, 1.0, 1.5, 2.0}, with 30 random datasets per noise level. We compare: GCM (memetic); GCM with 201 
+
+the local-search step disabled (an ablation isolating its contribution); agglomerative clustering on 1 − | R| 202 
+
+with average and with complete linkage (the algorithmic core of correlation-network methods such as 203 
+
+WGCNA), cut at the true k; and k-means. We also evaluate model selection with k unknown 204 
+
+(GCM/ loglik aic versus hierarchical clustering whose cut minimizes the same penalized criterion) and 205 
+
+robustness to unstructured “noise” genes that belong to no module. 206 
+
+We use the adjusted Rand index (ARI) [40] wirsanskyHGA2020; for the single-dataset summaries 207 
+
+(Table 3) we also report Hungarian-matched accuracy. Results are reported as mean ± SD over the random 208 
+
+datasets. All code to reproduce the experiments, figures, and tables is provided with the package. 209 
+
+6/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+# Results 210 
+
+## Recovering correlated modules on synthetic data 211 
+
+On Synthetic-Easy, GCM driven by the correlation log-likelihood (with gmax set to the true count) recovers 212 
+
+the planted three-module structure perfectly (ARI = 1 .00), whereas the k-means baseline—given the same 213 
+
+true k—fails badly (ARI = 0 .22). The gap is diagnostic: because module loadings carry random signs, each 214 
+
+module contains strongly anti-correlated genes that are coherent under the absolute-correlation objective but 215 
+
+lie far apart in Euclidean space, so k-means splits them. The GA converges within the first few dozen 216 
+
+generations (Fig 3). On Synthetic-Hard, where weak separation and higher noise make the problem 217 
+
+substantially harder, GCM still recovers the five modules well (ARI = 0 .99) while k-means remains poor (ARI 218 
+
+= 0 .27). The correlation-aware hierarchical seeding (Methods) is important here: it supplies the GA with 219 
+
+starting partitions that already respect the absolute-correlation structure, which a Euclidean seeder cannot. 220 
+
+## Global optimization beats greedy clustering, and local search is why 221 
+
+The central methodological question is whether globally optimizing the block likelihood improves on the 222 
+
+greedy agglomerative clustering it is seeded from. The replicated noise sweep (Fig 1, Table 2) shows that the 223 
+
+answer is yes, decisively and reproducibly. At the hard noise level ( σ = 1 .5, mean over 30 datasets), GCM 224 
+
+attains ARI 0 .94 versus 0 .80 for average-linkage hierarchical clustering at the true k and 0 .31 for k-means, 225 
+
+and its variance across datasets is the smallest of all methods, so the advantage is consistent rather than 226 
+
+occasional. The gap widens as noise grows. An ablation pins the cause on the memetic local search: 227 
+
+disabling it drops GCM to ARI 0 .88 (Fig 2). The genetic operators and correlation-aware seeds alone already 228 
+
+match or modestly exceed hierarchical clustering, but it is the hill-climb with the designed reassignment of 229 
+
+elements a posteriori (a move greedy agglomeration cannot make) the feature that produces the decisive 230 
+
+margin and the low variance. 231 
+
+Table 2. Module recovery (ARI, mean ± SD over 30 datasets) on the five-module design across a noise sweep, with the number of clusters fixed to the truth. 
+
+Method σ = 0 .7 σ = 1 .0 σ = 1 .5 σ = 2 .0GCM (memetic) 1.00 ±0.00 1.00 ±0.00 0.94 ±0.05 0.50 ±0.17 GCM (no local search) 1.00 ±0.00 1.00 ±0.01 0.88 ±0.12 0.53 ±0.15 hierarchical (average) 1.00 ±0.00 1.00 ±0.01 0.80 ±0.14 0.44 ±0.12 hierarchical (complete) 1.00 ±0.00 0.98 ±0.06 0.55 ±0.16 0.16 ±0.10 k-means 0.37 ±0.03 0.36 ±0.03 0.31 ±0.05 0.18 ±0.06 
+
+## Selecting the number of clusters without knowing it 232 
+
+When only loglik is optimized under a loose gmax , the correlation objective can over-segment, since Eq (2) 233 
+
+carries no parsimony term. The effect, however, is mild once the likelihood is optimized well: on 234 
+
+Synthetic-Easy the optimum already coincides with the true partition ( k = 3), and on Synthetic-Hard a loose 235 
+
+bound yields only k = 6 (true 5; Table 3), one module above the truth. The penalized correlation criteria 236 
+
+(Eq (3) ) keep selection near the truth within a single objective: on Synthetic-Easy loglik aic returns k = 3 237 
+
+at ARI = 1 .00, and on this Synthetic-Hard dataset k = 6 at ARI = 0 .90. The decisive test is replication: 238 
+
+over 30 datasets loglik aic selects 6 .7 modules on average at ARI 0 .87, closer to the truth and more 239 
+
+accurate than hierarchical clustering whose cut minimizes the same criterion (7 .5 modules, ARI 0 .83; 240 
+
+Table 4). So, the advantage of global optimization persists when the module count must be inferred. The 241 
+
+fit–parsimony trade-off is also visible by scanning gmax (Fig 4): loglik rises and plateaus with k while the 242 
+
+penalized criteria turn over near the true number of modules. 243 
+
+For users who prefer to inspect an explicit trade-off rather than commit to a single penalized criterion, 244 
+
+the multi-objective mode optimizes loglik against a parsimony target under NSGA-II and returns the full 245 
+
+Pareto front (Fig 5). We note that pairing loglik with the geometric BIC is less effective on these data, 246 
+
+because BIC’s Euclidean-Gaussian assumption conflicts with the absolute-correlation objective when modules 247 
+
+7/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+0.8 1.0 1.2 1.4 1.6 1.8 2.0 
+
+noise level 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> adjusted Rand index
+> GCM-MRK (memetic)
+> GCM-MRK (no local search)
+> hierarchical (average)
+> hierarchical (complete)
+> k-means
+
+Fig 1. Module recovery versus noise. Adjusted Rand index (mean, bands ± SD over 30 datasets) at the true number of clusters. GCM (memetic) dominates hierarchical clustering and k-means across the noise range and is the most consistent; the ablation without local search lies in between. 0.7 1.0 1.5 2.0 
+
+noise level 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> adjusted Rand index
+
+with local search 
+
+GA only 
+
+Fig 2. Local search is the decisive ingredient. Recovery with and without the memetic hill-climb across the noise sweep; the refinement that reassigns elements after seeding accounts for most of GCM’s advantage over greedy clustering. contain anti-correlated members—which is exactly why the penalized correlation criteria are preferable for 248 
+
+module selection. 249 
+
+8/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+Table 3. Benchmark results: clusters recovered ( k), adjusted Rand index (ARI), and Hungarian-matched accuracy against ground truth. 
+
+Dataset Method Target Setting k ARI Acc. Synthetic-Easy k-means WCSS k=3 3 0.220 0.587 GCM loglik known k=3 3 1.000 1.000 GCM loglik loose g max=10 3 1.000 1.000 GCM loglik bic model sel. g max=10 3 1.000 1.000 GCM loglik aic model sel. g max=10 3 1.000 1.000 Synthetic-Hard k-means WCSS k=5 5 0.269 0.430 GCM loglik known k=5 5 0.986 0.990 GCM loglik loose g max=10 6 0.903 0.900 GCM loglik bic model sel. g max=10 6 0.903 0.900 GCM loglik aic model sel. g max=10 6 0.903 0.900 GCM/nsga2 loglik+bic nsga2 g max=10 5 0.332 0.550 Iris k-means WCSS k=3 3 0.592 0.813 GCM silhouette g max=6 2 0.568 0.667 GCM calinski harabasz g max=6 2 0.568 0.667 GCM/nsga2 silhouette+davies bouldin nsga2 g max=8 3 0.558 0.660 GSE183947 GCM loglik aic top200, g max=12 12 – –True k is 3 (Synthetic-Easy, Iris) and 5 (Synthetic-Hard); GSE183947 has no ground-truth labelling (ARI/accuracy not applicable). “known k” fixes gmax to the true value; “loose gmax ” and “model sel.” use a loose bound, the latter with a penalized correlation criterion. k-means is given the true k and 10 restarts. GA settings as in Methods; fixed random seed. 
+
+Fig 3. Convergence of the genetic algorithm on Synthetic-Easy. Best and population-mean weighted fitness (correlation log-likelihood) across generations. The optimizer reaches a high-quality partition within the first few dozen generations and the elite fitness is monotone non-decreasing by construction. 0 20 40 60 80 100 120 
+
+generation 
+
+10 
+
+15 
+
+20 
+
+25 
+
+30 
+
+35 
+
+> weighted fitness (loglik)
+> best
+> population mean
+
+9/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+Fig 4. Model selection on Synthetic-Hard. The raw correlation log-likelihood (left axis) increases monotonically as clusters are added—the over-segmentation tendency—while the penalized criteria (right axis, lower is better) turn over near the true number of modules. The loglik aic minimum identifies a parsimonious, well-fitting partition without the number of clusters being specified in advance. 2 3 4 5 6
+
+number of clusters k 
+
+10.5 
+
+11.0 
+
+11.5 
+
+12.0 
+
+12.5 
+
+13.0 
+
+13.5 
+
+> correlation log-likelihood
+> loglik (fit)
+> true k=5
+> loglik_bic
+> loglik_aic
+> _child2
+
+1350 
+
+1300 
+
+1250 
+
+1200 
+
+1150 
+
+1100 
+
+1050 
+
+> penalized criterion (lower = better)
+
+Fig 5. Fit–parsimony Pareto front on Synthetic-Hard. Each point is a non-dominated partition from a single NSGA-II run optimizing the correlation log-likelihood (maximized) against the geometric BIC (minimized); colour encodes the number of clusters. The multi-objective mode exposes the trade-off explicitly for interactive exploration. 8 10 12 
+
+correlation log-likelihood (maximize) 
+
+14500 
+
+15000 
+
+15500 
+
+> BIC (minimize)
+
+3
+
+4
+
+5
+
+6
+
+7
+
+> clusters
+
+10/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+Table 4. Model selection with k unknown (mean ± SD over 30 datasets, Synthetic-Hard design, true 
+
+k = 5). Both methods use the same penalized correlation criterion; they differ only in optimizer. Method k recovered ARI GCM ( loglik aic ) 6.7 ±1.0 0.87 ±0.10 hierarchical + penalized cut 7.5 ±1.5 0.83 ±0.08 
+
+## Robustness to unstructured genes 250 
+
+Real gene sets contain many genes that belong to no module. When the five-module design is embedded 251 
+
+among unstructured “noise” genes and the methods must both find the modules and not be derailed by the 252 
+
+noise, GCM retains ARI 0 .96 against 0 .53 for hierarchical clustering (30 datasets). The likelihood isolates the 253 
+
+incoherent genes rather than letting them pollute real modules, whereas greedy linkage forces them into the 254 
+
+nearest module and degrades the recovered structure. 255 
+
+## Optimizer validation on geometric data: Iris 256 
+
+We include Iris not as a recovery benchmark—it is geometric rather than correlational, outside the correlation 257 
+
+objective’s domain—but to verify that the GA is a faithful, competent optimizer of any geometric index it is 258 
+
+given. It is: driven by silhouette it returns a partition with silhouette 0 .58, matching exactly the optimum 259 
+
+found by k-means at k = 2 (0 .58), so the optimizer reaches the index’s best value rather than a local one. 260 
+
+That this partition has k = 2 rather than three clusters is a property of the index , not the optimizer: on 261 
+
+Iris the three-species labelling has silhouette only 0 .38, below both the two-cluster split (0 .58) and the best 262 
+
+three-cluster k-means partition (0 .46), because versicolor and virginica overlap so heavily that merging them 263 
+
+is geometrically cleaner (Fig 6). No silhouette-maximizing method can return the three species here; GCM 264 
+
+correctly returns what the criterion prefers (ARI = 0 .57 against the species, matching k-means at the same 265 
+
+k). The lesson is that the choice of criterion, not the optimizer, determines the answer, which is precisely the 266 
+
+control GCM gives the user, and the reason the correlation objective matters for data where a geometric 267 
+
+index would be the wrong question. 268 
+
+## Empirical co-expression modules: breast cancer 269 
+
+Applied to the 200 most variable genes of GSE183947 with the penalized correlation criterion loglik aic , 270 
+
+GCM resolves 12 co-expression modules. These are strongly coherent: the mean within-module absolute 271 
+
+correlation is 0.59, against a background of 0.31 over all gene pairs. Crucially, the modules are biologically 272 
+
+meaningful with respect to the tumour/normal axis that the clustering never saw: 7 of the 12 module 273 
+
+eigengenes differ significantly between tumour and patient-matched normal tissue (Welch t-test, 274 
+
+Benjamini–Hochberg q < 0.05; Fig 7, Table 5). Because the genes were selected only for variability and 275 
+
+clustered only by mutual correlation, the recovery of phenotype-associated modules indicates that the 276 
+
+correlation objective captures co-regulation structure that tracks the underlying biology. 277 
+
+## Visualizing cluster structure in reduced dimensions 278 
+
+To provide visual confirmation that the recovered modules occupy distinct regions of the space in which the 279 
+
+objective operates, we embed each clustering result into two dimensions using PCA and correlation MDS 280 
+
+(1 − | R|; see Methods). On Synthetic-Easy the three recovered modules form well-separated clouds in both 281 
+
+embeddings (Fig 8), consistent with the perfect ARI. On Synthetic-Hard, where noise and unequal module 282 
+
+sizes degrade separation, PCA shows considerable overlap because co-expressed but anti-correlated genes are 283 
+
+geometrically distant; the correlation MDS, which measures distance in the same absolute-correlation space 284 
+
+as the objective, reveals clearer module boundaries. For the empirical breast-cancer data, the 285 
+
+correlation-MDS embedding of the 12 modules shows that even on real gene expression data the recovered 286 
+
+modules occupy coherent, distinguishable regions of correlation space (Fig 9). These visualizations are 287 
+
+produced automatically by the software and are available to users for any dataset. 288 
+
+11/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+Fig 6. Silhouette profile of the Iris clustering recovered by GCM. Per-sample silhouette coefficients grouped by recovered cluster; the dashed line marks the mean. One cluster is cleanly separated (uniformly high silhouette) while the other two overlap, the expected structure for the Iris species. 0.0 0.2 0.4 0.6 0.8 
+
+silhouette coefficient 
+
+0
+
+25 
+
+50 
+
+75 
+
+100 
+
+125 
+
+150 
+
+> samples (grouped by cluster)
+
+mean = 0.58 
+
+Table 5. Co-expression modules recovered from GSE183947. Size, mean within-module absolute correlation, variance explained by the module eigengene, and the tumour-vs-normal eigengene contrast ( t
+
+statistic and Benjamini–Hochberg-adjusted Welch q-value). Module Size Within |r| Eig. var. t (T vs N) q (BH) M7 5 0.88 0.91 15.4 <0.001 M8 14 0.47 0.52 9.5 <0.001 M1 22 0.81 0.82 7.6 <0.001 M2 20 0.52 0.55 3.6 0.002 M3 34 0.81 0.82 3.5 0.002 M4 23 0.74 0.76 3.6 0.002 M6 21 0.54 0.57 3.2 0.004 M11 14 0.50 0.55 1.4 0.220 M12 11 0.14 0.20 1.4 0.220 M9 14 0.54 0.58 0.9 0.457 M10 8 0.53 0.59 0.5 0.673 M5 14 0.56 0.60 0.2 0.858 
+
+# Discussion 289 
+
+GCM reframes co-expression module detection as maximum-likelihood inference under an explicit generative 290 
+
+model. Solving that inference problem is globally effective. The correlation objective is not a heuristic: it is, 291 
+
+up to a constant and the sample-size factor, the profile log-likelihood of a block-diagonal one-factor Gaussian 292 
+
+model in which each module is driven by a single regulator with equal-magnitude ± loadings [41] (S1 293 
+
+Appendix). This footing makes its model selection principled, in the sense that the number of modules is 294 
+
+chosen by BIC/AIC over the d samples (Eq (3)), and explains why pairing it with a geometric information 295 
+
+criterion fails: those assume Euclidean-Gaussian clusters, which the absolute-correlation model contradicts 296 
+
+whenever modules contain anti-correlated genes. 297 
+
+12/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+Fig 7. Module eigengenes separate tumour from normal tissue. Eigengene distributions (leading principal component of each module’s expression across the 60 samples) for the modules most associated with phenotype, split by tumour (T) and patient-matched normal (N) tissue; asterisks mark modules with a significant contrast (Benjamini–Hochberg q < 0.05). M7* M8* M1* M2* M3* M4* 
+
+module (T=tumor red, N=normal blue; * BH q < 0.05) 
+
+0.3 
+
+0.2 
+
+0.1 
+
+0.0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+> module eigengene
+
+Fig 8. Dimensionality-reduction visualization of synthetic clustering. Recovered modules projected into two dimensions by PCA (left) and correlation MDS (right) on Synthetic-Easy. Diamonds mark cluster centroids. The correlation-MDS embedding uses the distance space native to the correlation objective and shows clean separation. 8 6 4 2 0 2 4 6     
+
+> PCA dim 1
+> 8
+> 6
+> 4
+> 2
+> 0
+> 2
+> 4
+> 6
+> 8
+> PCA dim 2
+> PCA
+> C1
+> C2
+> C3
+> 0.4 0.2 0.0 0.2 0.4
+> Correlation MDS dim 1
+> 0.4
+> 0.2
+> 0.0
+> 0.2
+> 0.4
+> Correlation MDS dim 2
+> Correlation MDS (1 |R|)
+> Synthetic-Easy: recovered clusters
+
+Given the model, the contribution that matters in practice is optimization quality. Greedy agglomerative 298 
+
+clustering on the correlation distance—the core of widely used co-expression pipelines (is a strong seed but a 299 
+
+poor optimizer): once it merges two genes it can never separate them. Our replicated benchmark shows that 300 
+
+hybridizing the GA with a memetic local search, which reassigns genes after the fact, surpasses hierarchical 301 
+
+clustering across the noise range and does so consistently (lowest variance), and an ablation attributes most 302 
+
+of the gain to the local-search step specifically. The same advantage holds when the number of modules is 303 
+
+unknown and when unstructured genes must be ignored. In other words, the true (simulated) module 304 
+
+structure is the likelihood optimum, and the value of the method is that it actually reaches it. 305 
+
+The approach has clear limits. Local search is what makes the optimizer competitive, so on problems 306 
+
+where the objective does not decompose into incremental moves that are numerically inexpensive, it will be 307 
+
+less efficient. Scaling to genome-wide matrices is bounded by the O(n2) correlation matrix and 308 
+
+13/18 
+
+.CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint Fig 9. Dimensionality-reduction visualization of empirical modules. The 12 co-expression modules recovered from GSE183947 projected into two dimensions by PCA (left) and correlation MDS (right). Module boundaries are more distinct in the correlation distance space, confirming that the objective captures structure beyond what Euclidean geometry reveals. 20 0 20 40 60 80       
+
+> PCA dim 1
+> 15
+> 10
+> 5
+> 0
+> 5
+> 10
+> 15
+> 20
+> PCA dim 2
+> PCA
+> C1
+> C2
+> C3
+> C4
+> C5
+> C6
+> C7
+> C8
+> C9
+> C10
+> C11
+> C12
+> 0.6 0.4 0.2 0.0 0.2 0.4
+> Correlation MDS dim 1
+> 0.4
+> 0.2
+> 0.0
+> 0.2
+> 0.4
+> Correlation MDS dim 2
+> Correlation MDS (1 |R|)
+> GSE183947: co-expression modules in reduced dimensions
+
+per-evaluation cost, so gene pre-filtering (as used here) is currently required. Natural extensions include 309 
+
+richer within-module models (multi-factor or shrinkage-regularized free correlation, with the correspondingly 310 
+
+larger parameter counts in the information criteria), correlation-aware crossover, and approximate or 311 
+
+sketched correlation for very large n. 312 
+
+Methodologically, GCM sits in the tradition of GA-based and multi-objective clustering [19, 20] but is 313 
+
+distinguished by a co-expression objective with an explicit likelihood, principled in-model selection, and a 314 
+
+memetic optimizer that demonstrably is better than the greedy clustering such pipelines rely on—behind a 315 
+
+single swappable-metric interface with a minimal dependency footprint. As a practical complement, the 316 
+
+built-in dimensionality-reduction tools (PCA and correlation MDS, with optional t-SNE and UMAP) let 317 
+
+users visually inspect and communicate the clustering structure, and the correlation-MDS embedding is 318 
+
+particularly informative because it projects elements into the same distance space the objective operates in. 319 
+
+# Conclusion 320 
+
+We introduced GCM, a dependency-light Python tool that detects co-expression modules by maximizing the 321 
+
+likelihood of an explicit block-diagonal one-factor Gaussian model with a memetic genetic algorithm. Placing 322 
+
+the correlation objective on a likelihood footing makes its model selection principled, and hybridising the 323 
+
+search with a greedy local refinement lets it reproducibly surpass the greedy agglomerative clustering on 324 
+
+which standard co-expression pipelines rely. This advantage we establish with a replicated benchmark and an 325 
+
+ablation, and that persists under unknown module count and unstructured-gene contamination. The same 326 
+
+engine generalizes to geometric indices and recovers phenotype-associated modules in breast-cancer RNA-seq. 327 
+
+The software, documentation, and full reproduction scripts are openly available. 328 
+
+# Supporting information 329 
+
+S1 Appendix. Derivation of the correlation objective from the one-factor block model. 330 
+
+Model. Each of the d samples (columns of X) is an independent draw x ∼ N (0, Σ) over the n 331 
+
+row-standardized genes, with Σ block-diagonal by the partition. Within a module s of size ns, the 332 
+
+equal-magnitude one-factor structure xg = σg fs + εg , σg ∈ {± λs}, induces a correlation matrix that, after 333 
+
+absorbing the loading signs by a diagonal ±1 similarity (which changes neither eigenvalues nor determinant), 334 
+
+is the equicorrelation (compound-symmetry) matrix Σ CS (ρs) = (1 − ρs)I + ρs 11 ⊤ with ρs = λ2
+
+> s
+
+. Its 335 
+
+eigenvalues are 1 + ( ns − 1) ρs once and 1 − ρs with multiplicity ns − 1, so 336 
+
+log det Σ CS (ρs) = log[1 + ( ns − 1) ρs] + ( ns − 1) log(1 − ρs). 337 
+
+14/18 
+
+.CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint Profile likelihood. For d i.i.d. samples with sample correlation Ss the per-module Gaussian log-likelihood 338 
+
+is ℓs(ρ) = − d
+
+> 2
+
+ log det Σ CS (ρ) + tr(Σ CS (ρ)−1Ss) + ns log 2 π. Writing P = u⊤Ssu for the variance along the 339 
+
+aligned direction u = s/√ns (sign vector s), the two distinct eigenvalues of Σ CS are matched at their ML 340 
+
+values \1 + ( ns − 1) ρ = P and [1 − ρ = ( ns − P )/(ns − 1), giving ˆρs = ( P − 1) /(ns − 1). With sign alignment 341 
+
+P = 1 + ( ns − 1) ¯rs where ¯rs is the mean off-diagonal |R|, hence ˆρs = ¯rs = ( Cs − ns)/(n2 
+
+> s
+
+− ns) (Eq (1) ). At 342 
+
+the ML estimate the trace term collapses, tr(Σ CS (ˆ ρs)−1Ss) = ns, so 343 
+
+ℓs = − d 
+
+> 2
+
+log det Σ CS (ˆ ρs) − d 
+
+> 2
+
+ns(1 + log 2 π). 344 
+
+Objective. Summing over modules, the second term is − d 
+
+> 2
+
+(1 + log 2 π) P 
+
+> s
+
+ns, a constant (total genes 345 
+
+fixed). The partition-dependent part is − d
+
+> 2
+
+P 
+
+> s
+
+log det ΣCS ( ˆρs) = d L(ℓ), which is exactly d times Eq (2) after 346 
+
+substituting ˆρs = ( Cs − ns)/(n2 
+
+> s
+
+− ns) into the eigenvalue expression. The project’s objective is therefore the 347 
+
+maximum log-likelihood of the model up to an additive constant and the factor d, and the per-module 348 
+
+summand diverges to + ∞ as Cs → n2 
+
+> s
+
+(ρs → 1, a perfectly correlated module); we cap this at a large finite 349 
+
+value to keep the optimizer well-behaved. 350 
+
+Model selection. The K-module model has K free coherence parameters over d samples, giving 351 
+
+BIC = −2dL + K log d and AIC = −2dL + 2 K (Eq (3) ). Because the likelihood carries the factor d and the 352 
+
+penalty does not, the criteria license more modules as the number of samples grows, as required. 353 
+
+# Supporting information 354 
+
+S1 File. Reproduction package. For convenience, a compressed version of the repository is shared as a 355 
+
+companion to the paper (although it is also available through GitHub and Zenodo). It contains the source 356 
+
+code, the benchmark driver ( experiments/run experiments.py ), and the generated results tables and 357 
+
+figures. 358 
+
+# Data and Software Availability 359 
+
+All source code for the GCM package, along with the reproduction scripts to generate the results and figures 360 
+
+presented in this manuscript, is publicly available under an open-source license on GitHub at 361 
+
+https://github.com/luismadrigal98/GCM-MRK . To ensure long-term reproducibility, a persistent 362 
+
+snapshot of the codebase at the time of submission has been archived on Zenodo (DOI: 363 
+
+10.5281/zenodo.21361265). The empirical breast cancer RNA-seq dataset (GSE183947) analyzed in this 364 
+
+study is publicly available from the NCBI Gene Expression Omnibus (GEO). 365 
+
+# Acknowledgments 366 
+
+We thank all the class of Simulation in Python offered in the University of Kansas, where all this project of 367 
+
+evolving solutions using evolutionary algorithms (the simulation bit) started. 368 
+
+# References 
+
+1. Lorena AC, Costa IG, De Souto MCP. On the Complexity of Gene Expression Classification Data Sets. In: 2008 Eighth International Conference on Hybrid Intelligent Systems. Barcelona, Spain: IEEE; 2008. p. 825-30. doi:10.1109/HIS.2008.163. 2. Saelens W, Cannoodt R, Saeys Y. A Comprehensive Evaluation of Module Detection Methods for Gene Expression Data. Nature Communications. 2018 Mar;9(1):1090. doi:10.1038/s41467-018-03424-4. 3. Eisen MB, Spellman PT, Brown PO, Botstein D. Cluster Analysis and Display of Genome-Wide Expression Patterns. Proceedings of the National Academy of Sciences. 1998 Dec;95(25):14863-8. doi:10.1073/pnas.95.25.14863. 15/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+4. Wolfe CJ, Kohane IS, Butte AJ. Systematic Survey Reveals General Applicability of ”Guilt-by-Association” within Gene Coexpression Networks. BMC Bioinformatics. 2005 Sep;6(1):227. doi:10.1186/1471-2105-6-227. 5. Vengatharajuloo V, Goh HH, Hassan M, Govender N, Sulaiman S, Afiqah-Aleng N, et al. Gene Co-Expression Network Analysis Reveals Key Regulatory Genes in Metisa Plana Hormone Pathways. Insects. 2023 May;14(6):503. doi:10.3390/insects14060503. 6. Van Dam S, V˜ osa U, Van Der Graaf A, Franke L, De Magalh˜ aes JP. Gene Co-Expression Analysis for Functional Classification and Gene–Disease Predictions. Briefings in Bioinformatics. 2017 Jan:bbw139. doi:10.1093/bib/bbw139. 7. Hasankhani A, Bahrami A, Sheybani N, Aria B, Hemati B, Fatehi F, et al. Differential Co-Expression Network Analysis Reveals Key Hub-High Traffic Genes as Potential Therapeutic Targets for COVID-19 Pandemic. Frontiers in Immunology. 2021 Dec;12:789317. doi:10.3389/fimmu.2021.789317. 8. Hruschka ER, De Castro LN, Campello RJGB. Evolutionary Algorithms for Clustering Gene-Expression Data. In: Fourth IEEE International Conference on Data Mining (ICDM’04). Brighton, UK: IEEE; 2004. p. 403-6. doi:10.1109/ICDM.2004.10073. 9. Pirim H, Ek¸ sio˘ glu B, Perkins AD, Y¨ uceer C ¸ . Clustering of High Throughput Gene Expression Data. Computers & Operations Research. 2012 Dec;39(12):3046-61. doi:10.1016/j.cor.2012.03.008. 10. MacQueen J. Some methods for classification and analysis of multivariate observations; 1967. Available from: https://api.semanticscholar.org/CorpusID:6278891 .11. Rousseeuw PJ. Silhouettes: A Graphical Aid to the Interpretation and Validation of Cluster Analysis. Journal of Computational and Applied Mathematics. 1987 Nov;20:53-65. doi:10.1016/0377-0427(87)90125-7. 12. Davies DL, Bouldin DW. A Cluster Separation Measure. IEEE Transactions on Pattern Analysis and Machine Intelligence. 1979;PAMI-1(2):224-7. doi:10.1109/TPAMI.1979.4766909. 13. Cali´ nski T, Harabasz J. A Dendrite Method for Cluster Analysis. Communications in Statistics. 1974 Jan;3(1):1-27. doi:10.1080/03610927408827101. 14. Schwarz G. Estimating the Dimension of a Model. The Annals of Statistics. 1978 Mar;6(2). doi:10.1214/aos/1176344136. 15. Langfelder P, Horvath S. WGCNA: an R package for weighted correlation network analysis. BMC Bioinformatics. 2008;9:559. 16. Abu-Jamous B, Kelly S. Clust: automatic extraction of optimal co-expressed gene clusters from gene expression data. Genome Biology. 2018;19:172. 17. Abu-Jamous B, Fa R, Roberts DJ, Nandi AK. UNCLES: method for the identification of genes differentially consistently co-expressed in a specific subset of datasets. BMC Bioinformatics. 2015;16:184. 18. Saelens W, Cannoodt R, Saeys Y. A comprehensive evaluation of module detection methods for gene expression data. Nature Communications. 2018;9:1090. 19. Maulik U, Bandyopadhyay S. Genetic algorithm-based clustering technique. Pattern Recognition. 2000;33(9):1455-65. 20. Handl J, Knowles J. An evolutionary approach to multiobjective clustering. IEEE Transactions on Evolutionary Computation. 2007;11(1):56-76. 16/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+21. Moscato P. On Evolution, Search, Optimization, Genetic Algorithms and Martial Arts - Towards Memetic Algorithms. Caltech Concurrent Computation Program. 2000 10. 22. Neri F, Cotta C. Memetic algorithms and memetic computing optimization: A literature review. Swarm and Evolutionary Computation. 2012;2:1-14. doi:10.1016/j.swevo.2011.11.003. 23. Katoch S, Chauhan SS, Kumar V. A Review on Genetic Algorithm: Past, Present, and Future. Multimedia Tools and Applications. 2021 Feb;80(5):8091-126. doi:10.1007/s11042-020-10139-6. 24. Hageman JA, Van Den Berg RA, Westerhuis JA, Van Der Werf MJ, Smilde AK. Genetic Algorithm Based Two-Mode Clustering of Metabolomics Data. Metabolomics. 2008 Jun;4(2):141-9. doi:10.1007/s11306-008-0105-7. 25. Hruschka ER, Campello RJGB, De Castro LN. Evolving Clusters in Gene-Expression Data. Information Sciences. 2006 Jul;176(13):1898-927. doi:10.1016/j.ins.2005.07.015. 26. Korkmaz EE, Du J, Alhajj R, Barker K. Combining Advantages of New Chromosome Representation Scheme and Multi-Objective Genetic Algorithms for Better Clustering. Intelligent Data Analysis. 2006 Apr;10(2):163-82. doi:10.3233/IDA-2006-10205. 27. Wei LY, Cheng CH. An Entropy Clustering Analysis Based on Genetic Algorithm. Journal of Intelligent and Fuzzy Systems. 2008;19(4):235-41. 28. Wirsansky E. Hands-on Genetic Algorithms with Python: Applying Genetic Algorithms to Solve Real-World Deep Learning and Artificial Intelligence Problems. 1st ed. Erscheinungsort nicht ermittelbar: Packt Publishing; 2020. 29. Harris CR, Millman KJ, Van Der Walt SJ, Gommers R, Virtanen P, Cournapeau D, et al. Array Programming with NumPy. Nature. 2020 Sep;585(7825):357-62. doi:10.1038/s41586-020-2649-2. 30. Virtanen P, Gommers R, Oliphant TE, Haberland M, Reddy T, Cournapeau D, et al. SciPy 1.0: Fundamental Algorithms for Scientific Computing in Python. Nature Methods. 2020 Mar;17(3):261-72. doi:10.1038/s41592-019-0686-2. 31. Arthur D, Vassilvitskii S. k-means++: the advantages of careful seeding. In: Proceedings of the Eighteenth Annual ACM-SIAM Symposium on Discrete Algorithms. SODA ’07. USA: Society for Industrial and Applied Mathematics; 2007. p. 1027–1035. 32. Deb K, Pratap A, Agarwal S, Meyarivan T. A fast and elitist multiobjective genetic algorithm: NSGA-II. IEEE Transactions on Evolutionary Computation. 2002;6(2):182-97. doi:10.1109/4235.996017. 33. Fisher RA. THE USE OF MULTIPLE MEASUREMENTS IN TAXONOMIC PROBLEMS. Annals of Eugenics. 1936 Sep;7(2):179-88. doi:10.1111/j.1469-1809.1936.tb02137.x. 34. Akaike H. A new look at the statistical model identification. IEEE Transactions on Automatic Control. 1974;19(6):716-23. doi:10.1109/TAC.1974.1100705. 35. Pelleg D, Moore A. X-means: extending k-means with efficient estimation of the number of clusters. Proceedings of the 17th International Conference on Machine Learning. 2000:727-34. 36. Torgerson WS. Multidimensional Scaling: I. Theory and Method. Psychometrika. 1952 Dec;17(4):401-19. doi:10.1007/BF02288916. 37. van der Maaten L, Hinton G. Visualizing data using t-SNE. Journal of Machine Learning Research. 2008;9:2579-605. 38. McInnes L, Healy J, Saul N, Großberger L. UMAP: Uniform Manifold Approximation and Projection. Journal of Open Source Software. 2018 Sep;3(29):861. doi:10.21105/joss.00861. 17/18 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted July 20, 2026. ;https://doi.org/10.64898/2026.07.15.738632 doi: bioRxiv preprint
+
+39. Wang D, et al. Comprehensive transcriptomic profiling of paired breast tumour and adjacent normal tissues (GSE183947). Gene Expression Omnibus. 2021. NCBI GEO accession GSE183947. 40. Hubert L, Arabie P. Comparing partitions. Journal of Classification. 1985;2(1):193-218. 41. Bartholomew D, Knott M, Moustaki I. Latent Variable Models and Factor Analysis: A Unified Approach. 1st ed. Wiley Series in Probability and Statistics. Wiley; 2011. doi:10.1002/9781119970583. 18/18
