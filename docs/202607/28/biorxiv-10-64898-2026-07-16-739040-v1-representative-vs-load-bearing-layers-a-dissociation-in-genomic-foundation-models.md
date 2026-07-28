@@ -1,0 +1,25 @@
+---
+title: "Representative vs. Load-bearing Layers: A Dissociation in Genomic Foundation Models"
+title_zh: 代表性层与承重层：基因组基础模型中的解离
+authors: "Cho, Y., Kim, M. S., Kim, S."
+date: 2026-07-21
+pdf: "https://www.biorxiv.org/content/10.64898/2026.07.16.739040v1.full.pdf"
+tags: ["query:med-ai"]
+score: 7.0
+evidence: 基因组基础模型层分析用于变异解释
+tldr: "基因组基础模型下游使用时，常默认使用最后一层或中间层特征，但未验证分类器实际依赖的层。本文定义免训练标量||Δh_ℓ||_2，在NT-v2和Evo 2上分析发现代表性层（峰值AUROC层）与负载层（剔除后性能下降最大的层）存在分离。代表性层居中，负载层在MLM中偏浅层、在CLM中偏深层。MLM中单层标量优于1024维最后一层池化，表明标准操作对MLM遗漏变异信号。"
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-16-739040-v1/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1661, \"height\": 658}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-16-739040-v1/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 866, \"height\": 326}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-16-739040-v1/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 865, \"height\": 337}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-16-739040-v1/fig-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 1661, \"height\": 580}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-07-16-739040-v1/fig-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 1597, \"height\": 1067}]"
+tables_json: "[{\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-07-16-739040-v1/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 869, \"height\": 168}, {\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-07-16-739040-v1/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 868, \"height\": 173}, {\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-07-16-739040-v1/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 1191, \"height\": 170}, {\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-07-16-739040-v1/table-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 666, \"height\": 600}, {\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-07-16-739040-v1/table-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 860, \"height\": 353}, {\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-07-16-739040-v1/table-006.webp\", \"caption\": \"\", \"page\": 0, \"index\": 6, \"width\": 821, \"height\": 478}]"
+motivation: 现有基因组基础模型选择固定层作为特征，未检验分类器实际依赖的层，可能导致信息遗漏。
+method: "定义L2范数||Δh_ℓ||_2衡量每个隐藏层对变异位点的响应，通过单层AUROC找代表性层，通过剔除一层后的性能下降找负载层。"
+result: 代表性层位于网络中部，负载层在MLM中偏浅层、在CLM中偏深层；MLM中单层标量AUROC比最后一层池化高0.049。
+conclusion: 标准池化策略在MLM中不可靠，负载层分析能揭示真正依赖的层，指导特征选择。
+---
+
+## 摘要
+基因组基础模型的下游使用遵循三种常规之一：聚合所有层的表示（Pearce et al., 2026）、默认使用最后一层隐藏状态作为固定特征提取器（Dalla-Torre et al., 2024）、或通过机制可解释性工具选择单个中间层（Brixi et al., 2026）。这些方法均未考察联合分类器实际依赖的层。我们通过一个无需训练的最小标量||Δhℓ||₂（定义为变体标记处每层隐藏状态偏移的L2范数）来探究此问题。我们在NT-v2 500M（Dalla-Torre et al., 2024，掩码语言模型MLM）和Evo 2 7B（Brixi et al., 2026，hyena/注意力混合的因果语言模型CLM）上，对8,008个ClinVar（Landrum et al., 2018）单核苷酸变体进行了评估。在两个模型中，具有单特征AUROC峰值的层（代表性层）并非联合多层分类器最依赖的层（承重层，通过逐层剔除的消融下降确定，且与|SHAP|（Lundberg & Lee, 2017）一致）。代表性层位于两个模型的网络中部，而承重深度位于深度轴的两端：MLM中偏浅层，CLM混合模型中偏深层。这种解离具有直接的下游影响。在NT-v2中，一维中间层标量比标准的1024维最后一层平均池化基线高出+0.049 AUROC。在Evo 2中，4096维平均池化与联合||Δhℓ||₂特征表现相当，因此标准的最后一层池化未能利用变体相关信号，特别是在基于MLM的流程中。
+
+## Abstract
+Downstream use of genomic foundation models follows one of three conventions: aggregating representations across all layers (Pearce et al., 2026), defaulting to the last hidden state as a fixed feature extractor (Dalla-Torre et al., 2024), or picking a single intermediate layer via mechanistic-interpretability tooling (Brixi et al., 2026). None of these examines which layer a joint classifier actually relies on. We probe this question with a minimal training-free scalar, ||{triangleup}h{ell}||2, defined as the L2 norm of the per-layer hidden-state shift at the variant token. We evaluate it on 8,008 ClinVar (Landrum et al., 2018) single-nucleotide variants in NT-v2 500M (Dalla-Torre et al., 2024), a masked language model (MLM), and Evo 2 7B (Brixi et al., 2026), a causal language model (CLM) with a hyena/attention hybrid. In both models, the layer with peak single-feature AUROC (the representative layer) is not the layer a joint multi-layer classifier most depends on (the load-bearing layer, identified by leave-one-layer-out ablation drop and concordant with |SHAP| (Lundberg & Lee, 2017)). Representative layers sit mid-network in both models, whereas load-bearing depth lies at opposite ends of the depth axis: mid-shallow in the MLM and deep in the CLM hybrid. The dissociation has direct downstream consequences. In NT-v2, a 1-dimensional mid-layer scalar exceeds the canonical 1024-dimensional last-layer mean-pool baseline by +0.049 AUROC. In Evo 2, the 4096-dimensional mean-pool is competitive with the joint ||{triangleup}h{ell}||2 feature, so standard last-layer pooling leaves variant-relevant signal untapped specifically in MLM-based pipelines.

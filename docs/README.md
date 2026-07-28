@@ -6,46 +6,52 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-27
-- 运行时间：2026-07-27 21:27:37 UTC
+- 最新运行日期：2026-07-28
+- 运行时间：2026-07-28 21:25:51 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：3
-- 速读区：5
+- 本次总论文数：10
+- 精读区：4
+- 速读区：6
 
 ### 今日简报（AI）
-1) 今日精读两篇高分研究：基础模型揭示癌症基因组与影像关联，以及张量特征筛选用于面部形状分析。
-2) 最值得关注方向：放射基因组学与高维张量统计方法，均达8分以上。
-3) 建议优先精读《Foundation-model-guided radiogenomic discovery...》，速读可看BaiZe细胞响应框架。
-- 详情：[/202607/27/README](/202607/27/README)
+1) 今日精读合成数据驱动的联邦学习框架与因果字典学习基因组模型，速读多模态基因表达生成及基因组基础模型分层研究。  
+2) 最值得关注SynPre-FL如何用合成数据提升联邦学习效率，以及因果字典学习在验证转录因子结合特征中的突破。  
+3) 建议优先深挖精读论文，理解合成数据与因果推理如何赋能生物信息学与分布式学习。
+- 详情：[/202607/28/README](/202607/28/README)
 
 ### 精读区论文标签
-1. [Foundation-model-guided radiogenomic discovery linking cancer genomes to cancer scans](/202607/27/2607.20583v1-foundation-model-guided-radiogenomic-discovery-linking-cancer-genomes-to-cancer-scans)  
-   标签：评分：9.0/10、query:gwas
-   evidence：整合基因组基础模型与影像进行全基因组基因-表型关联发现
-2. [A Consistent Feature Screening Approach for Tensor Responses with Applications to Genome-Wide Facial Shape Association](/202607/27/2607.22437v1-a-consistent-feature-screening-approach-for-tensor-responses-with-applications-to-genome-wide-facial-shape-association)  
-   标签：评分：8.0/10、query:gwas
-   evidence：面向张量响应的GWAS特征筛选
-3. [GeneBench-Pro: Evaluating Multistage Statistical Reasoning in Genomics, Quantitative Biology, and Translational Biomedicine](/202607/27/biorxiv-10-64898-2026-06-29-735386-v4-genebench-pro-evaluating-multistage-statistical-reasoning-in-genomics-quantitative-biology-and-translational-biomedicine)  
+1. [SynPre-FL: Synthetic data-driven pretraining integrated Federated Learning training framework](/202607/28/2607.19524v1-synpre-fl-synthetic-data-driven-pretraining-integrated-federated-learning-training-framework)  
    标签：评分：8.0/10、query:med-ai
-   evidence：基因组AI智能体多阶段推理基准
+   evidence：合成电子健康记录生成与联邦学习用于临床风险预测
+2. [Causal dictionary learning reveals and validates transcription-factor binding features in genomic language models](/202607/28/2607.19618v1-causal-dictionary-learning-reveals-and-validates-transcription-factor-binding-features-in-genomic-language-models)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：对基因组语言模型进行因果字典学习以解释特征
+3. [Unifying multimodal single-cell data with a mixture-of-experts β-variational autoencoder framework](/202607/28/biorxiv-10-1101-2025-02-28-640429-v3-unifying-multimodal-single-cell-data-with-a-mixture-of-experts--variational-autoencoder-framework)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：混合专家VAE用于多模态单细胞数据整合，与虚拟细胞建模相关
+4. [GeneBench-Pro: Evaluating Multistage Statistical Reasoning in Genomics, Quantitative Biology, and Translational Biomedicine](/202607/28/biorxiv-10-64898-2026-06-29-735386-v4-genebench-pro-evaluating-multistage-statistical-reasoning-in-genomics-quantitative-biology-and-translational-biomedicine)  
+   标签：评分：8.0/10、query:med-ai
+   evidence：基因组学和转化生物医学中AI智能体的基准测试
 
 ### 速读区论文标签
-1. [BaiZe: A Multi-View Dynamic Framework for Simulating and Interpreting Cellular Responses Across Perturbation Contexts](/202607/27/biorxiv-10-64898-2026-07-15-738608-v1-baize-a-multi-view-dynamic-framework-for-simulating-and-interpreting-cellular-responses-across-perturbation-contexts)  
+1. [M$^3$-Gen: Interpretable Multimodal Generation of Gene Expression Profiles Using Clinical and Imaging Data](/202607/28/2607.21343v1-m3-gen-interpretable-multimodal-generation-of-gene-expression-profiles-using-clinical-and-imaging-data)  
    标签：评分：7.0/10、query:med-ai
-   evidence：多视角动态框架预测细胞对扰动的响应，与虚拟细胞模型和基因组模型相关
-2. [GCM: metric-guided clustering by genetic algorithm for correlation-defined modules](/202607/27/biorxiv-10-64898-2026-07-15-738632-v1-gcm-metric-guided-clustering-by-genetic-algorithm-for-correlation-defined-modules)  
-   标签：评分：7.0/10、query:gwas
-   evidence：使用遗传算法检测基因共表达模块，可与GWAS整合用于功能基因组学
-3. [Variational Bayesian Sparse Negative Binomial Regression](/202607/27/2607.18741v1-variational-bayesian-sparse-negative-binomial-regression)  
+   evidence：多模态生成基因表达，涉及虚拟细胞和基因组大模型
+2. [Representative vs. Load-bearing Layers: A Dissociation in Genomic Foundation Models](/202607/28/biorxiv-10-64898-2026-07-16-739040-v1-representative-vs-load-bearing-layers-a-dissociation-in-genomic-foundation-models)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：基因组基础模型层分析用于变异解释
+3. [Unveiling Invariant and Transferable Latent Factors Across Heterogeneous Environments via ATLAS](/202607/28/2607.18209v1-unveiling-invariant-and-transferable-latent-factors-across-heterogeneous-environments-via-atlas)  
    标签：评分：6.0/10、query:gwas
-   evidence：稀疏负二项回归可用于GWAS计数表型分析
-4. [M$^3$-Gen: Interpretable Multimodal Generation of Gene Expression Profiles Using Clinical and Imaging Data](/202607/27/2607.21343v1-m3-gen-interpretable-multimodal-generation-of-gene-expression-profiles-using-clinical-and-imaging-data)  
+   evidence：多环境因子模型，利用不变潜因子进行迁移学习
+4. [Theoretical Properties of Multivariate Random Forest in Feature Selection and its Application to Facial Morphology-Gene Detection](/202607/28/2607.21880v1-theoretical-properties-of-multivariate-random-forest-in-feature-selection-and-its-application-to-facial-morphology-gene-detection)  
+   标签：评分：6.0/10、query:gwas
+   evidence：多元随机森林用于遗传学高维特征选择
+5. [SCTA: An Agentic Framework for Stable and Interpretable Target Gene Discovery from Single-Cell RNA Sequencing](/202607/28/2607.23821v1-scta-an-agentic-framework-for-stable-and-interpretable-target-gene-discovery-from-single-cell-rna-sequencing)  
    标签：评分：6.0/10、query:med-ai
-   evidence：从临床和影像数据生成基因表达，与基因组模型和医疗AI相关
-5. [Globally aligned Principal Component Analysis for multi-group data](/202607/27/2607.21741v1-globally-aligned-principal-component-analysis-for-multi-group-data)  
+   evidence：基于智能体框架从单细胞转录组发现目标基因，符合医疗数据中的强化学习与智能体应用
+6. [Estimating fitness effects of mutations in the presence of genetic linkage](/202607/28/biorxiv-10-1101-2025-11-26-690712-v3-estimating-fitness-effects-of-mutations-in-the-presence-of-genetic-linkage)  
    标签：评分：6.0/10、query:gwas
-   evidence：全局对齐PCA可用于GWAS群体分层校正
+   evidence：考虑连锁的突变适应度效应估计方法，可用于精细定位
 
 
 <div class="dpr-home-promo-card">
