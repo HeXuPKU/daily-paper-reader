@@ -6,52 +6,66 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-28
-- 运行时间：2026-07-28 21:25:51 UTC
+- 最新运行日期：2026-07-29
+- 运行时间：2026-07-29 21:48:06 UTC
 - 运行状态：成功
-- 本次总论文数：10
-- 精读区：4
-- 速读区：6
+- 本次总论文数：14
+- 精读区：3
+- 速读区：11
 
 ### 今日简报（AI）
-1) 今日精读合成数据驱动的联邦学习框架与因果字典学习基因组模型，速读多模态基因表达生成及基因组基础模型分层研究。  
-2) 最值得关注SynPre-FL如何用合成数据提升联邦学习效率，以及因果字典学习在验证转录因子结合特征中的突破。  
-3) 建议优先深挖精读论文，理解合成数据与因果推理如何赋能生物信息学与分布式学习。
-- 详情：[/202607/28/README](/202607/28/README)
+今日共处理14篇论文，精读3篇，重点聚焦乳腺癌电子健康记录的无监督聚类分析及基于临床影像数据的可解释多模态基因表达生成。
+
+最值得关注的方向：UMAP降维增强健康记录中的乳腺癌聚类，以及M³-Gen多模态框架从临床与影像数据生成基因表达谱。
+
+建议普通读者优先关注第2篇精读论文的跨模态生成方法，以及速读中可信多模态融合、因果字典学习等前沿应用。
+- 详情：[/202607/29/README](/202607/29/README)
 
 ### 精读区论文标签
-1. [SynPre-FL: Synthetic data-driven pretraining integrated Federated Learning training framework](/202607/28/2607.19524v1-synpre-fl-synthetic-data-driven-pretraining-integrated-federated-learning-training-framework)  
+1. [An unsupervised clustering analysis of breast cancer data derived from electronic health records enhanced through UMAP dimensionality reduction](/202607/29/2607.19089v1-an-unsupervised-clustering-analysis-of-breast-cancer-data-derived-from-electronic-health-records-enhanced-through-umap-dimensionality-reduction)  
    标签：评分：8.0/10、query:med-ai
-   evidence：合成电子健康记录生成与联邦学习用于临床风险预测
-2. [Causal dictionary learning reveals and validates transcription-factor binding features in genomic language models](/202607/28/2607.19618v1-causal-dictionary-learning-reveals-and-validates-transcription-factor-binding-features-in-genomic-language-models)  
+   evidence：电子健康记录上的无监督聚类分析
+2. [M$^3$-Gen: Interpretable Multimodal Generation of Gene Expression Profiles Using Clinical and Imaging Data](/202607/29/2607.21343v1-m3-gen-interpretable-multimodal-generation-of-gene-expression-profiles-using-clinical-and-imaging-data)  
    标签：评分：8.0/10、query:med-ai
-   evidence：对基因组语言模型进行因果字典学习以解释特征
-3. [Unifying multimodal single-cell data with a mixture-of-experts β-variational autoencoder framework](/202607/28/biorxiv-10-1101-2025-02-28-640429-v3-unifying-multimodal-single-cell-data-with-a-mixture-of-experts--variational-autoencoder-framework)  
+   evidence：利用GAN从临床和成像数据生成基因表达谱，助力虚拟细胞模型
+3. [Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs](/202607/29/2607.25609v1-contrastive-representation-learning-of-longitudinal-disease-trajectories-on-temporal-graphs)  
    标签：评分：8.0/10、query:med-ai
-   evidence：混合专家VAE用于多模态单细胞数据整合，与虚拟细胞建模相关
-4. [GeneBench-Pro: Evaluating Multistage Statistical Reasoning in Genomics, Quantitative Biology, and Translational Biomedicine](/202607/28/biorxiv-10-64898-2026-06-29-735386-v4-genebench-pro-evaluating-multistage-statistical-reasoning-in-genomics-quantitative-biology-and-translational-biomedicine)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：基因组学和转化生物医学中AI智能体的基准测试
+   evidence：时间图上对比学习疾病轨迹，应用于临床数据，符合医疗AI复合需求中的电子健康记录深度学习
 
 ### 速读区论文标签
-1. [M$^3$-Gen: Interpretable Multimodal Generation of Gene Expression Profiles Using Clinical and Imaging Data](/202607/28/2607.21343v1-m3-gen-interpretable-multimodal-generation-of-gene-expression-profiles-using-clinical-and-imaging-data)  
+1. [SynPre-FL: Synthetic data-driven pretraining integrated Federated Learning training framework](/202607/29/2607.19524v1-synpre-fl-synthetic-data-driven-pretraining-integrated-federated-learning-training-framework)  
    标签：评分：7.0/10、query:med-ai
-   evidence：多模态生成基因表达，涉及虚拟细胞和基因组大模型
-2. [Representative vs. Load-bearing Layers: A Dissociation in Genomic Foundation Models](/202607/28/biorxiv-10-64898-2026-07-16-739040-v1-representative-vs-load-bearing-layers-a-dissociation-in-genomic-foundation-models)  
+   evidence：合成电子健康记录预训练用于联邦临床预测
+2. [Causal dictionary learning reveals and validates transcription-factor binding features in genomic language models](/202607/29/2607.19618v1-causal-dictionary-learning-reveals-and-validates-transcription-factor-binding-features-in-genomic-language-models)  
    标签：评分：7.0/10、query:med-ai
-   evidence：基因组基础模型层分析用于变异解释
-3. [Unveiling Invariant and Transferable Latent Factors Across Heterogeneous Environments via ATLAS](/202607/28/2607.18209v1-unveiling-invariant-and-transferable-latent-factors-across-heterogeneous-environments-via-atlas)  
+   evidence：因果字典学习解释基因组语言模型
+3. [Adaptive Confidence-weighted Expansion for Trustworthy Multi-Omics Multimodal Fusion](/202607/29/2607.20742v1-adaptive-confidence-weighted-expansion-for-trustworthy-multi-omics-multimodal-fusion)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：多组学多模态融合框架带置信度权重，适用于基因组与临床数据整合
+4. [Amortized Bayesian Causal Discovery of Extended Factor Graphs](/202607/29/2607.22934v1-amortized-bayesian-causal-discovery-of-extended-factor-graphs)  
+   标签：评分：7.0/10、query:gwas
+   evidence：用于基因网络的因果发现方法，与GWAS中的机器学习应用相关
+5. [HistoGPA: A Context-Conditioned Gene-Prior Attention Framework for Histology-Based Spatial Gene Expression Prediction](/202607/29/2607.24364v1-histogpa-a-context-conditioned-gene-prior-attention-framework-for-histology-based-spatial-gene-expression-prediction)  
+   标签：评分：7.0/10、query:med-ai
+   evidence：从组织学预测空间基因表达，与虚拟细胞模型相关
+6. [Local permutation tests for conditional independence: an adaptive binning perspective](/202607/29/2607.20751v1-local-permutation-tests-for-conditional-independence-an-adaptive-binning-perspective)  
    标签：评分：6.0/10、query:gwas
-   evidence：多环境因子模型，利用不变潜因子进行迁移学习
-4. [Theoretical Properties of Multivariate Random Forest in Feature Selection and its Application to Facial Morphology-Gene Detection](/202607/28/2607.21880v1-theoretical-properties-of-multivariate-random-forest-in-feature-selection-and-its-application-to-facial-morphology-gene-detection)  
+   evidence：局部置换检验用于条件独立性检验，可应用于GWAS统计推断
+7. [Another look at predicting molecular breast cancer subtypes from the METABRIC data](/202607/29/2607.21814v1-another-look-at-predicting-molecular-breast-cancer-subtypes-from-the-metabric-data)  
    标签：评分：6.0/10、query:gwas
-   evidence：多元随机森林用于遗传学高维特征选择
-5. [SCTA: An Agentic Framework for Stable and Interpretable Target Gene Discovery from Single-Cell RNA Sequencing](/202607/28/2607.23821v1-scta-an-agentic-framework-for-stable-and-interpretable-target-gene-discovery-from-single-cell-rna-sequencing)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：基于智能体框架从单细胞转录组发现目标基因，符合医疗数据中的强化学习与智能体应用
-6. [Estimating fitness effects of mutations in the presence of genetic linkage](/202607/28/biorxiv-10-1101-2025-11-26-690712-v3-estimating-fitness-effects-of-mutations-in-the-presence-of-genetic-linkage)  
+   evidence：应用监督学习方法进行基因组分类
+8. [DAGForge: Auditable Causal DAG Authoring with Biomedical Literature](/202607/29/2607.21859v1-dagforge-auditable-causal-dag-authoring-with-biomedical-literature)  
    标签：评分：6.0/10、query:gwas
-   evidence：考虑连锁的突变适应度效应估计方法，可用于精细定位
+   evidence：因果有向无环图构建用于生物医学因果分析
+9. [smartcor: Intelligent Correlation Method Selection for Mixed Variable Types](/202607/29/2607.22285v1-smartcor-intelligent-correlation-method-selection-for-mixed-variable-types)  
+   标签：评分：6.0/10、query:gwas
+   evidence：为混合变量类型自动选择相关方法，可用于GWAS关联检验
+10. [Robust Conformalized Selection with Noisy Responses](/202607/29/2607.22985v1-robust-conformalized-selection-with-noisy-responses)  
+   标签：评分：6.0/10、query:gwas
+   evidence：鲁棒一致化选择用于高质量候选选择，可应用于PRS变异选择
+11. [Distributional Split Criteria for Random Forests: Extensions, Shrinkage, and the Robustness of Mean Splitting](/202607/29/2607.23721v1-distributional-split-criteria-for-random-forests-extensions-shrinkage-and-the-robustness-of-mean-splitting)  
+   标签：评分：6.0/10、query:gwas
+   evidence：随机森林的分布分裂准则，是一种可用于高维数据特征选择的机器学习方法
 
 
 <div class="dpr-home-promo-card">

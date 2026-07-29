@@ -1,0 +1,329 @@
+Title: Causal dictionary learning reveals and validates transcription-factor binding features in genomic language models
+
+URL Source: https://arxiv.org/pdf/2607.19618v1
+
+Published Time: Thu, 23 Jul 2026 00:15:06 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Causal dictionary learning reveals and validates transcription-factor binding features in genomic language models 
+
+Sarwan Ali 11Columbia University Irving Medical Center, New York, USA sa4559@cumc.columbia.edu 
+
+Abstract 
+
+Genomic language models achieve strong performance across regulatory-genomics tasks, yet what these models internally represent remains opaque, and the field lacks a principled procedure for verifying that an apparent “concept” inside a model is real rather than an artifact of sequence composition. We intro-duce a framework that combines sparse dictionary learning with causal intervention to extract, validate, and causally test interpretable features in genomic foundation models. Training top-k sparse autoen-coders on the hidden activations of two architecturally distinct models, Nucleotide Transformer (6-mer tokenization) and DNABERT-2 (byte-pair encoding), we recover thousands of monosemantic features that map to transcription-factor (TF) sequence motifs. We show that the naive validation of such features against position weight matrices is severely confounded by GC composition and repetitive elements, pro-ducing hundreds of spurious “TF features”, and we develop a composition-matched, binding-resolved protocol that removes these confounds. Critically, we move beyond correlation: by ablating individual dictionary directions during the model’s forward pass and measuring the induced shift in the model’s own predictive distribution, we establish that specific features are causally used to represent cell-type-specific TF binding, not merely motif presence. Across three transcription factors (CTCF, GATA1, REST) and both architectures, causally validated binding features emerge reproducibly (7–14 of 15 tested features per condition), while two classes of negative control, scrambled binding labels and randomly selected features, yield no detectable signal. The framework is purely computational, uses only public data, and provides a reusable standard for interpretability claims in genomic deep learning. 
+
+1 Introduction 
+
+DNA language models trained by self-supervision on reference genomes have rapidly become general-purpose tools in regulatory genomics, supporting variant-effect prediction, chromatin-state annotation and regulatory-element discovery [1–6]. Their predictive utility is now well documented, but their interpretabil-ity is not. Unlike supervised models built around designed features [7–9], foundation models distribute information across high-dimensional activations in which individual neurons are polysemantic, responding to many unrelated sequence properties at once [10]. Consequently, it is rarely possible to state what a ge-nomic language model has actually learned, which limits both scientific trust and the use of these models for hypothesis generation about genome regulation [11]. In natural-language processing, sparse autoencoders (SAEs) have emerged as a powerful remedy for pol-ysemanticity: by reconstructing model activations through an over-complete, sparsely active dictionary, they decompose distributed representations into approximately monosemantic features [12–15]. Whether this paradigm transfers to genomic models, and whether the resulting features correspond to bona fide biological 1arXiv:2607.19618v1 [q-bio.GN] 21 Jul 2026 entities, has not been established. Two obstacles stand in the way. First, genomic models differ fundamen-tally in how they tokenize DNA, fixed k-mers, learned byte-pair vocabularies, or single nucleotides, and it is unknown whether dictionary learning behaves consistently across these schemes. Second, and more seri-ously, the genome’s sequence statistics make naive validation treacherous: many transcription-factor motifs are GC-rich, as are CpG islands and the most abundant repetitive elements in the human genome [16, 17], so a feature that merely detects local GC content or an Alu repeat will spuriously appear “enriched” for any GC-rich motif. An interpretability method that does not control for this will systematically over-report success. We address both obstacles and, in doing so, propose a general standard. Our contributions are as follows. (i) We train top-k SAEs on the activations of two genomic language models with different tokenizations and show that monosemantic, motif-aligned features arise robustly in both, with middle layers yielding the most interpretable dictionaries. (ii) We demonstrate quantitatively that position-weight-matrix enrichment, the obvious validation, is dominated by compositional confounds, and we introduce a GC-matched, binding-resolved test that isolates genuine signal. (iii) Most importantly, we develop a causal validation: ablating a single dictionary direction during the forward pass and measuring the Kullback–Leibler shift in the model’s masked-token predictions at bound versus unbound motif sites. This distinguishes features the model uses 
+
+to represent binding from features that merely correlate with it. (iv) We validate the whole framework with stringent negative controls and show cross-architecture, cross-TF reproducibility. The result is a purely computational, fully reproducible procedure, built entirely on public models and data, for making, and disciplining, interpretability claims about genomic deep learning. 
+
+2 Related Work 
+
+Genomic language models. Self-supervised models of DNA have progressed rapidly from early k-mer transformers [18] to large multi-species encoders such as the Nucleotide Transformer [1] and the byte-pair-encoded DNABERT-2 [2], and to long-context architectures including HyenaDNA [4], the state-space model Caduceus [3] and the genome-scale Evo model [5, 19]. These models support competitive variant-effect prediction [6] and regulatory annotation, but recent evaluations question how much regulatory signal their representations actually contain [20], underscoring the need for tools that probe what they encode rather than only how well they predict. Supervised sequence models such as DeepSEA [7], Basenji [8] and Enformer [9] remain the performance reference for binding and expression prediction; our aim is not to compete with them but to interpret the self-supervised models. 
+
+Interpretability of deep models in genomics. Attribution methods such as DeepLIFT [21] and SHAP [22], together with in-silico mutagenesis, are the standard tools for explaining genomic neural networks [11]. These produce per-input importance maps but do not yield a global vocabulary of reusable features, and they inherit the polysemanticity of individual neurons [10]. Our work instead learns an explicit, model-wide dictionary and asks which of its elements the model causally uses. 
+
+Sparse autoencoders and mechanistic interpretability. Sparse dictionary learning on model activations has become a leading approach to extracting monosemantic features from language models [12–14], with the top-k formulation offering a clean sparsity–fidelity trade-off [15]. Validating such features is an open problem: activation patching and causal mediation establish that components are used by a model [23, 24], but apparent feature interpretations can be illusory if not causally grounded [25]. We bring this causal-intervention discipline to genomics, where, uniquely, an external ground truth, experimental ChIP-seq bind-ing, is available, and where sequence-composition confounds make naive validation especially hazardous. 2Transcription-factor binding resources. We ground features against curated motif models from JAS-PAR [26] and HOCOMOCO [27] and against experimental occupancy from ENCODE ChIP-seq [28, 29]. The biology of our test factors, CTCF as a GC-rich insulator [30] whose motifs are frequently embedded in 
+
+Alu repeats [16, 17], is precisely what makes composition control essential. 
+
+3 Methodology 
+
+We formalize the three components of the framework, the sparse dictionary, the composition-matched bind-ing test, and the causal ablation, and then state two propositions that explain why the design isolates binding-specific causal use. The full procedure is summarized in Algorithm 1. 
+
+3.1 Top-k sparse autoencoders 
+
+Let x ∈ Rd denote a (mean-centered, scaled) model activation. A top-k sparse autoencoder [15] encodes x
+
+into a sparse code f ∈ Rm with m = 16 d and decodes it back: 
+
+z = Wenc (x − bpre ), (1) 
+
+f = TopK k
+
+ ReLU (z), (2) ˆx = Wdec f + bpre , (3) where TopK k retains the k largest entries and zeroes the rest, the columns d j of Wdec ∈ Rd×m are constrained to unit norm, and bpre ∈ Rd is a learned pre-bias. The training objective is reconstruction error with an auxiliary term that revives inactive features, 
+
+L = x − ˆx 22
+
+| {z }
+
+> reconstruction
+
++α (x − ˆx) − ˆxaux 22
+
+| {z }
+
+> dead-feature revival
+
+, (4) where ˆ xaux reconstructs the residual using only the top dead features and α = 1/16. The fixed sparsity 
+
+∥f∥0 = k is enforced architecturally by TopK k, avoiding the shrinkage bias of ℓ1 penalties. We initialized dictionary directions from random data activations, which proved essential for keeping the dictionary alive (raising the live fraction from 45% to 93% at fixed reconstruction error). 
+
+3.2 Composition-matched binding test 
+
+For each transcription factor we build three classes of length-matched genomic window: bound (ChIP-seq peak centers containing a strong motif), unbound-motif (strong motif occurrences outside all peaks), and 
+
+background (random windows). A position weight matrix M ∈ RL×4 from JASPAR [26] is converted to a log-odds matrix against a uniform background, and a window is deemed to contain a strong motif if its maximum log-odds score over all offsets exceeds a fixed fraction of the matrix maximum. To remove the compositional confound, the unbound-motif set is GC-matched to the bound set by rejection sampling against the bound GC histogram. For a feature j we max-pool its activation f j over the tokens of each window and test, with a one-sided Mann–Whitney U [31], whether f bound  
+
+> j
+
+> f unbound  
+
+> j
+
+. We summarize effect size by AUC j = U/(nbnu),the probability that a random bound window activates the feature more strongly than a random unbound-motif window. A feature is motif-selective if f unbound  
+
+> j
+
+> f background  
+
+> j
+
+and binding-sensitive if AUC j > 0.55 at Bonferroni-corrected significance; we additionally require |corr ( f j, GC )| < 0.2 for “GC-robust” status. 33.3 Causal feature ablation 
+
+Let hℓ(x) be the hidden state at the SAE’s layer and gℓ→L(·) the remainder of the network mapping that hidden state to output logits over the token vocabulary. For dictionary direction d j with encoded activation 
+
+f j, the ablated hidden state removes the feature’s contribution in the (normalized) SAE space, 
+
+h′
+
+> ℓ
+
+(x) = hℓ(x) − s−1   f j(x) d j
+
+, (5) where s is the activation scale used during SAE training. We then complete the forward pass with the perturbed state and compare the model’s predictive distributions at each token position t via the Kullback– Leibler divergence, 
+
+∆ j(x) = 1
+
+T
+
+> T
+
+# ∑
+
+> t=1
+
+KL 
+
+
+
+pt
+
+ gℓ→L(hℓ) pt
+
+ gℓ→L(h′
+
+> ℓ
+
+)
+
+, (6) where pt (·) = softmax of the logits at position t and T is the number of tokens. The binding-specific causal effect of feature j is the one-sided Mann–Whitney comparison of {∆ j(x)} between bound and unbound-motif windows, summarized again by an AUC. A feature passes if this AUC > 0.55 at Bonferroni-corrected significance. 
+
+Algorithm 1 Causal dictionary learning and validation  
+
+> 1:
+
+Input: genomic model with layer ℓ; windows; ChIP-seq peaks; motif PWMs  
+
+> 2:
+
+Extract per-token activations {x} at layer ℓ via forward hooks  
+
+> 3:
+
+Train top-k SAE on {x} by minimizing Eq. (4) ▷ Eqs. (1)–(3)  
+
+> 4:
+
+Build bound / unbound-motif (GC-matched) / background window sets  
+
+> 5:
+
+for each live feature j do  
+
+> 6:
+
+compute AUC j (bound vs. unbound) and corr ( f j, GC ) 
+
+> 7:
+
+mark j binding-sensitive if AUC j > 0.55 (Bonferroni) and |corr | < 0.2 
+
+> 8:
+
+end for  
+
+> 9:
+
+for each binding-sensitive feature j (and random controls) do  
+
+> 10:
+
+ablate d j (Eq. (5)); measure ∆ j (Eq. (6)) at bound vs. unbound  
+
+> 11:
+
+mark j causally validated if binding-specific AUC > 0.55 (Bonferroni)  
+
+> 12:
+
+end for  
+
+> 13:
+
+Output: causally validated binding features per factor and model 
+
+3.4 Theoretical analysis 
+
+We formalize why the causal ablation test isolates binding-specific use, and why the composition-matched design is necessary. Throughout, let B ∈ { 0, 1} indicate ChIP-seq binding, let S denote the observable sequence of a window, and let f j(S) be feature j’s (max-pooled) activation. 
+
+Proposition 1 (Spurious enrichment from composition) . Let ρ(S) ∈ [0, 1] be a compositional summary of S (e.g. GC fraction), and suppose a motif log-odds score σ (S) satisfies E[σ (S) | ρ(S) = r] strictly increasing in r. If a feature is a pure composition detector, f j(S) = φ (ρ(S)) for some increasing φ , then in an unmatched comparison where the high-activation set has higher mean composition than background, the feature’s top windows are enriched for high σ , i.e. 
+
+Eσ (S) f j(S) large  > Eσ (S),
+
+even though f j ⊥ B | ρ, i.e. the feature carries no information about binding beyond composition. 
+
+4Proof. Since f j = φ (ρ) with φ increasing, the event { f j large } equals {ρ > r0} for a threshold r0 above the marginal median of ρ. By the monotonicity of E[σ | ρ = r] in r and the law of total expectation, 
+
+E[σ | ρ > r0] =  
+
+> Z1
+> r0
+
+E[σ | ρ = r] dF ρ|ρ>r0 (r) > 
+
+> Z10
+
+E[σ | ρ = r] dF ρ (r) = E[σ ],
+
+because conditioning on ρ > r0 stochastically increases ρ and E[σ | ρ = r] is increasing. The independence 
+
+f j ⊥ B | ρ holds by construction since f j is a deterministic function of ρ alone. Hence the feature shows motif enrichment while being conditionally uninformative about binding. Proposition 1 formalizes the empirical failure of naive enrichment and motivates comparing bound against GC-matched unbound windows: matching equalizes the marginal law of ρ across groups, so a pure composition detector satisfies E[ f j | B=1] = E[ f j | B=0] in the matched population and its binding-sensitivity AUC → 1/2. The composition-matched test is therefore calibrated against this confound. 
+
+Definition 1 (Causal binding use) . Feature j is causally used for binding if its ablation changes the model’s output distribution more on bound than on unbound-motif inputs, i.e. E[∆ j | B = 1] > E[∆ j | B = 0] on motif-matched inputs. 
+
+Proposition 2 (Separation of importance from binding-specificity) . Let the contribution removed by abla-tion be c j(S) = s−1 f j(S)d j and write the post-layer map’s local sensitivity as J (S) = ∂ gℓ→L/∂ hℓ. To first order, 
+
+∆ j(S) ≈ 12 c j(S)⊤G(S) c j(S), (7) 
+
+where G (S) = J(S)⊤HKL J(S) ⪰ 0 and H KL is the Fisher information of the softmax output. Then a feature with large average effect E[∆ j] but f j ⊥ B (motif-only) has E[∆ j | B = 1] = E[∆ j | B = 0] on motif-matched inputs, hence binding-specificity AUC = 1/2; whereas a feature whose activation is elevated on bound inputs, E[ f j | B = 1] > E[ f j | B = 0], yields E[∆ j | B = 1] > E[∆ j | B = 0] whenever G (S) does not anti-correlate with binding. Proof. Equation (7) is the second-order Taylor expansion of the KL divergence between pt (g(hℓ)) and 
+
+pt (g(hℓ − c j)) about c j = 0; the first-order term vanishes because the KL divergence and its gradient are zero at c j = 0, and the quadratic form uses the Fisher information HKL as the Hessian of the KL divergence at the unperturbed distribution, propagated through J(S) by the chain rule. Taking c j(S) = s−1 f j(S)d j gives 
+
+∆ j(S) ≈ 12 s−2 f j(S)2 d⊤ 
+
+> j
+
+G(S)d j. Write γ(S) = 12 s−2d⊤ 
+
+> j
+
+G(S)d j ≥ 0. For a motif-only feature, f j ⊥ B on motif-matched inputs, and if the geometric factor γ does not anti-correlate with binding (in particular if it is independent of B, true to first order when ablation does not systematically interact with binding), then 
+
+E[ f 2 
+
+> j
+
+γ | B = 1] = E[ f 2 
+
+> j
+
+γ | B = 0], giving equal conditional effects and AUC = 1/2. For a binding-sensitive feature, E[ f 2 
+
+> j
+
+| B = 1] > E[ f 2 
+
+> j
+
+| B = 0] since f j ≥ 0 and its mean is larger on bound inputs; multiplying by the nonnegative, binding-independent γ preserves the inequality, so E[∆ j | B = 1] > E[∆ j | B = 0] and the binding-specificity AUC > 1/2. Proposition 2 predicts a counterintuitive phenomenon we observe empirically (Section 5): a motif-only feature can have a far larger absolute ablation effect than a binding feature, yet a binding-specificity AUC at chance, because absolute effect is governed by E[ f 2 
+
+> j
+
+γ] while specificity is governed by the difference of this quantity across binding states. The causal test reads the latter. 
+
+4 Experimental Setup 
+
+Models. We used the publicly released checkpoints of Nucleotide Transformer (NT) v2 (500M parameters, 6-mer tokenization, 24 transformer blocks) [1] and DNABERT-2 (117M parameters, byte-pair encoding, 12 blocks) [2]. Both expose a masked-language-model head, enabling the logit-level causal readout of Eq. (6). 5Data. The human reference genome (hg38), ENCODE SCREEN candidate cis-regulatory elements [29], JASPAR 2024 CORE vertebrate motifs [26], and ENCODE ChIP-seq IDR peak sets for CTCF (GM12878), GATA1 (K562) and REST (K562) were obtained from their public repositories. For activation extraction we sampled 5 × 10 4 cis-regulatory and 5 × 10 4 random 200 bp windows, retaining only windows with unam-biguous nucleotides, yielding 3 .6–4 .2 × 10 6 token activations per layer. Because the two models tokenize DNA differently, NT into non-overlapping 6-mers, DNABERT-2 into variable-length byte-pair tokens, we recorded, for every token, the exact base-pair span it covers, mapping all features to genomic coordinates regardless of tokenization. Special tokens were excluded from all analyses. 
+
+Training and layer selection. For each model we sampled four evenly spaced layers and trained one top-
+
+k SAE per layer (dictionary size 16 × the hidden width; k = 32) for one epoch with Adam (learning rate 4 × 10 −4, batch size 4096). Layer selection used reconstruction fidelity and live-feature fraction (Section 5, Fig. 1). 
+
+Binding sets and controls. Per-factor window sets were built as in Methodology, with the unbound-motif set GC-matched to bound. Two negative controls were processed by the identical pipeline: SCRAMBLE 
+
+(random windows with random bound/unbound labels) and GATA 1-SCRAM (real GATA1 motif windows with randomized labels, so that sequence and motif content are unchanged and only the binding label is destroyed). Population causal analyses ablate the top 15 binding-sensitive, GC-robust features and 15 ran-domly selected live features per condition. 
+
+Statistics. All P-values use the one-sided Mann–Whitney U test [31] and are Bonferroni-corrected for the number of features tested; significance thresholds are stated with each analysis. 
+
+5 Results 
+
+5.1 Sparse dictionaries are monosemantic and layer-dependent 
+
+The autoencoders reconstructed activations faithfully while remaining sparse: the best dictionaries explained 74–76% of activation variance with only 32 of ∼12,000–16,000 features active per token. Reconstruction quality and the fraction of “live” (ever-active) features both peaked at intermediate depth (Fig. 1), mirroring observations in language models [13]: NT layer 14 (50% depth) and DNABERT-2 layer 6 (50% depth) pro-vided the best balance of fidelity and dictionary utilization and were used in all subsequent analyses. Both tokenization schemes therefore admit high-quality sparse dictionaries, despite their very different vocabular-ies. 
+
+5.2 Naive motif enrichment is confounded by sequence composition 
+
+To ask whether dictionary features correspond to regulatory grammar, we first applied the obvious test: for each feature, we collected the genomic windows on which it fired most strongly and scored them against transcription-factor position weight matrices [26]. Using CTCF, a ubiquitous insulator with a long, information-rich motif [30], this naive procedure flagged 440 of 6 ,576 tested features as significantly CTCF-enriched. Inspection revealed this to be largely an artifact. The single most “CTCF-enriched” feature fired almost exclusively on near-identical copies of the Alu consensus, the most abundant repetitive element in the human genome [16], which scores above background on the GC-rich CTCF matrix without representing CTCF binding; other top features detected generic GC-rich or CpG-island sequence. Because CTCF, CpG islands and Alu elements are all GC-rich, a feature that merely tracks base composition is spuriously “enriched” for 6Figure 1. Sparse-autoencoder reconstruction across model depth. Variance explained (solid) and fraction of live dictionary features (dashed) for Nucleotide Transformer (blue) and DNABERT-2 (red) as a function of relative layer depth. Both architectures attain their best trade-off of reconstruction fidelity and feature utilization at intermediate depth (shaded), motivating the use of NT layer 14 and DNABERT-2 layer 6. 
+
+CTCF. Comparing each feature’s motif scores against a GC-matched background rather than an unmatched one collapsed the apparent enrichment of these features toward zero, identifying them as compositional, as predicted by Proposition 1. The count of motif-selective features for each factor after composition control is summarized in Fig. 2. 
+
+Figure 2. Motif-selective features per transcription factor after composition control, for NT (blue) and DNABERT-2 (red). CTCF and REST, long, information-rich motifs, yield many motif-selective features; GATA1, with a short 
+
+WGATAR motif, yields almost none (3 and 0, respectively), foreshadowing that its binding is encoded through context rather than the canonical motif. 
+
+5.3 A composition-matched, binding-resolved test isolates genuine signal 
+
+The deeper question is whether a feature encodes binding , cell-type-specific occupancy measured by ChIP-seq, rather than mere motif presence. Testing whether each feature’s activation is higher on bound than on GC-matched unbound-motif windows, NT layer 14 contained 265 motif-selective CTCF features but 7only a small number that remained binding-sensitive after GC control; the cleanest, feature 8087, exhib-ited a monotonic activation gradient from background to unbound-motif to bound windows (Fig. 3a) with negligible GC correlation. A stringent, composition-aware test therefore recovers a specific, interpretable, binding-associated feature where the naive test had returned hundreds of confounded ones. 
+
+5.4 Feature ablation establishes causal use of binding representations 
+
+Correlation between activation and binding does not establish that the model uses a feature to represent binding. We therefore ablated single dictionary directions during the forward pass (Eq. (5)) and measured the Kullback–Leibler shift in masked-token predictions (Eq. (6)). For the exemplar CTCF feature, ablation shifted NT’s predictions significantly more at bound than at unbound sites (AUC = 0.63; P = 1.7 × 10 −18 ). Two controls confirmed specificity (Fig. 3b). Ablating a random feature produced no binding-specific effect (AUC = 0.51). More tellingly, ablating a motif-selective but not binding-sensitive feature produced a large overall prediction shift, an order of magnitude larger in absolute terms than the binding feature, yet no bound-versus-unbound differential (AUC = 0.51), exactly the dissociation predicted by Proposition 2. The causal test thus distinguishes features that matter to the model in general from features that matter specifically for binding , which a magnitude-based analysis cannot.          
+
+> Figure 3. A causally validated CTCF binding feature. (a) Mean activation of two exemplar binding features (DNABERT-2 feature 857, red; NT feature 8087, blue) across background, unbound-motif and ChIP-seq-bound win-dows; activation increases monotonically with binding, not merely with motif presence. (b) Causal effect of ablating each of three NT features, measured as the prediction-distribution shift (Kullback–Leibler divergence) at bound (blue) versus unbound-motif (grey) sites. The binding feature shows a binding-specific effect (AUC =0.63); a random feature shows none; a motif-only feature shows a large overall effect but no binding specificity (AUC =0.51), demonstrating that the test isolates binding-specific causal use rather than general feature importance.
+
+5.5 Causal binding features are reproducible across factors and architectures 
+
+We next asked whether causal binding features are a population phenomenon and whether the framework generalizes. For each transcription factor and model we ablated the top 15 binding-sensitive, GC-robust features and 15 random features. Across three factors of distinct structural class, CTCF (insulator), GATA1 (lineage-specific activator) and REST (repressor), and both architectures, a substantial fraction of binding features showed significant binding-specific causal effects, whereas random-feature controls showed essen-tially none (Fig. 4, Fig. 5, Table 1). The effect was, if anything, stronger in DNABERT-2 than in NT, 8indicating that byte-pair tokenization does not impede, and may sharpen, the emergence of binding repre-sentations. A biologically informative subtlety emerged for GATA1. Its binding features were only weakly motif-selective in the correlational test (Fig. 2), which we had initially read as weak representation. The causal test overturned this: GATA1 binding features were robustly causal in both models (9 /15 and 13 /15; Ta-ble 1), indicating that the models encode GATA1 occupancy through contextual sequence features beyond the canonical WGATAR motif, signal that the causal test detects but motif-based correlation misses. This illustrates the added value of intervention over association.           
+
+> Figure 4. Causal validation matrix. Number of features (of 15 tested) with a significant binding-specific causal effect (Bonferroni-corrected P<1.7×10 −3and AUC >0.55), for each transcription factor (rows) and model (columns). Random-feature controls yielded 0 /15 in every cell. The two bottom rows are negative controls in which binding labels were scrambled; these produced no binding-sensitive features and hence nothing to test (“0 feat.”), confirming that the framework reports a true null when no real binding signal is present.
+
+5.6 Negative controls confirm that the framework reports true nulls 
+
+A validation method is only trustworthy if it can return a negative. In both negative controls, SCRAMBLE 
+
+(random windows, random labels) and the sharper GATA 1-SCRAM (real GATA1 motif windows, randomized labels), and in both architectures, the binding-sensitivity test identified zero qualifying features, leaving nothing for the causal stage to test (Table 1, Fig. 4, bottom rows). The framework thus manufactures no signal from structured-but-unlabeled data: the positive results for real transcription factors reflect genuine binding information, not artifacts of window construction or feature ablation. 
+
+6 Discussion 
+
+Three findings have implications beyond our specific models. First, the dominant obstacle to interpreting ge-nomic models is not extracting features but validating them: position-weight-matrix enrichment, the field’s default, is confounded by GC content and repetitive elements to the point of returning hundreds of spurious “TF features”, a failure we both observed empirically and proved is guaranteed under mild conditions (Propo-sition 1). Composition-matched, binding-resolved testing is therefore not optional but necessary. Second, association and causation diverge in an informative way. The GATA1 case exhibits a factor whose binding is 9Figure 5. Causal effect sizes separate binding features from controls. Distribution of causal-effect AUC (bound versus unbound motif) for the top 15 binding features of each transcription factor and for pooled random-feature controls, in NT (left) and DNABERT-2 (right). Target features lie above the significance threshold (AUC = 0.55, red dotted) while random controls cluster at chance (AUC = 0.5, grey dashed). Points are individual features; boxes show median and interquartile range. 
+
+Table 1. Causally validated binding features across transcription factors, models and controls. Entries give the number of features (of 15 tested) with a significant binding-specific causal effect (Bonferroni P < 1.7 × 10 −3,AUC > 0.55); random-feature controls were 0 /15 throughout. Negative controls (scrambled labels) yielded no binding-sensitive features to test. “Motif-sel.” gives the number of motif-selective features identified by the composition-matched test. Dashes ‘—’ denote not-applicable cells: the causal test is undefined for negative controls (no binding-sensitive features exist to test), and motif-selectivity is undefined for randomly chosen features. 
+
+NT (6-mer, layer 14) DNABERT-2 (BPE, layer 6) Condition Causal / 15 Motif-sel. Causal / 15 Motif-sel. CTCF (insulator) 7 265 10 88 GATA1 (activator) 9 3 13 0REST (repressor) 7 367 14 135  
+
+> SCRAMBLE
+
+(neg.) — 0 — 0
+
+> GATA
+
+1-SCRAM (neg.) — 0 — 0Random-feature control 0 — 0 —
+
+causally encoded yet poorly captured by motif correlation, because the model represents occupancy through contextual sequence beyond the canonical motif; only intervention reveals this, and Proposition 2 explains why magnitude-based attribution would have missed it. Third, the emergence of binding features in a model trained purely on reference sequence, with no cell-type labels, indicates that self-supervised genomic mod-els internalize determinants of cell-type-specific occupancy latent in sequence context, an observation that invites systematic study. Our analysis has limitations that also define natural extensions. We focused on two masked-language-model encoders; autoregressive and state-space genomic models [3, 5, 19] expose different readouts and merit dedicated treatment. We examined three well-characterized factors; the framework scales directly to the hundreds of factors with ENCODE ChIP-seq, enabling a systematic atlas of which regulatory programs genomic models encode and use. Finally, the same causal machinery could be turned from validation to 10 steering, editing binding features to test sequence-design hypotheses in silico. 
+
+7 Conclusion 
+
+We presented a purely computational framework that extracts interpretable features from genomic language models, validates them against experimental binding data while controlling for the compositional confounds that plague naive analyses, and tests by direct intervention whether the model actually uses each feature to represent binding. The framework recovers reproducible, causally validated transcription-factor binding fea-tures across two architectures with different tokenizations and across three transcription factors of distinct regulatory function, while returning clean nulls under two classes of negative control. By coupling sparse dictionary learning to causal intervention and disciplined controls, it offers the regulatory-genomics commu-nity a reusable standard for interpretability claims: a feature is real not when it correlates with a motif, but when the model demonstrably uses it. 
+
+References 
+
+[1] Hugo Dalla-Torre, Liam Gonzalez, Javier Mendoza-Revilla, Nicolas Lopez Carranza, Adam Henryk Grzywaczewski, Francesco Oteri, Christian Dallago, Evan Trop, Bernardo P De Almeida, Hassan Sirelkhatim, et al. Nucleotide transformer: building and evaluating robust foundation models for human genomics. Nature Methods , 22(2):287–297, 2025. [2] Zhihan Zhou, Yanrong Ji, Weijian Li, Pratik Dutta, Ramana Davuluri, and Han Liu. Dnabert-2: Ef-ficient foundation model and benchmark for multi-species genomes. In International Conference on Learning Representations , volume 2024, pages 41642–41665, 2024. [3] Yair Schiff, Chia-Hsiang Kao, Aaron Gokaslan, Tri Dao, Albert Gu, and Volodymyr Kuleshov. Ca-duceus: Bi-directional equivariant long-range dna sequence modeling. Proceedings of machine learn-ing research , 235:43632, 2024. [4] Eric Nguyen, Michael Poli, Marjan Faizi, Armin Thomas, Michael Wornow, Callum Birch-Sykes, Ste-fano Massaroli, Aman Patel, Clayton Rabideau, Yoshua Bengio, et al. Hyenadna: Long-range genomic sequence modeling at single nucleotide resolution. Advances in neural information processing systems ,36:43177–43201, 2023. [5] Eric Nguyen, Michael Poli, Matthew G Durrant, Brian Kang, Dhruva Katrekar, David B Li, Liam J Bartie, Armin W Thomas, Samuel H King, Garyk Brixi, et al. Sequence modeling and design from molecular to genome scale with evo. Science , 386(6723):eado9336, 2024. [6] Gonzalo Benegas, Sanjit Singh Batra, and Yun S Song. Dna language models are powerful predictors of genome-wide variant effects. Proceedings of the National Academy of Sciences , 120(44):e2311219120, 2023. [7] Jian Zhou and Olga G Troyanskaya. Predicting effects of noncoding variants with deep learning–based sequence model. Nature methods , 12(10):931–934, 2015. [8] David R Kelley, Yakir A Reshef, Maxwell Bileschi, David Belanger, Cory Y McLean, and Jasper Snoek. Sequential regulatory activity prediction across chromosomes with convolutional neural net-works. Genome research , 28(5):739, 2018. 11 [9] Žiga Avsec, Vikram Agarwal, Daniel Visentin, Joseph R Ledsam, Agnieszka Grabska-Barwinska, Kyle R Taylor, Yannis Assael, John Jumper, Pushmeet Kohli, and David R Kelley. Effective gene expression prediction from sequence by integrating long-range interactions. Nature methods , 18(10): 1196–1203, 2021. [10] Nelson Elhage, Tristan Hume, Catherine Olsson, Nicholas Schiefer, Tom Henighan, Shauna Kravec, Zac Hatfield-Dodds, Robert Lasenby, Dawn Drain, Carol Chen, et al. Toy models of superposition. 
+
+arXiv preprint arXiv:2209.10652 , 2022. [11] Gherman Novakovsky, Nick Dexter, Maxwell W Libbrecht, Wyeth W Wasserman, and Sara Mostafavi. Obtaining genetics insights from deep learning via explainable artificial intelligence. Nature Reviews Genetics , 24(2):125–137, 2023. [12] Hoagy Cunningham, Aidan Ewart, Logan Riggs, Robert Huben, and Lee Sharkey. Sparse autoencoders find highly interpretable features in language models. arXiv preprint arXiv:2309.08600 , 2023. [13] Trenton Bricken, Adly Templeton, Joshua Batson, Brian Chen, Adam Jermyn, Tom Conerly, Nick Turner, Cem Anil, Carson Denison, Amanda Askell, Robert Lasenby, Yifan Wu, Shauna Kravec, Nicholas Schiefer, Tim Maxwell, Nicholas Joseph, Zac Hatfield-Dodds, Alex Tamkin, Karina Nguyen, Brayden McLean, Josiah E. Burke, Tristan Hume, Shan Carter, Tom Henighan, and Chris Olah. Towards monosemanticity: Decomposing language models with dictionary learn-ing. Transformer Circuits Thread , 2023. URL https://transformer-circuits.pub/2023/ monosemantic-features/index.html .[14] Adly Templeton, Tom Conerly, Jonathan Marcus, Jack Lindsey, Trenton Bricken, Brian Chen, Adam Pearce, Craig Citro, Emmanuel Ameisen, Andy Jones, et al. Scaling monosemanticity: Extracting interpretable features from Claude 3 Sonnet. Transformer Circuits Thread , 2024. URL https:// transformer-circuits.pub/2024/scaling-monosemanticity/index.html .[15] Leo Gao, Tom Dupre la Tour, Henk Tillman, Gabriel Goh, Rajan Troll, Alec Radford, Ilya Sutskever, Jan Leike, and Jeffrey Wu. Scaling and evaluating sparse autoencoders. In International Conference on Learning Representations , volume 2025, pages 26721–26754, 2025. [16] Prescott Deininger. Alu elements: know the sines. Genome biology , 12(12):236, 2011. [17] Frank W Schmitges, Ernest Radovani, Hamed S Najafabadi, Marjan Barazandeh, Laura F Campitelli, Yimeng Yin, Arttu Jolma, Guoqing Zhong, Hongbo Guo, Tharsan Kanagalingam, et al. Multiparameter functional diversity of human c2h2 zinc finger proteins. Genome research , 26(12):1742, 2016. [18] Yanrong Ji, Zhihan Zhou, Han Liu, and Ramana V Davuluri. Dnabert: pre-trained bidirectional en-coder representations from transformers model for dna-language in genome. Bioinformatics , 37(15): 2112–2120, 2021. [19] Albert Gu and Tri Dao. Mamba: Linear-time sequence modeling with selective state spaces. arXiv preprint arXiv:2312.00752 , 2023. [20] Ziqi Tang, Nirali Somia, Yiyang Yu, and Peter K Koo. Evaluating the representational power of pre-trained dna language models for regulatory genomics. Genome Biology , 26(1):203, 2025. [21] Avanti Shrikumar, Peyton Greenside, and Anshul Kundaje. Learning important features through prop-agating activation differences. In International conference on machine learning , pages 3145–3153. PMlR, 2017. 12 [22] Scott M Lundberg and Su-In Lee. A unified approach to interpreting model predictions. Advances in neural information processing systems , 30, 2017. [23] Jesse Vig, Sebastian Gehrmann, Yonatan Belinkov, Sharon Qian, Daniel Nevo, Yaron Singer, and Stu-art Shieber. Investigating gender bias in language models using causal mediation analysis. Advances in neural information processing systems , 33:12388–12401, 2020. [24] Kevin Meng, David Bau, Alex Andonian, and Yonatan Belinkov. Locating and editing factual associa-tions in gpt. Advances in neural information processing systems , 35:17359–17372, 2022. [25] Aleksandar Makelov, Georg Lange, and Neel Nanda. Is this the subspace you are looking for? an interpretability illusion for subspace activation patching. arXiv preprint arXiv:2311.17030 , 2023. [26] Ieva Rauluseviciute, Rafael Riudavets-Puig, Romain Blanc-Mathieu, Jaime A Castro-Mondragon, Katalin Ferenc, Vipin Kumar, Roza Berhanu Lemma, Jérémy Lucas, Jeanne Chèneby, Damir Barana-sic, et al. Jaspar 2024: 20th anniversary of the open-access database of transcription factor binding profiles. Nucleic acids research , 52(D1):D174–D182, 2024. [27] Ilya E Vorontsov, Irina A Eliseeva, Arsenii Zinkevich, Mikhail Nikonov, Sergey Abramov, Alexandr Boytsov, Vasily Kamenets, Alexandra Kasianova, Semyon Kolmykov, Ivan S Yevshin, et al. Hocomoco in 2024: a rebuild of the curated collection of binding models for human and mouse transcription factors. Nucleic Acids Research , 52(D1):D154–D163, 2024. [28] ENCODE Project Consortium et al. An integrated encyclopedia of dna elements in the human genome. 
+
+Nature , 489(7414):57, 2012. [29] Jill E Moore, Michael J Purcaro, Henry E Pratt, Charles B Epstein, Noam Shoresh, Jessika Adrian, Trupti Kawli, Carrie A Davis, Alexander Dobin, et al. Expanded encyclopaedias of dna elements in the human and mouse genomes. Nature , 583(7818):699–710, 2020. [30] Chin-Tong Ong and Victor G Corces. Ctcf: an architectural protein bridging genome topology and function. Nature Reviews Genetics , 15(4):234–246, 2014. [31] Henry B Mann and Donald R Whitney. On a test of whether one of two random variables is stochasti-cally larger than the other. The annals of mathematical statistics , pages 50–60, 1947. 13

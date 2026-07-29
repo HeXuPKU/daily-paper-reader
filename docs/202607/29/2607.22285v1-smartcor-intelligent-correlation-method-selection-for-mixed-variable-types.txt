@@ -1,0 +1,1027 @@
+Title: smartcor: Intelligent Correlation Method Selection for Mixed Variable Types
+
+URL Source: https://arxiv.org/pdf/2607.22285v1
+
+Published Time: Mon, 27 Jul 2026 00:45:50 GMT
+
+Number of Pages: 38
+
+Markdown Content:
+# smartcor : Intelligent Correlation Method Selection for Mixed Variable Types 
+
+## M. Harshvardhan American University of Sharjah 
+
+## harshvardhan@aus.edu 
+
+## Pritam Ranjan Indian Institute of Management Indore 
+
+## pritamr@iimidr.ac.in 
+
+Abstract 
+
+Pearson correlation is the default measure of association in most statistical software, yet it is only appropriate for pairs of continuous variables with a linear relationship. When variables are binary, ordinal, or categorical, specialized methods (e.g., point-biserial, polychoric, tetrachoric, and Cramér’s V ) may be more appropriate, but practitioners rarely know which to select. The smartcor 
+
+package for R (and its companion pysmartcor package for Python ) automatically detects variable types, selects the statistically appropriate correlation method for each pair, and explains its reason-ing. The package supports 14 correlation and association methods covering all 10 variable-type pair combinations, and distinguishes true correlation (for ordinal and continuous pairs) from statistical association (for nominal categorical pairs). Monte Carlo simulations validate the selection logic, and a case study with General Social Survey data demonstrates substantive differences between naive and type-aware correlation analysis. 
+
+Keywords: correlation coefficient, summary statistic, discrete data, Likert scale, software. 
+
+# 1 Introduction 
+
+Correlation table is among the most fundamental summary statistic computed in applied statistics. Whether assessing the relationship between income and education, treatment assignment and health outcomes, or customer satisfaction and retention, researchers routinely compute correlation coefficients as a first step in exploratory data analysis. Yet in practice, the overwhelming majority of applied work defaults to Pearson correlation regardless of variable type. A large-scale review of more than 18,000 psychology articles found that Pearson correlation was the single most common measure of association, used in more than twice as many studies as the next alternative, Spearman’s rank correlation (De Winter et al., 2016). Pearson’s dominance reflects not a considered methodological choice but a software default: 
+
+cor() in R (R Core Team, 2025), numpy.corrcoef() in Python , and their equivalents in SPSS, Stata, and SAS, all return Pearson correlation by default — even though the method proposed by Pearson (1895) assumes continuous variables with a linear relationship. Scalar variables in real datasets come in five fundamental types: continuous, binary, ordinal, count, and categorical. A continuous variable can take any real value in an interval; temperature, air pressure, and fuel efficiency are typical examples. A binary variable takes only two values, such as Yes/No or Pass/Fail. An ordinal variable carries an inherent ordering but takes only a few discrete labels, and these labels often serve as indicators of an unobserved latent continuous variable; Likert scales are the canonical example. A count variable takes non-negative integer values {0, 1, 2, 3, . . . } and, unlike ordinal variables, arises from counting rather than ranking, and typically does not have an upper bound. Examples include the number of interviews a candidate attends or phone calls received per hour. From a correlation standpoint, all count variables are treated as continuous variables and thus not discussed separately at many places in this paper. Finally, a categorical variable takes unordered class labels with no inherent ranking, such as country of origin, brand name, or product category. Thus, the total number of variable-type pairs (unordered pairs among continuous, binary, ordinal and categorical) is equal to 1arXiv:2607.22285v1 [stat.ME] 24 Jul 2026 (42
+
+) + 4 = 10 . Correlation or association can be computed for all ten pairwise combinations of these types. As we detail in Section 2, Pearson correlation formula is correct or equivalent only for three of these ten variable-type combinations. Pairings among continuous, binary, ordinal, and count variables yield correlation coefficients bounded by −1 ≤ r ≤ 1, though the specific estimator differs by pairing. On the other hand, because categorical variables carry no ordering, their relationship with any other type is measured as association on a scale of 0 ≤ a ≤ 1. The available options are detailed in Table 1 and discussed later in this paper. Table 1: Correlation and association measures supported by smartcor , organized by variable-type pair. Continuous Binary Categorical Ordinal Continuous Pearson Point-biserial Cramér’s V ∗† Polyserial Spearman Spearman Kendall’s τ Kendall’s τ
+
+Binary Phi ( ϕ) Cramér’s V † Rank-biserial Tetrachoric Yule’s Q
+
+Categorical Cramér’s V † Cramér’s V †
+
+Theil’s U †
+
+Tschuprow’s T †
+
+Ordinal Polychoric Kendall’s τ
+
+Kruskal’s γ
+
+> ∗Continuous variable binned into quintiles.
+> †Association measure, not correlation (see text).
+
+A major source of error in social science research is the failure to match the correlation measure to the variables’ underlying measurement type (De Winter et al., 2016). Our mini-study (Section 2.6) shows the scale of the problem: Pearson’s coefficient accounts for 92.3% of the correlations reported in economics papers in leading journals. Yet Pearson is defensible only for the continuous-continuous, continuous-binary, and binary-binary cases; in the latter two it reduces algebraically to the point-biserial 
+
+and phi coefficients, as we prove in the Appendix . For every other pairing it returns a number without a meaningful interpretation. The recurring version of this error is treating an ordinal or count variable as continuous, since discreteness is easily mistaken for continuity, and doing so can distort estimates and support misleading conclusions. Using Pearson correlation for ordinal variables actually is the most common error in social science research, as evidenced from our mini-study in Section 2.6. In reality, what practitioners often lack is clear guidance on pairing the measure to the data, which smartcor supplies automatically. Thus, using the wrong method leads to three categories of errors: 1. Attenuation. When continuous constructs are observed through ordinal proxies such as Likert scales, Pearson correlation systematically underestimates the true association. Our simulations (Section 2.3) show that with five ordinal categories and true ρ = 0 .6, Pearson correlation underesti-mates ρ by approximately 0.05 (a relative bias of about −9% ), while polychoric correlation recovers the true value with near-zero bias. 2. Meaningless results. Applying Pearson correlation to nominal variables (religion, region, brand name) produces numbers without meaningful interpretation, since the numeric codes are arbitrary. For such pairs, association measures like Cramér’s V (Cramér, 1946) can be used, and standard correlation measures do not work. 3. Untested assumptions. Polychoric and tetrachoric correlations recover latent associations be-tween ordinal pairs but assume underlying bivariate normality (Poon and Lee, 1987; Drasgow, 1986). 2When this assumption is violated (i.e., when the latent distribution is skewed or heavy-tailed), these estimators exhibit positive bias. Practitioners rarely test or acknowledge this assumption. These errors are compounded by a fragmented software landscape. Computing appropriate corre-lations for a mixed-type dataset in R currently requires combining functions from multiple packages: 
+
+cor() from stats for Pearson, Spearman, and Kendall; polychor() and polyserial() from polycor 
+
+(Fox, 2022) for latent-variable methods; tetrachoric() from psych (Revelle, 2024) for binary pairs; and manual contingency-table calculations for Cramér’s V , Theil’s U , and related association measures, as they didn’t have an immediate built-in function in R/Python . Closest to our work is the correlation 
+
+package (Makowski et al., 2020) which provides a unified interface but does not auto-detect all four vari-able types, does not cover all 10 type-pair combinations, and does not explain its method choices. As we stated earlier, we distinguish correlation (when both variables are continuous , binary , ordinal or count )from association (when at least one variable is categorical ) between a pair of variables; existing software rarely makes this distinction explicit. The smartcor package for R and Python addresses this gap. 1 Given any pair of variables or a full data frame of mixed types, smartcor detects each variable’s type (continuous, binary, ordinal, count, or categorical) using a configurable heuristic; selects the statistically appropriate method from a library of 14 correlation and association measures, with selection logic grounded in the simulation evidence presented in Section 2; tests for latent normality assumption between two ordinal variables to pick most suitable method, and explains its reasoning through a human-readable rationale field. Users retain full control: any automatic choice can be overridden by specifying a method explicitly. A companion 
+
+Python package with an identical API is described in Section 6. The remainder of this paper is organized as follows. Section 2 presents the statistical background: when method choice matters, when Pearson correlation suffices, and how attenuation and violated nor-mality assumptions affect estimates. Section 3 describes the smartcor R package, including its design, type detection, method selection, and core functions. Section 4 demonstrates the package on General Social Survey data. Section 5 compares smartcor with existing software. Section 6 describes the Python 
+
+companion package. Section 7 concludes with limitations and future directions. 
+
+# 2 When does the choice of correlation method matter? 
+
+Correlation measures the strength and direction of statistical dependence between two random variables. Its value typically ranges between −1 and +1 , with 0 indicating no association. The appropriate measure depends on the types of variables being correlated. Previously presented Table 1 summarizes the 14 different correlation methods supported by smartcor , organized by variable-type pair. An important distinction underlines Table 1: the difference between correlation and association . Corre-lation quantifies the strength and direction of a monotonic or linear relationship between two variables. It requires that both variables possess at least an ordinal measurement scale—that is, their values must have a meaningful ordering (continuous, count, binary, or ordinal). A Pearson coefficient of r = −0.7 tells us that higher values of one variable have strong chance to pair-up with lower values of the other, and the sign carries directional information. All correlation methods in Table 1 without a dagger ( †) symbol produce signed values in [−1, +1] .
+
+Association , by contrast, measures statistical dependence between variables whose levels have no inherent ordering. When a variable is categorical (nominal)—religion, region, treatment group—the numeric codes are arbitrary, and neither direction nor monotonicity is defined. Some binary variables may be categorical: when a scalar variable with two (and only two) unique values exists, it is a binary categorical variable and must use an association measure instead of correlation measures. Measures such as Cramér’s V , Theil’s U , and Tschuprow’s T test a different question: are the two variables independent, or does knowing the level of one reduce uncertainty about the other? These measures are bounded between 0 (complete independence) and 1 (perfect association), have no sign, and cannot be interpreted as directional relationships. A Cramér’s V of 0.3 means the variables are moderately dependent, but it        
+
+> 1Unless stated otherwise, every method in smartcor for Rhas an equivalent in pysmartcor for Python .
+
+3says nothing about which levels covary or in which direction. All methods in Table 1 with a dagger ( †)symbol produce unsigned values on [0 , +1] .Three practical consequences follow from this distinction: 1. No direct comparison. A polychoric correlation of 0.5 and a Cramér’s V of 0.5 do not mean the same thing. The former estimates a latent linear relationship; the latter quantifies departure from independence. Combining both in a single matrix (as smart_cormat() does) is useful for exploratory purposes, but the values should not be ranked against each other as if they were on a common scale. 2. When to use association measures. Cramér’s V and its relatives are appropriate when at least one variable is truly nominal: its categories cannot be meaningfully ordered (e.g., country, species, diagnosis code). If the variable has a natural ordering that the analyst has chosen to ignore (e.g., education coded as a factor rather than an ordered factor), recoding it as ordinal and using a correlation method is preferable. 3. When to ignore them. If the research question concerns the strength of a directional relationship (“does higher education predict higher income?”), association measures cannot answer it. They detect dependence but not direction. In such cases, computing Cramér’s V between an ordinal and a categorical variable discards the ordinal information and should be treated as a rough screening tool rather than a definitive result. The most commonly used correlation methods fall into three families. Pearson correlation (Pearson, 1895; Benesty et al., 2009) measures linear relationship between two continuous variables; it is a paramet-ric method assuming bivariate normality. Spearman’s rank correlation (Spearman, 1904) and Kendall’s τ
+
+(Kendall, 1938, 1945) are nonparametric rank-based methods that capture monotonic relationships; they are robust to outliers and applicable to ordinal data. Latent-variable methods (polychoric (Poon and Lee, 1987; Drasgow, 1986), polyserial, and tetrachoric correlation) assume that observed ordinal or binary variables arise from underlying continuous normal latent variables and estimate the correlation between those latent variables. Finally, categorical association measures including Cramér’s V (Cramér, 1946), Theil’s U (Theil, 1967), and Tschuprow’s T (Tschuprow, 1939) quantify dependence for unordered cate-gorical variables through chi-square or entropy-based statistics; they belong to a fundamentally different class than the correlation methods discussed above. When is it safe to simply use Pearson? When does the choice matter? The following subsections answer these questions: first by defining each method precisely, then by presenting simulation evidence, with mathematical proofs deferred to Appendix A.1 and Appendix A.2. Among all 10 variable-type pairs discussed in Table 1 Pearson correlation is the correct choice for exactly three of them: continuous–continuous (the textbook case), continuous–binary (where Pearson coincides with the point-biserial coefficient under 0/1 coding), and binary–binary (where Pearson coincides with the phi ( ϕ) coefficient). Theorem 2.1 and Theorem 2.2 in Section 2.2 establish the equivalence of Pearson with point-biserial and phi, respectively. For the remaining seven combinations, Pearson is biased, attenuated, or undefined: it underestimates the association for binary and ordinal variables (Section 2.3), it ignores the latent structure of ordinal scales, and it is mathematically undefined when one of the variables is unordered categorical. A practitioner who reaches for cor() in R, numpy.corrcoef() in 
+
+Python , or similar functions in Stata or SAS, on a heterogeneous data set, therefore, has at most a 3/10 
+
+chance of computing the appropriate measure for each pair and an overwhelming chance of reporting an attenuated or biased value somewhere in the matrix. This is the central motivation for smartcor :routing each pair of variables to its correct estimator should not require the practitioner to remember which of the seven other cells they are in. 
+
+## 2.1 Correlation methods by variable type 
+
+Each of the 14 methods in Table 1 rests on distinct mathematical foundations. This subsection provides concise definitions organized by the types of variables being correlated. Readers who are already familiar with these formulas may skip ahead to Section 2.2. 4(a) Continuous–continuous pairs. The Pearson correlation coefficient , introduced by Pearson (1895), measures the strength of the linear relationship between two continuous paired variables. For a paired random variable ( X, Y ) with mean ( μX , μ Y ) and standard deviation ( σX , σ Y ), the population correlation coefficient is defined as 
+
+ρ = Cov( X, Y )
+
+σX σY
+
+= E[( X − μX )( Y − μY )] 
+
+σX σY
+
+, (1) with the sample version given by 
+
+r =
+
+∑ni=1 (xi − ¯x)( yi − ¯y)
+
+√∑ ni=1 (xi − ¯x)2 √∑ ni=1 (yi − ¯y)2 , (2) where {(xi, y i), i = 1 , ..., n } is the observed paired sample and ¯x, ¯y are the sample means. The denominator is the product of the sample standard deviations (up to the shared n − 1 or n factor, which cancels), so this expression is the direct sample analogue of Equation 1. The coefficient value ranges from −1
+
+(perfect negative linear relationship) to +1 (perfect positive linear relationship), with 0 indicating no linear dependence; the bound |ρ| ≤ 1 follows from the Cauchy-Schwarz inequality (Casella and Berger, 2002). Pearson correlation is a parametric measure: it is most appropriate when the bivariate distribution is approximately normal and the relationship is linear (Benesty et al., 2009). 
+
+Spearman’s rank correlation (Spearman, 1904) is a nonparametric alternative that captures monotonic (not necessarily linear) relationship. It is computed by applying the Pearson formula to the ranks of the observations rather than to their raw values. When there are no tied ranks, a convenient shortcut is 
+
+rs = 1 − 6 ∑ni=1 d2
+
+> i
+
+n(n2 − 1) , (3) where di is the difference between the ranks of the i-th paired observations. Since it operates on ranks, Spearman correlation is robust to outliers and does not require normality. 
+
+Kendall’s τ (Kendall, 1938) takes a different approach, evaluating monotonic relationship through pairwise comparisons. A pair of observations (xi, y i) and (xj , y j ) is said to be concordant if (xi − xj )( yi −
+
+yj ) > 0 and discordant if the product is negative. The tie-corrected variant τb (Kendall, 1945), which is the default in most software, is 
+
+τb = Nc − Nd
+
+√(Nc + Nd + TX )( Nc + Nd + TY ) , (4) where Nc and Nd are the numbers of concordant and discordant pairs, and TX , T Y count tied pairs on each variable. Since τb has a direct probabilistic interpretation (the difference between the probability of concordance and discordance), it is often preferred for ordinal data and small samples. 
+
+(b) Continuous–binary pairs. The point-biserial correlation measures relationship between a con-tinuous variable X and a paired binary variable Y ∈ { 0, 1}. It is defined as 
+
+rpb = ¯x1 − ¯x0
+
+sx
+
+√ n1 n0
+
+n2 , (5) where ¯x1 and ¯x0 are the means of X in the two groups, sx is the overall standard deviation, and n1, n 0 are the group sizes with n = n1 + n0. The formula is algebraically identical to applying Pearson correlation when Y is coded 0/1 (see Appendix A.1 for the proof). In practice, no separate computation is needed; Pearson correlation on the raw data yields the same value. 
+
+(c) Binary–binary pairs. The phi coefficient (ϕ) (Pearson, 1904) quantifies association between two binary variables. Let Nij denote the count of observations with X = i and Y = j in the 2 × 2 contingency table, for i, j ∈ { 0, 1}, then 
+
+ϕ = N11 N00 − N10 N01 
+
+√(N11 + N10 )( N01 + N00 )( N11 + N01 )( N10 + N00 ) . (6) 5The numerator contrasts concordant cells ( N11 , N 00 ) with discordant cells ( N10 , N 01 ), and the denomi-nator is the geometric mean of the four marginal totals. Like point-biserial correlation, ϕ is algebraically equivalent to Pearson correlation when both variables are coded 0/1. It ranges from −1 to +1 , but attain-ing either extreme requires equal marginal probabilities: ϕ = +1 only when P (X = 1) = P (Y = 1) , and 
+
+ϕ = −1 only when P (X = 1) = P (Y = 0) . When the marginal probabilities are unequal, the maximum attainable |ϕ| is strictly less than one and is given by 
+
+|ϕ|max =
+
+√
+
+min( pX , p Y ) min(1 − pX , 1 − pY )max( pX , p Y ) max(1 − pX , 1 − pY ) , (7) where pX = P (X = 1) and pY = P (Y = 1) (Davenport and El-Sanhurry, 1991). This dependence on equality of marginal probabilities is the central reason why Yule’s Q or tetrachoric correlation is often preferred when the binary variables are dichotomized continuous quantities. 
+
+Yule’s Q (Yule, 1912) is an odds-ratio-based alternative that is invariant to marginal distributions: 
+
+Q = N11 N00 − N10 N01 
+
+N11 N00 + N10 N01 
+
+= OR − 1
+
+OR + 1 , (8) where OR = N11 N00 /(N10 N01 ) is the odds ratio. Unlike ϕ, Yule’s Q can reach ±1 regardless of whether 
+
+pX and pY are equal, making it preferable when the marginal probabilities differ substantially across the two variables. 
+
+Tetrachoric correlation is a latent-variable method which assumes that the two binary outcomes arise from discretizing an underlying bivariate normal distribution at unknown thresholds (Hershberger, 2005). It estimates the Pearson correlation between the latent continuous variables via maximum likelihood. Although no closed-form expression exists, the method uses a two-step procedure that first estimates thresholds from the marginal proportions, and then maximizes the bivariate normal likelihood over ρ. It is the binary special case of polychoric correlation and is discussed in Part (e) of this section (Kiwanuka et al., 2022). 
+
+(d) Categorical–categorical pairs. Cramér’s V (Cramér, 1946) normalizes the Pearson chi-square statistic to produce a measure of association for a pair of nominal variables with r and c levels respectively. For a contingency table with r rows and c columns, the Pearson chi-square statistic is 
+
+χ2 =
+
+> r
+
+∑
+
+> i=1
+> c
+
+∑
+
+> j=1
+
+(Oij − Eij )2
+
+Eij 
+
+, (9) where Oij is the observed count in cell (i, j ). Under the null hypothesis that the two variables are independent, the corresponding expected count is Eij = ni·n·j 
+
+> n
+
+, where ni· = ∑cj=1 Oij and n·j = ∑ri=1 Oij 
+
+are the row and column marginal totals, respectively. Cramér’s V is then defined as 
+
+V =
+
+√
+
+χ2
+
+n · min( r − 1, c − 1) , (10) where n is the total sample size. The coefficient ranges from 0 (independence) to 1 (perfect association) and is always nonnegative because nominal categories have no inherent direction. 
+
+Tschuprow’s T (Tschuprow, 1939) is a chi-square-based measure that uses the geometric mean of the degrees of freedom as its normalizer: 
+
+T =
+
+√
+
+χ2
+
+n√(r − 1)( c − 1) . (11) It ranges from 0 to 1 but can attain unity only when the contingency table is square ( r = c). For nonsquare tables, the maximum value of T is strictly less than one, complicating interpretation. In modern practice, Cramér’s V is generally preferred because of this reason. 6Theil’s U (Theil, 1967), also called the uncertainty coefficient , applies information theory to measure how much knowing one variable reduces uncertainty about the other: 
+
+U (Y |X) = H(Y ) − H(Y |X)
+
+H(Y ) , (12) where H(Y ) = − ∑ 
+
+> j
+
+p(yj ) ln p(yj ) is the entropy of Y and H(Y |X) is the conditional entropy. Theil’s U
+
+ranges from 0 to 1. Crucially, it is asymmetric: U (Y |X) need not equal U (X|Y ). This makes it suitable when one variable is conceptually the predictor and the other the outcome. An analytical asymptotic standard error is available but is numerically unstable: it contains a log( pab ) term, where pab = P (X =
+
+xa, Y = yb) is the joint cell probability, that diverges in sparse cells. DescTools::UncertCoef mitigates this with a small-cell correction ( p.zero.correction = 1 /n 2); smartcor sidesteps the problem entirely using a percentile bootstrap as follows. The default confidence interval is a percentile bootstrap on U ,and the default p-value is obtained from a permutation test under the null hypothesis that X and Y
+
+are independent ( B = 500 shuffles of y; recompute U and count the proportion at least as large as the observed value). Both treat U as a non-negative measure for which a one-sided test against the independence null is the natural inference. 
+
+(e) Ordinal–ordinal pairs. Polychoric correlation (Drasgow, 1986; Poon and Lee, 1987) estimates the Pearson correlation between two latent continuous variables that are assumed to be bivariate normal but observed only through ordinal categories. The observed ordinal variable with k categories is modeled as arising from k − 1 thresholds τ1, . . . , τ k−1 applied to the latent variable. Both the thresholds and the latent correlation ρ are estimated jointly via maximum likelihood. No closed-form solution exists. The key benefit is that polychoric correlation recovers the “true” latent association that Pearson correlation on ordinal data would systematically underestimate, with attenuation worsening as the number of categories decreases. 
+
+Goodman–Kruskal gamma (γ) (Goodman and Kruskal, 1954) is a nonparametric measure for ordinal variables based on concordant and discordant pairs: 
+
+γ = Nc − Nd
+
+Nc + Nd
+
+. (13) Unlike Kendall’s τb, gamma excludes tied pairs from the denominator entirely. This means it can overstate the strength of association when ties are common: γ estimates P (concordant )−P (discordant ) conditional on the pair being untied, not the unconditional difference that τb targets. Kendall’s τb (Equation 4) is also widely used for ordinal–ordinal pairs, particularly when ties are prevalent and a more conservative estimate is desired. 
+
+(f) Mixed pairs: continuous–ordinal and binary–ordinal. Polyserial correlation (Olsson et al., 1982) extends the latent-variable framework to pairs where one variable is continuous and the other is ordinal. It assumes the ordinal variable arises from thresholding a latent normal variable and estimates the correlation between the observed continuous variable and the latent variable via maximum likelihood. Like polychoric correlation, it corrects for the attenuation introduced by discretization and requires the latent normality assumption. The rank-biserial correlation (Cureton, 1956) quantifies association between a binary variable and an ordinal variable by comparing the mean ranks of the ordinal variable across the two binary groups. It is a nonparametric method closely related to the Mann–Whitney U statistic, and it requires no distributional assumptions. For continuous–ordinal pairs, Spearman’s rs and Kendall’s τb also apply directly by ranking the continuous variable and proceeding as in the ordinal–ordinal case. 
+
+## 2.2 Equivalences: when Pearson suffices 
+
+Two important equivalences hold when binary variables are coded as 0/1. 7Assumption 2.1. Let {(xi, y i), i = 1 , ..., n } be a sample of n pairs of observations satisfying: (i) n ≥ 2;(ii) yi ∈ { 0, 1} with both groups non-empty, so n1 = ∑ 
+
+> i
+
+yi and n0 = n − n1 both lie in {1, . . . , n − 1},equivalently ˆp = ˆP (Y = 1) = n1/n ∈ (0 , 1) ; (iii) xi ∈ R has positive sample variance, s2 
+
+> x
+
+> 0.
+
+Theorem 2.1 (Pearson equals point-biserial) . Under Assumption 2.1, the Pearson sample correlation between x and y coincides with the point-biserial coefficient, 
+
+r = ¯x1 − ¯x0
+
+sx
+
+√ˆp(1 − ˆp) = rpb ,
+
+where ¯xj = n−1
+
+> j
+
+∑ 
+
+> yi=j
+
+xi for j ∈ { 0, 1}.
+
+The proof is in Appendix A.1. 
+
+Assumption 2.2. Let {(xi, y i), i = 1 , ..., n } be a sample of n pairs of observations satisfying: (i) n ≥ 2;(ii) xi, y i ∈ { 0, 1}; (iii) both marginals are non-degenerate, i.e., neither row sum nor column sum of the 
+
+2 × 2 contingency table equals 0 or n.
+
+Theorem 2.2 (Pearson equals ϕ). Under Assumption 2.2, the Pearson sample correlation between x and 
+
+y equals the ϕ coefficient, 
+
+r = N11 N00 − N10 N01 
+
+√N1· N0· N·1 N·0
+
+= ϕ, 
+
+where Nij is the count of observations with x = i and y = j, and Ni·, N·j denote row and column marginals respectively. 
+
+The proof is in Appendix A.2. Both equivalences are algebraic identities: the formulas reduce to one another when the binary variable is coded 0/1, with no statistical assumptions invoked. Distributional assumptions (bivariate normality, linearity) are required to interpret the resulting coefficient as a population parameter and to construct valid confidence intervals, but they do not affect the equivalence itself. The practical implication is that no separate computation is needed for these special cases: calling cor on raw 0/1-coded variables returns the point-biserial coefficient when paired with a continuous variable and the ϕ coefficient when paired with another binary variable. The equivalence does not extend further. For ordinal-ordinal, ordinal-continuous, or nominal pairs, Pearson on the raw codes is no longer algebraically identical to the type-appropriate coefficient (polychoric, polyserial, Cramér’s V , etc.), and the choice of method materially changes the reported value. 
+
+## 2.3 Attenuation: when Pearson underestimates 
+
+When binary or ordinal variables represent discretized versions of underlying continuous variables, Pear-son correlation systematically underestimates the true latent association. This phenomenon, known as 
+
+attenuation , becomes more severe as the number of response categories decreases. This section presents Monte Carlo simulation-based comparison for several variable-type pairs. 
+
+Binary-binary pairs. Figure 1 compares the phi coefficient (which equals Pearson for 0/1 data) with tetrachoric correlation for recovering the latent association between two dichotomized normal variables. Sweeping the true correlation across ρ ∈ { 0.1, 0.2, . . . , 0.9} at n = 500 with 500 replications per cell, the picture is unambiguous: the phi coefficient underestimates the latent correlation by an amount that grows with |ρ|—at ρ = 0 .8 the mean estimate is only ˆϕ ≈ 0.59 for balanced binary marginals, a downward bias of about 0.21 . Tetrachoric correlation centers on the true value with near-zero bias when the latent normality assumption holds. Thus, Tetrachoric outperforms the Phi (and Pearson) correlation coefficient 80.00 0.25 0.50 0.75 1.00            
+
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> True latent ρ
+> Estimate
+> Method Phi Tetrachoric
+
+Figure 1: Boxplots of estimated correlation across 500 replications, by method (phi versus tetrachoric) and true latent ρ. Horizontal dashed line marks the true value at each panel; phi consistently sits below it, tetrachoric centers on it. 
+
+Ordinal-ordinal pairs. Figure 2 shows the bias (estimate minus true ρ) for four correlation methods applied to ordinal variables with 5 categories and an underlying bivariate normal latent distribution, at 
+
+n = 500 across 500 replications. Polychoric correlation is approximately unbiased across all correlation strengths; its boxes hug the zero reference line at every ρ. Pearson and Spearman show moderate attenuation bias of about −0.05 
+
+for moderate to strong correlations, and the bias is systematic rather than noisy: the entire distribution shifts downward, not just the tails. Kendall’s τ exhibits the largest absolute deviation due to its different scale ( τ̸ = ρ even in the population), so the comparison should be read as “what does each estimator return when applied to ordinal data?” rather than “which estimator is closest to the true value?”. 
+
+Effect of number of ordinal categories. Figure 3 isolates how the number of Likert response options affects the polychoric estimator. Sweeping the common scale lengths K ∈ { 3, 5, 7, 9} at n = 500 , poly-choric correlation is unbiased at every length (its boxes hug the zero line throughout) but its precision 
+
+improves steadily as categories are added: at ρ = 0 .8 the standard deviation of the estimate falls from 
+
+0.025 at K = 3 to 0.021 at K = 5 and 0.018 at K = 9 . The gains flatten as the scale lengthens: moving from a 3-point to a 5-point scale buys about as much precision as all further additions combined. For practitioners designing instruments, the figure delivers a concrete recommendation: a 5-point Likert scale already captures much of the recoverable precision, and adding further options yields dimin-ishing returns that may not justify the extra cognitive load on respondents. Since polychoric correlation is unbiased at every K, the choice of scale length matters most for the variance of the polychoric estimate and, for analysts who fall back on Pearson or Spearman, for the magnitude of attenuation, which in the same simulation shrinks from about −0.11 at K = 3 to −0.03 at K = 9 when ρ = 0 .8.9ρ = 0.6 ρ = 0.7 ρ = 0.8 ρ = 0.9          
+
+> ρ = 0.1 ρ = 0.2 ρ = 0.3 ρ = 0.4 ρ = 0.5
+> Pearson Spearman Kendall Polychoric
+> Pearson Spearman Kendall Polychoric
+> Pearson Spearman Kendall Polychoric
+> Pearson Spearman Kendall Polychoric
+> Pearson Spearman Kendall Polychoric
+> −0.2 −0.1 0.0 0.1 0.2
+> −0.2 −0.1 0.0 0.1 0.2
+> r^ − ρ
+
+Figure 2: Bias of four estimators on ordinal–ordinal data ( n = 500 , k = 5 Likert categories, normal latent), faceted by true ρ. Polychoric correlation centers on zero across the full range of ρ; Pearson and Spearman exhibit moderate attenuation that grows with |ρ|; Kendall’s τ sits well below zero, reflecting its different scale rather than distributional sensitivity. 
+
+Continuous-ordinal pairs. Figure 4 shows bias for continuous–ordinal pairs, where polyserial cor-relation recovers the true correlation under latent normality. The pattern parallels the ordinal–ordinal case: Pearson and Spearman attenuate by similar amounts (e.g., at ρ = 0 .8 they give ˆρ ≈ 0.75 and 0.76 
+
+respectively, a downward bias of ≈ 0.04 ), and polyserial centers on the true value across the full range of 
+
+ρ.
+
+## 2.4 The latent normality question 
+
+Polychoric correlation (for ordinal-ordinal pairs) and tetrachoric correlation (for binary-binary pairs) assume that the observed variables arise from discretizing bivariate normal latent variables. When this assumption holds, these estimators are unbiased (as shown in Figure 1 and Figure 2). But what happens when the latent distribution is continuous and unimodal but non-normal? Figure 5 shows the bias of four methods under six different latent distributions, with the ordinal vari-ables having five categories and the true latent correlation swept across ρ ∈ { 0.1, 0.2, . . . , 0.9}. Crucially, we separate right-skewed from left-skewed latents (rather than lumping “skewed” as a single category), and we separate symmetric heavy-tailed (t3-like) from asymmetric heavy-tailed (a 70 /30 mixture of two normals with unequal variances and a shift). These distinctions matter because polychoric bias is direc-tional, not symmetric. Three patterns emerge. First, polychoric correlation is far more robust to non-normality than the textbook caveat suggests: under right-skewed, left-skewed, symmetric heavy-tailed, and uniform latents, the median ˆρpoly stays within about 0.01 of the truth across the full ρ range. Second, the exception is asymmetric-heavy latents (a 70/30 mixture of normals with unequal variances and a shift), where polychoric acquires a positive bias of up to +0 .10 at low ρ (about +0 .05 at moderate ρ) while Pearson 10 −0.2 −0.1 0.0 0.1 0.2              
+
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> True latent ρ
+> r^ − ρ
+> k3579
+
+Figure 3: Bias of the polychoric estimator grouped by true latent ρ (n = 500 ), colored by Likert scale length k. Polychoric is unbiased at every ρ regardless of scale length; what improves with more categories is precision, i.e. the spread of the estimate shrinks as k grows, with most of the gain achieved by a 5-point scale. and Spearman inherit a milder version of the same upward drift at low ρ (up to +0 .06 and +0 .08 at 
+
+ρ = 0 .1) before attenuating below the truth from ρ ≈ 0.4 onward. Third, Kendall’s τ shows the most consistent shape across distributions: a downward shift that grows with ρ, attributable to its different scale (in the population τ = 2 
+
+> π
+
+arcsin ρ̸ = ρ under normality) rather than to distributional sensitivity. When latent normality is doubtful, Kendall’s τ is the safer choice because its behavior is the most predictable. 
+
+Practical implication: When latent normality holds (e.g., the ordinal variable represents a Likert-scale measurement of an attitude), polychoric/polyserial correlation should be preferred. When latent normality is doubtful (e.g., the ordinal variable represents inherently discrete levels like educational degrees), Kendall’s τ or Spearman’s ρ are safer choices. The smart_cor() function exposes this choice via the assume_latent_normal argument. How, then, should a practitioner assess whether the latent normality assumption is credible? The literature offers several complementary approaches. The foundational work of Muthén and Kaplan (1985, 1992) established that normal-theory estimators such as polychoric correlation are reasonably robust to mild departures from bivariate normality but can exhibit meaningful bias under severe departures: apattern consistent with the simulation results in Figure 5. Flora and Curran (2004) formalized this robustness boundary empirically, showing that polychoric estimation remains largely unbiased when skewness stays below roughly |1.0| and excess kurtosis below |2.0|; more extreme departures shift the estimator toward overestimation. The smartcor package implements a formal test for bivariate normality based on Jöreskog (2005). The test_bivariate_normality() function fits the polychoric model by maximum likelihood and ex-tracts the likelihood-ratio (LR) chi-square statistic that compares the observed cell frequencies of the two ordinal variables to the frequencies expected under a bivariate normal threshold model. Specifically, given two ordinal variables with m1 and m2 categories, the maximum likelihood (ML) procedure jointly estimates m1 − 1 row thresholds, m2 − 1 column thresholds, and the latent correlation ρ, for a total of 11 −0.2 −0.1 0.0 0.1 0.2             
+
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> True ρ
+> r^ − ρ
+> Method Pearson Spearman Polyserial
+
+Figure 4: Bias of three estimators on continuous–ordinal data ( n = 500 , k = 5 , normal latent), grouped by true ρ. Polyserial recovers the latent correlation under bivariate normality; Pearson and Spearman attenuate by roughly 4–8% of the true value. 
+
+m1 + m2 − 1 parameters. 2 The contingency table has m1 × m2 − 1 free frequencies (the total is fixed), so the test has df = m1m2 − m1 − m2 degrees of freedom. A significant result (small p-value) indicates that the bivariate normal threshold model is a poor fit to the observed data, suggesting that polychoric correlation may be biased and a distribution-free alternative such as Kendall’s τ should be preferred. For a 2 × 2 table, df = 0 and the model is saturated and no test is possible. The assume_latent_normal = "auto" option in smart_cor() leverages this test to make a data-driven choice: it runs test_bivariate_normality() internally and selects polychoric correlation when the test does not reject the possibility of the scalar random variable coming from a latent normal dis-tribution, or Kendall’s τ when the latent normality test is rejected. Thus, smartcor shifts the latent normality decision from a subjective judgment to an automated evidence-based recommendation. 
+
+## 2.5 Practical recommendations 
+
+Table 2 summarizes the recommended methods by variable-type combination and encodes the default decision logic of smart_cor() .The upper block lists correlation methods, applicable when both variables have at least ordinal mea-surement; the lower block lists association measures, applicable when at least one variable is nominal categorical. The defaults are deliberately assumption-light: none of the recommended methods in the second column requires a latent-normality assumption. The latent-variable alternatives (tetrachoric, pol-yserial, polychoric) deliver tighter estimates when the underlying continuum is genuinely Gaussian, but the assumption is untestable from the discrete data alone in any strict sense and unwarranted assump-tions can bias the resulting coefficient. To strike a balance, smart_cor() performs a likelihood ratio test                       
+
+> 2The m1−1row thresholds and m2−1column thresholds account for m1+m2−2parameters, and the latent correlation
+> ρis the remaining one, giving (m1−1) + ( m2−1) + 1 = m1+m2−1in total.
+
+12 Normal Right−skewed Left−skewed Symmetric heavy Asymmetric heavy Uniform 
+
+> Pearson  Spearman  Kendall  Polychoric
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+> −0.2 −0.1 0.0 0.1 0.2
+> −0.2 −0.1 0.0 0.1 0.2
+> −0.2 −0.1 0.0 0.1 0.2
+> −0.2 −0.1 0.0 0.1 0.2
+
+True ρ
+
+> r^ − ρ
+
+Figure 5: Bias by latent distribution type ( n = 500 , k = 5 , ρ ∈ { 0.1, 0.2, . . . , 0.9}, 500 replications). Rows: methods (Pearson, Spearman, Kendall, polychoric). Columns: latent distribution; all panels share a common y-axis clipped at ±0.25 for readability. Skewed distributions are split into right- and left-skewed; heavy-tailed distributions into symmetric ( t3-like) and asymmetric (mixture). Polychoric is unbiased under normality and acquires a modest positive bias (up to ≈ +0 .10 at low ρ) under asymmetric heavy-tailed latents. Kendall’s τ has the most consistent shape across distributions. Table 2: Recommended methods by variable-type combination, as implemented in smart_cor() . The lower block contains association measures (not correlation; see Section 2). 
+
+Variable types Default method Alternative 
+
+Correlation methods (signed, [−1, +1] )
+
+Continuous + continuous Pearson Spearman (suggested, especially if nonlinear) Continuous + binary Pearson = Point-biserial —Binary + binary Pearson = Phi Tetrachoric (preferred, if latent normality holds) Continuous + ordinal Spearman/Kendall Polyserial (preferred, if latent normality holds) Ordinal + ordinal Kendall’s τ Polychoric (preferred, if latent normality holds) Binary + ordinal Rank-biserial Spearman 
+
+Association measures (unsigned, [0 , 1] )
+
+Continuous + categorical Cramér’s V (binned) —Binary + categorical Cramér’s V —Ordinal + categorical Cramér’s V —Categorical + categorical Cramér’s V Theil’s U , Tschuprow’s T
+
+for bivariate latent normality (Jöreskog, 2005) on each ordinal pair and switches to the latent-variable alternative only when the test fails to reject normality at the user-specified level (default α = 0 .05 ); otherwise it retains the rank-based or contingency-based default. Binary–binary pairs are the exception: a 2 × 2 table is saturated by the two thresholds and the correlation, leaving no degrees of freedom to 13 test latent normality, so smart_cor() reports ϕ and reserves tetrachoric correlation for users who as-sert the latent-normal model explicitly ( assume_latent_normal = TRUE or method = "tetrachoric" ). Failure to reject is of course not equivalent to accepting normality, particularly at small sample sizes, and users who can defend the latent-normal model on substantive grounds, or who prefer a different testing threshold, can override the selection through the method argument. 
+
+## 2.6 Usage of correlations in existing literature 
+
+The preceding sections describe the ideal decision procedure for correlation calculations. For a given pair of variables, an analyst determines the measurement scale of each, identifies the type-appropriate estimator from Table 2, and (where that estimator rests on a latent-variable model) decides whether the latent-normal assumption is defensible before computing the coefficient and a corresponding confidence interval. Consequently, it is fair to ask how often that procedure is actually carried out in published empirical work, and whether the default choices of existing software affect the results and conclusions. To answer both questions, we conducted a study of correlation usage in the data supplements of published economics articles, using the coefficients researchers computed themselves as the benchmark and our 
+
+smart_cor() as the comparison. Source of research papers and supplementary materials in our mini-study is the Find Economic Ar-ticles with Data (EJD) database maintained by Kranz (2023), which indexes articles from the American Economic Association journals, the Review of Economic Studies , the Review of Economics and Statistics ,and smaller samples from the Quarterly Journal of Economics , the Journal of Political Economy , Econo-metrica , and others, together with their deposited replication supplements. Table 3 traces the corpus from that index to the set of coefficients we analyze. Of the 11 ,889 indexed articles, 9,312 provide a data supplement. We specially look at the subset of 1,101 studies whose supplements are retrievable through an open programmatic interface (Harvard Dataverse and Zenodo); the remainder are hosted behind logins (openICPSR) or on legacy links that now redirect to them. Of these, 1,077 were successfully retrieved and screened, 780 contained analysis code, and 197 (25 .3% of those with code) contained at least one correlation command. Each of the 197 was examined in full: every correlation call was traced to the data in the supplementary files and, whenever possible, correlation values were recomputed to reproduce the paper’s outputs. Eighty papers’ correlations were recomputable based on this criterion; the 117 that were not divide into 76 resting on restricted or proprietary microdata (administrative registers, confiden-tial vendor panels, etc.), 25 whose only correlations are internal to simulations, 6 that occur in bundled third-party library code, and 10 with other technical reasons. The recomputation yielded 3,364 distinct variable pairs, of which 3,322 have at least 15 complete observations and form the analysis set; pairs below that size are excluded because type detection is unreliable when a continuous variable happens to take few distinct values (Section 3.2). Table 3: From the EJD index to the analyzed coefficients. Each row is a subset of the one above it. Stage Count Articles indexed in EJD 11 ,889 
+
+with a data supplement 9,312 
+
+supplement anonymously retrievable (sampling frame) 1,101 
+
+retrieved and screened 1,077 
+
+containing analysis code 780 
+
+issuing ≥ 1 correlation command 197 
+
+Papers recomputable (data shipped, light preparation) 80 
+
+Papers contributing recomputed pairs 79 
+
+Distinct variable pairs recomputed 3,364 
+
+Pairs analyzed ( n ≥ 15 ) 3,322 
+
+The first finding concerns the method itself, before any question of whether it is the right one. 14 Across the 197 papers, 1,124 of the 1,218 correlation calls ( 92 .3% ) are Pearson (identified using the Stata 
+
+correlate /pwcorr , R cor() , MATLAB corrcoef() , and Python defaults) with Spearman ( 63 ), Kendall (17 ), partial Pearson ( 10 ), and polychoric ( 4) making up the remainder. At the paper level, 174 of the 
+
+197 (88% ) use Pearson and nothing else. This is unconditional on the variables being correlated: the default is applied whether the pair consists of two continuous variables, a continuous variable and a binary indicator, or two ordinal Likert items. For each recomputed pair, we computed the authors’ own coefficient in R, reproducing their pub-lished value where a public version of the paper allowed the check, so that the comparison is like–for-like—alongside the coefficient smart_cor() , which selects on the identical observations. Of the 3,322 ana-lyzed pairs, 2,381 (71 .7% ) fall in what we term the Pearson-equivalent class: the estimator smart_cor() 
+
+selects is either Pearson itself or one of its two algebraic identities, the point-biserial coefficient for a continuous–binary pair or ϕ for a binary–binary pair (Section 2.2), which return the same number. The remaining 941 instances diverge. This high equivalence rate should not be read as evidence that Pearson is broadly appropriate. Of the ten variable-type pairings enumerated in Table 2, Pearson (or one of its two identities) is the type-appropriate estimator in only three: continuous–continuous, continuous– binary, and binary–binary. The equivalence rate is high because the corpus is compositionally dominated by exactly those three pairings: economists overwhelmingly correlate continuous magnitudes and binary indicators, for which Pearson is often the near-best tool. Indeed, not a single variable in the corpus enters a correlation as a nominal categorical with its k levels intact: of the 761 distinct variables behind the analyzed pairs, type detection classifies 506 as continuous, 121 as binary, 79 as ordinal, and 55 as count, and none as categorical—where group membership matters, it appears only as already-constructed binary indicator variables. The decomposition by pairing makes the point sharply. Among the 2,590 analyzed pairs in which no variable is ordinal, the method diverges in 8.1% of cases—the residual arising almost entirely where authors deliberately chose a rank method on continuous data. Among the 732 pairs in which at least one variable is ordinal, the method diverges in every single case (732 of 732 , 100% ). The choice of correlation method is therefore not a matter that “usually does not matter”; it does not matter precisely where the variables are continuous, and it almost always matters the moment an ordinal variable enters. In the three pairings where the coefficient coincides with Pearson, the coincidence is exact and provable (Appendix A), but the literature does not arrive at it by the reasoning that would establish it. Recognizing that a continuous–binary or binary–binary pairing makes Pearson the correct estimator requires first classifying each variable’s measurement scale and identifying the pairing; only then does one know that the point-biserial or ϕ formula (and hence the generic Pearson call) returns the type-appropriate coefficient. In the corpus, that coefficient is instead reached generically: a single correlate or pwcorr statement in a software package is applied across a block of variables, without a preceding step that establishes the pairing. The resulting number may be correct, but its correctness is incidental rather than demonstrated, and is applied unchanged to the seven pairings for which it is not the type-appropriate choice. This is not to characterize the generic call as an error where it happens to coincide; it is to observe that the reasoning distinguishing the three coincident pairings from the seven non-coincident ones is, in practice, rarely performed. The value of automating the choice of correlation metric is clearest when the manual alternative is spelled out. To select the type-appropriate coefficient for a single pair, an analyst would, in principle: (i) determine each variable’s measurement scale, which is not always evident from the stored values—a 
+
+0/1 column may encode a genuine dichotomy or a coarsened continuum, and a 1–5 column may be a Likert attitude with a plausible latent continuum or a set of intrinsically discrete categories; (ii) look up the estimator appropriate to the resulting pairing; (iii) for any pairing whose recommended estimator is a latent-variable coefficient (tetrachoric, polyserial, polychoric), decide whether the latent-normal model is defensible, ideally through a formal test rather than an assumption (Section 3.4), and fall back to a rank-based estimator when it is not; and (iv) compute a confidence interval derived for the chosen estimator rather than the Pearson interval. Carried out by hand for every cell of every correlation table, across every variable pairing a paper reports, this is a substantial and repetitive cost, and a single trusted default is an understandable economy even if it may be wrong. 
+
+smart_cor() performs all four steps automatically for each pair, at no marginal cost to the analyst: it 15 detects the measurement type of each variable, selects the estimator by pairing, runs the latent-normality test where the pairing calls for one and switches estimators on its outcome, and returns an interval matched to the method. Where the method diverges, the magnitude of the change ranges from negligible to consequential. Among the 941 divergent pairs the median absolute change in the coefficient is small, |∆r| ≈ 0.017 , but the distribution has a substantial tail, reaching 0.47 , and in 36 pairs the divergence moves the coefficient across the conventional p < 0.05 threshold, so relationships that were rendered insignificant with default correlation methods in existing software packages, become significant with smart_cor ’s statistically-accurate choices. The direction is not uniform, and this is worth stating plainly: in the ordinal pairings 
+
+smart_cor() ’s latent-variable estimators recover more association than Pearson, consistent with the attenuation documented in Section 2.3, whereas in the 209 divergent continuous-data pairs the authors had chosen a rank method (typically Spearman on skewed magnitudes) and smart_cor() defaults to Pearson where the package is the more conservative choice, and the difference reflects a genuine distinction between linear and monotone association rather than an error on either side. 
+
+# 3 The smartcor package 
+
+## 3.1 Design philosophy 
+
+The smartcor package is built around four principles: 1. Smart defaults. The package “just works” for the common case: pass two variables or a data frame, and the appropriate methods are selected automatically. 2. Transparency. Every decision is explained. Each result includes a rationale field describing why a particular method was chosen, and verbose mode prints the detection and selection process. 3. User override. Users can force any method or type assignment via the method , x_type , and 
+
+y_type arguments. 4. Tidy integration. All output objects have tidy() methods (via broom ; Robinson et al., 2024) returning tibbles, and smart_cormat() produces matrices compatible with ggplot2 (Wickham, 2016) visualization. The package can be installed from CRAN: 
+
+> R> install.packages("smartcor") R> library("smartcor")
+
+The core dependencies are cli for formatted console output, rlang , tibble , and generics for tidyverse-style data handling, polycor (Fox, 2022) for polychoric, polyserial, and tetrachoric correlations, and 
+
+ggplot2 (Wickham, 2016) for the heatmap visualizations of Section 3.7. 
+
+## 3.2 Variable type detection 
+
+The detect_type() function classifies a variable into one of five types (continuous, binary, ordinal, count, or categorical) using the following rules, applied in order: 1. Ordered factors → "ordinal" .2. Unordered factors or character vectors with exactly 2 unique values → "binary" ; with 3 or more 
+
+→ "categorical" .3. Logical vectors → "binary" .4. Numeric vectors with exactly 2 unique values → "binary" .16 5. Numeric vectors with ≤ ordinal_threshold (default: 10) unique values → "ordinal" .6. Numeric vectors that are non-negative integer-valued and have more than ordinal_threshold 
+
+unique values → "count" (disable with detect_count = FALSE ). 7. All other numeric vectors → "continuous" .Rule 6 is a syntactic heuristic: any non-negative, integer-valued vector with more than ordinal_threshold 
+
+distinct values is labeled "count" , including integer-recorded measurements such as age in years or engine horsepower that do not, strictly, arise from counting. Since smartcor treats count variables identically to continuous variables for every correlation, this labeling never changes the selected method or the esti-mate; it affects only the descriptive type reported. Set detect_count = FALSE to classify such variables as "continuous" .
+
+> R> detect_type(rnorm(100)) [1] "continuous" R> detect_type(c(0, 1, 0, 1, 1, 0)) [1] "binary" R> detect_type(c(1, 2, 3, 4, 5, 3, 2, 4)) [1] "ordinal" R> detect_type(c("red", "blue", "green")) [1] "categorical"
+
+Full argument documentation for detect_type() , and for every function introduced below, is available in the package help pages. 
+
+## 3.3 Core function: smart_cor() 
+
+The primary function smart_cor(x, y) computes the best-suited correlation for two variables. It detects types, selects a method, and returns a richly annotated result. 
+
+> R> result <- smart_cor(mtcars$mpg, mtcars$wt, verbose = FALSE) R> result -- Smart Correlation --Estimate: -0.8677 Method: Pearson Correlation Variables: mtcars$mpg ("continuous") x mtcars$wt ("continuous") N: 32 p-value: < 0.001 Test: t-test on r (cor.test) H0: rho = 0 Small p-values (e.g., p < 0.05) indicate evidence against H0. 95\% CI: [-0.9338, -0.7441] Source: Fisher z (cor.test) Both variables are continuous; Pearson correlation selected. i Alternatives: "spearman" and "kendall" (pass ‘method = "..."‘ to use)
+
+17 The result object is a list of class "smartcor" with elements covering identifiers ( x_name , y_name ,
+
+x_type , y_type ), the point estimate ( estimate , method , method_label ), inference ( statistic , p.value ,
+
+p_method , null_hypothesis , p_interpretation , ci_lower , ci_upper , conf_level , ci_method , ci_source ), the rationale text, and sample sizes. The tidy() method returns a one-row tibble with twenty columns; transposing it with t() makes every column readable in print: 
+
+R> library("broom") R> t(tidy(result)) [,1] var_x "mtcars$mpg" var_y "mtcars$wt" x_type "continuous" y_type "continuous" estimate "-0.8676594" method "pearson" method_label "Pearson Correlation" rationale "Both variables are continuous; Pearson correlation selected." statistic "-9.559044" p.value "1.293959e-10" p_method "t-test on r (cor.test)" null_hypothesis "rho = 0" p_interpretation "Small p-values (e.g., p < 0.05) indicate evidence against H0." ci_lower "-0.9338264" ci_upper "-0.7440872" conf_level "0.95" ci_method "analytic" ci_source "Fisher z (cor.test)" n "32" n_complete "32" 
+
+For a pair involving different types, smart_cor() selects the appropriate specialized method. The default 
+
+assume_latent_normal = "auto" runs the bivariate normality test only when at least one data type is ordinal to test for latent normality, for instance, in ordinal-ordinal pair one needs to choose between Kendall and Polychoric correlations. For ordinal–ordinal pairs, the default "auto" mode runs the bivariate normality test to decide between polychoric and Kendall. Users can override with assume_latent_normal = FALSE :
+
+R> smart_cor(mtcars$gear, mtcars$carb, + assume_latent_normal = FALSE, verbose = FALSE) -- Smart Correlation --Estimate: 0.0980 Method: Kendall’s Tau-b Variables: mtcars$gear ("ordinal") x mtcars$carb ("ordinal") N: 32 p-value: 0.5302 Test: asymptotic normal (cor.test, exact = FALSE) H0: tau = 0 Small p-values (e.g., p < 0.05) indicate evidence against H0. 95% CI: [-0.1455, 0.3303] Source: Fieller, Hartley, and Pearson (1957) Both variables are ordinal. Kendall’s tau selected (no latent normality assumption; stable bias across distributions). i Alternatives: "polychoric", "spearman", and "gamma" (pass ‘method = "..."‘ to use) 
+
+18 The default behavior of smart_cor() can be summarized as follows. Variable types are auto-detected via 
+
+detect_type() unless the user supplies x_type or y_type . For ordinal–ordinal and ordinal–continuous pairs, the latent normality assumption is tested automatically ( assume_latent_normal = "auto" ) using a likelihood-ratio chi-square test (Section 3.4); if the test rejects, a distribution-free method is selected instead. For binary–binary pairs the 2×2 table is saturated and cannot support this test, so the default is the ϕ coefficient; tetrachoric correlation is available through assume_latent_normal = TRUE or method = "tetrachoric" . Confidence intervals and p-values are computed analytically wherever a closed-form or asymptotic source is available; this is the default for every method except Theil’s U , whose CI is obtained by a percentile bootstrap and p-value is obtained using a permutation test against H0 : X ⊥ Y (both 
+
+B = 500 , set via n_boot and n_perm ). Table 4 documents the estimate, p-value, and confidence-interval source used for each correlation method, with citations. The bootstrap = "auto" (default) ensures that bootstrapping is performed only when an analytic confidence interval is unavailable or fails to compute (e.g., singular Hessian, sparse 2 × 2 table); setting bootstrap = TRUE forces bootstrap intervals for all methods, useful when cross-checking analytic intervals. The ordinary paired bootstrap is centred at the observed estimate rather than the null, so it is not used to construct p-values; analytic tests remain in place, and Theil’s U retains its permutation test. Data pairs with at least one missing value are removed by ignore_na = TRUE .
+
+Sanity check on simulated data. A two-line sanity check makes the behaviour easier to internalise. Simulating two correlated normals with ρ = 0 .7, smart_cor() reports a Pearson estimate near the truth with an analytic Fisher-z confidence interval. Replacing the variables with their ranks reproduces the well-known identity that Pearson on ranks equals Spearman on the originals.  
+
+> R> set.seed(7) R> xy <- MASS::mvrnorm(500, mu = c(0, 0), +Sigma = matrix(c(1, 0.7, 0.7, 1), 2, 2)) R> x <- xy[, 1]; y <- xy[, 2] R> smart_cor(x, y, verbose = FALSE) -- Smart Correlation --Estimate: 0.7167 Method: Pearson Correlation Variables: x ("continuous") x y ("continuous") N: 500 p-value: < 0.001 Test: t-test on r (cor.test) H0: rho = 0 Small p-values (e.g., p < 0.05) indicate evidence against H0. 95% CI: [0.6712, 0.7568] Source: Fisher z (cor.test) Both variables are continuous; Pearson correlation selected. i Alternatives: "spearman" and "kendall" (pass ‘method = "..."‘ to use)
+
+The same call on the rank-transformed pair returns the Spearman of the original pair exactly:  
+
+> R> all.equal(cor(rank(x), rank(y)), +cor(x, y, method = "spearman")) [1] TRUE
+
+rank(x) and rank(y) are integer-valued with many unique values, so detect_type() flags them as counts; under the smartcor convention that counts are treated as continuous numerics, the function returns Pearson correlation, whose value coincides with the Spearman of the originals by construction, which is a useful end-to-end sanity check before running the same pipeline on real data. 19 Table 4: Source of the point estimate, p-value, and confidence interval for each correlation method in 
+
+smartcor . Cells marked ∗ are computed natively by smartcor rather than delegated to base R or an external package; for the tetrachoric, polychoric, and polyserial methods, the Wald p-value and Fisher-z
+
+interval are constructed by smartcor from the maximum-likelihood standard error returned by polycor .Bootstrap confidence intervals are available via bootstrap = TRUE and serve as automatic fallback when an analytic interval fails.              
+
+> Correlation Estimate p-value Confidence interval Pearson stats::cor.test (default Pearson) cor.test (analytic,
+> t)
+> cor.test (Fisher z)Spearman stats::cor.test( method="spearman", exact=FALSE) cor.test (asymp-totic AS 89) Bonett and Wright (2000), Fisher z,
+> SE z=
+
+√(1 + r2/2) /(n − 3) ∗     
+
+> Kendall stats::cor.test( method="kendall", exact=FALSE) cor.test (asymp-totic normal) Fieller et al. (1957), Fisher z,SE z=
+
+√0.437 /(n − 4) ∗                               
+
+> Point-Biserial stats::cor.test on continuous and 0/1-coded binary
+> cor.test (analytic,
+> t)
+> cor.test (Fisher z)Phi 2×2contingency formula ∗chisq.test
+> (correct=FALSE )Noncentral χ2pivot (signed) ∗
+> Tetrachoric polycor::polychor(ML=TRUE, std.err=TRUE) on the 2×2ta-ble Wald, Fisher z∗Olsson (1979) and Jöreskog (1994), Fisher z∗
+> Polychoric polycor::polychor(ML=TRUE, std.err=TRUE)
+> Wald, Fisher z∗Olsson (1979) and Jöreskog (1994), Fisher z∗
+> Polyserial polycor::polyserial(ML=TRUE, std.err=TRUE)
+> Wald, Fisher z∗Olsson et al. (1982), Fisher z∗
+> Cramér’s V
+
+√χ2/(n(k − 1)) from chisq.test ∗ chisq.test (ana-lytic) Noncentral χ2 pivot ∗ 
+
+> Tschuprow’s T
+
+√
+
+> χ2/(n
+
+√(r − 1)( c − 1)) from                                                   
+
+> chisq.test ∗
+> chisq.test (ana-lytic) Noncentral χ2pivot (rescaled V)∗
+> Yule’s Q(ad −bc )/(ad +bc )on 2×2∗Wald, Fisher z∗Brown and Benedetti (1977) (gamma on 2×2)∗
+> Goodman– Kruskal γ
+> (P−Q)/(P+Q)from concor-dant/discordant pairs ∗Wald, Fisher z∗Brown and Benedetti (1977) (closed-form SE) ∗
+> Rank-biserial Glass formula 2(¯ r1−¯r0)/n ∗Wald, Fisher z∗Cliff (1996) asymptotic (Cliff’s δ)∗
+> Theil’s UEntropy-based U(Y|X)∗Permutation, B=500 ∗Bootstrap, B= 500 ∗
+
+## 3.4 Testing latent normality: test_bivariate_normality() 
+
+As discussed in Section 2.4, polychoric and tetrachoric correlations assume that the observed ordinal or binary variables arise from an underlying bivariate normal distribution. Following the approach of Jöreskog (2005), our test_bivariate_normality() function provides a formal likelihood-ratio test of the latent normality assumption. The implementation fits the polychoric model by maximum likelihood using polycor::polychor(tab, ML = TRUE, std.err = TRUE) , which jointly estimates row thresholds, column thresholds, and the latent correlation ρ. It then extracts the likelihood-ratio chi-square statistic comparing the observed cell frequencies to those expected under the fitted bivariate normal threshold model (see Section 2.4 for the degrees of freedom). A small p-value indicates that the bivariate normal model is a poor fit, suggesting that polychoric correlation may be biased and Kendall’s τ should be preferred: 
+
+R> set.seed(42) R> z <- MASS::mvrnorm(500, mu = c(0, 0), + Sigma = matrix(c(1, 0.5, 0.5, 1), 2, 2)) R> x <- cut(z[, 1], breaks = qnorm(c(0, 0.2, 0.4, 0.6, 0.8, 1)), + labels = FALSE) R> y <- cut(z[, 2], breaks = qnorm(c(0, 0.2, 0.4, 0.6, 0.8, 1)), + labels = FALSE) R> test_bivariate_normality(x, y) -- Bivariate Normality Test (LR Chi-Square) --
+
+20 Table dimensions: 5 x 5 N = 500 Polychoric rho: 0.4399 LR chi-square: 22.2181 (df = 15, p = 0.1022) Conclusion: no evidence against bivariate normality at alpha = 0.05. Polychoric correlation is appropriate. 
+
+Because assume_latent_normal = "auto" is the default, this test is integrated directly into the standard 
+
+smart_cor() workflow. The output includes the LR test result alongside the correlation estimate: 
+
+R> smart_cor(x, y, verbose = FALSE) -- Smart Correlation --Estimate: 0.4406 Method: Polychoric Correlation Variables: x ("ordinal") x y ("ordinal") N: 500 p-value: < 0.001 Test: Wald test on Fisher-z scale H0: rho = 0 Small p-values (e.g., p < 0.05) indicate evidence against H0. 95% CI: [0.3565, 0.5176] Source: Olsson (1979) and Joreskog (1994) Latent normality: LR chi-sq = 22.22, df = 15, p = 0.102 (not rejected) Test: LR chi-square test of latent bivariate normality H0: (x, y) ~ bivariate normal Small p-values indicate evidence against latent bivariate normality. Both variables are ordinal. Polychoric correlation selected under the assumption of latent bivariate normality. i Alternatives: "kendall", "spearman", and "gamma" (pass ‘method = "..."‘ to use) 
+
+The two test results sit side by side. The first p-value ( p < 0.001 ) tests the polychoric estimate it-self against the independence null H0: ρ = 0, using a Wald statistic on the Fisher-z scale: z =atanh(ˆ ρ)/(̂ SE(ˆ ρ)/(1 − ˆρ2)) . The second test (latent normality, p = 0 .102 ) compares the polychoric model against the saturated multinomial via likelihood ratio; large values reject the bivariate-normal threshold model. Because that test did not reject ( p = 0 .102 ), smart_cor() retained polychoric correlation; had it rejected, the function would have defaulted to Kendall’s τb. The confidence interval uses the Olsson– Jöreskog standard error of ˆρ on the Fisher z scale (Table 4); bootstrap inference is no longer needed but remains available via bootstrap = TRUE as a sanity check. 
+
+## 3.5 Correlation matrix: smart_cormat() 
+
+For data frames with mixed variable types, smart_cormat() computes pairwise correlations using the appropriate method for each pair. We illustrate on the entire mtcars data frame with all eleven columns and no custom changes. Auto-detection (the central premise of smartcor ) handles the type assignment internally: 
+
+R> mat <- smart_cormat(mtcars, assume_latent_normal = FALSE, + verbose = FALSE) R> mat$types mpg cyl disp hp drat "continuous" "ordinal" "continuous" "count" "continuous" 
+
+21 wt qsec vs am gear "continuous" "continuous" "binary" "binary" "ordinal" carb "ordinal" 
+
+detect_type() correctly recognizes cyl , gear , and carb as ordinal (small numeric ranges), vs and am as binary (two unique values), and hp as a count (non-negative integers exceeding ordinal_threshold ); the remaining five columns are continuous. Counts are treated as numeric continuous variables for purposes of method selection, so a count × continuous pair routes to Pearson and a count × ordinal pair routes through the same polyserial-or-Spearman logic as continuous × ordinal. The correlation matrix follows directly:                                                                         
+
+> R> signif(mat$correlations, 2) mpg cyl disp hp drat wt qsec vs am gear carb mpg 1.00 -0.91 -0.85 -0.78 0.680 -0.87 0.420 0.66 0.600 0.540 -0.660 cyl -0.91 1.00 0.93 0.90 -0.680 0.86 -0.570 -0.88 -0.570 -0.510 0.470 disp -0.85 0.93 1.00 0.79 -0.710 0.89 -0.430 -0.71 -0.590 -0.590 0.540 hp -0.78 0.90 0.79 1.00 -0.450 0.66 -0.710 -0.72 -0.240 -0.330 0.730 drat 0.68 -0.68 -0.71 -0.45 1.000 -0.71 0.091 0.44 0.710 0.740 -0.130 wt -0.87 0.86 0.89 0.66 -0.710 1.00 -0.170 -0.55 -0.690 -0.680 0.500 qsec 0.42 -0.57 -0.43 -0.71 0.091 -0.17 1.000 0.74 -0.230 -0.150 -0.660 vs 0.66 -0.88 -0.71 -0.72 0.440 -0.55 0.740 1.00 0.170 0.300 -0.710 am 0.60 -0.57 -0.59 -0.24 0.710 -0.69 -0.230 0.17 1.000 0.870 -0.073 gear 0.54 -0.51 -0.59 -0.33 0.740 -0.68 -0.150 0.30 0.870 1.000 0.098 carb -0.66 0.47 0.54 0.73 -0.130 0.50 -0.660 -0.71 -0.073 0.098 1.000
+
+Two significant figures keep the matrix on a single block; print(mat, digits = 3) restores three-figure rounding when greater precision is needed. The result contains four elements: $correlations (a numeric matrix), $methods (a character matrix of method codes), $types (detected types), and $details (a list of full smartcor objects for each pair). Every cell, including the diagonal, is computed by an explicit method (the diagonal records, e.g., phi for binary-binary, kendall for ordinal-ordinal, etc. as appropriate). The 
+
+tidy() method returns a long-format tibble with one row per variable pair. 
+
+Comparison against base cor() . Calling cor(mtcars) silently treats every column as continuous, returning Pearson everywhere. To see where that silent treatment makes a real difference, we filter the cell-wise difference ˆρsmart − ˆρPearson to entries with |∆| > 0.05 . By construction this filter excludes every pair for which Pearson is the equivalent estimator (continuous–continuous, continuous–binary, and continuous–count), since smartcor returns the same numerical value there; only pairs touching an ordinal variable ( cyl , gear , carb ) survive:                         
+
+> R> base_pearson <- cor(mtcars) R> diff_mat <- mat$correlations - base_pearson R> ix <- which(abs(diff_mat) > 0.05 & upper.tri(diff_mat), arr.ind = TRUE) R> data.frame( +pair = paste(rownames(diff_mat)[ix[,1]], +colnames(diff_mat)[ix[,2]], sep = "-"), +smartcor = round(mat$correlations[ix], 2), +pearson = round(base_pearson[ix], 2), +diff = round(diff_mat[ix], 2) +)pair smartcor pearson diff 1mpg-cyl -0.91 -0.85 -0.06 2cyl-hp 0.90 0.83 0.07 3cyl-wt 0.86 0.78 0.08 4cyl-vs -0.88 -0.81 -0.07
+
+22 5 mpg-gear 0.54 0.48 0.06 6 hp-gear -0.33 -0.13 -0.21 7 wt-gear -0.68 -0.58 -0.09 8 qsec-gear -0.15 -0.21 0.06 9 vs-gear 0.30 0.21 0.10 10 am-gear 0.87 0.79 0.08 11 mpg-carb -0.66 -0.55 -0.11 12 cyl-carb 0.47 0.53 -0.06 13 disp-carb 0.54 0.39 0.14 14 wt-carb 0.50 0.43 0.07 15 vs-carb -0.71 -0.57 -0.14 16 am-carb -0.07 0.06 -0.13 17 gear-carb 0.10 0.27 -0.18 
+
+Every row that crosses the threshold contains at least one ordinal column. The largest gap is at hp –gear 
+
+where base cor() reports r = −0.13 while the type-aware Spearman reports r = −0.33 ; cor(mtcars) 
+
+silently treats gear as continuous and produces the smaller, attenuated number. Variable pairs where Pearson is the equivalent estimator (continuous–continuous, continuous–binary, and, with counts treated as continuous, continuous–count and count–count), smart_cormat() produces the same numerical value, but the methods matrix records the conceptually-correct estimator name. A reader of the output can tell which cells happen to coincide with Pearson and which were a substantive choice; cor(mtcars) cannot make this distinction. 
+
+## 3.6 Method comparison: compare_methods() 
+
+The compare_methods() function computes all applicable methods for a given variable pair, allowing users to assess how sensitive the result is to method choice. 
+
+> R> compare_methods(mtcars$gear, mtcars$carb, verbose = FALSE) -- Method Comparison --Variables: mtcars$gear ("ordinal") x mtcars$carb ("ordinal") N: 32 Polychoric Correlation <- recommended r = 0.2451 p = 0.2490 95% CI [-0.1734, 0.5886] Kendall’s Tau-b r = 0.0980 p = 0.5302 95% CI [-0.1455, 0.3303] Spearman Rank Correlation r = 0.1149 p = 0.5312 95% CI [-0.2447, 0.4467] Goodman-Kruskal’s Gamma r = 0.1405 p = 0.5433 95% CI [-0.3046, 0.5353]
+
+The arrow ( <- recommended ) indicates the default method that smart_cor() would select. Here poly-choric is recommended because assume_latent_normal defaults to "auto" , the latent-normality test supports normality for this pair, and the data therefore meet polychoric’s underlying assumption. All four methods report analytic confidence intervals: Kendall via Fieller–Hartley–Pearson, Spearman via Bonett–Wright, polychoric via Olsson/Jöreskog (Fisher z scale), and Goodman–Kruskal γ via Brown– Benedetti (Table 4). The widely different CI widths reflect the different precision properties of each estimator at n = 32 , not a switch between bootstrap and analytic inference. 
+
+## 3.7 Visualization 
+
+The ggcor_heatmap() and ggcor_method_heatmap() functions produce ggplot2 -based heatmaps from a smartcormat object. The correlation heatmap displays the estimated values with a diverging color scale, while the method heatmap shows which correlation method was used for each pair, making the analytic heterogeneity of a mixed-type dataset immediately visible. 23 R> library("ggplot2") R> ggcor_heatmap(mat) R> ggcor_method_heatmap(mat) 
+
+A base R alternative is also available via plot(mat) , although it is not as flexible as the ggplot due to inherent design of ggplot .
+
+## 3.8 Pipeline-friendly interface: smart_cor_df() 
+
+A central design choice in smartcor is that every function returns an S3 object with a consistent shape, and every such object has a tidy() method (Robinson et al., 2024) producing a one-row-per-pair tibble. This composes naturally with the tidyverse (Wickham et al., 2019), the native pipe |> , and down-stream tools such as dplyr (Wickham et al., 2023), purrr (Wickham and Henry, 2023), ggplot2 (Wick-ham, 2016), and presentation-table packages such as gt (Iannone et al., 2024) and kableExtra (Zhu, 2024). The contrast with the heterogeneous return types of stats::cor.test() (an htest object), 
+
+polycor::polychor() (a numeric scalar or a custom polycor list), and stats::chisq.test() (another 
+
+htest ) is what motivated the unified API: practitioners no longer have to write per-method wrangling code to assemble a comparable summary across mixed variable types. The smart_cor_df() function is a non-interactive convenience wrapper that returns a plain list of two data frames (correlations and methods), with latent normality assessed per pair under the de-fault assume_latent_normal = "auto" . It is designed for use in automated pipelines where interactive prompts are undesirable.   
+
+> R> library("dplyr") R> mat <- smart_cormat(data, verbose = FALSE, assume_latent_normal = TRUE) R> tidy(mat) |> +filter(abs(estimate) > 0.3) |> +arrange(desc(abs(estimate)))
+
+The tidied data frame carries the full inference machinery for each pair, including ci_lower , ci_upper ,
+
+ci_method , ci_source , p_method , null_hypothesis , and rationale , so downstream code can filter or annotate by source as easily as by estimate:     
+
+> R> mtcars |> +smart_cormat(verbose = FALSE) |> +tidy() |> +filter(ci_method == "analytic", abs(estimate) > 0.5) |> +select(var_x, var_y, method, estimate, ci_lower, ci_upper, ci_source)
+
+Group-wise correlations follow the same idiomatic approach via dplyr ’s group_modify() :   
+
+> R> mtcars |> +group_by(am) |> +group_modify(~ tidy(smart_cormat(.x, verbose = FALSE))) |> +ungroup()
+
+purrr ’s map_dfr() maps over arbitrary variable pairs while preserving the consistent return shape:  
+
+> R> pairs <- list(c("mpg","wt"), c("mpg","hp"), c("disp","qsec")) R> purrr::map_dfr(pairs, ~ tidy(smart_cor(mtcars[[.x[1]]], mtcars[[.x[2]]], +verbose = FALSE)))
+
+For publication-quality output, gt or kableExtra can format the tidied tibble directly: tidy(mat) |> gt::gt() |> gt::fmt_number(decimals = 3) .Note that smart_cor_df() fixes verbose = FALSE internally; users requiring verbose output should call 
+
+smart_cormat() directly. 24 4 Case study: General Social Survey 
+
+To demonstrate smartcor on real data, we analyze a subset of the General Social Survey (GSS; Smith et al., 2024), accessed via the gssr R package (Healy, 2023). The GSS is a long-running, mostly annual survey of United States households administered by NORC, and it pairs continuous, ordinal, binary, and count items in a single instrument, which makes it a natural test bed for a package whose purpose is to match the correlation measure to the variable type. Because gssr bundles the cumulative file and exposes the codebook through R’s help system, the variables and their response scales are inspectable without leaving the analysis session. 3
+
+## 4.1 Data and variables 
+
+We select seven variables representing all four types: 
+
+• Continuous: age (age in years), coninc (family income in constant dollars). 
+
+• Ordinal: degree (highest degree: less than high school, high school, junior college, bachelor, graduate), happy (general happiness, coded 1 = very happy, 2 = pretty happy, 3 = not too happy, so negative correlations with happy indicate greater happiness). 
+
+• Binary: sex (male/female), marital (currently married vs. not, recoded from 5 to 2 unique categories by us). 
+
+• Categorical: region (4 Census regions: Northeast, Midwest, South, West). The GSS distributes data in Stata format with haven_labelled vectors, which inherit from double .A researcher who loads the data and immediately calls cor() encounters no error:                                     
+
+> R> library("gssr") R> library("dplyr") R> gss <- gss_get_yr(2024) R> gss_raw <- gss[, c("age", "coninc", "degree", "happy", +"sex", "marital", "region")] R> round(cor(gss_raw, use = "pairwise.complete.obs"), 3) age coninc degree happy sex marital region age 1.000 0.023 0.051 -0.058 0.007 -0.380 -0.061 coninc 0.023 1.000 0.436 -0.150 -0.107 -0.330 0.055 degree 0.051 0.436 1.000 -0.087 0.004 -0.152 0.008 happy -0.058 -0.150 -0.087 1.000 -0.017 0.216 0.008 sex 0.007 -0.107 0.004 -0.017 1.000 0.027 -0.033 marital -0.380 -0.330 -0.152 0.216 0.027 1.000 -0.009 region -0.061 0.055 0.008 0.008 -0.033 -0.009 1.000
+
+The silence is dangerous. Every value in this matrix is a Pearson correlation computed on raw numeric codes. The region column (where the integer codes 1–4 label the four Census regions 1 = Northeast, 
+
+2 = Midwest, 3 = South, 4 = West) produces a small but meaningless correlation with income, an artifact of the arbitrary ordering imposed on an unordered category. The marital column (1 = married, 2 = widowed, . . . , 5 = never married) appears to “correlate” −0.38 with age, but this number reflects nothing about the actual association between age and marital status. A careful analyst would convert 
+
+marital from categorical with five categories to a binary variable (married/not married), as we share above and demonstrate below. Similarly, sex is also converted to a 0/1 binary variable from original 1/2 coding, where 2 := Female. The happy and degree columns use ordinal codes as if they were continuous measurements. A more careful analyst converts each variable to its appropriate R type before computing correlations:  
+
+> 3The package is maintained by Kieran Healy and hosted at https://github.com/kjhealy/gssr , with documentation at
+> https://kjhealy.github.io/gssr/ .
+
+25 R> set.seed(2026) R> gss_sub <- gss |> + transmute( + age = as.numeric(age), + coninc = as.numeric(coninc), + degree = factor(haven::as_factor(degree), ordered = TRUE), + happy = factor(haven::as_factor(happy), ordered = TRUE), + sex = as.integer(as.numeric(sex) == 2), + marital = as.integer(as.numeric(marital) == 1), + region = haven::as_factor(region) + ) |> + filter(complete.cases(age, coninc, degree, happy, + sex, marital, region)) |> + slice(sample.int(n(), 3000)) 
+
+To make every result below reproducible identically in R and Python , we freeze this 3,000 -row complete-case extract as gss_2024_casestudy.csv , which both reproduction bundles read. But now cor() fails entirely: 
+
+R> cor(gss_sub, use = "pairwise.complete.obs") Error in cor(gss_sub, use = "pairwise.complete.obs") : ’x’ must be numeric 
+
+## 4.2 The naive workaround 
+
+The typical workaround is to drop non-numeric columns and compute Pearson on whatever remains: 
+
+R> gss_num <- gss_sub[, sapply(gss_sub, is.numeric)] R> round(cor(gss_num, use = "pairwise.complete.obs"), 3) age coninc sex marital age 1.000 0.019 -0.009 0.141 coninc 0.019 1.000 -0.101 0.393 sex -0.009 -0.101 1.000 -0.090 marital 0.141 0.393 -0.090 1.000 
+
+Three of the seven variables ( degree , happy , region ) are silently dropped. The surviving four columns all receive Pearson correlations, which underestimate associations involving binary variables (Section 2.2) and ignore ordinal structure entirely. 
+
+## 4.3 The smartcor approach 
+
+R> mat <- smart_cormat(gss_sub, verbose = FALSE) R> mat -- Smart Correlation Matrix ---- Variable types --age: "count" coninc: "continuous" degree: "ordinal" happy: "ordinal" sex: "binary" marital: "binary" region: "categorical" 
+
+26 -- Correlations --age coninc degree happy sex marital region age 1.0000 0.019 0.028 -0.0680 -0.0087 0.140 0.068 coninc 0.0190 1.000 0.450 -0.1700 -0.1000 0.390 0.092 degree 0.0280 0.450 1.000 -0.0790 0.0150 0.180 0.058 happy -0.0680 -0.170 -0.079 1.0000 -0.0047 -0.230 0.035 sex -0.0087 -0.100 0.015 -0.0047 1.0000 -0.090 0.063 marital 0.1400 0.390 0.180 -0.2300 -0.0900 1.000 0.067 region 0.0680 0.092 0.058 0.0350 0.0630 0.067 1.000 -- Methods used --age coninc degree happy sex marital region age Pr Pr Sp Ps PB PB CV coninc Pr Pr Sp Sp PB PB CV degree Sp Sp Pc Kn RB RB CV happy Ps Sp Kn Pc RB RB CV sex PB PB RB RB Ph Ph CV marital PB PB RB RB Ph Ph CV region CV CV CV CV CV CV CV i Legend: "Pr" = Pearson Correlation "Sp" = Spearman Rank Correlation "Ps" = Polyserial Correlation "PB" = Point-Biserial Correlation (= Pearson) "CV" = Cramer’s V "Pc" = Polychoric Correlation "Kn" = Kendall’s Tau-b "RB" = Rank-Biserial Correlation "Ph" = Phi Coefficient (= Pearson for 0/1) 
+
+age is recognised as a count (integer years 18–89, 70+ unique values), and counts are routed through the same Pearson default as continuous variables, so age –coninc returns Pr . Every diagonal cell records the method that would have been chosen if that variable had been correlated with another variable of the same type: Pr for continuous-continuous and count-count pairs, Pc for ordinal–ordinal pairs, Ph for binary–binary pairs (under the default assume_latent_normal = "auto" a saturated 2×2 table resolves to ϕ; tetrachoric requires assume_latent_normal = TRUE ), and CV for categorical. The numeric value at every diagonal is 1.000 by definition. The correlation matrix mat includes all seven variables. The methods matrix reveals the analytic het-erogeneity: Pearson for continuous–continuous pairs, polychoric or Kendall’s τ for ordinal–ordinal pairs (the choice depends on the data-driven latent-normality test, which is rejected for degree –happy so Kn is selected, but the diagonals retain Pc as the conceptual default), polyserial or Spearman for continuous– ordinal and count–ordinal pairs ( age –degree test rejects, hence Sp ; age –happy accepts, hence Ps ), point-biserial for continuous–binary pairs, ϕ for the binary–binary pair, and rank-biserial for binary–ordinal pairs. The region column reports Cramér’s V values, which measure statistical association rather than directional correlation. These values are on a different scale ( [0 , 1] with no sign) and should not be com-pared directly to correlation coefficients (see Section 2). The methods matrix identifies CV for these pairs, alerting the analyst to this distinction. The heatmaps (Figures 6 and 7) provide a visual summary: 
+
+> R> ggcor_heatmap(mat) R> ggcor_method_heatmap(mat)
+
+27 1.00 0.02 0.03 −0.07 −0.01 0.14 0.07 0.02 1.00 0.45 −0.17 −0.10 0.39 0.09 0.03 0.45 1.00 −0.08 0.02 0.18 0.06 −0.07 −0.17 −0.08 1.00 −0.00 −0.23 0.04 −0.01 −0.10 0.02 −0.00 1.00 −0.09 0.06 0.14 0.39 0.18 −0.23 −0.09 1.00 0.07 0.07 0.09 0.06 0.04 0.06 0.07 1.00 region marital sex happy degree coninc age 
+
+> age coninc degree happy sex marital region
+> r
+> −1.0 −0.5 0.0 0.5 1.0
+
+GSS 2024 Correlation Matrix (smartcor) Figure 6: Correlation heatmap for the GSS subset using smart_cormat() . Each cell displays the esti-mated correlation, with the color scale ranging from −1 (blue) to +1 (red). Different methods are used for each pair depending on variable types. 
+
+## 4.4 Comparing methods for a specific pair 
+
+To illustrate the impact of method choice, we compare all applicable methods for the degree –happy pair (ordinal–ordinal): 
+
+R> compare_methods(gss_sub$degree, gss_sub$happy, verbose = FALSE) -- Method Comparison --Variables: gss_sub$degree ("ordinal") x gss_sub$happy ("ordinal") N: 3000 Polychoric Correlation r = -0.1031 p < 0.001 95% CI [-0.1456, -0.0601] Kendall’s Tau-b <- recommended r = -0.0795 p < 0.001 95% CI [-0.1030, -0.0559] Spearman Rank Correlation r = -0.0906 p < 0.001 95% CI [-0.1261, -0.0549] Goodman-Kruskal’s Gamma r = -0.1261 p < 0.001 95% CI [-0.1746, -0.0769] 
+
+All four methods report analytic 95% confidence intervals and p-values, drawn from the sources catalogued in Table 4: Kendall (Fieller–Hartley–Pearson), Spearman (Bonett–Wright), polychoric (Olsson/Jöreskog, Fisher z), and Goodman–Kruskal γ (Brown–Benedetti). No bootstrap is invoked under the default 
+
+bootstrap = "auto" for this pair. The polychoric estimate ( −0.103 ) exceeds the Spearman ( −0.091 )and Kendall ( −0.079 ) estimates in absolute value, consistent with the attenuation theory demonstrated 28 1.00 0.02 0.03 −0.07 −0.01 0.14 0.07 0.02 1.00 0.45 −0.17 −0.10 0.39 0.09 0.03 0.45 1.00 −0.08 0.02 0.18 0.06 −0.07 −0.17 −0.08 1.00 −0.00 −0.23 0.04 −0.01 −0.10 0.02 −0.00 1.00 −0.09 0.06 0.14 0.39 0.18 −0.23 −0.09 1.00 0.07 0.07 0.09 0.06 0.04 0.06 0.07 1.00 region marital sex happy degree coninc age 
+
+> age coninc degree happy sex marital region
+> Method
+> Cramer's V
+> Kendall
+> Pearson
+> Phi
+> Polychoric
+> Polyserial
+> Pt−Biserial
+> Rank−Biserial
+> Spearman
+
+GSS 2024 Method Selection by Pair Figure 7: Method-selection heatmap showing which correlation method was selected for each variable pair. The analytic heterogeneity is immediately visible: nine distinct methods appear in a single correlation matrix. in Section 2.3. But since the latent-normality test is rejected for this pair, compare_methods() recom-mends Kendall’s τ , the value smart_cor() would report by default. Gamma ( −0.126 ) is the largest in absolute value but also has the widest interval ( [−0.175 , −0.077] ), because it ignores tied pairs en-tirely and the resulting effective sample size is smaller. This comparison enables the researcher to make an informed choice about which estimate to report; smart_cor() provides a transparent default while 
+
+compare_methods() reveals the sensitivity. 
+
+## 4.5 Pipeline integration 
+
+The tidy output integrates smoothly with dplyr pipelines: 
+
+R> tidy(mat) |> + filter(x_type == "ordinal" | y_type == "ordinal") |> + select(var_x, var_y, method, estimate) |> + arrange(desc(abs(estimate))) # A tibble: 11 x 4 var_x var_y method estimate <chr> <chr> <chr> <dbl> 1 coninc degree spearman 0.451 2 happy marital rank_biserial -0.230 3 degree marital rank_biserial 0.185 4 coninc happy spearman -0.168 5 degree happy kendall -0.0795 6 age happy polyserial -0.0676 7 degree region cramers_v 0.0580 8 happy region cramers_v 0.0351 
+
+29 9 age degree spearman 0.0276 10 degree sex rank_biserial 0.0154 11 happy sex rank_biserial -0.00474 
+
+This pipeline extracts all pairs involving at least one ordinal variable and sorts them by correlation strength, allowing the researcher to quickly identify the strongest associations. 
+
+## 4.6 Key findings 
+
+The comparison of naive Pearson versus type-aware smartcor analysis reveals three patterns. First , the latent-variable estimators recover more association than Pearson where they apply: compare_methods() 
+
+reports polychoric −0.103 versus Pearson −0.091 for degree –happy , consistent with the attenuation theory in Section 2.3; for this particular pair, however, the latent-normality test rejects, so smart_cor() 
+
+conservatively reports Kendall’s τ instead. Second , the categorical variable region now has association measures (Cramér’s V ) with all other variables, whereas the naive approach excluded it entirely. These are measures of statistical association rather than correlation proper (see Section 2), but they provide useful information about dependence that would otherwise be lost. Third , the methods matrix makes the analytic heterogeneity visible: eight different methods are used across the variable pairs of a single correlation matrix (nine counting the diagonal’s self-pair method), each chosen for a principled reason. 
+
+## 4.7 Overriding type detection 
+
+The automatic type detection in smart_cor() can be overridden for individual variables using the x_type 
+
+and y_type arguments. This is useful when the heuristic classification does not match domain knowledge. For example, mtcars$cyl has only three unique values (4, 6, 8) and is automatically detected as ordinal, but a researcher might prefer to treat it as continuous:   
+
+> R> # Default: cyl detected as ordinal -> Spearman R> smart_cor(mtcars$mpg, mtcars$cyl, +assume_latent_normal = FALSE, verbose = FALSE) -- Smart Correlation --Estimate: -0.9108 Method: Spearman Rank Correlation Variables: mtcars$mpg ("continuous") x mtcars$cyl ("ordinal") N: 32 p-value: < 0.001 Test: t approximation (cor.test, exact = FALSE) H0: rho_S = 0 Small p-values (e.g., p < 0.05) indicate evidence against H0. 95% CI: [-0.9615, -0.8002] Source: Bonett and Wright (2000) One variable is continuous and the other is ordinal. Spearman rank correlation selected (no latent normality assumption). i Alternatives: "kendall" and "polyserial" (pass ‘method = "..."‘ to use) R> # Override: treat cyl as continuous -> Pearson R> smart_cor(mtcars$mpg, mtcars$cyl, +y_type = "continuous", verbose = FALSE) -- Smart Correlation --Estimate: -0.8522 Method: Pearson Correlation Variables: mtcars$mpg ("continuous") x mtcars$cyl ("continuous") N: 32
+
+30 Table 5: Feature comparison of R packages for mixed-type correlation analysis. Feature smartcor correlation polycor psych 
+
+Auto type detection 5 types Partial Limited Threshold All 10 type-pair combos Yes No No No Categorical measures Yes No No No Latent normality control Yes No No No Explains method choice Yes No No No Tidy output Yes Yes No No 
+
+compare_methods() Yes No No No 
+
+Python companion Yes No No No 
+
+> p-value: < 0.001 Test: t-test on r (cor.test) H0: rho = 0 Small p-values (e.g., p < 0.05) indicate evidence against H0. 95% CI: [-0.9258, -0.7163] Source: Fisher z (cor.test) Both variables are continuous; Pearson correlation selected. i Alternatives: "spearman" and "kendall" (pass ‘method = "..."‘ to use)
+
+The Spearman estimate ( −0.911 ) exceeds the Pearson ( −0.852 ) because Spearman captures the strong monotonic relationship without assuming linearity. The x_type argument overrides only the specified variable; the other retains its auto-detected type. This design ensures that type overrides are explicit and local, rather than requiring a global reconfiguration. 
+
+# 5 Comparison with existing software 
+
+Several R packages compute correlations for mixed variable types, but none covers all 10 type-pair combi-nations or explains its method choices. Table 5 compares smartcor with three widely used alternatives. 
+
+## 5.1 Code comparison 
+
+Consider computing a correlation matrix for a data frame with continuous, binary, ordinal, and categorical variables. With smartcor , this requires a single function call: 
+
+> R> smart_cormat(data, assume_latent_normal = TRUE, verbose = FALSE)
+
+With polycor , the user must manually specify which variables are ordinal and binary, and only poly-choric/polyserial correlations are computed: 
+
+> R> library("polycor") R> hetcor(data, ML = TRUE)
+
+The hetcor() function from polycor handles Pearson, polyserial, and polychoric correlations but ignores categorical variables entirely: it computes neither Cramér’s V nor Theil’s U , and it provides no rationale for its choices. The psych::mixedCor() function uses a numeric threshold to distinguish continuous from categorical variables but does not differentiate binary from ordinal, limiting its coverage of type-pair combinations. The correlation package (Makowski et al., 2020) provides a method = "auto" option, but its auto-detection does not reliably distinguish ordinal from continuous variables, and it does not support cate-gorical association measures. 31 5.2 Key differentiators 
+
+smartcor is a decision-support tool , not merely a method library. No other package provides: (1) a human-readable rationale for each method choice; (2) coverage of all 10 variable-type pair combinations including categorical measures; (3) a compare_methods() function for sensitivity analysis; or (4) selection logic grounded in simulation evidence (Section 2). 
+
+# 6 The pysmartcor package for Python 
+
+A companion Python package provides the same decision logic and API. The package uses NumPy 
+
+(Harris et al., 2020), SciPy (Virtanen et al., 2020), and pandas (McKinney, 2010) for core computation; polychoric and polyserial correlations are estimated by a vendored, corrected port of semopy ’s maximum-likelihood routines (the role polycor plays in the R implementation), so these three libraries are the only runtime dependencies. 4
+
+## 6.1 Installation 
+
+pysmartcor 1.0.0 is published on the Python Package Index (PyPI) at https://pypi.org/project/ pysmartcor/ and installs with pip :
+
+$ pip install pysmartcor $ pip install pysmartcor[viz] # includes matplotlib, seaborn 
+
+## 6.2 API parity 
+
+The Python API mirrors the R API: 
+
+>>> from pysmartcor import smart_cor, smart_cormat, compare_methods >>> result = smart_cor(x, y, assume_latent_normal=True, verbose=False) >>> round(result.estimate, 4) -0.8677 >>> result.to_dataframe() # equivalent to tidy() in R 
+
+The same functions are available: smart_cor() , smart_cormat() , smart_cor_df() , compare_methods() ,
+
+detect_type() , and available_methods() .Table 6 shows the correspondence between key elements of the R and Python APIs. Table 6: API correspondence between the R and Python packages. 
+
+R Python 
+
+result$estimate result.estimate tidy(result) result.to_dataframe() tidy(mat) mat.to_long() mat$correlations mat.correlations ggcor_heatmap(mat) cor_heatmap(mat) smart_cor_df(data) smart_cor_df(data)                     
+
+> 4Vendoring became necessary for two reasons. First, semopy 2.3.11 evaluates bivariate-normal rectangle proba-bilities through scipy.stats.mvn , a private interface removed in SciPy 1.14, so its polychoric and polyserial routines raise AttributeError on any recent SciPy; the port replaces those calls with scipy.stats.multivariate_normal.cdf via inclusion–exclusion. Second, semopy ’s polyserial likelihood standardizes the continuous variable as z= ( x−¯x)/s 2—dividing by the variance where the standard deviation is required — and additionally passes the variance to the scale
+> argument of norm.logpdf , which expects a standard deviation; both errors bias ˆρ.The vendored port fixes both and is distributed under semopy ’s MIT license with attribution.
+
+32 6.3 Visualization 
+
+The optional viz module provides matplotlib (Hunter, 2007) and seaborn (Waskom, 2021) based equivalents of the R heatmap functions: 
+
+> >>> from pysmartcor.viz import cor_heatmap, method_heatmap >>> fig = cor_heatmap(mat) >>> fig = method_heatmap(mat)
+
+# 7 Concluding remarks 
+
+Pearson correlation remains the default in virtually every statistical software environment, yet it is only one member of a large family of association measures, each designed for specific variable types and distributional assumptions. When applied indiscriminately to binary, ordinal, or mixed-type data, Pear-son’s r can attenuate, inflate, or otherwise distort the strength of association. The smartcor pack-age addresses this gap by automatically detecting variable types, selecting the statistically appropriate method from a library of 14 correlation measures, and explaining the rationale behind each choice. The Monte Carlo simulations presented in Section 2 quantified when method selection matters and when it does not, while the General Social Survey case study in Section 4 demonstrated that type-aware correlation analysis yields substantively different results on real data. Both the R and Python implemen-tations share identical decision logic, ensuring reproducibility across platforms. Both implementations are distributed through the standard repositories: smartcor via CRAN and pysmartcor via PyPI (https://pypi.org/project/pysmartcor/ ). The simulation evidence supports several practical conclusions. Pearson correlation is numerically identical to the point-biserial coefficient for continuous-binary pairs and to the ϕ coefficient for binary-binary pairs, provided the binary variables are coded 0/1; practitioners gain nothing by switching methods in these cases. The picture changes for ordinal data. Discretizing a continuous variable into ordered cat-egories attenuates the observed correlation by roughly 2–21%, with fewer categories producing greater underestimation (dichotomization is worse still, attenuating by up to ≈37% ). Polychoric and polyserial correlations recover the latent association when the underlying bivariate normality assumption holds, but they exhibit substantial bias when it does not. Among rank-based alternatives, Kendall’s τb proved the most robust estimator across non-normal latent distributions, making it the safer default when distribu-tional assumptions are uncertain. The current implementation has clear boundaries. The assume_latent_normal argument gives users explicit control over the latent normality assumption: TRUE and FALSE force the choice, NULL asks inter-actively, and "auto" runs the likelihood-ratio goodness-of-fit test described in Section 2.4 to decide from the data. The "auto" option implements the model-fit test proposed by Jöreskog (2005), selecting poly-choric correlation when the bivariate normal threshold model fits the observed cell frequencies and falling back to Kendall’s τ when it does not. All correlations are bivariate: controlling for confounders through partial correlation requires separate analysis. The inferential framework is entirely frequentist. Every supported method except Theil’s U ships with an analytic confidence interval by default; the closed-form / asymptotic sources are catalogued in Table 4. Bootstrap confidence intervals remain available via the 
+
+bootstrap argument as either an opt-in ( bootstrap = TRUE ) for cross-checking analytic intervals, or as automatic fallback when an analytic interval fails (e.g., singular Hessian, sparse 2 × 2 table); the analytic or permutation p-value is retained. When bootstrap = "auto" (the default), the percentile bootstrap is invoked only when no analytic CI is available for the chosen method. The conf_level parameter controls the confidence level (default: 0.95 ), and n_boot sets the number of bootstrap replications (default: 500 ,lowered from 1,000 now that bootstrap is a fallback path rather than the primary one). These boundaries reflect deliberate design choices rather than oversights; each represents a direction for future development. 33 Acknowledgments 
+
+The smartcor package relies on the foundational R package polycor for polychoric, polyserial, and tetrachoric correlation estimation. We thank its maintainers for their sustained contributions to the R
+
+ecosystem. 
+
+# References 
+
+J. Benesty, J. Chen, Y. Huang, and I. Cohen. Pearson correlation coefficient. In Noise Reduction in Speech Processing , pages 1–4. Springer, 2009. D. G. Bonett and T. A. Wright. Sample size requirements for estimating pearson, kendall and spearman correlations. Psychometrika , 65(1):23–28, 2000. M. B. Brown and J. K. Benedetti. Sampling behavior of tests for correlation in two-way contingency tables. Journal of the American Statistical Association , 72(358):309–315, 1977. G. Casella and R. L. Berger. Statistical Inference . Duxbury, Pacific Grove, CA, 2nd edition, 2002. N. Cliff. Ordinal Methods for Behavioral Data Analysis . Lawrence Erlbaum Associates, Mahwah, NJ, 1996. H. Cramér. Mathematical Methods of Statistics . Princeton University Press, Princeton, 1946. E. E. Cureton. Rank-biserial correlation. Psychometrika , 21(3):287–290, 1956. doi: 10.1007/BF02289138. E. C. Davenport and N. A. El-Sanhurry. Phi/phimax: Review and synthesis. Educational and Psycho-logical Measurement , 51(4):821–828, 1991. doi: 10.1177/001316449105100403. J. C. De Winter, S. D. Gosling, and J. Potter. Comparing the Pearson and Spearman correlation coefficients across distributions and sample sizes: A tutorial using simulations and empirical data. 
+
+Psychological Methods , 21(3):273–290, 2016. F. Drasgow. Polychoric and polyserial correlations. The Encyclopedia of Statistics , 7:68–74, 1986. E. C. Fieller, H. O. Hartley, and E. S. Pearson. Tests for rank correlation coefficients. I. Biometrika , 44 (3/4):470–481, 1957. D. B. Flora and P. J. Curran. An empirical evaluation of alternative methods of estimation for confir-matory factor analysis with ordinal data. Psychological Methods , 9(4):466–491, 2004. J. Fox. polycor : Polychoric and Polyserial Correlations , 2022. URL https://CRAN.R-project.org/ package=polycor . R package version 0.8-1. L. A. Goodman and W. H. Kruskal. Measures of association for cross classifications. Journal of the American Statistical Association , 49(268):732–764, 1954. C. R. Harris, K. J. Millman, S. J. van der Walt, R. Gommers, P. Virtanen, D. Cournapeau, E. Wieser, J. Taylor, S. Berg, N. J. Smith, et al. Array programming with NumPy. Nature , 585(7825):357–362, 2020. doi: 10.1038/s41586-020-2649-2. K. Healy. gssr : General Social Survey Data for R, 2023. URL https://kjhealy.github.io/gssr/ .
+
+R package version 0.4.0. S. L. Hershberger. Tetrachoric correlation. Encyclopedia of statistics in behavioral science , 2005. J. D. Hunter. Matplotlib: A 2D graphics environment. Computing in Science & Engineering , 9(3):90–95, 2007. doi: 10.1109/MCSE.2007.55. 34 R. Iannone, J. Cheng, B. Schloerke, E. Hughes, A. Lauer, and J. Seo. gt: Easily Create Presentation-Ready Display Tables , 2024. URL https://CRAN.R-project.org/package=gt . R package version 0.10. K. G. Jöreskog. On the estimation of polychoric correlations and their asymptotic covariance matrix. 
+
+Psychometrika , 59(3):381–389, 1994. K. G. Jöreskog. Structural equation modeling with ordinal variables using LISREL. Technical Report ,2005. URL https://www.ssicentral.com/lisrel/techdocs/ordinal.pdf . Scientific Software In-ternational, Lincolnwood, IL. M. G. Kendall. A new measure of rank correlation. Biometrika , 30(1-2):81–93, 1938. M. G. Kendall. The treatment of ties in ranking problems. Biometrika , 33(3):239–251, 1945. F. Kiwanuka, J. Kopra, N. Sak-Dankosky, R. C. Nanyonga, and T. Kvist. Polychoric correlation with ordinal data in nursing research. Nursing Research , 71(6):469–476, 2022. S. Kranz. Find economic articles with data. Database and search application, Ulm University, 2023. URL https://ejd.econ.mathematik.uni-ulm.de . Snapshot of 2024-05-30. D. Makowski, M. S. Ben-Shachar, I. Patil, and D. Lüdecke. Methods and algorithms for correlation analysis in R. Journal of Open Source Software , 5(51):2306, 2020. doi: 10.21105/joss.02306. W. McKinney. Data structures for statistical computing in Python. In Proceedings of the 9th Python in Science Conference , pages 56–61, 2010. doi: 10.25080/Majora-92bf1922-00a. B. Muthén and D. Kaplan. A comparison of some methodologies for the factor analysis of non-normal Likert variables. British Journal of Mathematical and Statistical Psychology , 38(2):171–189, 1985. B. Muthén and D. Kaplan. A comparison of some methodologies for the factor analysis of non-normal Likert variables: A note on the size of the model. British Journal of Mathematical and Statistical Psychology , 45(1):19–30, 1992. U. Olsson. Maximum likelihood estimation of the polychoric correlation coefficient. Psychometrika , 44 (4):443–460, 1979. U. Olsson, F. Drasgow, and N. J. Dorans. The polyserial correlation coefficient. Psychometrika , 47(3): 337–347, 1982. doi: 10.1007/BF02294164. K. Pearson. Notes on regression and inheritance in the case of two parents. Proceedings of the Royal Society of London , 58:240–242, 1895. K. Pearson. Mathematical Contributions to the Theory of Evolution. XIII. On the Theory of Contingency and Its Relation to Association and Normal Correlation . Number 1 in Drapers’ Company Research Memoirs, Biometric Series. Dulau and Co., London, 1904. W.-Y. Poon and S.-Y. Lee. Maximum likelihood estimation of multivariate polyserial and polychoric correlation coefficients. Psychometrika , 52(3):409–430, 1987. 
+
+R Core Team. R: A Language and Environment for Statistical Computing . R Foundation for Statistical Computing, Vienna, Austria, 2025. URL https://www.R-project.org/ .W. Revelle. psych : Procedures for Psychological, Psychometric, and Personality Research . Northwestern University, Evanston, IL, 2024. URL https://CRAN.R-project.org/package=psych . R package version 2.4.3. D. Robinson, A. Hayes, and S. Couch. broom : Convert Statistical Analysis Objects into Tidy Tibbles ,2024. URL https://CRAN.R-project.org/package=broom . R package version 1.0.7. 35 T. W. Smith, M. Davern, J. Freese, and S. Morgan. General social surveys, 1972–2024. NORC at the University of Chicago, 2024. URL https://gss.norc.org/ . Machine-readable data file. C. Spearman. The proof and measurement of association between two things. The American Journal of Psychology , 15(1):72–101, 1904. H. Theil. Economics and information theory. 1967. A. A. Tschuprow. Principles of the Mathematical Theory of Correlation . W. Hodge & Co., London, 1939. Translated by M. Kantorowitsch. P. Virtanen, R. Gommers, T. E. Oliphant, M. Haberland, T. Reddy, D. Cournapeau, E. Burovski, P. Peterson, W. Weckesser, J. Bright, et al. SciPy 1.0: Fundamental algorithms for scientific computing in Python. Nature Methods , 17:261–272, 2020. doi: 10.1038/s41592-019-0686-2. M. L. Waskom. seaborn : Statistical data visualization. Journal of Open Source Software , 6(60):3021, 2021. doi: 10.21105/joss.03021. H. Wickham. ggplot2 : Elegant Graphics for Data Analysis . Springer-Verlag, New York, 2016. URL 
+
+https://ggplot2.tidyverse.org .H. Wickham and L. Henry. purrr: Functional Programming Tools , 2023. URL https://CRAN.R-project. org/package=purrr . R package version 1.0.2. H. Wickham, M. Averick, J. Bryan, W. Chang, L. D. McGowan, R. François, G. Grolemund, A. Hayes, L. Henry, J. Hester, M. Kuhn, T. L. Pedersen, E. Miller, S. M. Bache, K. Müller, J. Ooms, D. Robinson, D. P. Seidel, V. Spinu, K. Takahashi, D. Vaughan, C. Wilke, K. Woo, and H. Yutani. Welcome to the 
+
+tidyverse . Journal of Open Source Software , 4(43):1686, 2019. doi: 10.21105/joss.01686. H. Wickham, R. François, L. Henry, K. Müller, and D. Vaughan. dplyr: A Grammar of Data Manipula-tion , 2023. URL https://CRAN.R-project.org/package=dplyr . R package version 1.1.4. G. U. Yule. On the methods of measuring association between two attributes. Journal of the Royal Statistical Society , 75(6):579–652, 1912. H. Zhu. kableExtra: Construct Complex Table with kable and Pipe Syntax , 2024. URL https://CRAN. R-project.org/package=kableExtra . R package version 1.4.0. 36 A Proofs of correlation equivalences 
+
+## A.1 Equality of Pearson and point-biserial correlations 
+
+Assumption A.1. The data {(xi, y i)}ni=1 satisfy: (i) n ≥ 2; (ii) yi ∈ { 0, 1} with both groups non-empty, so n1 = ∑ 
+
+> i
+
+yi and n0 = n − n1 both lie in {1, . . . , n − 1}, equivalently ˆp = n1/n ∈ (0 , 1) ; (iii) xi ∈ R has positive sample variance, s2 
+
+> x
+
+> 0.
+
+Theorem A.1 (Pearson equals point-biserial) . Under Assumption A.1, the Pearson sample correlation between x and y coincides with the point-biserial coefficient, 
+
+r = ¯x1 − ¯x0
+
+sx
+
+√ˆp(1 − ˆp) = rpb ,
+
+where ¯xj = n−1
+
+> j
+
+∑ 
+
+> yi=j
+
+xi for j ∈ { 0, 1}.Proof. The overall mean decomposes as ¯x = ˆ p¯x1 + (1 − ˆp)¯ x0. Because yi ∈ { 0, 1}, the deviation yi − ˆp
+
+takes only the two values 1 − ˆp and −ˆp, so the sample covariance becomes 
+
+Sxy = 1
+
+n − 1
+
+> n
+
+∑
+
+> i=1
+
+(xi − ¯x)( yi − ˆp)= 1
+
+n − 1 [n1(¯ x1 − ¯x)(1 − ˆp) + n0(¯ x0 − ¯x)( −ˆp)] .
+
+Substituting ¯x1 − ¯x = (1 − ˆp)(¯ x1 − ¯x0) and ¯x0 − ¯x = −ˆp(¯ x1 − ¯x0) collapses both terms, 
+
+Sxy = nn − 1 ˆp(1 − ˆp)(¯ x1 − ¯x0).
+
+For the binary variable, s2 
+
+> y
+
+= nn−1 ˆp(1 − ˆp), strictly positive by Assumption A.1(ii). Combined with sx > 0
+
+from Assumption A.1(iii), 
+
+r = Sxy 
+
+sxsy
+
+= ¯x1 − ¯x0
+
+sx
+
+√ˆp(1 − ˆp) = rpb .
+
+Remark (Population analogue) . With Y ∈ { 0, 1}, p = Pr( Y = 1) ∈ (0 , 1) , μj = E[X|Y = j], and σX > 0,the same argument yields ρ = ( μ1 − μ0)σ−1
+
+> X
+
+√p(1 − p).
+
+Remark (On the coding of y). Pearson’s r is invariant under any positive affine recoding y 7 → γy + δ with 
+
+γ > 0, so the numerical correlation is unchanged if y is coded as {− 1, +1 } rather than {0, 1}. The closed form rpb = (¯ x1 − ¯x0)s−1
+
+> x
+
+√ˆp(1 − ˆp) is, however, derived under 0/1 coding and takes different algebraic shapes under other codings, even though the numerical value of the correlation it represents is the same. 
+
+## A.2 Equality of Pearson and ϕ for two binary variables 
+
+Assumption A.2. The data {(xi, y i)}ni=1 satisfy: (i) n ≥ 2; (ii) xi, y i ∈ { 0, 1}; (iii) both marginals are non-degenerate, i.e., neither row sum nor column sum of the 2 × 2 contingency table equals 0 or n.
+
+Theorem A.2 (Pearson equals ϕ). Under Assumption A.2, the Pearson sample correlation between x
+
+and y equals the ϕ coefficient, 
+
+r = N11 N00 − N10 N01 
+
+√N1· N0· N·1 N·0
+
+= ϕ, 
+
+where Nij is the count of observations with x = i and y = j, and Ni·, N·j denote row and column marginals respectively. 
+
+37 Proof. Arrange the contingency counts as 
+
+y = 1 y = 0 row sums 
+
+x = 1 N11 N10 N1·
+
+x = 0 N01 N00 N0·
+
+col sums N·1 N·0 n
+
+with n = N11 + N10 + N01 + N00 , and write ¯x = N1·/n , ¯y = N·1/n . Because indicators satisfy x2 
+
+> i
+
+= xi
+
+and y2 
+
+> i
+
+= yi,
+
+s2 
+
+> x
+
+= nn − 1 ¯x(1 − ¯x) = N1· N0·
+
+n(n − 1) ,s2 
+
+> y
+
+= nn − 1 ¯y(1 − ¯y) = N·1 N·0
+
+n(n − 1) ,
+
+both strictly positive by Assumption A.2(iii). For the covariance, 
+
+Sxy = 1
+
+n − 1
+
+> n
+
+∑
+
+> i=1
+
+(xi − ¯x)( yi − ¯y) = 1
+
+n − 1
+
+( n∑
+
+> i=1
+
+xiyi − n¯x¯y
+
+)
+
+= 1
+
+n − 1
+
+(
+
+N11 − N1· N·1
+
+n
+
+)
+
+= N11 N00 − N10 N01 
+
+n(n − 1) ,
+
+where the last equality uses N11 n − N1·N·1 = N11 (N11 + N10 + N01 + N00 ) − (N11 + N10 )( N11 + N01 ) = 
+
+N11 N00 − N10 N01 . Hence 
+
+r = Sxy 
+
+sxsy
+
+= (N11 N00 − N10 N01 )/[n(n − 1)] 
+
+√N1· N0· N·1 N·0/[n(n − 1)] = N11 N00 − N10 N01 
+
+√N1· N0· N·1 N·0
+
+,
+
+which is the definition of ϕ.
+
+Remark (Population analogue) . Let X, Y ∈ { 0, 1} with px = Pr( X = 1) ∈ (0 , 1) , py = Pr( Y = 1) ∈ (0 , 1) ,and joint probabilities {pij }i,j ∈{ 0,1}. Then Var( X) = px(1 − px), Var( Y ) = py (1 − py ), and Cov( X, Y ) = 
+
+p11 − pxpy = p11 p00 − p10 p01 , so 
+
+ρ = p11 p00 − p10 p01 
+
+√px(1 − px) py (1 − py ) = ϕ. 
+
+Remark (Invariance to coding) . Both r and ϕ are invariant under any positive affine recoding x 7 → αx +β,
+
+y 7 → γy + δ with α, γ > 0, provided the convention that the larger of the two coded values labels the " 1"row (or column) of the contingency table is preserved. Swapping the row labels (or column labels) flips the sign of ϕ, matching the corresponding sign flip of r.
+
+Remark (Degeneracy) . If any marginal count is zero or equals n (i.e., Ni· ∈ { 0, n } or N·j ∈ { 0, n }), the corresponding sample variance vanishes and both r and ϕ are undefined. Assumption A.2(iii) rules this out. 38
