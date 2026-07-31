@@ -1,55 +1,108 @@
-<div class="dpr-home-notice-card">
-  <h3 class="dpr-home-notice-title">🚀 Start Here</h3>
-  <ul class="dpr-home-notice-list">
-    <li><a href="#/tutorial/README">使用教程</a></li>
-  </ul>
+<div class="dpr-home-notice-card dpr-home-panel">
+  <div class="dpr-home-notice-header dpr-home-panel-header">
+    <h3 class="dpr-home-notice-title">公告与更新</h3>
+    <a class="dpr-home-notice-tutorial" href="#/tutorial/README">使用教程 <span aria-hidden="true">›</span></a>
+  </div>
+  <div class="dpr-home-notice-entry">
+    <time class="dpr-home-notice-date" datetime="2026-07-20">07.20</time>
+    <div>
+      <strong class="dpr-home-notice-entry-title">反馈功能上线</strong>
+      <span class="dpr-home-notice-entry-summary">新增反馈功能，欢迎大家踊跃反馈各种建议，我们会第一时间查看并协调处理。</span>
+    </div>
+  </div>
+  <div class="dpr-home-notice-entry">
+    <time class="dpr-home-notice-date" datetime="2026-07-19">07.19</time>
+    <div>
+      <strong class="dpr-home-notice-entry-title">首页新增社区统计</strong>
+      <span class="dpr-home-notice-entry-summary">现在可以看到今天看论文的人数和项目加入人数。</span>
+    </div>
+  </div>
+  <div class="dpr-home-site-stats" data-dpr-site-stats hidden aria-live="polite">
+    <span>今天有 <strong class="dpr-home-site-stat-value" data-dpr-daily-readers>--</strong> 人在看论文</span>
+    <span class="dpr-home-site-stat-separator" aria-hidden="true">·</span>
+    <span>昨天有 <strong class="dpr-home-site-stat-value" data-dpr-yesterday-readers>--</strong> 人在看论文</span>
+    <span class="dpr-home-site-stat-separator" aria-hidden="true">·</span>
+    <span>已有 <strong class="dpr-home-site-stat-value" data-dpr-fork-count>--</strong> 人加入 Daily Paper Reader</span>
+    <span class="dpr-home-history">
+      <button type="button" class="dpr-home-history-trigger" data-dpr-history-trigger aria-label="查看最近 14 天阅读趋势"><span aria-hidden="true">🔍</span></button>
+      <span class="dpr-home-history-popover" data-dpr-history-popover role="tooltip">
+        <span class="dpr-home-history-header">近 14 天阅读趋势</span>
+        <span class="dpr-home-history-meta">
+          <span data-dpr-history-range>--</span>
+          <span>峰值 <strong data-dpr-history-peak>--</strong></span>
+        </span>
+        <span class="dpr-home-history-chart" data-dpr-history-chart></span>
+      </span>
+    </span>
+  </div>
 </div>
 
-## 每次日报
-- 最新运行日期：2026-07-30
-- 运行时间：2026-07-30 20:22:28 UTC
-- 运行状态：成功
-- 本次总论文数：8
-- 精读区：3
-- 速读区：5
+<div class="dpr-home-dashboard-grid">
+<section class="dpr-home-dashboard-card dpr-home-report-card">
+  <div class="dpr-home-dashboard-header">
+    <div>
+      <span class="dpr-home-dashboard-kicker">2026-07-31</span>
+      <h3 class="dpr-home-dashboard-title">今日汇总</h3>
+    </div>
+    <strong class="dpr-home-dashboard-count">共 12 篇</strong>
+  </div>
+  <dl class="dpr-home-dashboard-stats">
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>11</dd></div>
+  </dl>
+  <p class="dpr-home-dashboard-body">最近更新：2026-07-31 21:59:34 UTC<br>状态：成功</p>
+</section>
+<section class="dpr-home-dashboard-card dpr-home-brief-card">
+  <div class="dpr-home-dashboard-header">
+    <div>
+      <span class="dpr-home-dashboard-kicker">合并后生成</span>
+      <h3 class="dpr-home-dashboard-title">今日简报</h3>
+    </div>
+    <strong class="dpr-home-dashboard-count">AI</strong>
+  </div>
+  <div class="dpr-home-dashboard-body">
+<p>今日读12篇论文，精读TCellAlign，速读11篇，聚焦单细胞与多模态分析。</p>
+<p>最值得关注：TCellAlign用命名学多智能体对齐T细胞群（8.0分），另有三篇7分工作覆盖多模态基因表达、靶基因发现与纵向轨迹学习。</p>
+<p>建议普通读者优先精读TCellAlign，其余可速读了解单细胞AI新范式。</p>
+  </div>
+</section>
+<section class="dpr-home-dashboard-card dpr-home-deep-card">
+  <div class="dpr-home-dashboard-header">
+    <div>
+      <span class="dpr-home-dashboard-kicker">今日累计</span>
+      <h3 class="dpr-home-dashboard-title">精读推荐</h3>
+    </div>
+    <strong class="dpr-home-dashboard-count">1 篇</strong>
+  </div>
+  <div class="dpr-home-dashboard-body">
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="TCellAlign: Cross-study T-cell Populations Alignment with Nomenclature-Guided Multi-Agent Workflow">TCellAlign: Cross-study T-cell Populations Alignment with Nomenclature-Guided Multi-Agent Workflow</span></li></ul>
+  </div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
+</section>
+<section class="dpr-home-dashboard-card dpr-home-skim-card">
+  <div class="dpr-home-dashboard-header">
+    <div>
+      <span class="dpr-home-dashboard-kicker">今日累计</span>
+      <h3 class="dpr-home-dashboard-title">速读推荐</h3>
+    </div>
+    <strong class="dpr-home-dashboard-count">11 篇</strong>
+  </div>
+  <div class="dpr-home-dashboard-body">
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="M$^3$-Gen: Interpretable Multimodal Generation of Gene Expression Profiles Using Clinical and Imaging Data">M$^3$-Gen: Interpretable Multimodal Generation of Gene Expression Profiles Using Clinical and Imaging Data</span></li><li><span class="dpr-home-dashboard-paper-title" title="SCTA: An Agentic Framework for Stable and Interpretable Target Gene Discovery from Single-Cell RNA Sequencing">SCTA: An Agentic Framework for Stable and Interpretable Target Gene Discovery from Single-Cell RNA Sequencing</span></li><li><span class="dpr-home-dashboard-paper-title" title="Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs">Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs</span></li></ul>
+  </div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>9</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>2</strong></span></div>
+</section>
+</div>
 
-### 今日简报（AI）
-今日精读3篇、速读5篇，聚焦基因组语言模型与多组学融合两大前沿方向。最值得关注《Causal dictionary learning》以9.0分揭示转录因子结合特征的可解释性，以及《M^3-Gen》用多模态数据生成基因表达谱的新范式。建议普通读者优先精读这两篇高分论文，速读内容可重点关注单细胞靶基因发现的SCTA框架。
-- 详情：[/202607/30/README](/202607/30/README)
-
-### 精读区论文标签
-1. [Causal dictionary learning reveals and validates transcription-factor binding features in genomic language models](/202607/30/2607.19618v1-causal-dictionary-learning-reveals-and-validates-transcription-factor-binding-features-in-genomic-language-models)  
-   标签：评分：9.0/10、query:med-ai
-   evidence：因果字典学习用于基因组语言模型，解释转录因子结合特征
-2. [M$^3$-Gen: Interpretable Multimodal Generation of Gene Expression Profiles Using Clinical and Imaging Data](/202607/30/2607.21343v1-m3-gen-interpretable-multimodal-generation-of-gene-expression-profiles-using-clinical-and-imaging-data)  
-   标签：评分：8.0/10、query:med-ai
-   evidence：利用GAN从临床和影像数据多模态生成基因表达谱
-3. [The genetic control of rapid genome content divergence in Arabidopsis thaliana](/202607/30/biorxiv-10-1101-2025-06-11-659220-v3-the-genetic-control-of-rapid-genome-content-divergence-in-arabidopsis-thaliana)  
-   标签：评分：8.0/10、query:gwas
-   evidence：基于K-mer的全基因组关联分析识别拟南芥重复序列丰度的遗传基础
-
-### 速读区论文标签
-1. [Adaptive Confidence-weighted Expansion for Trustworthy Multi-Omics Multimodal Fusion](/202607/30/2607.20742v1-adaptive-confidence-weighted-expansion-for-trustworthy-multi-omics-multimodal-fusion)  
-   标签：评分：7.0/10、query:gwas
-   evidence：自适应置信加权多组学融合，增强功能基因组与GWAS整合的可信度
-2. [HierarchicalDAEW: Domain-Aware Edge-Weighted Graph Convolution with Evidential Uncertainty for Multi-Section Spatial Gene Expression Prediction from H&E Histology](/202607/30/2607.20896v1-hierarchicaldaew-domain-aware-edge-weighted-graph-convolution-with-evidential-uncertainty-for-multi-section-spatial-gene-expression-prediction-from-he-histology)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：从组织学预测空间基因表达，使用图卷积
-3. [SCTA: An Agentic Framework for Stable and Interpretable Target Gene Discovery from Single-Cell RNA Sequencing](/202607/30/2607.23821v1-scta-an-agentic-framework-for-stable-and-interpretable-target-gene-discovery-from-single-cell-rna-sequencing)  
-   标签：评分：7.0/10、query:med-ai
-   evidence：从单细胞RNA测序中识别靶基因的智能体框架
-4. [HistoGPA: A Context-Conditioned Gene-Prior Attention Framework for Histology-Based Spatial Gene Expression Prediction](/202607/30/2607.24364v1-histogpa-a-context-conditioned-gene-prior-attention-framework-for-histology-based-spatial-gene-expression-prediction)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：基于上下文的基因先验注意力框架用于组织学基因表达预测
-5. [Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs](/202607/30/2607.25609v1-contrastive-representation-learning-of-longitudinal-disease-trajectories-on-temporal-graphs)  
-   标签：评分：6.0/10、query:med-ai
-   evidence：基于时间图的对比表示学习建模纵向疾病轨迹，使用电子健康记录数据
-
-
-<div class="dpr-home-promo-card">
-  <h3 class="dpr-home-promo-title">💬 社区与支持</h3>
-  <ul class="dpr-home-promo-list">
-    <li>欢迎 Star / Fork / Issue / PR</li>
-    <li>QQ群：583867967（欢迎交流，已有：1151人）</li>
-  </ul>
+<div class="dpr-home-promo-card dpr-home-panel">
+  <div class="dpr-home-panel-header">
+    <h3 class="dpr-home-promo-title">社区与支持</h3>
+  </div>
+  <p class="dpr-home-promo-copy">欢迎通过 Star、Fork、Issue 或 PR 一起完善 Daily Paper Reader。</p>
+  <div class="dpr-home-promo-meta">
+    <span>QQ群 <strong>583867967</strong></span>
+    <span class="dpr-home-promo-separator" aria-hidden="true">·</span>
+    <span>已有 <strong>1,491</strong> 人参与交流</span>
+  </div>
 </div>
