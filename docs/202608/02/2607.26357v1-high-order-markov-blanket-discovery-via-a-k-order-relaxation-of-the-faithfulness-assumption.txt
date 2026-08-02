@@ -1,0 +1,1263 @@
+Title: High-Order Markov Blanket Discovery via a k-Order Relaxation of the Faithfulness Assumption
+
+URL Source: https://arxiv.org/pdf/2607.26357v1
+
+Published Time: Thu, 30 Jul 2026 00:18:08 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# High-Order Markov Blanket Discovery via a k-Order Relaxation of the Faithfulness Assumption 
+
+Loong Kuan Lee 1 Ragavi Krishnamoorthy 1 Nico Piatkowski 11Hybrid Intelligence, Fraunhofer IAIS, Sankt Augustin, Germany, 
+
+## Abstract 
+
+The problem of learning the graphical Markov blanket (MB) of a variable from data has applic-ations in many areas such as structure learning for Bayesian networks and Markov random fields, causal discovery, and feature selection. However, a common assumption most methods make is that the conditional independencies in the distribution im-ply the same separation in the graphical structure— also known as the faithfulness assumption. Unfor-tunately, this assumption can be violated by higher-order dependencies such as XOR and parity-type relations, and—on finite samples—by empirical violations that, in extreme cases, even induce spuri-ous dependencies absent from the true distribution. Therefore, in this paper we propose a “k-order” re-laxation of the faithfulness assumption that captures parity type relationships between k+2 variables. We then propose a proof of concept algorithm called k-order Markov blanket (kOMB) that uses this re-laxation for MB discovery. Finally, we empirically show how kOMB can recover the MB of a variable under both true and empirical violations of faithful-ness. Code available at: https://github.c om/lklee9/k-order-Markov-blanket .
+
+## 1 INTRODUCTION 
+
+The goal of the Markov blanket (MB) discovery problem is to infer the MB of some variable 𝑌 in the graph G given a data-set D sampled from the joint distribution P. Originating from the Bayesian network and causal learning literature [Margar-itis and Thrun, 1999, Tsamardinos et al., 2003a, Ling et al., 2021, Hu and Zheng, 2024], the MB discovery problem has also been discussed and utilised in the feature selection liter-ature as well [Tsamardinos and Aliferis, 2003, Wang et al., 2020]. More recently, MB discovery has also been employed 
+
+𝑋 1 𝑋 2 𝑋 3
+
+𝑌 
+
+𝑍 :=
+
+hÍ3 
+
+> 𝑖 =1
+
+𝑋 𝑖 = 1
+
+i
+
+P(𝑌 = 𝑍 | X) = 0.9
+
+Recall (%) Sample Size Method 100 1000 Grow and Shrink 28.33 100 0-OMB (ours) 28.33 100 1-OMB (ours) 77.50 100 
+
+2-OMB (ours) 100.0 100 Figure 1: Recovering the MB of variable 𝑌 when 𝑌 is the output of a noisy Boolean function that returns 1 when only one of 𝑋 1, 𝑋 2, and 𝑋 3 is 1. Our algorithm that assumes a 
+
+2-order faithfulness relaxation is able to fully recover the MB of each variable—even with just 100 samples. as a subroutine within distributed, divide-and-conquer ap-proaches to large-scale BN structure learning [Dong et al., 2025]. That said, we are interested in inferring MBs in both Bayesian network (BN) and Markov random field (MRF). Therefore, whenever possible we will try to keep our notation and exposition agnostic to the graph type of G.Most existing approaches to MB discovery operate under two main assumptions. The first being that any separations in G
+
+imply the same conditional independence in P. The second assumption—known as the faithfulness assumption—goes the opposite direction, that is any conditional independencies in P imply the same separation in G.Theoretically, BNs with faithfulness violations have Le-besgue measure zero [Meek, 1995, Spirtes et al., 2001, Boeken et al., 2025]; however these “typicality” results de-pend on somewhat arbitrary choices, like the choice of 𝜎 -ideal [Boeken et al., 2025]. There are well-known examples of some—very simple—relations that violate faithfulness. The most famous of which is the (noisy) XOR function for violations involving three variables [Inazumi et al., 2011, Marx et al., 2021]; which is a special case of the (noisy) parity function whose higher-order faithfulness violations we detail in Example 1. arXiv:2607.26357v1 [cs.LG] 29 Jul 2026 That said, even if unfaithful BNs and MRFs are truly almost non-existent in nature, a lack of sufficient samples can still cause an empirical faithfulness violation [Uhler et al., 2013, Lemeire et al., 2012, Boeken et al., 2025]. For example, the small example in Figure 1 is one such case where the true BN is faithful, but due to a finite sample, empirical faithfulness violations occur—which can be overcome by the algorithm we will propose later in Section 5. A full walkthrough of empirical faithfulness violation can be found later in Ex-ample 2 under Section 3. Furthermore, in extreme cases, a limited sample size can cause MB discovery algorithms to falsely discover spurious dependencies absent from the true distribution. We later observe this phenomenon in Figure 4 under Section 6.1 with the low precision exhibited by the different MB discovery methods at low sample sizes. There are several weaker assumptions compared to faithfulness such as adjacency faithfulness [Spirtes et al., 2001], Pearl-minimality [Pearl, 1988, 2009], SGS-minimality [Spirtes et al., 2001], frugality [Forster et al., 2018], and more recently 2-adjacency faithfulness [Marx et al., 2021]. 2-adjacency faithfulness in particular is quite practical as by limiting faithfulness violations to “Unfaithful Triples”, it yields an algorithm with a much smaller search space compared to frugality. However, although the 
+
+2-adjacency faithfulness can find XOR-type relations, it is unable to find higher-order parity relationships between more than 3 variables. 
+
+Contributions Therefore, motivated by the considerations above, in Section 4 we propose a relaxation of faithfulness for parity-like relationships between 𝑘 + 2 variables: the 
+
+𝑘 -order faithfulness assumption. This relaxation of faithful-ness allows us to infer—from sample data—the graphical Markov blanket of a variable under mild assumptions. We show this in Section 5 by implementing a proof-of-concept algorithm called the 𝑘 -order Markov blanket (kOMB). We then empirically show in Section 6 that kOMB can over-come both true and empirical faithfulness violations and that it outperforms some existing constraint-based methods on well-known benchmark datasets—where we find merit in exploring relationships between 4 variables at a time, and not just 3.
+
+## 2 PROBABILISTIC GRAPHICAL MODELS AND INDEPENDENCIES 
+
+Consider the set of 𝑛 variables 𝑽 = {𝑉 1, . . . , 𝑉 𝑛 } with no other hidden or latent variables. The conditional independ-encies between these variables— Y ⫫ X | Z for disjoint variables sets Y, X, Z ⊆ 𝑽 —can be represented by either a directed acyclic graph (DAG) [Pearl, 1988] or an undirected graph (UG) Lauritzen [1996]. That said, we will denote both graphs with the tuple G = (𝑽 , 𝑬 ) since we are agnostic on the type of graph used for representing these graphical conditional independencies J (G) .Regardless of the graph type of G, for disjoint subsets 
+
+X, Y, S ⊆ 𝑽 , we will denote that X and Y are separated in G as, X ⫫G Y | S. Furthermore, we denote the set of conditional independencies encoded by the graph G—i.e. the independence model of G—as, 
+
+⟨X, Y | S⟩ ∈ J (G) ⇐⇒ X ⫫G Y | S, (1) where ⟨X, Y | S⟩ is known as an independence state-ment [Sadeghi, 2017]. In addition to the graphical structure G, we also consider a joint distribution P over 𝑽 that might encode its own set of conditional independencies between the variables in 𝑽 ,
+
+⟨X, Y | S⟩ ∈ J ( P) ⇐⇒ X ⫫P Y | S, (2) where X ⫫P Y | S denotes X and Y are probabilistically conditionally independent given S.So far, J (G) and J ( P) are two separate collections of con-ditional independencies in the graph G and distribution P
+
+respectively. Our base assumption throughout this paper, the 
+
+Global Markov Property , links the two by requiring that every conditional independence encoded by the graph G
+
+also hold in the distribution P. This is a common assumption in the Markov blanket discovery literature Schlüter [2014], Yu et al. [2020], Marx et al. [2021]. 
+
+Assumption 1 (Global Markov Property) . Given a PGM 
+
+M = (G , P), we say that the distribution P is Markov to the graph G when for all disjoint subsets X, Y, S ⊆ 𝑽 [Ham-mersley and Clifford, 1971, Lauritzen and Sadeghi, 2018], 
+
+X ⫫G Y | S =⇒ X ⫫P Y | S. (3) Furthermore, by Equations (1) and (2), the relation in Equa-tion (3) is equivalent to J (G) ⊆ J ( P).Despite their differences, the independence models of G and 
+
+P are both known to obey a set of axioms called the (semi)-graphoid axioms [Pearl et al., 1989] (see Definition 6). As mentioned in Section 1, we are interested in learning the graphical Markov blanket of some 𝑌 ∈ 𝑽 defined as follows. 
+
+Definition 1 (Markov Blanket and Boundary) . For a variable 
+
+𝑌 ∈ 𝑽 , the MB of 𝑌 in G is any subset S ⊆ V \ 𝑌 1 s.t. 
+
+𝑌 ⫫G 𝑽 \ ( 𝑌 ∪ S) | S, (4) or in other words, every other variable in 𝑽 \ ( 𝑌 ∪ S) is graphically separated from 𝑌 by S. The Markov boundary of the variable 𝑌 —henceforth denoted as MB G (𝑌 )—is then defined as the minimal Markov blanket of 𝑌 [Pearl, 1988].        
+
+> 1We allow set operations between variable sets and single vari-ables to implicitly mean the operation between the set and the atomic set of the single variable—for example: V\𝑌 ≔V\ { 𝑌 }.
+
+An equivalent definition for the Markov blanket and boundary of 𝑌 in P can be made by just substituting the graph separation term in Equation (4) for conditional independence in P.Therefore, it is more accurate to say that we wish to learn the Markov boundary of 𝑌 and not just its Markov blanket. However, since colloquially the term Markov blanket is com-monly used to implicitly refer to the Markov boundary, we shall use the term Markov blanket in such a fashion as well. Several methods exist for discovering the Markov blanket (MB) of a target variable 𝑌 ∈ 𝑽 in G with one of the larger class of methods being constraint-based approaches [Mar-garitis and Thrun, 1999, Tsamardinos et al., 2003a, Schlüter, 2014, Ling et al., 2019]. These approaches iteratively test conditional independence statements—using data sampled from P—to grow and shrink a candidate MB of 𝑌 . However, the MB of 𝑌 in the joint distribution P might not be the same as its MB in the graph G. Following the Global Markov Property in Assumption 1, we at know that the MB of 𝑌 in 
+
+P is a subset of the MB in G—which this might prevent us from fully recovering the MB in G. Therefore, in order to ensure that the Markov blankets of 𝑌 in both P and G are equal, a common assumption constraint-based approaches make is that G is faithful to the joint distribution P as defined in Definition 2 [Spirtes et al., 2001]. 
+
+Definition 2 (Faithfulness) . Given a PGM M = (G , P), the graph G is faithful to the joint distribution P if for all disjoint subsets X, Y, S ⊆ 𝑽 [Spirtes et al., 2001], 
+
+X ⫫P Y | S =⇒ X ⫫G Y | S (5) which is basically the reverse direction of the global Markov property in Assumption 1. Therefore, by assuming both the Global Markov Property faithfulness, the conditional independencies of both G and 
+
+P then coincide, J (G) = J ( P). However faithfulness can be violated in many ways and we will explore some of them in the following section. 
+
+## 3 FAITHFULNESS VIOLATIONS AND EXISTING RELAXATIONS 
+
+Probably the most well-known example of a faithfulness violation is the (noisy) XOR function 𝑌 ≔ 𝑋 1 ⊕ 𝑋 2 with the graphical structure 𝑋 1 → 𝑌 ← 𝑋 2 [Inazumi et al., 2011, Marx et al., 2021] 2. A recent faithfulness relaxation for tack-ling XOR-type relations that is of particular interest to us is 
+
+2-adjacency faithfulness [Marx et al., 2021]. 
+
+Definition 3 (2-adjacency faithfulness) . Given the PGM 
+
+M = (G , P), G is 2-adjacent faithful to P if for all adjacent 
+
+> 2The (noisy) XOR function is a special case of the (noisy) parity function whose faithfulness violation we detail in Example 1.
+
+𝑋 1 𝑋 2 𝑋 3
+
+𝑌 
+
+∀𝑖 ∈ [ 3]
+
+P𝑋 𝑖 (0) P𝑋 𝑖 (1)
+
+0.5 0.5 
+
+𝑋 1 𝑋 2 𝑋 3 P𝑌 (1)
+
+0 0 0 0.1 0 0 1 0.9 0 1 0 0.9 0 1 1 0.1 1 0 0 0.9 1 0 1 0.1 1 1 0 0.1 1 1 1 0.9 
+
+Figure 2: Example of a noisy parity BN over 4 variables. variables (𝑋, 𝑌 ) ∈ 𝑬 , ∃X ⊆ MB G (𝑌 ) where 𝑋 ∈ X s.t. 
+
+∀𝑋 ∈ X : 𝑋 ⫫P 𝑌 | X \ 𝑋 and if |X| = 2, 𝑋 1 ⫫P 𝑋 2 | 𝑌 .That said XOR-type relationships only involve three variables. Since we are interested in higher-order unfaithfulness, we will use the noisy parity function as a primary example of the type of faithfulness violation we are interested in. 
+
+Example 1 (Noisy Parity Function) . Let M = (G , P) be a PGM where X = {𝑋 1, 𝑋 2, 𝑋 3 }, 𝑽 = 𝑌 ∪ X, and G has the structure of the DAG in Figure 2. Each 𝑋 ∈ X are independent of each other and has the distribution of a fair coin. The distribution of 𝑌 conditioned on X is then 
+
+P(𝑌 = 𝑓 (x) | X = x) = 0.9, where, 𝑓 (x) ≡ Í𝑛 𝑖 =1 𝑥 𝑛 
+
+(mod 2 ). For any random variable 𝑋 ∈ X, we know that 
+
+P(𝑌 , 𝑋 ) = 0.25 = 0.5 × 0.5 = P(𝑌 )P(𝑋 ) for any value 𝑌 
+
+and 𝑋 takes. Therefore it must the case that 𝑌 ⫫P 𝑋 , but since 
+
+𝑌 and 𝑋 are not separable in G, 𝑌 ⫫G 𝑋 ; G is not faithful to 
+
+P. Additionally for any distinct random variables 𝑋 𝑖 , 𝑋 𝑗 ∈ X,
+
+P(𝑌 , 𝑋 𝑖 , 𝑋 𝑗 ) = 1/8 = 0.53 = P(𝑌 )P(𝑋 𝑖 )P(𝑋 𝑗 ) for any val-ues of 𝑌 , 𝑋 𝑖 , 𝑋 𝑗 . Therefore we know that 𝑌 ⫫P {𝑋 𝑖 , 𝑋 𝑗 },
+
+𝑋 𝑖 ⫫P {𝑌 , 𝑋 𝑗 }, and 𝑋 𝑗 ⫫P {𝑋 𝑖 , 𝑌 }. Since 𝑌 is adjacent to all 𝑋 ∈ X, but there is no 2-cardinality subsets X′ ⊂ X that makes 𝑌 ⫫P X′; G is not 2-adjacent faithful to P following the definition in Marx et al. [2021, Definition 7]. Although we now know of a BN that violates both faithful-ness and 2-adjacency faithfulness, these types of relation-ships between variables might very well not be common in nature. In fact, it has been shown that unfaithful BNs has Lebesgue measure zero [Meek, 1995, Spirtes et al., 2001, Boeken et al., 2025]. However, empirical violations of faith-fulness due to limited samples can be quite common [Uhler et al., 2013, Lemeire et al., 2012, Boeken et al., 2025]. There-fore in Example 2, we will present a scenario where, even though the true BN is faithful; due to sampling error, the DAG of the BN is not faithful to the empirical distribution obtained from the sample. 
+
+Example 2. Similar to Example 1, let M = (G , P) be a PGM with random variables X and 𝑌 with the DAG structure in Figure 3. The distribution of 𝑌 conditioned on X is then 
+
+P 𝑌 = Í 𝑋 ∈X 𝑋 = 1 X = 0.9, where [·] is the Iverson bracket notation for the indicator function. In other words, 𝑋 1 𝑋 2 𝑋 3
+
+𝑌 
+
+𝑔 (X) :=
+
+hÍ𝑋 ∈X 𝑋 = 1
+
+i
+
+P 𝑌 = 𝑔 (X) | X = 0.9
+
+Pathological D
+
+𝑋 1 𝑋 2 𝑋 3 𝑌 
+
+0 0 0 00 0 1 10 1 0 10 1 1 01 0 0 11 0 1 01 1 0 01 0 0 1
+
+Figure 3: Example of a noisy exactly-1 BN over 4 variables with a pathological sample that causes the DAG to be un-faithful to the empirical distribution. 
+
+𝑌 = 1 has a probability of 0.9 when only one of the variables in X is 1. Otherwise, 𝑌 = 0 has a probability of 0.9.The marginal distribution of 𝑌 is P(𝑌 = 1) = 3/8 since only 3 value-combinations of X has just a single 1 among them. We then know that ∀𝑋 ∈ X : P(𝑌 = 1, 𝑋 = 1) =
+
+1/8 ≠ (3/8) × ( 4/8) = P(𝑌 = 1)P(𝑋 = 1). Therefore, 
+
+∀𝑋 ∈ X : 𝑌 ⫫P 𝑋 and consequently, G is faithful to P.However, it is possible for a sample D of P to be pathological in the sense that, the empirical distribution from D induces a independence between 𝑌 and some 𝑋 ∈ X. For example, the sample in Figure 3 causes the marginal distribution of 𝑌 to be ˆP(𝑌 ) = 1/2 and the marginal distribution over 𝑌 and 𝑋 1
+
+to be ˆP(𝑌 , 𝑋 1) = 1/4 = (1/2) × ( 1/2) = ˆP(𝑌 ) ˆP(𝑋 1) for all possible values of 𝑌 and 𝑋 1. Therefore under this empirical distribution ˆP, 𝑌 ⫫ˆP 𝑋 1—which empirically violates the faithfulness assumption. Fortunately in Example 2, the DAG in Figure 3 is still 2-adjacent faithful to the empirical distribution, therefore the full MB is still recoverable by the algorithm outlined in Marx et al. [2021]. However, this is not always the case and as we will see in Section 6.1, sometimes considering higher-order relationships between variables can help better overcome empirical faithfulness violations. 
+
+## 4 THE K-ORDER FAITHFULNESS RELAXATION 
+
+In this section we will introduce our generalisation of the faithfulness assumption in Definition 2 for finding condi-tional dependencies between two variables in 𝑽 that require considering 𝑘 additional variables to be found. But before that, we first define in Definition 4 what it means for two dis-tinct variables 𝑌 , 𝑋 ∈ 𝑽 to only be conditionally dependent given some 𝑘 -cardinality subset Z ⊆ 𝑽 \ { 𝑌 , 𝑋 }, |Z| = 𝑘 .
+
+Definition 4 (𝑘 -Order Dependence) . Given a PGM M =
+
+(G , P), let 𝑌 , 𝑋 ∈ V be two distinct random variables and 
+
+S, Z ⊆ 𝑽 \ { 𝑌 , 𝑋 } be two disjoint subsets. Then we denote the absence of any subset of S′ ⊆ S that renders 𝑌 and 𝑋 
+
+conditionally independent given Z ∪ S′ as 
+
+asc S (𝑌 , 𝑋 | Z) := ∀S′ ⊆ S : 𝑌 ⫫P 𝑋 | Z ∪ S′. (6) Here we say that 𝑌 and 𝑋 are |Z|-order associated w.r.t. Z over the “separating” set S. Of course under this definition there might be some proper subset Z′ ⊂ Z where asc S (𝑌 , 𝑋 | Z′)
+
+still holds. Therefore we say 𝑌 and 𝑋 are |Z|-order dependent 
+
+on Z only if this is not the case, 
+
+dep S (𝑌 , 𝑋 | Z)
+
+:= asc S (𝑌 , 𝑋 | Z) ∧ ∀ Z′ ⊂ Z : ¬ asc S (𝑌 , 𝑋 | Z′). (7) With this definition of 𝑘 -order dependence, we are able to capture parity-like relations over 𝑘 + 2 variables—such as the one in Example 1. Specifically we know that the noisy-parity relationship in Example 1 is 2-order dependent since for distinct variables 𝐴, 𝐵 ∈ { 𝑋 1, 𝑋 2, 𝑋 3, 𝑌 }, Z must always contain the other two variables for asc ∅ ( 𝐴, 𝐵 | Z) to be true. Further note that when 𝑘 = 1, our notion of 𝑘 -order dependence— similar to 2-association in Marx et al. [2021, Definition 6]—is able to capture the relationships between 
+
+Unfaithful Triples which includes XOR-type relationships. There are two aspects of Definition 4 whose purpose might not immediately jump out. The first being that in Equation (6), we require 𝑌 ⫫P 𝑋 | Z ∪ S′ to be true for all subsets S′ ⊆ S—instead of just 𝑌 ⫫P 𝑋 | Z ∪ S. This requirement ensures that 𝑌 and 𝑋 are dependent as long as they are conditioned on Z—forcing a distinction between the possible depend-ants Z and the possible separators S. The other odd aspect of Definition 4 is that we define both 𝑘 -order association and dependence over some arbitrary subset S ⊆ 𝑽 \ { 𝑌 , 𝑋 }
+
+instead of just the entirety of 𝑽 \ { 𝑌 , 𝑋 }. This allows us to reason about associations relative to the candidate Markov blanket maintained by our algorithm, which is central to prov-ing in Section 5 that kOMB correctly recovers the Markov boundary of some variable 𝑌 ∈ 𝑽 .Since henceforth we need to reason about subsets with a restricted cardinality; before continuing we will first define some notational shorthand for dealing with such sets. 
+
+Definition 5 (Power Sets of Limited Cardinality) . Let 𝑽 
+
+be a set of elements and 𝑘 ∈ N : 𝑘 ≤ | 𝑽 | be some natural number 3 smaller than the cardinality of 𝑽 . Then we use, 
+
+P=𝑘 (𝑽 ) := {Z ⊆ 𝑽 : |Z| = 𝑘 }, (8) to denote the set of all subsets of 𝑽 with cardinality 𝑘 and, 
+
+P≤ 𝑘 (𝑽 ) := {Z ⊆ 𝑽 : |Z| ≤ 𝑘 }, (9) to denote the set of all the subsets of 𝑽 with cardinality less than or equal to 𝑘 .  
+
+> 3We adopt the definition of the natural numbers in which 0is included.
+
+Before introducing our generalisation of the faithfulness as-sumption to 𝑘 -order dependencies, we first show in Lemma 1 that 𝑘 -order associations w.r.t. Z implies the existence of a 
+
+𝑘 -order dependence w.r.t. some subset of Z.
+
+Lemma 1 (𝑘 -Order Dependence Arises from Association) .
+
+Given a PGM M = (G , P), let 𝑌 , 𝑋 ∈ V be distinct random variables and S, Z ⊂ 𝑽 \ { 𝑌 , 𝑋 } be disjoint subsets. Then the following holds for all 𝑌 , 𝑋, S, Z:asc S (𝑌 , 𝑋 | Z) =⇒ ∃ Z′ ⊆ Z : dep S (𝑌 , 𝑋 | Z′). (10) The proof of Lemma 1 and all other Lemmas in the paper can be found in Appendix B. 
+
+Assumption 2 (𝑘 -Order Faithfulness) . Given the PGM M =
+
+(G , P), G is 𝑘 -order faithful to P if ∀S ⊆ 𝑽 \ { 𝑌 , 𝑋 },
+
+∀Z ∈ P ≤ 𝑘 (𝑽 \ { 𝑌 , 𝑋 }) ∃ S′ ⊆ S : 𝑌 ⫫P 𝑋 | Z ∪ S′
+
+=⇒ 𝑌 ⫫G 𝑋 | S. (11) Its contrapositive then states that ∀S ⊆ 𝑽 \ { 𝑌 , 𝑋 },
+
+𝑌 ⫫G 𝑋 | S
+
+=⇒ ∃ Z ∈ P ≤ 𝑘 (𝑽 \ { 𝑌 , 𝑋 }) : asc S (𝑌 , 𝑋 | Z). (12) However, the definition in Equation (12) allows 𝑘 to be larger than it needs to be—i.e. 𝑘 is not strict. Therefore, we say that 
+
+G is strictly 𝑘 -order faithful to P if ∀S ⊆ 𝑽 \ { 𝑌 , 𝑋 },
+
+𝑌 ⫫G 𝑋 | S
+
+=⇒ ∃ Z ∈ P =𝑘 ′ (𝑽 \ { 𝑌 , 𝑋 }) : dep S (𝑌 , 𝑋 | Z), (13) where 𝑘 ′ ≤ 𝑘 . This definition in Equation (13) logically follows from Equation (12) as a result of Lemma 1. With this new generalisation of faithfulness, we will now present an initial algorithm, kOMB , that makes use of our 
+
+𝑘 -order faithfulness assumption for MBs discovery. 
+
+## 5 KOMB: K-ORDER MARKOV BLANKET 
+
+Our algorithm for Markov blanket (MB) discovery, kOMB ,is a modified version of the Grow and Shrink (GS) algorithm by Margaritis and Thrun [1999]. In GS, a candidate MB S
+
+is iteratively grown by testing the conditional independence between 𝑌 and variables that are not yet in S—conditioned the current candidate MB S. Therefore, the separating set used in the conditional independence tests change as the GS algorithm progresses. In kOMB , something similar occurs where we will only consider subsets of the candidate MB when trying to find subsets that successfully cause 𝑌 and 𝑋 to be condition-ally independent. In other words, instead of considering the dependence between 𝑌 and 𝑋 over all the variables in 𝑽 ,
+
+dep 𝑽 \{ 𝑌 ,𝑋 } (𝑌 , 𝑋 | Z); we will instead consider the associ-ation between 𝑌 and 𝑋 over just the current candidate MB 
+
+S, asc S (𝑌 , 𝑋 | Z). As a first step, we show that a 𝑘 -order dependence between 𝑌 and 𝑋 with no separating variables to consider implies that 𝑌 is 𝑘 -order associated with every one of the involved variables. 
+
+Lemma 2 (Marginal 𝑘 -Order Dependence Implies Inter-As-sociation) . Given a PGM M = (G , P), let 𝑋, 𝑌 ∈ 𝑽 be distinct variables and Z ⊆ 𝑽 \ { 𝑌 , 𝑋 }. Then if 𝑌 and 𝑋 are 
+
+|Z|-order dependent w.r.t. Z over the empty separating set, 
+
+𝑌 is |Z|-order associated with every variable in Z ∪ 𝑋 ,dep ∅ (𝑌 , 𝑋 | Z) =⇒ asc ∅ (𝑌 , Z ∪ 𝑋 ), (14) 
+
+where asc S (𝑌 , W) := ∀𝑊 ∈ W : asc S (𝑌 , 𝑊 | W \ 𝑊 ). (15) 
+
+When Equation (14) is true, we say that 𝑌 is |Z|-order inter-associated with 𝑋 ∪ Z.
+
+Lemma 2 requires no faithfulness assumption—it holds for every distribution via the semi-graphoid axioms—and gener-alises the 2-association property of unfaithful triples in Marx et al. [2021, Definition 6] to arbitrary orders; the noisy-parity Example 1 is exactly this case with Z = {𝑋 2, 𝑋 3 }. It motiv-ates the make_strict routine of Algorithm 2, which prunes a found dependence set towards an inter-associated one. The last consideration we need to make for kOMB to be remotely feasible—especially in cases where the true MB of 
+
+𝑌 ∈ 𝑽 in G is large—is that, we need to somehow limit the size of the conditioning set when conducting the conditional independence (CI) tests in kOMB . When testing if 𝑌 and 𝑋 are 
+
+𝑘 -order associated, we will generally use CI tests of the form, 
+
+∀S′ ⊆ S : 𝑌 ⫫P 𝑋 | Z ∪ S′, where Z is the “dependence” set that renders 𝑌 and 𝑋 conditionally dependent. Fortunately, assuming 𝑘 -order faithfulness, we know that the size of Z is bounded by 𝑘 .However the same cannot be said for the set S′ as it can be as large as the candidate MB S–which can be arbitrarily large depending on G. Therefore, the third and last assumption we will make is that if 𝑌 and 𝑋 are conditionally independent given Z ∪ S, then there must exist some subset with size less than 𝑙 , S′ ∈ P ≤𝑙 (S), such that 𝑌 and 𝑋 are still conditionally independent given Z ∪ S′.
+
+Assumption 3 (𝑙 -Bounded Separator Assumption) . For a PGM M = (G , P), distinct variables 𝑌 , 𝑋 ∈ 𝑽 , and 𝑽 ′ ≔ 𝑽 \{𝑌 , 𝑋 }, let us first recall the 𝑘 -order faithfulness assumption as defined in Equation (11) ∀S ⊆ 𝑽 \ { 𝑌 , 𝑋 },
+
+∀Z ∈ P ≤ 𝑘 (𝑽 ′) ∃ S′ ⊆ S : 𝑌 ⫫P 𝑋 | Z ∪ S′
+
+=⇒ 𝑌 ⫫G 𝑋 | S. (11) Then, for some natural number 𝑙 ∈ N, we define an 𝑙 -bounded separator version of the 𝑘 -order faithfulness assumption ∀S ⊆ 𝑽 \ { 𝑌 , 𝑋 },
+
+∀Z ∈ P ≤ 𝑘 (𝑽 ′) ∃ S′ ∈ P ≤𝑙 (S) : 𝑌 ⫫P 𝑋 | Z ∪ S′
+
+⇐⇒ ∀ Z ∈ P ≤ 𝑘 (𝑽 ′) ∃ S′ ⊆ S : 𝑌 ⫫P 𝑋 | Z ∪ S′
+
+=⇒ 𝑌 ⫫G 𝑋 | S,
+
+(16) which essentially states that as long as 𝑌 and 𝑋 are condition-ally independent given Z and every ≤ 𝑙 -cardinality subset of 
+
+S, then 𝑌 and 𝑋 are conditionally independent given Z and every possible subset of S—regardless of cardinality. The contrapositive of this assumption is then 
+
+𝑌 ⫫G 𝑋 | S
+
+=⇒ ∃ Z ∈ P ≤ 𝑘 (𝑽 ′) ∀ S′ ⊆ S : 𝑌 ⫫P 𝑋 | Z ∪ S′
+
+⇐⇒ ∃ Z ∈ P ≤ 𝑘 (𝑽 ′) : asc S (𝑌 , 𝑋 | Z)⇐⇒ ∃ Z ∈ P ≤ 𝑘 (𝑽 ′) : asc (𝑙 ) 
+
+> S
+
+(𝑌 , 𝑋 | Z),
+
+(17) where asc (𝑙 ) 
+
+> S
+
+(𝑌 , 𝑋 | Z) ≔ ∀S′ ∈ P ≤𝑙 (S) : 𝑌 ⫫P 𝑋 | Z ∪ S′.The concept of bounding the maximum size of the separators in a graph has been explored before. For instance, Soh and Tatikonda [2019] defined an undirected graph G to be weakly 
+
+𝐾 -separable if for any two non-adjacent vertices in G, there exists a set of vertices with cardinality ≤ 𝐾 that separates the two vertices in G. However, instead of focusing on separation in the graph G, our 𝑙 -bounded separator assumption focuses on the cardinality of “separating” sets that causes conditional independencies between variables in 𝑽 .The 𝑙 -bounded separator assumption is also analogous to assumptions that existing constraint-based MB discovery methods make about the size of the conditioning sets needed to decide conditional independence reliably from finite samples [Margaritis and Thrun, 1999, Tsamardinos et al., 2003a, Aliferis et al., 2003, Tsamardinos et al., 2003b]. As-sumption 3 simply makes such a bound explicit. Furthermore, as shown later in Appendix F, the bound is mild on the net-works used in Section 6.2. 
+
+5.1 THEORETICAL ALGORITHM 
+
+As a proof-of-concept, in this section we propose kOMB —a modification of the Grow and Shrink (GS) by Margaritis and Thrun [1999] to discover Markov blankets with higher-order relationships under the following assumptions: 1) the Global Markov Property from Assumption 1, 2) 𝑘 -order faithful-ness as in Assumption 2, and 3) the 𝑙 -bounded separator assumption in Assumption 3. The original GS algorithm starts with an empty MB S = ∅
+
+and iteratively adds a variable 𝑋 into S if the conditional independence (CI) test 𝑌 ⫫P 𝑋 | S indicates that 𝑌 is con-ditionally independent to 𝑋 given S. The main difference between kOMB and the GS algorithm then is: 1) consider-ing the addition of entire sets of variables 𝑋 ∪ X : X ∈
+
+Algorithm 1: kOMB 
+
+Input: D, M, 𝑌 , 𝛼 , 𝑘 , 𝑙 
+
+Output: MB G (𝑌 ) 
+
+> 1
+
+S ← ∅ ; // Candidate Markov Blanket  
+
+> 2
+
+repeat  
+
+> 3
+
+𝑽 ′ ← 𝑽 \ ( 𝑌 ∪ S); 
+
+> 4
+
+X′ ← find_inter_dep( 𝑌 , ∅, S, 𝑽 ′, 𝑘 , 𝑙 );  
+
+> 5
+
+S ← S ∪ X′ 
+
+> 6
+
+until X′ = ∅; 
+
+> 7
+
+while ∃𝑋 ∈ S : find_cond (𝑌 , 𝑋, ∅, S \ 𝑋, 𝑘, 𝑙 ) = ⊥ do  
+
+> 8
+
+S ← S \ 𝑋 ; 
+
+> 9
+
+return S;
+
+P≤ 𝑘 (𝑽 \ 𝑌 ), 𝑋 ∈ 𝑽 \ ( 𝑌 ∪ S ∪ X) at each iteration to find higher-order parity-type relationships between variables, and 2) conducting CI tests using just subsets of the current can-didate MB S in the condition to ensure that these CI tests remain feasible even when the cardinality of S is large. As such, we break up kOMB into 3 sub-algorithms: 
+
+Algorithm 1 is just the entry-point function that imple-ments the overall logic of the GS algorithm, with the main modifications and additions located in the other two algorithms, 
+
+Algorithm 2 is overall responsible for finding some subset of the variables not already in the candidate MB, X ∈P≤ 𝑘 (𝑽 \ ( 𝑋 ∪ 𝑌 ∪ S)) , that might cause 𝑌 and 𝑋 to be conditionally dependent given X and some subset 
+
+X′ ∈ P ≤ 𝑘 − | X| (S) of the current candidate MB, finally, 
+
+Algorithm 3 is then tasked with finding such a X′ ∈P≤ 𝑘 − | X| (S) that causes 𝑌 ⫫P 𝑌 | X ∪ X′ and checking if there are any 𝑙 -bounded subsets of the current candidate MB, S′ ∈ P ≤𝑙 (S), such that 𝑌 ⫫P 𝑌 | X ∪ X′ ∪ S′.Keeping this outline in mind, we now present the full al-gorithm for kOMB and show that it correctly discovers the MB of some 𝑌 ∈ 𝑽 assuming that Assumptions 1 to 3 hold. The proofs for any subsequent Theorems can be found in Appendix C. 
+
+Theorem 1 (Correctness of Algorithm 3) . Given an es-timated distribution ˆP, distinct variables 𝑌 , 𝑋 ∈ 𝑽 , disjoint subsets X, S ⊂ 𝑽 \ { 𝑌 , 𝑋 }, and the natural numbers 𝑘, 𝑙 ∈ N;the function find_cond in Algorithm 3 returns the set X′ ∪ X
+
+if and only if ∃X′ ∈ P ≤ 𝑘 − | X| (S) where, 
+
+∀S′ ∈ P ≤𝑙 (S \ X′) : 𝑌 ⫫ˆP 𝑋 | X ∪ X′ ∪ S′. (18) 
+
+Otherwise find_cond returns the failure value ⊥, distinct from the empty set, which it may return on success when 
+
+X′ = X = ∅.
+
+Theorem 2 (Correctness of Algorithm 2) . Given an es-timated distribution ˆP, the target variable 𝑌 ∈ 𝑽 , the cur-rent candidate MB S ⊂ 𝑽 \ 𝑌 , the remaining variables Algorithm 2: Association Mining  
+
+> 1
+
+Function make_strict( 𝑌 , 𝑋 , Z, S, 𝑘 , 𝑙 ): 
+
+> 2
+
+for 𝑍 ∈ Z do  
+
+> 3
+
+if ¬ no_seps( 𝑌 , 𝑍 , 𝑋 ∪ Z \ 𝑍 , S, 𝑙 ) then  
+
+> 4
+
+remove 𝑍 from Z; 
+
+> 5
+
+return 𝑋 ∪ Z; 
+
+> 6
+
+Function find_inter_dep( 𝑌 , X, S, V′, 𝑘 , 𝑙 ): 
+
+> 7
+
+if |X| > 𝑘 then  
+
+> 8
+
+return ∅; 
+
+> 9
+
+for 𝑋 ∈ V \ ( 𝑌 ∪ S ∪ X) do  
+
+> 10
+
+Z ←find_cond (𝑌 , 𝑋 , X, S, 𝑘 , 𝑙 );  
+
+> 11
+
+if Z ≠ ⊥ then  
+
+> 12
+
+return make_strict( 𝑌 , 𝑋 , Z, S, 𝑘 , 𝑙 ); 
+
+> 13
+
+for 𝑋 ∈ V′ \ ( 𝑌 ∪ S ∪ X) do  
+
+> 14
+
+V′ ← V′ \ 𝑋 ; 
+
+> 15
+
+X′ ← find_inter_dep( 𝑌 , X ∪ 𝑋 , S, V′, 𝑘 , 𝑙 );  
+
+> 16
+
+if X′ ≠ ∅ then  
+
+> 17
+
+return X′; 
+
+> 18
+
+return ∅;
+
+𝑽 ′ = 𝑽 \ ( 𝑌 ∪ S), and the natural numbers 𝑘, 𝑙 ∈ N; the call find_inter_dep (𝑌 , ∅, S, 𝑽 ′, 𝑘, 𝑙 ) returns the empty set if and only if 
+
+∀𝑋 ∈ 𝑽 ′ ∀Z ∈ P ≤ 𝑘 (𝑽 \ { 𝑌 , 𝑋 }) ∃ S′ ∈ P ≤𝑙 (S \ Z) :
+
+𝑌 ⫫ˆP 𝑋 | Z ∪ S′.
+
+(19) 
+
+Otherwise it returns a nonempty set 𝑋 ∪ Z𝑅 with 𝑋 ∈ 𝑽 ′
+
+and Z𝑅 ⊆ Z for some Z ∈ P ≤ 𝑘 (𝑽 \ { 𝑌 , 𝑋 }) satisfying the estimated 𝑙 -bounded association ∀S′ ∈ P ≤𝑙 (S\Z) : 𝑌 ⫫ˆP 𝑋 |
+
+Z ∪ S′.
+
+Theorem 3 (Correctness of Algorithm 1) . Given an estim-ated distribution ˆP over variables 𝑽 , the target variable whose graphical Markov blanket we want to discover 𝑌 ∈ 𝑽 ,and the natural numbers 𝑘, 𝑙 ∈ N; the grow phase of kOMB 
+
+then grows the candidate MB S such that, MB G (𝑌 ) ⊆ S. (20) 
+
+If, in addition, every true blanket member admits an in-blanket dependence witness—i.e. for every 𝑋 ∈ MB G (𝑌 )
+
+and every S with MB G (𝑌 ) ⊆ S ⊆ 𝑽 \ 𝑌 there is a witness 
+
+Z ∈ P ≤ 𝑘 (MB G (𝑌 ) \ 𝑋 ) with asc (𝑙 ) 
+
+> S\( 𝑋 ∪Z)
+
+(𝑌 , 𝑋 | Z)—then the shrink phase of kOMB removes variables from S until, MB G (𝑌 ) = S, (21) 
+
+where it subsequently terminates and returns S.
+
+Beyond Assumptions 1 to 3, the recovery guarantee of The-orem 3 assumes the CI decisions are sufficiently accurate —i.e. they reflect the true conditional independencies of P.
+
+Algorithm 3: Practical Conditional Independence Test  
+
+> 1
+
+Function no_seps( 𝑌 , 𝑋 , Z, S, 𝑙 ): 
+
+> 2
+
+for S′ ∈ P ≤𝑙 (S \ Z) do  
+
+> 3
+
+if 𝑌 ⫫ 𝑋 | Z ∪ S′ then  
+
+> 4
+
+return False ; 
+
+> 5
+
+return True ; 
+
+> 6
+
+Function find_cond( 𝑌 , 𝑋 , X, S, 𝑘 , 𝑙 ): 
+
+> 7
+
+for X′ ∈ P ≤ 𝑘 − | X| (S) do  
+
+> 8
+
+Z ← X′ ∪ X; 
+
+> 9
+
+if 𝑌 ⫫ 𝑋 | Z then  
+
+> 10
+
+if no_seps( 𝑌 , 𝑋 , Z, S, 𝑙 ) then  
+
+> 11
+
+return Z; 
+
+> 12
+
+return ⊥;
+
+5.2 COMPUTATIONAL COMPLEXITY OF KOMB 
+
+As kOMB is a proof-of-concept, we prioritised correctness and clarity over efficiency. It is nonetheless instructive to characterise its worst-case time complexity, which we state in Corollary 1 with proof given in Appendix D. 
+
+Corollary 1 (Computational Complexity of kOMB ). Let 
+
+𝑛 = |𝑽 | denote the number of variables, 𝑁 the sample size, and 𝐾 the maximum size of any candidate MB S encountered by Algorithm 1 during execution. Furthermore assume each CI test runs in 𝑂 (𝑁 ) time. Then, for a given order 𝑘 and separator bound 𝑙 , kOMB (Algorithm 1) terminates in worst-case time 
+
+𝑂 ©«
+
+𝐾 𝑛 
+
+> 𝑘
+
+∑︁ 
+
+> 𝑖 =0
+
+𝑛 𝑖 
+
+  
+
+> 𝑘 −𝑖
+
+∑︁ 
+
+> 𝑖 ′=0
+
+𝐾 𝑖 ′
+
+ 𝑙 ∑︁ 
+
+> 𝑗 =0
+
+𝐾 − 𝑖 ′
+
+𝑗 
+
+
+
+𝑁 
+
+ª®¬
+
+, (22) 
+
+where we adopt the convention that   𝑛 𝑚 
+
+ = 0 whenever 𝑛 < 𝑚 .
+
+Treating 𝑘 and 𝑙 as constants, Equation (22) is bounded by 𝑂 (𝑛 𝑘 +1 𝐾 𝑘 +𝑙 +1 𝑁 )—polynomial in 𝑛 , 𝐾 , and 𝑁 , and for 
+
+𝑘 = 0 it reduces to a scan that is linear in 𝑛 , recovering the original GS algorithm. Crucially, the search for a dependence-exposing subset and its separator is governed by 𝐾 rather than 
+
+𝑛 , a direct consequence of the 𝑙 -bounded separator assump-tion (Assumption 3). The remaining exponential dependence on 𝑘 and 𝑙 motivates keeping them small. The ablation study in Appendix G showcases how differing values of 𝑘 and 𝑙 
+
+affects Algorithm 1 runtime and its ability to find high-order dependencies. Generally, from the results in Appendix G for the benchmark datasets used, we found that setting 𝑘 = 𝑙 and having 𝑘 ≤ 2 provides a decent trade-off between runtime and finding high-order dependencies. Table 1: Results on Synthetically Generated Data Method and ex-1 ex-2 or parity GS 0.410 0.313 0.288 0.365 0.025     
+
+> ±0.405 ±0.419 ±0.407 ±0.374 ±0.110
+
+kOMB 0.410 0.283 0.268 0.350 0.025          
+
+> (𝑘 =0, 𝑙 =3)±0.405 ±0.372 ±0.374 ±0.351 ±0.110
+
+kOMB 0.618 0.675 0.675 0.560 0.050          
+
+> (𝑘 =1, 𝑙 =3)±0.374 ±0.474 ±0.474 ±0.435 ±0.221
+
+kOMB 0.618 1.000 1.000 0.710 1.000          
+
+> (𝑘 =2, 𝑙 =3)±0.374 ±0.000 ±0.000 ±0.384 ±0.000
+
+## 6 EXPERIMENTS 
+
+In order to empirically test kOMB we implemented the al-gorithm as a Python package written in Rust . The imple-mentation uses the G-Test with 𝛼 = 0.01 as its conditional independence test of choice when possible and falls back to the SCI test [Marx and Vreeken, 2019] when G-test is too weak for the test being conducted—i.e. when the aver-age frequency for each cell is < 5. A public repo for our implementation of kOMB and code for the experiments can be found at https://github.com/lklee9/k-ord er-Markov-blanket . All experiments were run on an Apple M4 Mac mini. Throughout this section we will compare kOMB against existing methods for Markov blanket (MB) discovery. Spe-cifically we will compare against the following eight MB discovery methods: GS [Margaritis and Thrun, 1999], IAMB [Tsamardinos et al., 2003a], HITON [Aliferis et al., 2003], MMMB [Tsamardinos et al., 2003b], PCMB [Peña et al., 2007], LRH [Liu and Liu, 2016], STMB [Gao and Ji, 2017], BAMB [Ling et al., 2019]. We will use the im-plementation of these methods found in the pyCausalFS 
+
+python library [Yu et al., 2020] with a significance level of 
+
+0.01 for any statistical tests as well. When comparing between different MB discovery methods, we will use the F1 score defined as: 𝐹 1 = 2 × precision ×
+
+recall /( precision + recall ), which is the harmonic mean of 
+
+precision and recall . Here precision denotes the ratio between the number of true positives in the inferred MB and the size of the inferred MB. On the other hand, Recall denotes the ratio between the number of true positives in the inferred MB and the size of the true MB. Therefore 𝐹 1 = 1 represents the perfect precision and recall. 
+
+6.1 EXPERIMENTS WITH SYNTHETIC BAYESIAN NETWORKS 
+
+To systematically test how kOMB behaves in the face of true and empirical faithfulness violations, we will task kOMB at learning the MB of every variable for five different basic toy Bayesian networks. These problems will have 4 variables— 0      
+
+> 1
+> F1
+> parity exactly-2 or
+> 0
+> 1
+> precision
+> 01000
+> size
+> 0
+> 1
+> recall
+> 1000
+> size
+> 1000
+> size
+> method GS kOMB-1-1 kOMB-2-2
+
+Figure 4: Precision, recall, and F1 score of GS and ( kOMB -
+
+𝑘 -𝑙 ) when recovering the MBs of the synthetic BNs in Sec-tion 6.1, over sample size. Each row corresponds to a metric and each column to a BN. 
+
+X = {𝑋 1, 𝑋 2, 𝑋 3 } and 𝑌 —with a DAG that has edges ∀𝑖 ∈[3] : 𝑋 𝑖 → 𝑌 . Each variable 𝑋 ∈ X is an independent Bernoulli random variable with 𝑝 = 0.5. The conditional distribution of 𝑌 is then P(𝑌 = 𝑓 (X) | X) = 0.9 where 
+
+𝑓 (X) is one of 5 different Boolean functions, one for each toy problem which we describe in Appendix E. We then sample 100 samples from the 5 Bayesian networks 
+
+10 different times, leading to 10 × 5 samples of size 100 —hence the size of each sample is much larger than the cardin-ality of the domain over all variables, 100 >> 24. We then tasked each method to infer—for each Bayesian network— the MB of all 4 variables from the 10 different samples separately. We then averaged the F1 score over the 10 × 4
+
+runs and variables for each Bayesian network, resulting in Table 1. Note that we only include the results for kOMB and Grow and Shrink (GS) because GS was the best perform-ing method out of all the previous methods mentioned in Section 6 for these synthetic datasets. From the results in Table 1, we can observe that kOMB con-sistently outperforms the other approaches at MB discovery. More interestingly—even for the problems whose Bayesian networks are faithful—as we increase 𝑘 and look at higher order relationships, kOMB achieves a better F1 score and therefore is capable of better overcoming empirical unfaith-fulness. Furthermore the MB for the parity problem is only recoverable when 𝑘 = 2, which confirms kOMB ’s ability to find these higher-order parity-like relations. In order to better understand the source of these empirical unfaithfulness in the low sample size regime, Figure 4 traces the precision, recall, and F1 score as the sample size grows from 50 to 100 . As expected only kOMB -2-2 is capable of re-covering the higher-order dependence of the parity network regardless of sample size. From the other faithful networks, we can observe that at small sample size, all methods exhibit lower recall and precision which indicates dependencies missed by the MB discovery methods and spurious depend-Table 2: F1 score and runtime (in seconds) on benchmark datasets. Best F1 and fastest runtime per dataset in bold. F1 Score Runtime (s) Method Alarm1 Barley Insurance Mildew Alarm1 Barley Insurance Mildew BAMB 0.6742 0.3385 0.6588 0.4945 3.517 1.149 5.615 0.797        
+
+> ±0.1771 ±0.1226 ±0.0797 ±0.1084 ±4.305 ±0.681 ±5.358 ±0.392
+
+GS 0.3434 0.2113 0.4615 0.2867 4.875 1.575 4.433 1.035        
+
+> ±0.1503 ±0.0807 ±0.1477 ±0.1581 ±5.183 ±0.606 ±3.792 ±0.341
+
+HITON_MB 0.7636 0.3400 0.6746 0.4918 2.560 1.027 3.514 0.604        
+
+> ±0.1861 ±0.1284 ±0.1594 ±0.1487 ±1.277 ±0.298 ±2.525 ±0.218
+
+MMMB 0.7692 0.3298 0.6978 0.4861 2.724 1.090 3.508 0.553        
+
+> ±0.1874 ±0.1274 ±0.1405 ±0.1810 ±1.278 ±0.374 ±2.525 ±0.128
+
+kOMB 0.7804 0.5158 0.7136 0.6220 5.258 58.190 4.856 17.698             
+
+> (𝑘 =1, 𝑙 =1)±0.1145 ±0.1964 ±0.1328 ±0.1595 ±2.921 ±31.619 ±2.041 ±10.205
+
+kOMB 0.8209 0.3128 0.7336 0.4360 18.144 335.821 14.493 121.909             
+
+> (𝑘 =2, 𝑙 =2)±0.1914 ±0.1582 ±0.1624 ±0.1394 ±7.566 ±135.966 ±7.280 ±33.153
+
+encies erroneously detected by said methods respectively. That said, we can also observe that for kOMB , the higher the value of 𝑘 used, the greater its performance in the low sample regime and the quicker it recovers the true MBs for all variables. 
+
+6.2 EXPERIMENTS WITH BENCHMARK BAYESIAN NETWORKS 
+
+To further explore how kOMB behaves in more realistic scen-arios, we then repeated the same procedure as Section 6.1, but with some well-known benchmark datasets 4 in the MB discovery literature. The main difference in the experiments in this section is that we used samples of 5000 and we only tasked each method at finding the MB for the 10 variables with the largest neighborhoods in the Bayesian network. Fur-thermore, we also omit some of the poorer performing meth-ods in Table 2 to conserve space. From the results in Table 2 we can observe that kOMB does generally outperform the other existing approaches to MB discovery. Whether a higher order helps, however, depends on the network’s cardinality. On the lower-cardinality Alarm1 and Insurance networks kOMB with order 2 improves on order 1, whereas on the high-cardinality Barley and Mildew networks order 1 is best and order 2 is substantially worse— there the larger conditioning sets leave the higher-order CI tests underpowered at this sample size. Runtime, in turn, grows with both the order 𝑘 and the cardinality of the net-work. Specifically, the baselines finish within roughly 6 sper dataset, while kOMB ranges from comparable at order 1
+
+on the lower-cardinality networks (Alarm1, Insurance) to a few hundred times slower at order 2 on the high-cardinality 
+
+> 4
+
+The datasets can be accessed at: https://pages.mtu. edu/~lebrown/supplements/mmhc_paper/mmhc_i ndex.html 
+
+networks (Barley, Mildew). The full results and runtimes for every method and every (𝑘, 𝑙 ) configuration are given in Tables 5 and 6 under Appendix G. 
+
+## 7 CONCLUSION 
+
+We introduced a 𝑘 -order relaxation of faithfulness that ex-plicitly accounts for parity-type dependencies among 𝑘 +2
+
+variables, and used it to derive a proof-of-concept Markov blanket (MB) discovery algorithm, kOMB ; with theoretical guarantees that kOMB recovers the graphical MB under the proposed assumptions. Empirically, kOMB overcomes both true and empirical faithfulness violations on synthetic problems, and it performs competitively on commonly used benchmark datasets. As kOMB is a proof-of-concept demonstrating that exploit-ing higher-order dependencies can improve MB discovery, an important direction for future work is the development of 
+
+approximate algorithms that uncover these higher-order de-pendencies without kOMB ’s worst-case cost—for example, through more intricate pruning rules that make kOMB scale better with larger values of 𝑘 . Secondly, although our abla-tion (Appendix G) shows that 𝑙 = 𝑘 with 𝑘 ≤ 2 is a robust default, principled a priori selection of 𝑘 and 𝑙 without expert knowledge remains open. A practical alternative is to run 
+
+kOMB for several values of 𝑘 and 𝑙 while memoising results across runs to speed up the total runtime. Finally, our eval-uation compares against established constraint-based MB discovery methods using the G-test (with an SCI fallback) for conditional independence. Therefore, utilising more recent alternative CI tests is a further avenue for future work. Acknowledgements 
+
+This research has been funded by the Federal Ministry of Research, Technology and Space of Germany and the state of North Rhine-Westphalia as part of the Lamarr Institute for Machine Learning and Artificial Intelligence. 
+
+References 
+
+C. F. Aliferis, I. Tsamardinos, and A. Statnikov. HITON: a novel Markov Blanket algorithm for optimal variable selection. AMIA ... Annual Symposium proceedings. AMIA Symposium , 2003:21–25, 2003. ISSN 1942-597X. Philip Boeken, Patrick Forré, and Joris M. Mooij. Are Bayesian networks typically faithful? arXiv:2410.16004 [math] , January 2025. doi: 10.48550/arXiv.2410.16004. A. Philip Dawid. Conditional independence in statistical theory. Journal of the Royal Statistical Society. Series B (Methodological) , 41(1):1–31, 1979. ISSN 0035-9246. Shuyu Dong, Michele Sebag, Kento Uemura, Akito Fujii, Shuang Chang, Yusuke Koyanagi, and Koji Maruhashi. DCILP: A Distributed Approach for Large-Scale Causal Structure Learning. Proceedings of the AAAI Confer-ence on Artificial Intelligence , 39(15):16345–16353, April 2025. ISSN 2374-3468. doi: 10.1609/aaai.v39i15.33795. Malcolm Forster, Garvesh Raskutti, Reuben Stern, and Naf-tali Weinberger. The Frugal Inference of Causal Relations. 
+
+The British Journal for the Philosophy of Science , 69(3): 821–848, 2018. ISSN 0007-0882. Tian Gao and Qiang Ji. Efficient Markov Blanket Discovery and Its Application. IEEE Transactions on Cybernetics ,47(5):1169–1179, May 2017. ISSN 2168-2275. doi: 10.1109/TCYB.2016.2539338. John Michael Hammersley and Peter Clifford. Markov fields on finite graphs and lattices. Unpublished manuscript ,1971. Lijuan Hu and Zhuoyuan Zheng. Causal Feature Selec-tion Algorithm Based on Maximizing Neighbourhood Mutual Information. Proceedings of the 2024 8th In-ternational Conference on Computer Science and Artifi-cial Intelligence , pages 482–490, December 2024. doi: 10.1145/3709026.3709031. Takanori Inazumi, T. Washio, Shohei Shimizu, J. Suzuki, Akihiro Yamamoto, and Y. Kawahara. Discovering causal structures in binary exclusive-or skew acyclic models. In 
+
+Conference on Uncertainty in Artificial Intelligence , July 2011. Steffen Lauritzen and Kayvan Sadeghi. Unifying Markov Properties for Graphical Models. The Annals of Statistics ,46(5):2251–2278, 2018. ISSN 0090-5364. Steffen L. Lauritzen. Graphical models . Number 17 in Oxford statistical science series. Clarendon Press ; Oxford University Press, Oxford : New York, 1996. ISBN 978-0-19-852219-5. Jan Lemeire, Stijn Meganck, Francesco Cartella, and Tingt-ing Liu. Conservative independence-based causal struc-ture learning in absence of adjacency faithfulness. In-ternational Journal of Approximate Reasoning , 53(9): 1305–1325, December 2012. ISSN 0888-613X. doi: 10.1016/j.ijar.2012.06.004. Zhaolong Ling, Kui Yu, Hao Wang, Lin Liu, Wei Ding, and Xindong Wu. BAMB: A Balanced Markov Blanket Discovery Approach to Feature Selection. ACM Trans. Intell. Syst. Technol. , 10(5):52:1–52:25, October 2019. ISSN 2157-6904. doi: 10.1145/3335676. Zhaolong Ling, Kui Yu, Hao Wang, Lei Li, and Xindong Wu. Using Feature Selection for Local Causal Structure Learning. IEEE Transactions on Emerging Topics in Computational Intelligence , 5(4):530–540, August 2021. ISSN 2471-285X. doi: 10.1109/TETCI.2020.2978238. Xuqing Liu and Xinsheng Liu. Swamping and masking in Markov boundary discovery. Machine Learning , 104(1): 25–54, July 2016. ISSN 1573-0565. doi: 10.1007/s109 94-016-5545-0. Dimitris Margaritis and Sebastian Thrun. Bayesian Net-work Induction via Local Neighborhoods. In Advances in Neural Information Processing Systems , volume 12. MIT Press, 1999. Alexander Marx and Jilles Vreeken. Testing Conditional Independence on Discrete Data using Stochastic Complex-ity. In Proceedings of the Twenty-Second International Conference on Artificial Intelligence and Statistics , pages 496–505. PMLR, April 2019. Alexander Marx, Arthur Gretton, and Joris M. Mooij. A weaker faithfulness assumption based on triple interac-tions. In Proceedings of the Thirty-Seventh Conference on Uncertainty in Artificial Intelligence , pages 451–460. PMLR, December 2021. Christopher Meek. Strong completeness and faithfulness in Bayesian networks. In Proceedings of the Eleventh con-ference on Uncertainty in artificial intelligence , UAI’95, pages 411–418, San Francisco, CA, USA, August 1995. Morgan Kaufmann Publishers Inc. ISBN 978-1-55860-385-1. J. Pearl and Thomas Verma. The Logic of Representing Dependencies by Directed Graphs. In AAAI Conference on Artificial Intelligence , July 1987. Judea Pearl. Probabilistic reasoning in intelligent systems: networks of plausible inference . Morgan Kaufmann Pub-lishers Inc., San Francisco, CA, USA, 1988. ISBN 978-1-55860-479-7. Judea Pearl. Causality: models, reasoning, and inference .Cambridge University Press, Cambridge New York, NY Port Melbourne New Delhi Singapore, second edition, reprinted with corrections edition, 2009. ISBN 978-0-521-89560-6. Judea Pearl and Azaria Paz. GRAPHOIDS: a graph-based logic for reasoning about relevance relations. Technical Report CSD-850038, UCLA Computer Science Depart-ment, 1985. Judea Pearl, Dan Geiger, and Thomas Verma. Conditional independence and its representations. Kybernetika , 25(7): 33–44, 1989. Jose M. Peña, Roland Nilsson, Johan Björkegren, and Jesper Tegnér. Towards scalable and data efficient learning of Markov boundaries. International Journal of Approximate Reasoning , 45(2):211–232, July 2007. ISSN 0888-613X. doi: 10.1016/j.ijar.2006.06.008. Kayvan Sadeghi. Faithfulness of Probability Distributions and Graphs. Journal of Machine Learning Research , 18 (148):1–29, 2017. ISSN 1533-7928. Federico Schlüter. A survey on independence-based Markov networks learning. Artificial Intelligence Review , 42(4): 1069–1093, December 2014. ISSN 1573-7462. doi: 10.1 007/s10462-012-9346-y. De Wen Soh and Sekhar Tatikonda. Learning Unfaithful $K$-separable Gaussian Graphical Models. Journal of Machine Learning Research , 20(109):1–30, 2019. ISSN 1533-7928. Peter Spirtes, Clark Glymour, and Richard Scheines. Caus-ation, Prediction, and Search . The MIT Press, 2nd edi-tion, January 2001. ISBN 978-0-262-28415-8. doi: 10.7551/mitpress/1754.001.0001. I. Tsamardinos, C. Aliferis, and A. Statnikov. Algorithms for Large Scale Markov Blanket Discovery. In The Florida AI Research Society , 2003a. Ioannis Tsamardinos and Constantin F. Aliferis. Towards Principled Feature Selection: Relevancy, Filters and Wrap-pers. In International Workshop on Artificial Intelligence and Statistics , pages 300–307. PMLR, January 2003. Ioannis Tsamardinos, Constantin F. Aliferis, and Alexander Statnikov. Time and sample efficient discovery of Markov blankets and direct causal relations. In Proceedings of the ninth ACM SIGKDD international conference on Know-ledge discovery and data mining , KDD ’03, pages 673– 678, New York, NY, USA, August 2003b. Association for Computing Machinery. ISBN 978-1-58113-737-8. doi: 10.1145/956750.956838. Caroline Uhler, Garvesh Raskutti, Peter Bühlmann, and Bin Yu. Geometry of the Faithfulness Assumption in Causal Inference. The Annals of Statistics , 41(2):436–463, 2013. ISSN 0090-5364. Hao Wang, Zhaolong Ling, Kui Yu, and Xindong Wu. To-wards efficient and effective discovery of Markov blankets for feature selection. Information Sciences , 509:227–242, January 2020. ISSN 0020-0255. doi: 10.1016/j.ins.2019 .09.010. Kui Yu, Xianjie Guo, Lin Liu, Jiuyong Li, Hao Wang, Zhao-long Ling, and Xindong Wu. Causality-based Feature Selection: Methods and Evaluations. ACM Comput. Surv. ,53(5):111:1–111:36, September 2020. ISSN 0360-0300. doi: 10.1145/3409382. High-Order Markov Blanket Discovery via a k-Order Relaxation of the Faithfulness Assumption (Supplementary Material) 
+
+Loong Kuan Lee 1 Ragavi Krishnamoorthy 1 Nico Piatkowski 11Hybrid Intelligence, Fraunhofer IAIS, Sankt Augustin, Germany, 
+
+## A GRAPHOID AXIOMS 
+
+Definition 6 (Graphoid Axioms) . For disjoint subsets 
+
+X, Y, Z, W ⊆ 𝑽 , a semi-graphoid independence model 
+
+J (·) obeys the following properties [Dawid, 1979, Pearl and Verma, 1987]: 1. Symmetry: X ⫫ Y | Z =⇒ Y ⫫ X | Z
+
+2. Decomposition: X ⫫ Y ∪ W | Z =⇒ X ⫫ Y | Z
+
+3. Weak Union: X ⫫ Y ∪ W | Z =⇒ X ⫫ Y | W ∪ Z
+
+4. Contraction: (X ⫫ Y | W ∪ Z) ∧ ( X ⫫ W | Z) =⇒
+
+X ⫫ Y ∪ W | Z
+
+The independence model is called a graphoid if it also obeys the following additional property [Pearl and Paz, 1985]: 5. Intersection: (X ⫫ Y | Z∪W)∧( X ⫫ W | Z∪Y) =⇒
+
+X ⫫ Y ∪ W | Z
+
+All graph independence models J (G) are guaranteed to obey all the graphoid axioms [Lauritzen and Sadeghi, 2018]. However, probabilistic independence models J ( P) are only guaranteed to obey the semi-graphoid axioms. However if the joint distribution is strictly positive, then J ( P) is guaranteed to be a graphoid as well [Pearl, 1988, Pearl et al., 1989]. 
+
+## B PROOFS 
+
+Lemma 1 (𝑘 -Order Dependence Arises from Association) .
+
+Given a PGM M = (G , P), let 𝑌 , 𝑋 ∈ V be distinct random variables and S, Z ⊂ 𝑽 \ { 𝑌 , 𝑋 } be disjoint subsets. Then the following holds for all 𝑌 , 𝑋, S, Z:asc S (𝑌 , 𝑋 | Z) =⇒ ∃ Z′ ⊆ Z : dep S (𝑌 , 𝑋 | Z′). (10) 
+
+Proof. Consider the family of association witnesses con-tained in Z,
+
+W ≔ {W ⊆ Z : asc S (𝑌 , 𝑋 | W)} .
+
+By the hypothesis asc S (𝑌 , 𝑋 | Z) we have Z ∈ W , so 
+
+W is nonempty; and since Z is finite, so is W. Hence W
+
+contains an element Z′ of minimum cardinality. Every proper subset Z∗ ⊊ Z′ satisfies |Z∗ | < |Z′ | and Z∗ ⊆ Z, so by the minimality of Z′ we have Z∗ ∉ W, i.e. ¬ asc S (𝑌 , 𝑋 | Z∗).Together with asc S (𝑌 , 𝑋 | Z′), this is by Equation (7) exactly 
+
+dep S (𝑌 , 𝑋 | Z′). As Z′ ⊆ Z, this establishes Equation (10). 
+
+□
+
+Lemma 2 (Marginal 𝑘 -Order Dependence Implies Inter-As-sociation) . Given a PGM M = (G , P), let 𝑋, 𝑌 ∈ 𝑽 be distinct variables and Z ⊆ 𝑽 \ { 𝑌 , 𝑋 }. Then if 𝑌 and 𝑋 are 
+
+|Z|-order dependent w.r.t. Z over the empty separating set, 
+
+𝑌 is |Z|-order associated with every variable in Z ∪ 𝑋 ,dep ∅ (𝑌 , 𝑋 | Z) =⇒ asc ∅ (𝑌 , Z ∪ 𝑋 ), (14) 
+
+where asc S (𝑌 , W) := ∀𝑊 ∈ W : asc S (𝑌 , 𝑊 | W \ 𝑊 ). (15) 
+
+When Equation (14) is true, we say that 𝑌 is |Z|-order inter-associated with 𝑋 ∪ Z.Proof. Assume dep ∅ (𝑌 , 𝑋 | Z). For the variable 𝑋 , the inter-association clause is asc ∅ (𝑌 , 𝑋 | Z), i.e. 𝑌 ⫫P 𝑋 | Z,which is exactly the first conjunct of Equation (7) and hence immediate. Now suppose, towards a contradiction, that the clause fails for some 𝑍 ∈ Z, i.e. 𝑌 ⫫P 𝑍 | 𝑋 ∪ ( Z \ 𝑍 ). Since Z \ 𝑍 is a proper subset of Z and the separating set is empty, the second conjunct of Equation (7) gives 𝑌 ⫫P 𝑋 | Z \ 𝑍 . Applying the contraction and then weak union graphoid axioms of Definition 6, 
+
+(𝑌 ⫫P 𝑍 | 𝑋 ∪ ( Z \ 𝑍 )) ∧ ( 𝑌 ⫫P 𝑋 | Z \ 𝑍 )
+
+=⇒ 𝑌 ⫫P {𝑋, 𝑍 } | Z \ 𝑍 =⇒ 𝑌 ⫫P 𝑋 | Z, (23) contradicting 𝑌 ⫫P 𝑋 | Z. Hence 𝑌 ⫫P 𝑍 | 𝑋 ∪ ( Z \ 𝑍 ) for every 𝑍 ∈ Z, which together with 𝑌 ⫫P 𝑋 | Z is precisely 
+
+asc ∅ (𝑌 , Z ∪ 𝑋 ). □C CORRECTNESS OF KOMB 
+
+Theorem 1 (Correctness of Algorithm 3) . Given an es-timated distribution ˆP, distinct variables 𝑌 , 𝑋 ∈ 𝑽 , disjoint subsets X, S ⊂ 𝑽 \ { 𝑌 , 𝑋 }, and the natural numbers 𝑘, 𝑙 ∈ N;the function find_cond in Algorithm 3 returns the set X′ ∪ X
+
+if and only if ∃X′ ∈ P ≤ 𝑘 − | X| (S) where, 
+
+∀S′ ∈ P ≤𝑙 (S \ X′) : 𝑌 ⫫ˆP 𝑋 | X ∪ X′ ∪ S′. (18) 
+
+Otherwise find_cond returns the failure value ⊥, distinct from the empty set, which it may return on success when 
+
+X′ = X = ∅.Proof. The function find_cond first iterates through all the subsets X′ ∈ P ≤ 𝑘 − | X| (S) and for each X′ where 𝑌 ⫫ˆP 𝑋 |
+
+X ∪ X′ (line 9 in find_cond ), it passes X′ to the function 
+
+no_seps (line 10 in find_cond ) to determine if there are any subsets S′ ∈ P ≤𝑙 (S \ X′) that results in 𝑌 ⫫ˆP 𝑋 | X ∪ X′ ∪ S′
+
+(line 4 in no_seps ). As soon as no_seps finds such a S′, it returns False (line 4 in no_seps ), and find_cond will need to go to the next iteration. Otherwise, if no_seps is unable to find any such subset S′, it returns True (line 5 in no_seps ), and 
+
+find_cond then immediately returns Z = X′ ∪ X (line 11 in 
+
+find_cond ) as there are no 𝑙 -bounded subsets S′ ∈ P ≤𝑙 (S\Z)
+
+that render 𝑌 and 𝑋 conditionally independent given Z ∪ S′.Here we use that the external set X is disjoint from S, so 
+
+S \ Z = S \ X′; and since ∅ ∈ P ≤𝑙 (S \ X′), the dependence check 𝑌 ⫫ˆP 𝑋 | Z on line 9 is precisely the S′ = ∅ instance tested by no_seps , so a returned Z satisfies Equation (18) in full. However, if find_cond completes all its iteration without returning early, then we know that all subset X′ has some 
+
+𝑙 -bounded subset S′ that will cause 𝑌 ⫫ˆP 𝑋 | X′ ∪ X ∪ S′.Therefore find_cond returns the failure value ⊥ in this case (line 12 in find_cond ). □
+
+Theorem 2 (Correctness of Algorithm 2) . Given an es-timated distribution ˆP, the target variable 𝑌 ∈ 𝑽 , the cur-rent candidate MB S ⊂ 𝑽 \ 𝑌 , the remaining variables 
+
+𝑽 ′ = 𝑽 \ ( 𝑌 ∪ S), and the natural numbers 𝑘, 𝑙 ∈ N; the call find_inter_dep (𝑌 , ∅, S, 𝑽 ′, 𝑘, 𝑙 ) returns the empty set if and only if 
+
+∀𝑋 ∈ 𝑽 ′ ∀Z ∈ P ≤ 𝑘 (𝑽 \ { 𝑌 , 𝑋 }) ∃ S′ ∈ P ≤𝑙 (S \ Z) :
+
+𝑌 ⫫ˆP 𝑋 | Z ∪ S′.
+
+(19) 
+
+Otherwise it returns a nonempty set 𝑋 ∪ Z𝑅 with 𝑋 ∈ 𝑽 ′
+
+and Z𝑅 ⊆ Z for some Z ∈ P ≤ 𝑘 (𝑽 \ { 𝑌 , 𝑋 }) satisfying the estimated 𝑙 -bounded association ∀S′ ∈ P ≤𝑙 (S\Z) : 𝑌 ⫫ˆP 𝑋 |
+
+Z ∪ S′.Proof. First consider a call that returns anonempty set. find_inter_dep does so only by re-turning make_strict (𝑌 , 𝑋, Z, S, 𝑘, 𝑙 ) after a call 
+
+find_cond (𝑌 , 𝑋, X, S, 𝑘, 𝑙 ) has returned some Z ≠ ⊥,for some 𝑋 ∈ 𝑽 \ ( 𝑌 ∪ S ∪ X) (as S is passed un-changed through every recursive call, any such 𝑋 satisfies 
+
+𝑋 ∈ 𝑽 \ ( 𝑌 ∪ S) = 𝑽 ′, matching the theorem’s candidate set). By Theorem 1, Z = X ∪ X′ for some X′ ∈ P ≤ 𝑘 − | X| (S) such that 𝑌 ⫫ˆP 𝑋 | Z ∪ S′ holds for all S′ ∈ P ≤𝑙 (S \ X′). As the dependence set X is disjoint from S, we have S \ X′ = S \ Z,so 𝑌 ⫫ˆP 𝑋 | Z ∪ S′ holds for all S′ ∈ P ≤𝑙 (S \ Z) with 
+
+Z ∈ P ≤ 𝑘 (𝑽 \ { 𝑌 , 𝑋 }) —the estimated 𝑙 -bounded association claimed in the theorem. Since make_strict only removes variables from Z, the returned set is 𝑋 ∪ Z𝑅 for some 
+
+Z𝑅 ⊆ Z, as claimed. Next consider a call that returns the empty set. Here every internal find_cond call must have failed, so find_inter_dep 
+
+traverses the full enumeration tree of the dependence sets 
+
+X ∈ P ≤ 𝑘 (𝑽 \ ( 𝑌 ∪ S)) (lines 13–17 of find_inter_dep ), and for each visits every candidate 𝑋 ∈ 𝑽 \ ( 𝑌 ∪ S ∪ X) through 
+
+find_cond (𝑌 , 𝑋, X, S, 𝑘, 𝑙 ), which by Theorem 1 searches all X′ ∈ P ≤ 𝑘 − | X| (S). Every conditioning set Z ∈ P ≤ 𝑘 (𝑽 \{𝑌 , 𝑋 }) decomposes uniquely into its part outside and its part inside the candidate blanket, Z = (Z \ S) ∪ ( Z ∩ S) =
+
+X ∪ X′, so this enumeration covers every pair (𝑋, Z) with 
+
+𝑋 ∈ 𝑽 ′ and Z ∈ P ≤ 𝑘 (𝑽 \ { 𝑌 , 𝑋 }) . By Theorem 1, the call for (𝑋, X) returns ⊥ exactly when every such X′ admits a separator S′ ∈ P ≤𝑙 (S \ X′) with 𝑌 ⫫ˆP 𝑋 | X ∪ X′ ∪ S′.Therefore find_inter_dep returns the empty set if and only if Equation (19) holds. The distinguished value ⊥ lets the callers tell such a failure from a success that returns the empty conditioning set. □
+
+Theorem 3 (Correctness of Algorithm 1) . Given an estim-ated distribution ˆP over variables 𝑽 , the target variable whose graphical Markov blanket we want to discover 𝑌 ∈ 𝑽 ,and the natural numbers 𝑘, 𝑙 ∈ N; the grow phase of kOMB 
+
+then grows the candidate MB S such that, MB G (𝑌 ) ⊆ S. (20) 
+
+If, in addition, every true blanket member admits an in-blanket dependence witness—i.e. for every 𝑋 ∈ MB G (𝑌 )
+
+and every S with MB G (𝑌 ) ⊆ S ⊆ 𝑽 \ 𝑌 there is a witness 
+
+Z ∈ P ≤ 𝑘 (MB G (𝑌 ) \ 𝑋 ) with asc (𝑙 ) 
+
+> S\( 𝑋 ∪Z)
+
+(𝑌 , 𝑋 | Z)—then the shrink phase of kOMB removes variables from S until, MB G (𝑌 ) = S, (21) 
+
+where it subsequently terminates and returns S.Proof. Throughout we assume that the CI decisions are ac-curate, so ˆP and P agree on every tested statement. In the grow phase, every nonempty set returned by 
+
+find_inter_dep contains a variable 𝑋 ∉ S by Theorem 2, so each iteration of the repeat loop strictly grows S and the phase terminates. Upon termination find_inter_dep returned the empty set, so by Theorem 2 the condition in Equation (19) holds in ˆP, and by accuracy in P. Fix any 𝑋 ∈ 𝑽 \ ( S ∪ 𝑌 ).For every Z ∈ P ≤ 𝑘 (𝑽 \ { 𝑌 , 𝑋 }) , Equation (19) supplies an S′ ∈ P ≤𝑙 (S \ Z) ⊆ P ≤𝑙 (S) with 𝑌 ⫫P 𝑋 | Z ∪ S′; the 
+
+𝑙 -bounded separator assumption (Assumption 3) then lifts this, for every such Z, to the unbounded statement that some 
+
+S′ ⊆ S gives 𝑌 ⫫P 𝑋 | Z ∪ S′, which is the antecedent of 
+
+𝑘 -order faithfulness (Equation (11)). Hence 𝑌 ⫫G 𝑋 | S for every 𝑋 ∈ 𝑽 \ ( S ∪ 𝑌 ). Since the parents and children of 
+
+𝑌 —and, for an undirected G, its neighbours—can never be separated from 𝑌 , they must all lie in S. Any spouse 𝑋 shares a child 𝐶 ∈ ch (𝑌 ) ⊆ S, so the collider path 𝑌 → 𝐶 ← 𝑋 
+
+is active given S; hence 𝑌 ⫫G 𝑋 | S, which forces 𝑋 ∈ S as well. Therefore MB G (𝑌 ) ⊆ S, establishing Equation (20). During the shrink phase we maintain the invariant MB G (𝑌 ) ⊆ S, which holds on entry by Equation (20). First, we show that no true member is ever removed. For 
+
+𝑋 ∈ MB G (𝑌 ), the in-blanket witness hypothesis of The-orem 3 supplies a set Z ∈ P ≤ 𝑘 (MB G (𝑌 ) \ 𝑋 ) ⊆ P ≤ 𝑘 (S \ 𝑋 )
+
+such that 𝑌 ⫫P 𝑋 | Z ∪ S′ holds for all S′ ∈ P ≤𝑙 (( S \ 𝑋 ) \ Z).By accuracy and Theorem 1 (with candidate blanket S \ 𝑋 ,external dependence set X = ∅, and X′ = Z), the call 
+
+find_cond (𝑌 , 𝑋, ∅, S \ 𝑋, 𝑘, 𝑙 ) does not return ⊥, so 𝑋 is never selected for removal (a member whose only witness is 
+
+Z = ∅ makes find_cond return the empty set rather than ⊥). Next, we show that every non-member is removed once selected. Let 𝑋 ∈ S \ MB G (𝑌 ); by the invariant MB G (𝑌 ) ⊆ 
+
+S\ 𝑋 . We first observe that MB G (𝑌 ) separates 𝑌 from 𝑋 even after conditioning on any further set Z ⊆ 𝑽 \ { 𝑌 , 𝑋 }. Since 
+
+𝑋 ∉ MB G (𝑌 ), 𝑋 is not adjacent to 𝑌 , so every path between them has at least one interior vertex; write such a path as 
+
+𝑌 = 𝑁 0 ∼ 𝑁 1 ∼ · · · ∼ 𝑁 𝑚 = 𝑋 with 𝑚 ≥ 2. Its first interior vertex 𝑁 1 is adjacent to 𝑌 and hence lies in MB G (𝑌 ). If 𝑁 1
+
+is a non-collider on the path, it blocks the path. If instead 
+
+𝑁 1 is a collider 𝑌 → 𝑁 1 ← 𝑁 2, then 𝑁 1 is a common child of 𝑌 and its successor 𝑁 2 on the path, so 𝑁 2 is a spouse of 𝑌 and hence 𝑁 2 ∈ MB G (𝑌 ). In particular 𝑁 2 ≠ 𝑋 (as 
+
+𝑋 ∉ MB G (𝑌 )), so 𝑁 2 is a genuine interior vertex; and since the edge 𝑁 2 → 𝑁 1 points out of 𝑁 2, it is a non-collider on the path and blocks it. For an undirected G, 𝑁 1 is instead a neighbour of 𝑌 and blocks the path directly. As each path is thus blocked at a conditioned vertex of MB G (𝑌 ) irrespective of Z [Pearl, 1988, Lauritzen, 1996], 𝑌 ⫫G 𝑋 | MB G (𝑌 ) ∪ Z
+
+for every Z ∈ P ≤ 𝑘 (𝑽 \ { 𝑌 , 𝑋 }) .The Global Markov Property transfers this to P with the separator S′ ≔ MB G (𝑌 ) \ Z ⊆ S \ 𝑋 , so the unbounded side of Assumption 3—at the separating set S\𝑋 —holds for every such Z. The biconditional then yields some S′ ∈ P ≤𝑙 (S \
+
+𝑋 ); discarding any overlap with Z leaves Z ∪ S′ unchanged and gives S′ ∈ P ≤𝑙 (( S \ 𝑋 ) \ Z) with 𝑌 ⫫P 𝑋 | Z ∪ S′.By accuracy and Theorem 1, find_cond (𝑌 , 𝑋, ∅, S \ 𝑋, 𝑘, 𝑙 )
+
+returns ⊥, so 𝑋 is removed once selected. Each iteration of the while loop removes one variable, so the phase terminates; it exits only when no 𝑋 ∈ S yields 
+
+⊥, whence S \ MB G (𝑌 ) = ∅ and, with the invariant, S =
+
+MB G (𝑌 ), establishing Equation (21). □
+
+## D COMPLEXITY OF KOMB 
+
+Corollary 1 (Computational Complexity of kOMB ). Let 
+
+𝑛 = |𝑽 | denote the number of variables, 𝑁 the sample size, and 𝐾 the maximum size of any candidate MB S encountered by Algorithm 1 during execution. Furthermore assume each CI test runs in 𝑂 (𝑁 ) time. Then, for a given order 𝑘 and separator bound 𝑙 , kOMB (Algorithm 1) terminates in worst-case time 
+
+𝑂 ©«
+
+𝐾 𝑛 
+
+> 𝑘
+
+∑︁ 
+
+> 𝑖 =0
+
+𝑛 𝑖 
+
+  
+
+> 𝑘 −𝑖
+
+∑︁ 
+
+> 𝑖 ′=0
+
+𝐾 𝑖 ′
+
+ 𝑙 ∑︁ 
+
+> 𝑗 =0
+
+𝐾 − 𝑖 ′
+
+𝑗 
+
+
+
+𝑁 
+
+ª®¬
+
+, (22) 
+
+where we adopt the convention that   𝑛 𝑚 
+
+ = 0 whenever 𝑛 < 𝑚 .Proof. We charge 𝑂 (𝑁 ) to each CI test and bound the run-ning time by analysing the three sub-algorithms of Section 5 from the innermost outwards. First consider find_cond (Algorithm 3) for a fixed candidate variable 𝑋 and external dependence set X with |X| = 𝑖 . It iterates over every subset X′ ∈ P ≤ 𝑘 −𝑖 (S), of which there are at most Í𝑘 −𝑖 𝑖 ′=0
+
+ 𝐾 𝑖 ′
+
+ since |S| ≤ 𝐾 . For each X′ it performs one CI test and, whenever that test indicates a dependence, calls 
+
+no_seps , which iterates over every separator S′ ∈ P ≤𝑙 (S\X′)
+
+and performs one further CI test per separator. Writing |X′ | =
+
+𝑖 ′, there are at most Í𝑙 𝑗 =0
+
+ 𝐾 −𝑖 ′
+
+> 𝑗
+
+ such separators, so a single call to find_cond costs 
+
+𝑂 ©«
+
+> 𝑘 −𝑖
+
+∑︁ 
+
+> 𝑖 ′=0
+
+𝐾 𝑖 ′
+
+ 𝑙 ∑︁ 
+
+> 𝑗 =0
+
+𝐾 − 𝑖 ′
+
+𝑗 
+
+
+
+𝑁 ª®¬
+
+, (24) where the convention   𝑛 𝑚 
+
+ = 0 for 𝑛 < 𝑚 accounts for the separator set S \ X′ being exhausted. Next consider find_inter_dep (Algorithm 2). It explores the enumeration tree of 𝑽 \𝑌 up to subsets of cardinality 𝑘 (lines 13–17 of find_inter_dep ), and hence visits at most Í𝑘 𝑖 =0
+
+ 𝑛 𝑖 
+
+
+
+dependence sets X ∈ P ≤ 𝑘 (𝑽 \𝑌 ) (a loose bound on the exact count Í𝑘 𝑖 =0
+
+ 𝑛 −1
+
+> 𝑖
+
+, as |𝑽 \ 𝑌 | = 𝑛 − 1). For every such X it loops over the 𝑂 (𝑛 ) candidate variables 𝑋 ∈ 𝑽 \ ( 𝑌 ∪ S ∪ X)
+
+and invokes find_cond . Multiplying these two factors by Equation (24) bounds the cost of a single association-mining sweep by 
+
+𝑂 ©«
+
+𝑛 
+
+> 𝑘
+
+∑︁ 
+
+> 𝑖 =0
+
+𝑛 𝑖 
+
+  
+
+> 𝑘 −𝑖
+
+∑︁ 
+
+> 𝑖 ′=0
+
+𝐾 𝑖 ′
+
+ 𝑙 ∑︁ 
+
+> 𝑗 =0
+
+𝐾 − 𝑖 ′
+
+𝑗 
+
+
+
+𝑁 
+
+ª®¬
+
+. (25) Each successful sweep additionally invokes make_strict ex-actly once; it iterates over the found dependence set Z—of size at most min (𝑘, 𝑛 − 2), since Z ⊆ 𝑽 \ { 𝑌 , 𝑋 } and 
+
+|Z| ≤ 𝑘 —and performs a single no_seps call per ele-ment, at cost 𝑂 
+
+
+
+min (𝑘, 𝑛 − 2) Í𝑙 𝑗 =0
+
+ 𝐾 𝑗 
+
+ 𝑁 
+
+
+
+. This is dom-inated by the per-sweep find_cond total already counted in Equation (25)—whose bracketed factor already contains the term Í𝑙 𝑗 =0
+
+ 𝐾 𝑗 
+
+ (at 𝑖 ′ = 0) multiplied by the outer factor 
+
+𝑛 Í𝑘 𝑖 =0
+
+ 𝑛 𝑖 
+
+ ≥ 𝑛 ≥ min (𝑘, 𝑛 − 2)—and is therefore absorbed into the bound. Finally, consider kOMB itself (Algorithm 1). Each successful call to find_inter_dep in the grow phase returns a nonempty set 𝑋 ∪ Z that is added to S, so the candidate Markov blanket grows by at least one variable per successful call; as 
+
+|S| ≤ 𝐾 throughout, the grow phase performs at most 𝑂 (𝐾 )
+
+association-mining sweeps. The shrink phase re-evaluates its guard after each removal, calling find_cond at most 𝑂 (𝐾 2)
+
+times over the at most 𝐾 removals; as 𝐾 ≤ 𝑛 − 1, this cost is dominated by that of the grow phase. Multiplying Equa-tion (25) by these 𝑂 (𝐾 ) sweeps yields the bound in Equa-tion (22), completing the proof. □
+
+## E BOOLEAN FUNCTIONS FOR THE SYNTHETIC BAYESIAN NETWORKS 
+
+parity: 𝑓 (𝑋 1, . . . , 𝑋 3) = (Í3 
+
+> 𝑖 =1
+
+𝑋 𝑖 ) ( mod 2 )
+
+ex-𝑠 : 𝑓 (𝑋 1, . . . , 𝑋 3; 𝑠 ) = (Í3 
+
+> 𝑖 =1
+
+𝑋 𝑖 ) = 𝑠 
+
+and: 𝑓 (𝑋 1, . . . , 𝑋 3) = (Í3 
+
+> 𝑖 =1
+
+𝑋 𝑖 ) = 3
+
+or: 𝑓 (𝑋 1, . . . , 𝑋 3) = (Í3 
+
+> 𝑖 =1
+
+𝑋 𝑖 ) ≥ 1
+
+where 𝑠 ∈ { 1, 2}.
+
+## F SEPARATOR SIZES IN THE BENCHMARK DATASETS 
+
+To gauge how restrictive the 𝑙 -bounded separator assumption (Assumption 3) is in practice, we examine the benchmark networks of Section 6.2. We use every variable in turn as a target and, for every pair formed by a target and a variable outside its Markov blanket, compute a minimal d-separator drawn from the true Markov blanket. Table 3 reports the mean and worst-case (maximum) separator size and the fraction of pairs whose separator has size at most three. Separators are small across all four networks—the mean never exceeds 
+
+2.19 and size-≤ 3 separators cover at least 83% of pairs— and no pair had to be skipped, i.e. a separator within the true Markov blanket always existed. The bound is loosest on Barley, where the largest separator reaches size 9; this is also the network on which kOMB is the most expensive and least accurate (Section 6.2), illustrating that the difficulty of MB discovery tracks the separator sizes the assumption must accommodate. Overall, a modest separator bound 𝑙 already suffices to capture most of the conditional independencies needed to recover the Markov blanket on these networks. 
+
+## G ABLATION 
+
+For completeness, we report the full results of the exper-iments in Section 6.2 for every method and every (𝑘, 𝑙 )
+
+Table 3: Minimal d-separator sizes restricted to the true Markov blanket, computed using every variable of each benchmark network as a target. “Targets” is the number of targets (all variables) and “Pairs” the number of target– non-blanket pairs; “Mean sep. size” and “Max” are the mean and maximum separator size; and “Cover ≤ 3” is the fraction whose minimal separator has size at most three. Network Targets Pairs Mean sep. size Max Cover ≤ 3                    
+
+> Alarm1 37 1202 0.621 31.000 Barley 48 2004 1.739 90.835 Insurance 27 562 2.190 70.925 Mildew 35 1030 1.065 60.976
+
+configuration of kOMB . Table 5 gives the performance of all methods, while Table 6 gives their runtimes in seconds. In both tables, “–” denotes a configuration that failed to complete within the allotted time budget. Table 4 summarises the F1 score of kOMB across all synthetic and benchmark datasets for every (𝑘, 𝑙 ) configuration. F1 generally improves from 𝑘 = 0 to 𝑘 = 2—higher orders expose dependencies that lower orders miss—but the gains flatten or reverse beyond 𝑘 = 2 as the larger conditioning sets incur both higher runtime (Table 6) and more error-prone CI tests. Setting 𝑙 = 𝑘 with 𝑘 ≤ 2 therefore offers a robust default, the heuristic we adopt in Section 5.2. For a fixed 𝑘 ,raising 𝑙 beyond 𝑘 does not consistently improve F1 (Table 4), which motivates simply setting 𝑙 = 𝑘 rather than tuning 𝑙 
+
+separately. Table 4: F1 score across datasets for each (𝑘, 𝑙 ) configuration of kOMB .Method parity ex-1 ex-2 and or Alarm1 Barley Insurance Mildew kOMB 0.0250 0.2825 0.2675 0.4100 0.3500 – – – –
+
+(𝑘 = 0, 𝑙 = 1) ±0.1104 ±0.3720 ±0.3737 ±0.4050 ±0.3508 – – – –kOMB 0.0250 0.2825 0.2675 0.4100 0.3500 – – – –
+
+(𝑘 = 0, 𝑙 = 2) ±0.1104 ±0.3720 ±0.3737 ±0.4050 ±0.3508 – – – –kOMB 0.0250 0.2825 0.2675 0.4100 0.3500 – – – –
+
+(𝑘 = 0, 𝑙 = 3) ±0.1104 ±0.3720 ±0.3737 ±0.4050 ±0.3508 – – – –kOMB 0.0500 0.6750 0.6750 0.6175 0.5600 0.7804 0.5158 0.7136 0.6220 
+
+(𝑘 = 1, 𝑙 = 1) ±0.2207 ±0.4743 ±0.4743 ±0.3741 ±0.4349 ±0.1145 ±0.1964 ±0.1328 ±0.1595 
+
+kOMB 0.0500 0.6750 0.6750 0.6175 0.5600 0.8187 0.3128 0.7336 0.4360 
+
+(𝑘 = 1, 𝑙 = 2) ±0.2207 ±0.4743 ±0.4743 ±0.3741 ±0.4349 ±0.1944 ±0.1582 ±0.1624 ±0.1394 
+
+kOMB 0.0500 0.6750 0.6750 0.6175 0.5600 0.7923 0.2498 0.7076 0.3726 
+
+(𝑘 = 1, 𝑙 = 3) ±0.2207 ±0.4743 ±0.4743 ±0.3741 ±0.4349 ±0.1885 ±0.1140 ±0.1304 ±0.1558 
+
+kOMB 1.0000 1.0000 1.0000 0.6175 0.7100 0.7775 0.4634 0.7249 0.5059 
+
+(𝑘 = 2, 𝑙 = 1) ±0.0000 ±0.0000 ±0.0000 ±0.3741 ±0.3842 ±0.1511 ±0.1774 ±0.1464 ±0.1458 
+
+kOMB 1.0000 1.0000 1.0000 0.6175 0.7100 0.8209 0.3128 0.7336 0.4360 
+
+(𝑘 = 2, 𝑙 = 2) ±0.0000 ±0.0000 ±0.0000 ±0.3741 ±0.3842 ±0.1914 ±0.1582 ±0.1624 ±0.1394 
+
+kOMB 1.0000 1.0000 1.0000 0.6175 0.7100 0.7967 0.2498 0.7058 0.3726 
+
+(𝑘 = 2, 𝑙 = 3) ±0.0000 ±0.0000 ±0.0000 ±0.3741 ±0.3842 ±0.1828 ±0.1140 ±0.1311 ±0.1558 
+
+kOMB – – – – – 0.7721 – 0.7227 0.5243 
+
+(𝑘 = 3, 𝑙 = 1) – – – – – ±0.1599 – ±0.1552 ±0.1075 
+
+kOMB – – – – – 0.8001 – 0.7288 0.4194 
+
+(𝑘 = 3, 𝑙 = 2) – – – – – ±0.1948 – ±0.1471 ±0.1414 
+
+kOMB – – – – – 0.7967 – 0.7058 0.3726 
+
+(𝑘 = 3, 𝑙 = 3) – – – – – ±0.1828 – ±0.1311 ±0.1558 Table 5: Full results on benchmark datasets. Method Alarm1 Barley Insurance Mildew BAMB 0.6742 0.3385 0.6588 0.4945 
+
+±0.1771 ±0.1226 ±0.0797 ±0.1084 
+
+GS 0.3434 0.2113 0.4615 0.2867 
+
+±0.1503 ±0.0807 ±0.1477 ±0.1581 
+
+HITON_MB 0.7636 0.3400 0.6746 0.4918 
+
+±0.1861 ±0.1284 ±0.1594 ±0.1487 
+
+IAMB 0.6931 0.3373 0.6293 0.4677 
+
+±0.1827 ±0.1223 ±0.0778 ±0.1224 
+
+LRH 0.6813 0.3373 0.6281 0.4674 
+
+±0.1777 ±0.1223 ±0.0782 ±0.1230 
+
+MMMB 0.7692 0.3298 0.6978 0.4861 
+
+±0.1874 ±0.1274 ±0.1405 ±0.1810 
+
+PCMB 0.7371 0.2284 0.6299 0.4156 
+
+±0.2127 ±0.1199 ±0.1291 ±0.1445 
+
+STMB 0.6598 0.2145 0.5648 0.2734 
+
+±0.1627 ±0.1281 ±0.1324 ±0.1765 
+
+kOMB 0.7804 0.5158 0.7136 0.6220 
+
+(𝑘 = 1, 𝑙 = 1) ±0.1145 ±0.1964 ±0.1328 ±0.1595 
+
+kOMB 0.8187 0.3128 0.7336 0.4360 
+
+(𝑘 = 1, 𝑙 = 2) ±0.1944 ±0.1582 ±0.1624 ±0.1394 
+
+kOMB 0.7923 0.2498 0.7076 0.3726 
+
+(𝑘 = 1, 𝑙 = 3) ±0.1885 ±0.1140 ±0.1304 ±0.1558 
+
+kOMB 0.7775 0.4588 0.7249 0.5059 
+
+(𝑘 = 2, 𝑙 = 1) ±0.1511 ±0.1825 ±0.1464 ±0.1458 
+
+kOMB 0.8209 0.3128 0.7336 0.4360 
+
+(𝑘 = 2, 𝑙 = 2) ±0.1914 ±0.1582 ±0.1624 ±0.1394 
+
+kOMB 0.7967 0.2498 0.7058 0.3726 
+
+(𝑘 = 2, 𝑙 = 3) ±0.1828 ±0.1140 ±0.1311 ±0.1558 
+
+kOMB 0.7721 0.0000 0.7227 0.0419 
+
+(𝑘 = 3, 𝑙 = 1) ±0.1599 ±0.0000 ±0.1552 ±0.1458 
+
+kOMB 0.8001 0.0000 0.7288 0.3607 
+
+(𝑘 = 3, 𝑙 = 2) ±0.1948 ±0.0000 ±0.1471 ±0.1964 
+
+kOMB 0.7967 0.0000 0.7058 0.3726 
+
+(𝑘 = 3, 𝑙 = 3) ±0.1828 ±0.0000 ±0.1311 ±0.1558 
+
+Table 6: Full runtimes (in seconds) on benchmark datasets. Method Alarm1 Barley Insurance Mildew BAMB 3.517 1.149 5.615 0.797 
+
+±4.305 ±0.681 ±5.358 ±0.392 
+
+GS 4.875 1.575 4.433 1.035 
+
+±5.183 ±0.606 ±3.792 ±0.341 
+
+HITON_MB 2.560 1.027 3.514 0.604 
+
+±1.277 ±0.298 ±2.525 ±0.218 
+
+IAMB 2.527 1.104 1.650 0.943 
+
+±1.710 ±0.496 ±0.967 ±0.420 
+
+LRH 89.877 5.071 45.401 1.833 
+
+±93.285 ±2.496 ±24.653 ±0.651 
+
+MMMB 2.724 1.090 3.508 0.553 
+
+±1.278 ±0.374 ±2.525 ±0.128 
+
+PCMB 15.515 4.982 27.213 3.066 
+
+±10.203 ±1.872 ±21.695 ±1.486 
+
+STMB 5.305 1.895 14.658 0.561 
+
+±5.855 ±2.367 ±33.396 ±0.524 
+
+kOMB 5.258 58.190 4.856 17.698 
+
+(𝑘 = 1, 𝑙 = 1) ±2.921 ±31.619 ±2.041 ±10.205 
+
+kOMB 3.974 12.369 3.828 7.562 
+
+(𝑘 = 1, 𝑙 = 2) ±2.468 ±7.709 ±2.235 ±2.301 
+
+kOMB 4.111 9.639 3.171 7.384 
+
+(𝑘 = 1, 𝑙 = 3) ±2.791 ±3.794 ±1.707 ±2.127 
+
+kOMB 26.092 788.531 19.901 311.324 
+
+(𝑘 = 2, 𝑙 = 1) ±14.668 ±453.059 ±7.226 ±167.079 
+
+kOMB 18.144 335.821 14.493 121.909 
+
+(𝑘 = 2, 𝑙 = 2) ±7.566 ±135.966 ±7.280 ±33.153 
+
+kOMB 18.016 290.512 10.424 121.146 
+
+(𝑘 = 2, 𝑙 = 3) ±9.135 ±85.391 ±4.290 ±32.239 
+
+kOMB 174.900 1800.000 96.149 1761.246 
+
+(𝑘 = 3, 𝑙 = 1) ±83.504 ±0.000 ±46.913 ±188.357 
+
+kOMB 132.619 1800.000 58.350 1534.465 
+
+(𝑘 = 3, 𝑙 = 2) ±46.566 ±0.000 ±21.745 ±300.944 
+
+kOMB 127.861 1800.000 53.452 1356.514 
+
+(𝑘 = 3, 𝑙 = 3) ±49.652 ±0.000 ±18.285 ±304.778
