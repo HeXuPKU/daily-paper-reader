@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-02</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-03</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 11 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 12 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>10</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>5</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>7</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-02 21:20:35 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-03 21:20:56 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共读11篇论文，精读1篇、速读3篇；核心亮点是基于时间图的疾病轨迹对比学习模型，另涉单细胞靶基因发现与隐私保护框架。最值得关注的方向是疾病轨迹预测与可解释靶基因挖掘。建议普通读者优先从精读论文入手，把握时间图建模思路。</p>
+<p>今日共读12篇论文，精5速7，聚焦单细胞与因果推断。</p>
+<p>最值得关注：scDiffusion稀疏引导生成模型（9.0分）与SCTA可解释靶基因发现框架（8.0分）。</p>
+<p>建议优先精读上述两篇，并速览治疗效应估计中的不确定性语义增强思路。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +73,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">1 篇</strong>
+    <strong class="dpr-home-dashboard-count">5 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs">Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Improving scDiffusion with Sparsity-Biased Classifier-Free Guidance">Improving scDiffusion with Sparsity-Biased Classifier-Free Guidance</span></li><li><span class="dpr-home-dashboard-paper-title" title="SCTA: An Agentic Framework for Stable and Interpretable Target Gene Discovery from Single-Cell RNA Sequencing">SCTA: An Agentic Framework for Stable and Interpretable Target Gene Discovery from Single-Cell RNA Sequencing</span></li><li><span class="dpr-home-dashboard-paper-title" title="TCellAlign: Cross-study T-cell Populations Alignment with Nomenclature-Guided Multi-Agent Workflow">TCellAlign: Cross-study T-cell Populations Alignment with Nomenclature-Guided Multi-Agent Workflow</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -84,12 +86,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">10 篇</strong>
+    <strong class="dpr-home-dashboard-count">7 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="SCTA: An Agentic Framework for Stable and Interpretable Target Gene Discovery from Single-Cell RNA Sequencing">SCTA: An Agentic Framework for Stable and Interpretable Target Gene Discovery from Single-Cell RNA Sequencing</span></li><li><span class="dpr-home-dashboard-paper-title" title="MOSAIC-FL, a micro-service based privacy-preserving framework with application to genomics">MOSAIC-FL, a micro-service based privacy-preserving framework with application to genomics</span></li><li><span class="dpr-home-dashboard-paper-title" title="DynaBridge: Dynamic Summary-Guided Cross-Task Multimodal Fusion for DASS-Structured Mental Health Assessment">DynaBridge: Dynamic Summary-Guided Cross-Task Multimodal Fusion for DASS-Structured Mental Health Assessment</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Uncertainty-Guided LLM Semantic Augmentation for Heterogeneous Treatment Effect Estimation">Uncertainty-Guided LLM Semantic Augmentation for Heterogeneous Treatment Effect Estimation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Adaptive Nyström for Gaussian Process Regression">Adaptive Nyström for Gaussian Process Regression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Distance Profile Embedding for Independence and Conditional Independence Testing of Random Objects">Distance Profile Embedding for Independence and Conditional Independence Testing of Random Objects</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>8</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>3</strong></span></div>
 </section>
 </div>
 
