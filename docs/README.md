@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-03</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-04</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 12 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 15 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>5</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>7</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>4</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>11</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-03 21:20:56 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-04 21:22:16 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共读12篇论文，精5速7，聚焦单细胞与因果推断。</p>
-<p>最值得关注：scDiffusion稀疏引导生成模型（9.0分）与SCTA可解释靶基因发现框架（8.0分）。</p>
-<p>建议优先精读上述两篇，并速览治疗效应估计中的不确定性语义增强思路。</p>
+<p>今日共读15篇论文，4篇精读、11篇速读，重点关注遗传关联与罕见病诊断领域。最值得看的是《Correlated frailty model》提出的家族研究遗传关联新模型，以及《GraphRareBench》构建的罕见病表型诊断可审计基准。建议普通读者优先浏览精读两篇，再按兴趣扩展至临床异常检测与因果推断方向的速读文章。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -73,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">5 篇</strong>
+    <strong class="dpr-home-dashboard-count">4 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Improving scDiffusion with Sparsity-Biased Classifier-Free Guidance">Improving scDiffusion with Sparsity-Biased Classifier-Free Guidance</span></li><li><span class="dpr-home-dashboard-paper-title" title="SCTA: An Agentic Framework for Stable and Interpretable Target Gene Discovery from Single-Cell RNA Sequencing">SCTA: An Agentic Framework for Stable and Interpretable Target Gene Discovery from Single-Cell RNA Sequencing</span></li><li><span class="dpr-home-dashboard-paper-title" title="TCellAlign: Cross-study T-cell Populations Alignment with Nomenclature-Guided Multi-Agent Workflow">TCellAlign: Cross-study T-cell Populations Alignment with Nomenclature-Guided Multi-Agent Workflow</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Correlated frailty model for analysis of genetic association in family studies">Correlated frailty model for analysis of genetic association in family studies</span></li><li><span class="dpr-home-dashboard-paper-title" title="GraphRareBench: An Auditable Graph-Evidence Benchmark for Phenotype-Driven Rare-Disease Diagnosis">GraphRareBench: An Auditable Graph-Evidence Benchmark for Phenotype-Driven Rare-Disease Diagnosis</span></li><li><span class="dpr-home-dashboard-paper-title" title="Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs">Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>3</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -86,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">7 篇</strong>
+    <strong class="dpr-home-dashboard-count">11 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Uncertainty-Guided LLM Semantic Augmentation for Heterogeneous Treatment Effect Estimation">Uncertainty-Guided LLM Semantic Augmentation for Heterogeneous Treatment Effect Estimation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Adaptive Nyström for Gaussian Process Regression">Adaptive Nyström for Gaussian Process Regression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Distance Profile Embedding for Independence and Conditional Independence Testing of Random Objects">Distance Profile Embedding for Independence and Conditional Independence Testing of Random Objects</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="INCLAIR: Inception-Based Longitudinal Clinical Anomaly Detection with Informed Reasoning">INCLAIR: Inception-Based Longitudinal Clinical Anomaly Detection with Informed Reasoning</span></li><li><span class="dpr-home-dashboard-paper-title" title="Doubly Robust Functional Representation Learning for Longitudinal Causal Inference with Irregular Histories">Doubly Robust Functional Representation Learning for Longitudinal Causal Inference with Irregular Histories</span></li><li><span class="dpr-home-dashboard-paper-title" title="xMICD: Explainable Representation of Multiple ICD Codes">xMICD: Explainable Representation of Multiple ICD Codes</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>7</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>4</strong></span></div>
 </section>
 </div>
 
