@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-04</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-05</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 15 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 12 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>4</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>11</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-04 21:22:16 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-05 22:06:05 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共读15篇论文，4篇精读、11篇速读，重点关注遗传关联与罕见病诊断领域。最值得看的是《Correlated frailty model》提出的家族研究遗传关联新模型，以及《GraphRareBench》构建的罕见病表型诊断可审计基准。建议普通读者优先浏览精读两篇，再按兴趣扩展至临床异常检测与因果推断方向的速读文章。</p>
+<p>今日共处理12篇论文，其中精读1篇、速读11篇，整体聚焦计算生物学与医学信息学。</p>
+<p>最值得关注的是精读论文《Beyond Gene Reconstruction》提出的细胞多视角表示学习方法（8.0/10），以及速读中关于时序图轨迹对比学习（7.0/10）与scDiffusion稀疏引导改进（7.0/10）的方向。</p>
+<p>建议优先精读细胞表示学习一文，并可结合纵向疾病轨迹建模与扩散模型改进寻找交叉应用思路。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +73,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">4 篇</strong>
+    <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Correlated frailty model for analysis of genetic association in family studies">Correlated frailty model for analysis of genetic association in family studies</span></li><li><span class="dpr-home-dashboard-paper-title" title="GraphRareBench: An Auditable Graph-Evidence Benchmark for Phenotype-Driven Rare-Disease Diagnosis">GraphRareBench: An Auditable Graph-Evidence Benchmark for Phenotype-Driven Rare-Disease Diagnosis</span></li><li><span class="dpr-home-dashboard-paper-title" title="Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs">Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Beyond Gene Reconstruction: Learning Cell Representations through Complementary Transcriptomic Views">Beyond Gene Reconstruction: Learning Cell Representations through Complementary Transcriptomic Views</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>3</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +89,9 @@
     <strong class="dpr-home-dashboard-count">11 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="INCLAIR: Inception-Based Longitudinal Clinical Anomaly Detection with Informed Reasoning">INCLAIR: Inception-Based Longitudinal Clinical Anomaly Detection with Informed Reasoning</span></li><li><span class="dpr-home-dashboard-paper-title" title="Doubly Robust Functional Representation Learning for Longitudinal Causal Inference with Irregular Histories">Doubly Robust Functional Representation Learning for Longitudinal Causal Inference with Irregular Histories</span></li><li><span class="dpr-home-dashboard-paper-title" title="xMICD: Explainable Representation of Multiple ICD Codes">xMICD: Explainable Representation of Multiple ICD Codes</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs">Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs</span></li><li><span class="dpr-home-dashboard-paper-title" title="Improving scDiffusion with Sparsity-Biased Classifier-Free Guidance">Improving scDiffusion with Sparsity-Biased Classifier-Free Guidance</span></li><li><span class="dpr-home-dashboard-paper-title" title="xMICD: Explainable Representation of Multiple ICD Codes">xMICD: Explainable Representation of Multiple ICD Codes</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>7</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>11</strong></span></div>
 </section>
 </div>
 
