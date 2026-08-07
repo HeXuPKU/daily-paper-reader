@@ -1,0 +1,1595 @@
+Title: Population-Robust Feature Selection via Generalized Welfare Optimization
+
+URL Source: https://arxiv.org/pdf/2608.02887v1
+
+Published Time: Wed, 05 Aug 2026 00:14:18 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# Population-Robust Feature Selection via Generalized Welfare Optimization 
+
+## Ruiqi Lyu 1∗, Alistair Turcan 1, Bryan Wilder 1
+
+> 1
+
+Carnegie Mellon University * ruiqil@andrew.cmu.edu 
+
+Abstract 
+
+Choosing which features to collect is a deployment decision: the same limited questionnaire, test panel, or sensor set may need to serve several heterogeneous populations. Standard feature-selection methods typically optimize for one large population, while existing robust approaches tend to learn one shared model for every population. We introduce PopFS, a method for learning one shared, deployable feature set that is robust to population differences while letting each pop-ulation train its own model. PopFS uses a tunable welfare objective that lets practitioners balance overall predictive ben-efit against stronger protection of the populations that benefit least. To make this objective practical at scale, PopFS first uses multitask sparse learning to reduce the candidate pool, then searches directly over hard feature sets by ranking promising additions and swaps and fully refitting only a shortlist. Across eight population splits from six prediction tasks drawn from five tabular and public-health datasets, PopFS consistently achieves strong average and worst-population performance while scaling to thousands of candidate features. A 43-state COVID-19 nowcasting study further shows that changing the welfare objective can improve the least-served states with lit-tle change in average performance and yields an interpretable change in the selected symptom signals. Our code is available at https://github.com/Rachel-Lyu/PopFS. 
+
+## Introduction 
+
+Many machine-learning systems are developed using richer data than can be collected once the system is deployed (Saar-Tsechansky, Provost et al. 2006; Kapoor and Greiner 2005). A pilot health study may record hundreds of survey responses and clinical measurements, while a deployed screener must use only a short questionnaire or test panel (Kroenke, Spitzer, and Williams 2003). Similar constraints arise in sensor place-ment, credit assessment, and other settings where each addi-tional measurement carries a financial, operational, privacy, or human cost (Guestrin, Krause, and Singh 2005). The chal-lenge becomes sharper when the same measurements must be collected across several populations that differ in distribution (Sagawa et al. 2019; Hashimoto et al. 2018). A health sys-tem, for example, may require every clinic to administer the same screening protocol across heterogeneous patient popu-lations, for some of which fitting a reliable separate model is itself challenging. Specifically, from p candidate features, we must choose exactly k features, where k ≪ p, that support useful prediction for each population. After the shared fea-ture set is fixed, each population may deploy its own student model, chosen to match local sample size, modeling con-straints, and operational requirements. A feature set selected only for pooled accuracy may work well on average while preserving little useful information for populations whose predictive relationships differ from those of the majority. Existing work addresses important parts of this problem, but less so their combination. Classical feature selection gen-erally asks which variables best support prediction for one distribution or one fitted model (Guyon and Elisseeff 2003; Kohavi and John 1997; Tibshirani 1996). Distributionally ro-bust and group-robust learning instead protect performance across distributions, but typically do so by fitting one shared predictor (Duchi and Namkoong 2021; Sagawa et al. 2019; Hashimoto et al. 2018). The closest work to our setting is Distributionally Robust Feature Selection (DRFS), which selects one shared feature set via a continuous relaxation to protect the worst-performing population while allowing a different downstream model in each population (Swaroop, Krishnamurti, and Wilder 2026). This leaves two practical gaps. First, robustness is not one-size-fits-all. Some appli-cations prioritize overall benefit, while others are willing to trade some average performance for stronger protection of the populations that benefit least. Second, feature acquisition is ultimately a discrete design decision: a system deploys a particular questionnaire, test panel, or sensor set, not a collec-tion of partially included features. Optimizing a continuous relaxation and rounding it afterward can therefore create a gap between the objective being optimized and the feature set that is ultimately deployed. We seek a method that makes the population trade-off explicit and tunable, while enabling a scalable search over very large feature sets. We introduce PopFS, a scalable, tunable method for learn-ing a robust shared feature set while fitting a separate pre-diction model in each population. PopFS makes the trade-off between overall benefit and protection of lower-benefit pop-ulations explicit through a simple welfare hyperparameter. PopFS achieves high accuracy through directly searching over discrete feature sets instead of continuous objectives, arXiv:2608.02887v1 [cs.LG] 3 Aug 2026 while making this tractable through a series of pre-screening and surrogate measures which can approximate the discrete objective. Across multiple population splits in diverse set-tings, PopFS improves in both average and worst-case pop-ulation performance by up to 22% over baselines while run-ning in < 15 minutes regardless of total feature size. In a COVID-19 nowcasting case study, tuning the welfare hyper-parameter of PopFS enables up to 40% higher performance for the least-served states without sacrificing performance overall. Our contributions are as follows: 1. We introduce PopFS, a method for learning one shared deployable feature set that is robust to population differ-ences under a tunable welfare objective. 2. We develop a scalable optimization strategy that directly searches over discrete feature sets using multitask sparse learning for screening and a Gauss–Newton-ranked refit search. 3. PopFS achieves strong performance in population-average and worst-population comparisons and demon-strates interpretable shared feature selection in a COVID-19 application. 
+
+## Related work 
+
+Feature selection. Feature-selection methods include fil-ters and wrappers that search candidate subsets and embed-ded methods that induce sparsity during model fitting (Guyon and Elisseeff 2003; Kohavi and John 1997; Tibshirani 1996). Exact cardinality-constrained selection is discrete even for linear prediction (Natarajan 1995), motivating greedy ap-proximations and sparse regularization (Das and Kempe 2011; Khanna et al. 2017; Tibshirani 1996). These methods generally assume one target distribution and assess features through a particular model’s performance or coefficients. Multi-task feature learning allows task-specific predictors to share a common feature set (Argyriou, Evgeniou, and Pontil 2006; Obozinski, Taskar, and Jordan 2010; Yuan and Lin 2006), but typically selects that set by minimizing aggregate prediction loss across tasks rather than explicitly balancing the benefit received by each population. Sample- or cluster-specific masks address a different acquisition setting because individuals may receive different measurements (Yang, Lin-denbaum, and Kluger 2022; Svirsky and Lindenbaum 2023). Full-feature reference models also relate to knowledge distil-lation and privileged information (Hinton, Vinyals, and Dean 2015; Lopez-Paz et al. 2015). PopFS instead learns a shared feature set for deploying unique models to each population while considering the balance between these populations’ performance. 
+
+Distributionally robust optimization. Distributionally robust optimization seeks predictors stable across distribu-tions, while group DRO protects the worst specified pop-ulation (Duchi and Namkoong 2021; Sagawa et al. 2019; Hashimoto et al. 2018). These methods typically fit one shared predictor, so sparsifying it yields a robust sparse model rather than a shared acquisition set for separate population-specific models. DRFS introduces this shared-acquisition setting, selecting one feature set while allowing population-specific downstream predictors (Swaroop, Kr-ishnamurti, and Wilder 2026). PopFS generalizes DRFS’s worst-population objective: it provides a tunable hyperpa-rameter to vary aggregate benefit and protection of lower-benefit populations. DRFS relaxes binary inclusion and learns the least-noised features after continuous optimiza-tion. PopFS instead searches directly over deployable hard subsets while staying computationally tractable, which is more directly aligned with the discrete selection objec-tive. Concurrent safe distributionally robust feature selec-tion seeks a superset containing every support that may be-come optimal under a range of covariate shifts (Hanada et al. 2026), a coverage objective complementary to selecting one welfare-optimal set for observed populations. 
+
+## Problem formulation 
+
+Our aim is to learn one set of shared features for all r
+
+populations such that each population can train an ap-propriate deployed student model on those features. Pop-ulation i ∈ [r] has distribution Pi over (X, Y ), where 
+
+X = ( X1, . . . , X p) comprises p candidate features. Here, 
+
+[m] = {1, . . . , m }, population i contributes training obser-vations {(xit , y it )}ni
+
+> t=1
+
+, and XS = ( Xj )j∈S for any S ⊆ [p].The goal is to choose one shared subset S ⊆ [p], |S| = k,used by a separate prediction model in every population, that will not sacrifice worst-case performance in favor of the aver-age case, and vice-versa, while providing a tunable balance between these. The difficulty is that a feature set that pre-serves the predictive signal in one population may discard it in another, but it is computationally intractable to learn appropriate feature sets by fitting models on every possible subset in every population. 
+
+## Method 
+
+Overview. PopFS selects one shared feature set while al-lowing each population to fit its own predictor. In each pop-ulation, we first fit a model using all available features; its predictions estimate the predictive signal that the selected features should retain. To evaluate a candidate set, we fit a population-specific model using only those features and assess how well it reproduces the full-feature model’s pre-dictions. This teacher objective is the default; optional label and mixed objectives instead use label utility or a weighted combination of teacher and label utilities. During selection, population-specific improvements over no-feature baselines are combined through a tunable welfare objective, ranging from average benefit to stronger protection of lower-utility populations. After the shared feature set is selected, each population may refit its deployed model to its own out-comes. Directly evaluating every subset would require fit-ting population-specific models for every combination of features, so PopFS first uses multitask sparse learning to screen features, then uses Gauss–Newton surrogates to short-list feature sets for full validation refits. Thus, screening and ranking make the search scalable, while validation welfare determines the deployed subset. Teacher-Compression Objective 
+
+To evaluate the performance of one shared feature set, we ask how much of the predictive signal available from all features can still be recovered using the selected features. This separates information lost through feature restriction from irreducible variation in the observed outcomes: un-der squared loss, only the error in approximating the full-feature conditional mean depends on the subset. Because this conditional mean is unknown, we later approximate it with a fitted full-feature teacher and aggregate the result-ing population-specific benefits through a tunable welfare objective. Let ω(Y ) ∈ Rq denote the response representa-tion and assume it is square-integrable under each Pi. De-fine mi(x) = EPi {ω(Y ) | X = x}, which is also square-integrable. For S ⊆ [p], let XS be the domain of XS , write 
+
+X = X[p], and let Gi,S be a nonempty class of measurable predictors g : XS → Rq available to population i when only XS is observed. The classes {G i,S }S are induced by the same population-specific modeling rule under different feature restrictions. Assume g(XS ) is square-integrable for every g ∈ G i,S . Theorem 1 formalizes why approximating 
+
+mi(X) is the relevant target for feature selection. 
+
+Theorem 1 (Full-signal decomposition) . For every popula-tion i, subset S ⊆ [p], and g ∈ G i,S , EPi ∥ω(Y )−g(XS )∥22 =
+
+EPi ∥ω(Y ) − mi(X)∥22 + EPi ∥mi(X) − g(XS )∥22. Conse-quently, within the restricted class Gi,S , the subset-dependent part of the squared risk is exactly the error of approximating 
+
+mi(X) using XS .
+
+Thus, subsets differ only through how well XS preserves 
+
+mi(X). Because mi is unknown, we fit a full-feature teacher 
+
+Ti : X → Rq , treat it as fixed after training, and assume 
+
+Ti(X) is square-integrable. Define the teacher-compression risk CTi (S) = inf g∈G i,S EPi ℓT {Ti(X), g (XS )}, where ℓT
+
+is the teacher-matching loss. For squared teacher loss, define 
+
+DG 
+
+> i
+
+(S) = inf 
+
+> g∈G i,S
+
+EPi ∥mi(X) − g(XS )∥22 ,ϵi = EPi ∥Ti(X) − mi(X)∥22 .
+
+Theorem 2 (Teacher-compression bridge) . Under the con-ditions above, if ℓT (a, b ) = ∥a − b∥22, then, conditional on the fitted teacher and with expectations over a fresh draw from Pi, for every population i and subset S,
+
+pCTi (S) −
+
+q
+
+DG 
+
+> i
+
+(S) ≤ √ϵi. Thus, teacher-compression risk approximates full-signal risk on root-risk scale when teacher error is small. 
+
+Together, Theorems 1 and 2 justify teacher-compression risk as a squared-loss surrogate when the teacher error is small.The bridge controls root risks. In particular, for a fixed population i, if 
+
+q
+
+DG 
+
+> i
+
+(S2) −
+
+q
+
+DG 
+
+> i
+
+(S1) > 2√ϵi, then 
+
+CTi (S1) < C Ti (S2).
+
+Tuning the Welfare Objective 
+
+A shared feature set may provide substantial benefit to some populations but little benefit to others. We therefore need to specify how the selection objective should trade off aggregate performance against stronger protection of the populations that benefit least. Let ui(S) > 0 denote the utility population i receives from subset S, and let 
+
+u(S) = ( u1(S), . . . , u r (S)) . For population weights ρi > 0
+
+satisfying Pri=1 ρi = 1 , we aggregate these utilities using the weighted power mean 
+
+Aα,ρ (u) = 
+
+(
+
+(Pri=1 ρiuαi )1/α , α̸ = 0 ,
+
+Qri=1 uρi 
+
+> i
+
+, α = 0 .
+
+The weights ρi specify the relative importance of the popula-tions, while α controls how strongly the objective prioritizes populations with lower utility. In particular, α = 1 gives the weighted average, α = 0 the geometric mean, and α → −∞ 
+
+the minimum. Thus, α indexes a continuous family of ob-jectives; as it decreases from 1, the objective shifts from the weighted average toward minimum-population utility on the floored utility scale. Unless stated otherwise, our ex-periments use uniform population weights, ρi = 1 /r . Our feature-selection objective is 
+
+S⋆ ∈ arg max 
+
+> S⊆[p]
+> |S|=k
+
+Aα,ρ (u(S)) . (1) To instantiate ui(S), utilities must be comparable across populations with different risk scales and baseline pre-dictability, and strictly positive for the power mean. We therefore measure teacher- or label-based improvement rel-ative to each population’s own constant-prediction base-line. Assume that the losses are nonnegative and that all risks below are finite. For direct label-based selection, de-fine CYi (S) = inf g∈H i,S EPi ℓY {Y, g (XS )}, where Hi,S is the population-specific label-predictor class. In our experi-ments, ℓT is squared loss; ℓY is squared loss for regression and binary log loss during classification selection, while final classification evaluation uses Brier score. For R ∈ { T, Y },define 
+
+sRi (S) = CRi (∅) − CRi (S)max {CRi (∅), ε 0} ,uRi (S) = max {sRi (S) + δ0, δ 0}.
+
+Here ε0, δ 0 > 0, and CRi (∅) is the population risk of the best no-feature constant predictor in the corresponding class. The displayed quantities define the population objective. In computation, bCRi (S) is the unpenalized validation loss of a student fitted on the training partition; the no-feature predic-tor is likewise fitted on training data and evaluated on vali-dation data. Empirical utilities replace CRi by bCRi through-out. Thus, sRi (S) is normalized improvement over that base-line, while the floor makes uRi (S) strictly positive and treats all nonpositive gains equally. Selection uses ui = uTi for the teacher objective, ui = uYi for the label objective, and 
+
+ui = βu Ti + (1 − β)uYi for the mixed objective, where 
+
+β ∈ [0 , 1] . For the mixed objective, the teacher- and label-target students are fitted separately when computing the two utilities. Theorem 3 formalizes how decreasing α increases the relative marginal importance of lower-utility populations. Theorem 3 (Lower-utility weighting) . For u ∈ (0 , ∞)r
+
+and finite α ∈ R, the power mean satisfies ∂A α,ρ  
+
+> ∂u i
+
+(u) = 
+
+ρiuα−1 
+
+> i
+
+Aα,ρ (u)1−α, where the expression at α = 0 is de-fined by continuity. Hence, as d → 0 with u + d ∈ (0 , ∞)r ,
+
+Aα,ρ (u + d) − Aα,ρ (u) = Pri=1 ρiuα−1 
+
+> i
+
+Aα,ρ (u)1−αdi +
+
+o(∥d∥2). For any populations i and h, ∂A α,ρ /∂u i 
+
+> ∂A α,ρ /∂u h
+
+=
+
+> ρi
+> ρh
+
+ ui
+
+> uh
+
+α−1
+
+. Therefore, when ρi = ρh and α < 1, the pop-ulation with lower utility receives greater marginal weight. 
+
+Because a general power mean need not preserve submod-ularity, even when the population utilities are monotone sub-modular, our validated greedy-and-swap search is a heuristic for (1); we do not claim a universal constant-factor guarantee for arbitrary α (Das and Kempe 2011; Khanna et al. 2017). 
+
+Teacher Fitting and Candidate Screening 
+
+To make the subsequent hard-subset search tractable, we con-struct Cscr in two screening rounds after fitting population-specific teachers, with 1 ≤ k ≤ d ≤ p0 ≤ p. First, an in-expensive marginal-association screen reduces the original p
+
+features to a broad pool C0 of size p0. Second, a multitask sparse model considers these features jointly across popu-lations and retains d features as Cscr , allowing population-specific effects while encouraging shared support. For each population i, we fit a full-feature teacher Ti once using all input columns. The teacher supplies the targets for both screening rounds and for teacher-based restricted-model fitting; PopFS does not differentiate through Ti or its training procedure. In our implementation, Ti(x) is a scalar prediction—a regression prediction or positive-class probability—so the teacher may be any supported black-box predictor. Teachers are fitted only on the training partition. Their in-sample training predictions (not cross-fitted pre-dictions) are used for screening and feature-opening scores. Candidate students are fitted on training data, move accep-tance and final subset selection use unpenalized validation welfare, and the test partition is reserved for final evaluation. For the first screening round, let ¯xij = n−1
+
+> i
+
+Pni 
+
+> t=1
+
+xitj 
+
+and ¯zi = n−1
+
+> i
+
+Pni 
+
+> t=1
+
+Ti(xit ). We score each feature by its marginal association with the teacher across populations: 
+
+qj =
+
+ 1
+
+r
+
+> r
+
+X
+
+> i=1
+
+(
+
+1
+
+niniX
+
+> t=1
+
+(xitj − ¯xij ) Ti(xit ) − ¯zi
+
+)2
+
+> 1/2
+
+.
+
+Thus, qj is the root-mean-square centered feature–teacher covariance across populations (Fan and Lv 2008). We retain the p0 highest-scoring features to form C0.For the second round, let Xci,C 0 be population i’s column-centered design matrix restricted to C0, and let zci be its centered teacher-output vector. For λmt > 0, we fit the joint sparse model 
+
+bB ∈ arg min 
+
+> B∈R|C0|× r
+> r
+
+X
+
+> i=1
+
+12rn i
+
+zci − Xci,C 0 B·i
+
+> 22
+
++λmt 
+
+X
+
+> j∈C0
+
+∥Bj·∥2 .
+
+The group penalty allows population-specific coefficients while encouraging common support. The d features in C0
+
+with the largest row norms ∥ bBj·∥2 form Cscr , with qj used to break row-norm ties. Because the first round uses marginal feature–teacher covariance, it can discard a jointly useful feature with zero marginal covariance, as may occur for pure interactions. We therefore choose p0 and d generously: screening is intended only for high-recall dimension reduc-tion, and subsequent search cannot recover a feature omitted from Cscr .
+
+Welfare-Guided Subset Search 
+
+Let d = |Cscr |, and let Sscreen contain the k highest-ranked features in Cscr . PopFS refines this initialization using a val-idated one-swap local search. At each iteration, for every 
+
+h ∈ S, we form the base set B = S \ { h} and consider re-placements j ∈ Cscr \ S. Fully refitting all k(d − k) possible swaps in every population would be expensive, so we first rank them using an inexpensive population-specific surrogate and fully evaluate only a shortlist. 
+
+Surrogate ranking. For target R ∈ { T, Y }, let rRi,B ∈ Rni
+
+denote the residual vector of a population-i ridge ranking model fitted using B. The target is the teacher prediction when R = T and the observed label when R = Y . For a centered candidate column xij ∈ Rni and λridge > 0, define the auxiliary one-dimensional ridge objective 
+
+ψRi,j |B (γ) = 12ni
+
+rRi,B − xij γ 22 + λridge 
+
+2 γ2.
+
+Its predicted reduction from adding feature j is 
+
+e∆Ri (j | B) = ψRi,j |B (0) − min  
+
+> γ∈R
+
+ψRi,j |B (γ)= 12
+
+ n−1 
+
+> i
+
+x⊤ 
+
+> ij
+
+rRi,B 
+
+2
+
+n−1 
+
+> i
+
+x⊤ 
+
+> ij
+
+xij + λridge 
+
+. (2) Thus, a candidate receives a large score when it is strongly aligned with the residual signal that remains after fitting the base set. 
+
+Theorem 4 (Quadratic feature-opening gain) . Consider 
+
+Q(γ) = Q0 + g⊤γ + 12 γ⊤Hγ, H ≻ 0,
+
+where H is symmetric positive definite. Then the unique min-imizer is γ⋆ = −H−1g, and Q(0) − Q(γ⋆) = 12 g⊤H−1g. 
+
+Equation (2) is the scalar ridge specialization of this damped quadratic feature-opening calculation. The Ap-pendix gives the corresponding residual–Jacobian Gauss– Newton form for a general differentiable feature opening. The score is exact only for the local quadratic surrogate, not for the fully refitted expanded model, and is therefore used only to rank candidate swaps. This fixed ridge ranking sur-rogate may also be used when the shortlisted subsets are evaluated with nonlinear students. For binary labels, ranking uses the squared-error ridge surrogate, while fully refitted candidates are evaluated during selection using probabilistic predictions and binary log loss; final test reporting below uses Brier score. For R ∈ { T, Y }, define the normalized surrogate incre-ment 
+
+edRi (j | B) = e∆Ri (j | B)max { bCRi (∅), ε 0} .
+
+The teacher and label objectives use edTi and edYi , respectively, and the mixed objective uses β edTi + (1 − β) edYi . Let ed(j | B)
+
+denote the resulting vector, and let bu(B) be the positive validation-utility vector obtained by fitting the base-set stu-dents on training data and evaluating them on validation data. The nonnegative surrogate increment is only a ranking proxy. In particular, when a base utility is at its floor, the increment is optimistic because it does not offset the negative raw gain hidden by that floor. We rank each proposed subset by its surrogate welfare score 
+
+bA(B ∪ { j}) = Aα,ρ 
+
+bu(B) + ed(j | B)
+
+
+
+.
+
+Equivalently, for a fixed base set B, candidates may be ranked by their surrogate increase over Aα,ρ (bu(B)) . Con-sequently, the welfare parameter α and population weights ρ
+
+determine which population-specific improvements are pri-oritized, rather than ranking features only by aggregate loss reduction. 
+
+Validated local search. In shortlist mode, for each re-moved feature h, we retain up to L of its highest-ranked replacements and pool the resulting swap proposals. We then fully refit at most max {L, L ⌊| S|/2⌋} of the highest-ranked pooled proposals. In exhaustive mode, we skip shortlisting and fully refit all k(d − k) possible swaps. A full evalua-tion refits the population-specific restricted students on the training data and computes their unpenalized welfare on the validation data. We accept the proposal with the highest val-idation welfare only if it exceeds the current welfare by more than δswap . The procedure then repeats from the updated sub-set and terminates when no validated proposal satisfies this condition or after Mswap accepted swaps. Finally, the refined subset is returned only if its validation welfare exceeds that of Sscreen plus δsafe ; otherwise, PopFS returns Sscreen . Thus, the surrogate controls which swaps are worth the expense of a full refit, while validation wel-fare determines every accepted move and the final deployed subset. 
+
+## Results 
+
+Experimental setup. We evaluate PopFS on eight pop-ulation definitions across six tasks from five heteroge-neous tabular and public-health datasets (Table 2): ACS in-come, NHANES child and adult blood lead, HELOC credit risk, UCI Adult income(Ding et al. 2021), and COVID-19 symptom-search nowcasting(Reinhart et al. 2021). Tasks span 10–2,110 candidate features and 9,870–883,984 ob-servations; geography, age, sex, race+sex, or credit-file age define 73 populations. Each selector chooses one shared fea-ture set, then a separate downstream model is trained per population. The formulation permits different population-specific model classes; within each reported experiment, we use one common class and hyperparameter setting fitted sep-arately in each population. COVID-19 uses 36,772 state-day observations from 43 states (April 1, 2020–November 13, 2022) to nowcast same-day ( h = 0 ) log-transformed hos-pital admissions from 422 symptom-search signals at lags 
+
+{0, 1, 2, 3, 7} (2,110 features), with within-state 60/20/20 train/validation/test chronological splits. We compare PopFS with its screening-only ablation (PopFS-Screen), pooled Lasso and XGBoost selection, population-reweighted DRO variants of both (Duchi and Namkoong 2021; Sagawa et al. 2019; Hashimoto et al. 2018) implemented following (Swaroop, Krishnamurti, and Wilder 2026), and DRFS (Swaroop, Krishnamurti, and Wilder 2026). DRFS is reported when selection finishes within 24 hours. All methods use the same splits and population-specific downstream model class, isolating feature-set qual-ity. Let Gi(S) = ℓi(∅) − ℓi(S) denote held-out label gain in population i, where ℓi(∅) and ℓi(S) are the losses of the population-specific empty predictor and downstream model trained on S. Higher gain indicates greater predictive value beyond baseline. We report its population mean and mini-mum, measuring average and least-served-population bene-fit. Regression uses mean squared error, classification uses Brier score, and results are averaged over three random seeds. 
+
+PopFS improves both average and worst-population per-formance. Table 1 reports the main comparison at k = 6 
+
+and α = 0 using gradient-boosting downstream evalua-tion models. PopFS achieves the highest mean in all 16 population-average and worst-population comparisons on both metrics for every split. Relative to the strongest external baseline, its population-average improvement ranges up to 
+
+21 .9% , with a median of 5.0% across the eight splits. The largest external-baseline gain occurs on NHANES child lead, where PopFS reaches 0.284 /0.238 average/worst-population gain, compared with 0.233 /0.187 for the strongest external baselines. Additional feature budgets, metrics, and model ablations are reported in the Appendix. 
+
+The validated hard-subset search improves over screen-ing alone. The comparison with PopFS-Screen isolates the contribution of the ridge-surrogate shortlist and validation-refit stage. The full method improves over screening alone on both metrics for all eight population splits. The difference is especially large on COVID-19: the screened subset reaches 
+
+0.573 average gain but only 0.002 worst-state gain, whereas the validated search reaches 0.731 and 0.333 , respectively. This result supports the intended division of labor in PopFS: multitask sparsity provides a scalable, high-recall candidate pool, while fully refitted validation welfare determines the deployed hard subset. 
+
+Screening makes discrete search computationally practi-cal. Figure 1 reports end-to-end selection time at k = 6 .PopFS completes every task in approximately 3–12 minutes, including the 2,110-feature COVID-19 task, and is largely in-sensitive to the total feature count. The sparse screen removes most of the ambient features before the more expensive refit stage, so runtime depends primarily on the screened pool and number of validated candidates rather than on the orig-inal dimension. DRFS requires roughly 24–600 minutes on Population-balanced Standard DRO Dataset PopFS PopFS-Screen DRFS Lasso XGBoost Lasso XGBoost UCI Adult (sex) 0.067 ±0.002 
+
+0.043 ±0.004 
+
+0.061 ±0.002 
+
+0.041 ±0.003 
+
+0.049 ±0.013 
+
+0.029 ±0.013 
+
+0.062 ±0.003 
+
+0.041 ±0.004 
+
+0.063 ±0.003 
+
+0.041 ±0.003 
+
+0.063 ±0.003 
+
+0.041 ±0.004 
+
+0.064 ±0.001 
+
+0.042 ±0.003 
+
+UCI Adult (race+sex) 0.056 ±0.001 
+
+0.021 ±0.003 
+
+0.041 ±0.002 
+
+0.014 ±0.004 
+
+0.050 ±0.005 
+
+0.019 ±0.001 
+
+0.053 ±0.002 
+
+0.020 ±0.002 
+
+0.054 ±0.002 
+
+0.020 ±0.002 
+
+0.054 ±0.002 
+
+0.020 ±0.002 
+
+0.054 ±0.002 
+
+0.021 ±0.002 
+
+UCI Adult (age) 0.070 ±0.002 
+
+0.021 ±0.003 
+
+0.059 ±0.009 
+
+0.018 ±0.003 
+
+0.055 ±0.005 
+
+0.018 ±0.001 
+
+0.064 ±0.002 
+
+0.019 ±0.003 
+
+0.063 ±0.002 
+
+0.020 ±0.003 
+
+0.064 ±0.002 
+
+0.019 ±0.002 
+
+0.064 ±0.002 
+
+0.019 ±0.003 
+
+HELOC 0.041 ±0.006 
+
+0.027 ±0.006 
+
+0.035 ±0.005 
+
+0.019 ±0.009 
+
+0.031 ±0.004 
+
+0.016 ±0.005 
+
+0.041 ±0.005 
+
+0.023 ±0.011 
+
+0.040 ±0.004 
+
+0.023 ±0.008 
+
+0.041 ±0.005 
+
+0.023 ±0.011 
+
+0.041 ±0.003 
+
+0.021 ±0.007 
+
+ACS Income 0.689 ±0.059 
+
+0.530 ±0.055 
+
+0.659 ±0.062 
+
+0.510 ±0.051 
+
+0.092 ±0.107 
+
+0.049 ±0.079 
+
+0.675 ±0.050 
+
+0.529 ±0.044 
+
+0.681 ±0.055 
+
+0.525 ±0.063 
+
+0.675 ±0.050 
+
+0.529 ±0.044 
+
+0.680 ±0.058 
+
+0.517 ±0.047 
+
+NHANES adult lead 0.236 ±0.024 
+
+0.183 ±0.030 
+
+0.229 ±0.022 
+
+0.175 ±0.024 
+
+0.119 ±0.049 
+
+0.075 ±0.036 
+
+0.223 ±0.024 
+
+0.172 ±0.025 
+
+0.222 ±0.026 
+
+0.169 ±0.015 
+
+0.224 ±0.025 
+
+0.173 ±0.024 
+
+0.222 ±0.026 
+
+0.168 ±0.025 
+
+NHANES child lead 0.284 ±0.010 
+
+0.238 ±0.030 
+
+0.249 ±0.014 
+
+0.211 ±0.029 
+
+0.189 ±0.011 
+
+0.144 ±0.007 
+
+0.231 ±0.016 
+
+0.181 ±0.017 
+
+0.224 ±0.021 
+
+0.187 ±0.020 
+
+0.233 ±0.012 
+
+0.183 ±0.015 
+
+0.224 ±0.014 
+
+0.184 ±0.018 
+
+COVID symptoms 0.731 ±0.013 
+
+0.333 ±0.027 
+
+0.573 ±0.008 
+
+0.002 ±0.005 — 0.667 ±0.016 
+
+0.257 ±0.081 
+
+0.617 ±0.021 
+
+0.000 ±0.000 
+
+0.581 ±0.006 
+
+0.000 ±0.000 
+
+0.653 ±0.051 
+
+0.145 ±0.205 
+
+Table 1: Population-average (top) and worst-population (bottom) held-out label gain at k = 6 and α = 0 . Entries are mean ± one standard deviation over three seeds; higher is better. Every selector is evaluated using the same population-specific downstream model classes and data splits. Bold marks the highest mean for each metric. A dash indicates that feature selection did not finish within 24 hours. the tasks it completes and does not finish COVID-19 within the 24-hour limit. Thus, the screen–rank–refit strategy en-ables direct evaluation of deployable hard subsets without exhaustive search or high-dimensional kernel optimization. 
+
+Figure 1: End-to-end feature-selection runtime at k = 6 . The original number of candidate features is shown in parenthe-ses. Lines show means and shaded regions show ±1 standard error over 3 seeds. All analyses were conducted on an AMD CPU with 16 cores and 64 GB RAM. 
+
+The welfare parameter provides meaningful control over who benefits. Figure 2 reports the within-task change in test-set label gain relative to α = 0 , averaged across the eight population splits at k = 6 . Moving to α = −1 changes population-average gain by less than 0.001 on average, while increasing worst-population gain by approximately 0.01 , or roughly 11% relative to the corresponding α = 0 values. Here, α is exhibiting its desired behavior of controlling how strongly the acquisition decision should prioritize popula-tions currently receiving lower predictive benefit. 
+
+Figure 2: Effect of the welfare parameter across eight pop-ulation splits at k = 6 . Each point is the mean within-task change in held-out label gain relative to α = 0 ; shaded re-gions denote ±1 standard error across population splits. 
+
+Case study: welfare-aware COVID-19 nowcasting. Fig-ure 3 examines COVID-19 nowcasting at k = 6 , where one shared symptom-search panel supports separate mod-els across 43 states. In a fixed, separately tuned case-study configuration, decreasing α from 1 to −1 leaves population-average held-out label gain near 0.64 but raises worst-state gain from about 0.16 to 0.22 (about 40% ). Thus, greater em-phasis on lower-benefit states improves the lower tail without apparent aggregate cost. The selected features suggest that timing partly drives this gain. Relative to α = 0 , the lower-tail setting selects hy-poxemia at lag 1 in every additional run, more often selects ageusia at lags 3 and 7 and pneumonia at lag 0, and relies less on other hypoxemia and ageusia lags. Ageusia predicts SARS-CoV-2 infection (Menni et al. 2020), hypoxemic pneu-monia characterizes severe COVID-19 (Zhang et al. 2022), and digital traces can precede reported case changes with location-specific timing (Kogan et al. 2021). This may indi-cate that PopFS replaces nearby, partly redundant lags with a more temporally diverse panel accommodating state-specific lead–lag relationships, although we note PopFS is not de-signed to detect causal effects. 
+
+Figure 3: COVID-19 nowcasting across 43 states at k = 6 . Left: population-average and worst-state held-out label gain as the welfare parameter varies; lines show means and shaded regions show ±1 standard error across three seeds. Right: change in feature-selection frequency under α = −1 relative to α = 0 .
+
+## Discussion 
+
+PopFS frames robust feature selection as a shared acquisition decision: one limited feature set must serve heterogeneous populations, even when each population fits its own pre-dictor. PopFS improves both average and worst-population performance, and its welfare parameter balances average and worst-case performance expectedly. We note several limita-tions and directions for future work, including relying on the quality of the fitted teachers and model classes, and do not imply the heuristic search finds a globally optimal feature set. Future work can extend the framework to unseen or evolving populations and incorporate uncertainty and heterogeneous acquisition costs directly into the selection objective. 
+
+## References 
+
+Argyriou, A.; Evgeniou, T.; and Pontil, M. 2006. Multi-task feature learning. Advances in neural information processing systems , 19. Das, A.; and Kempe, D. 2011. Submodular meets spectral: Greedy algorithms for subset selection, sparse approximation and dictionary selection. arXiv preprint arXiv:1102.3975 .Ding, F.; Hardt, M.; Miller, J.; and Schmidt, L. 2021. Retiring adult: New datasets for fair machine learning. Advances in neural information processing systems , 34: 6478–6490. Duchi, J. C.; and Namkoong, H. 2021. Learning models with uniform performance via distributionally robust opti-mization. The Annals of Statistics , 49(3): 1378–1406. Fan, J.; and Lv, J. 2008. Sure Independence Screening for Ultrahigh Dimensional Feature Space. Journal of the Royal Statistical Society Series B: Statistical Methodology , 70(5): 849–911. Guestrin, C.; Krause, A.; and Singh, A. P. 2005. Near-optimal sensor placements in gaussian processes. In Proceedings of the 22nd international conference on Machine learning ,265–272. Guyon, I.; and Elisseeff, A. 2003. An introduction to variable and feature selection. Journal of machine learning research ,3(Mar): 1157–1182. Hanada, H.; Akahane, S.; Hashimoto, N.; Takeno, S.; and Takeuchi, I. 2026. Safe Distributionally Robust Fea-ture Selection under Covariate Shift. arXiv preprint arXiv:2603.16062 .Hashimoto, T. B.; Srivastava, M.; Namkoong, H.; and Liang, P. 2018. Fairness without demographics in repeated loss minimization. arXiv preprint arXiv:1806.08010 .Hinton, G.; Vinyals, O.; and Dean, J. 2015. Distill-ing the knowledge in a neural network. arXiv preprint arXiv:1503.02531 .Kapoor, A.; and Greiner, R. 2005. Learning and classifying under hard budgets. In European conference on machine learning , 170–181. Springer. Khanna, R.; Elenberg, E.; Dimakis, A.; Negahban, S.; and Ghosh, J. 2017. Scalable greedy feature selection via weak submodularity. In Artificial Intelligence and Statistics , 1560– 1568. PMLR. Kogan, N. E.; Clemente, L.; Liautaud, P.; Kaashoek, J.; Link, N. B.; Nguyen, A. T.; Lu, F. S.; Huybers, P.; Resch, B.; Havas, C.; et al. 2021. An early warning approach to monitor COVID-19 activity with multiple digital traces in near real time. Science advances , 7(10): eabd6989. Kohavi, R.; and John, G. H. 1997. Wrappers for feature subset selection. Artificial intelligence , 97(1-2): 273–324. Kroenke, K.; Spitzer, R. L.; and Williams, J. B. 2003. The Patient Health Questionnaire-2: validity of a two-item de-pression screener. Medical care , 41(11): 1284–1292. Lopez-Paz, D.; Bottou, L.; Schölkopf, B.; and Vapnik, V. 2015. Unifying distillation and privileged information. arXiv preprint arXiv:1511.03643 .Menni, C.; Valdes, A. M.; Freidin, M. B.; Sudre, C. H.; Nguyen, L. H.; Drew, D. A.; Ganesh, S.; Varsavsky, T.; Car-doso, M. J.; El-Sayed Moustafa, J. S.; et al. 2020. Real-time tracking of self-reported symptoms to predict potential COVID-19. Nature medicine , 26(7): 1037–1040. Natarajan, B. K. 1995. Sparse approximate solutions to linear systems. SIAM journal on computing , 24(2): 227–234. Obozinski, G.; Taskar, B.; and Jordan, M. I. 2010. Joint covariate selection and joint subspace selection for multiple classification problems. Statistics and Computing , 20(2): 231–252. Reinhart, A.; Brooks, L.; Jahja, M.; Rumack, A.; Tang, J.; Agrawal, S.; Saeed, W. A.; Arnold, T.; Basu, A.; Bien, J.; et al. 2021. An open repository of real-time COVID-19 indicators. Proceedings of the National Academy of Sciences of the United States of America , 118(51): 1–8. Saar-Tsechansky, M.; Provost, F.; et al. 2006. Active feature-value acquisition. McCombs Research Paper Series No. IROM-08-06 .Sagawa, S.; Koh, P. W.; Hashimoto, T. B.; and Liang, P. 2019. Distributionally robust neural networks for group shifts: On the importance of regularization for worst-case generaliza-tion. arXiv preprint arXiv:1911.08731 .Svirsky, J.; and Lindenbaum, O. 2023. Interpretable deep clustering for tabular data. arXiv preprint arXiv:2306.04785 .Swaroop, M.; Krishnamurti, T.; and Wilder, B. 2026. Dis-tributionally Robust Feature Selection. Advances in neural information processing systems , 38: 63046–63075. Tibshirani, R. 1996. Regression shrinkage and selection via the lasso. Journal of the Royal Statistical Society Series B: Statistical Methodology , 58(1): 267–288. Yang, J.; Lindenbaum, O.; and Kluger, Y. 2022. Locally sparse neural networks for tabular biomedical data. In Inter-national Conference on Machine Learning , 25123–25153. PMLR. Yuan, M.; and Lin, Y. 2006. Model selection and estimation in regression with grouped variables. Journal of the Royal Statistical Society Series B: Statistical Methodology , 68(1): 49–67. Zhang, Q.; Bastard, P.; Karbuz, A.; Gervais, A.; Tayoun, A.; Aiuti, A.; Belot, A.; Bolze, A.; Gaudet, A.; Bondarenko, A.; et al. 2022. Human genetic and immunological determinants of critical COVID-19 pneumonia. Nature , 603(7902). Proofs 
+
+Proof of Theorem 1 
+
+We prove the full-signal decomposition. Fix a population i. To simplify notation, write 
+
+Z = ω(Y ), m(X) = mi(X) = E{Z | X}, h(XS ) = g(XS ).
+
+Because Z is square-integrable, conditional Jensen’s inequality implies that m(X) is square-integrable; together with the assumed square-integrability of h(XS ), Cauchy–Schwarz then shows that all expectations below are finite. We start from the identity 
+
+Z − h(XS ) = {Z − m(X)} + {m(X) − h(XS )}.
+
+Taking squared Euclidean norms and expanding gives 
+
+∥Z − h(XS )∥22 = ∥Z − m(X)∥22 + ∥m(X) − h(XS )∥22
+
++ 2 ⟨Z − m(X), m (X) − h(XS )⟩ .
+
+Now take expectations: 
+
+E∥Z − h(XS )∥22 = E∥Z − m(X)∥22 + E∥m(X) − h(XS )∥22
+
++ 2 E [⟨Z − m(X), m (X) − h(XS )⟩] .
+
+It remains to show that the cross term is zero. Since S ⊆ [p], XS is a function of X. Therefore h(XS ) is measurable with respect to X. Also m(X) is measurable with respect to X. Hence 
+
+m(X) − h(XS )
+
+is measurable with respect to X. Using the tower property of conditional expectation, 
+
+E [⟨Z − m(X), m (X) − h(XS )⟩]= E [E {⟨ Z − m(X), m (X) − h(XS )⟩ | X}] .
+
+Because m(X) − h(XS ) is X-measurable, it can be taken outside the inner conditional expectation. Thus 
+
+E {⟨ Z − m(X), m (X) − h(XS )⟩ | X}
+
+= ⟨E{Z − m(X) | X}, m (X) − h(XS )⟩ .
+
+But 
+
+E{Z − m(X) | X} = E{Z | X} − m(X) = m(X) − m(X) = 0 .
+
+Therefore the cross term is zero. We obtain 
+
+E∥Z − h(XS )∥22 = E∥Z − m(X)∥22 + E∥m(X) − h(XS )∥22.
+
+Returning to the original notation gives 
+
+EPi ∥ω(Y ) − g(XS )∥22 = EPi ∥ω(Y ) − mi(X)∥22 + EPi ∥mi(X) − g(XS )∥22.
+
+Taking the infimum over g ∈ G i,S on both sides gives 
+
+inf 
+
+> g∈G i,S
+
+EPi ∥ω(Y ) − g(XS )∥22 = EPi ∥ω(Y ) − mi(X)∥22 + DG 
+
+> i
+
+(S).
+
+The first term does not depend on the selected feature subset S, while the second term is the only term that can depend on S.Hence, under squared loss, the subset-dependent part of the prediction risk is exactly the error of approximating the full-feature signal mi(X) using only XS .
+
+Proof of Theorem 2 
+
+We prove the teacher-compression bridge. Fix a population i and a subset S. To simplify notation, write 
+
+m(X) = mi(X), T (X) = Ti(X).
+
+Let 
+
+Vi,S = {g(XS ) : g ∈ G i,S }
+
+be the set of all predictions that can be produced by the restricted student class using only XS .We use the L2(Pi) norm 
+
+∥U ∥L2(Pi) =  EPi ∥U ∥22
+
+1/2 .Because the student class is nonempty and, by the stated assumptions, Ti(X), mi(X), and every candidate prediction are square-integrable, the displayed risks are finite. Because the square-root function is increasing and continuous on [0 , ∞), taking square roots commutes with the infima below. With this notation, q
+
+CTi (S) = inf 
+
+> v∈V i,S
+
+∥T (X) − v∥L2(Pi)
+
+and q
+
+DG 
+
+> i
+
+(S) = inf 
+
+> v∈V i,S
+
+∥m(X) − v∥L2(Pi).
+
+Also, √ϵi = ∥T (X) − m(X)∥L2(Pi).
+
+The proof uses only the triangle inequality. For any candidate restricted prediction v ∈ V i,S ,
+
+T (X) − v = {T (X) − m(X)} + {m(X) − v}.
+
+Therefore, 
+
+∥T (X) − v∥L2(Pi) ≤ ∥ T (X) − m(X)∥L2(Pi) + ∥m(X) − v∥L2(Pi).
+
+Substituting the definitions gives 
+
+∥T (X) − v∥L2(Pi) ≤ √ϵi + ∥m(X) − v∥L2(Pi).
+
+Now take the infimum over all v ∈ V i,S on both sides: 
+
+q
+
+CTi (S) ≤ √ϵi +
+
+q
+
+DG 
+
+> i
+
+(S).
+
+Rearranging, q
+
+CTi (S) −
+
+q
+
+DG 
+
+> i
+
+(S) ≤ √ϵi.
+
+We also need the reverse inequality. Again, for any v ∈ V i,S ,
+
+m(X) − v = {m(X) − T (X)} + {T (X) − v}.
+
+By the triangle inequality, 
+
+∥m(X) − v∥L2(Pi) ≤ ∥ m(X) − T (X)∥L2(Pi) + ∥T (X) − v∥L2(Pi).
+
+Since 
+
+∥m(X) − T (X)∥L2(Pi) = √ϵi,
+
+taking the infimum over v ∈ V i,S gives q
+
+DG 
+
+> i
+
+(S) ≤ √ϵi +
+
+q
+
+CTi (S).
+
+Rearranging, q
+
+DG 
+
+> i
+
+(S) −
+
+q
+
+CTi (S) ≤ √ϵi.
+
+The two inequalities together imply q
+
+CTi (S) −
+
+q
+
+DG 
+
+> i
+
+(S) ≤ √ϵi.
+
+This proves the result. The theorem is stated “conditional on the fitted teacher” because, after training, Ti is treated as a fixed function. The bound says that if the teacher prediction Ti(X) is close to the true full-feature signal mi(X) in L2(Pi), then teacher-compression risk and full-signal compression risk are close in root-risk scale. Proof of Theorem 3 
+
+We prove the marginal-weighting formula for the weighted power mean. Let 
+
+u = ( u1, . . . , u r ), ui > 0, ρi > 0,
+
+> r
+
+X
+
+> i=1
+
+ρi = 1 .
+
+First consider the case α̸ = 0 . Define 
+
+Bα(u) = 
+
+> r
+
+X
+
+> i=1
+
+ρiuαi .
+
+Then 
+
+Aα,ρ (u) = Bα(u)1/α .
+
+We compute the derivative with respect to ui. By the chain rule, 
+
+∂A α,ρ 
+
+∂u i
+
+(u) = 1
+
+α Bα(u)1/α −1 · ∂B α
+
+∂u i
+
+(u).
+
+Since ∂B α
+
+∂u i
+
+(u) = ρiαu α−1 
+
+> i
+
+,
+
+we get 
+
+∂A α,ρ 
+
+∂u i
+
+(u) = 1
+
+α Bα(u)1/α −1 · ρiαu α−1 
+
+> i
+
+.
+
+Canceling α,
+
+∂A α,ρ 
+
+∂u i
+
+(u) = ρiuα−1 
+
+> i
+
+Bα(u)1/α −1.
+
+Because 
+
+Aα,ρ (u) = Bα(u)1/α ,
+
+we have 
+
+Bα(u) = Aα,ρ (u)α.
+
+Therefore 
+
+Bα(u)1/α −1 = ( Aα,ρ (u)α)1/α −1 = Aα,ρ (u)1−α.
+
+Substituting back, 
+
+∂A α,ρ 
+
+∂u i
+
+(u) = ρiuα−1 
+
+> i
+
+Aα,ρ (u)1−α.
+
+This proves the derivative formula for α̸ = 0 .Now consider the geometric case α = 0 . The welfare is 
+
+A0,ρ (u) = 
+
+> r
+
+Y
+
+> i=1
+
+uρi 
+
+> i
+
+.
+
+Taking logs, 
+
+log A0,ρ (u) = 
+
+> r
+
+X
+
+> i=1
+
+ρi log ui.
+
+Differentiating, 
+
+∂∂u i
+
+log A0,ρ (u) = ρi
+
+ui
+
+.
+
+Using 
+
+∂∂u i
+
+log A0,ρ (u) = 1
+
+A0,ρ (u)
+
+∂A 0,ρ 
+
+∂u i
+
+(u),
+
+we obtain ∂A 0,ρ 
+
+∂u i
+
+(u) = ρiu−1 
+
+> i
+
+A0,ρ (u).
+
+This is exactly the continuous limit of 
+
+ρiuα−1 
+
+> i
+
+Aα,ρ (u)1−αas α → 0.Next, we prove the first-order expansion. Since Aα,ρ is differentiable for strictly positive ui, Taylor’s theorem gives, as 
+
+d = ( d1, . . . , d r ) → 0 with u + d ∈ (0 , ∞)r ,
+
+Aα,ρ (u + d) = Aα,ρ (u) + 
+
+> r
+
+X
+
+> i=1
+
+∂A α,ρ 
+
+∂u i
+
+(u)di + o(∥d∥2).
+
+Substituting the derivative formula, 
+
+Aα,ρ (u + d) − Aα,ρ (u) = 
+
+> r
+
+X
+
+> i=1
+
+ρiuα−1 
+
+> i
+
+Aα,ρ (u)1−αdi + o(∥d∥2).
+
+Finally, we compare marginal weights between two populations i and h. Using the derivative formula, 
+
+∂A α,ρ /∂u i
+
+∂A α,ρ /∂u h
+
+= ρiuα−1 
+
+> i
+
+Aα,ρ (u)1−α
+
+ρhuα−1 
+
+> h
+
+Aα,ρ (u)1−α .
+
+The common welfare term cancels: 
+
+∂A α,ρ /∂u i
+
+∂A α,ρ /∂u h
+
+= ρi
+
+ρh
+
+ ui
+
+uh
+
+α−1
+
+.
+
+If ρi = ρh, this reduces to  ui
+
+uh
+
+α−1
+
+.
+
+Suppose ui < u h. Then ui/u h < 1. If α < 1, then α − 1 < 0, and raising a number smaller than one to a negative power yields a value greater than one:  ui
+
+uh
+
+α−1
+
+> 1.
+
+Thus, when ρi = ρh and α < 1, the lower-utility population receives greater marginal weight. 
+
+Proof of Theorem 4 
+
+We first prove the generic quadratic-gain formula in Theorem 4, and then derive the residual–Jacobian Gauss–Newton form referenced in the method. 
+
+Part 1: the local quadratic reduction. Fix a current subset S and a candidate feature j / ∈ S. Consider the local quadratic model 
+
+Q(γ) = Q0 + g⊤γ + 12 γ⊤Hγ, H ≻ 0.
+
+Here g and γ have the same dimension, and H is a symmetric positive-definite matrix of the corresponding dimension. To minimize Q, differentiate with respect to γ:
+
+∇γ Q(γ) = g + Hγ. 
+
+At the minimizer, the gradient is zero: 
+
+g + Hγ ⋆ = 0 .
+
+Since H ≻ 0, it is invertible. Therefore 
+
+γ⋆ = −H−1g. 
+
+Now compute the decrease in the quadratic objective: 
+
+Q(0) − Q(γ⋆).
+
+First, 
+
+Q(0) = Q0
+
+Second, 
+
+Q(γ⋆) = Q0 + g⊤(−H−1g) + 12 (−H−1g)⊤H(−H−1g).
+
+The middle term is 
+
+g⊤(−H−1g) = −g⊤H−1g. The quadratic term is 12 (−H−1g)⊤H(−H−1g) = 12 g⊤H−1HH −1g
+
+= 12 g⊤H−1g. 
+
+Thus 
+
+Q(γ⋆) = Q0 − g⊤H−1g + 12 g⊤H−1g
+
+= Q0 − 12 g⊤H−1g. 
+
+Therefore 
+
+Q(0) − Q(γ⋆) = 12 g⊤H−1g. 
+
+This proves the quadratic gain formula. 
+
+Part 2: residual–Jacobian specialization. We now derive the Gauss–Newton quantities for the half-scaled squared teacher objective used for ranking. Fix a fitted current predictor fi,S ( · ; bθi,S ). Suppose that the expanded predictor has an opening parameter γj ∈ Rdj , is differentiable in γj at zero, and satisfies 
+
+fi,S ∪{ j}(xS∪{ j}; bθi,S , 0) = fi,S (xS ; bθi,S ).
+
+Throughout this calculation, bθi,S is held fixed. For a training point t, define the current teacher residual 
+
+rt,S = Ti(xit ) − fi,S (xit,S ; bθi,S ).
+
+The first-order expansion of the expanded predictor around γj = 0 is 
+
+fi,S ∪{ j}(xit,S ∪{ j}; bθi,S , γ j ) ≈ fi,S (xit,S ; bθi,S ) + Jit,j γj ,
+
+where 
+
+Jit,j = ∇γj fi,S ∪{ j}(xit,S ∪{ j}; bθi,S , γ j ) γj =0 
+
+.
+
+For vector-valued outputs, Jit,j is the Jacobian of the output vector with respect to the opening parameter γj , and the products 
+
+J⊤ 
+
+> it,j
+
+rt,S and J⊤ 
+
+> it,j
+
+Jit,j are interpreted in the usual vector-Jacobian sense. Under the linearized expanded model, the teacher residual after opening the feature is approximately 
+
+rt,S − Jit,j γj .
+
+For λdamp > 0, the damped local half-squared-loss model is 
+
+Q(γj ) = 12niniX
+
+> t=1
+
+∥rt,S − Jit,j γj ∥22 + λdamp 
+
+2 ∥γj ∥22.
+
+We expand the squared norm: 
+
+∥rt,S − Jit,j γj ∥22 = ∥rt,S ∥22 − 2r⊤ 
+
+> t,S
+
+Jit,j γj + γ⊤ 
+
+> j
+
+J⊤ 
+
+> it,j
+
+Jit,j γj .
+
+Substituting into Q(γj ),
+
+Q(γj ) = 12niniX
+
+> t=1
+
+∥rt,S ∥22 − 1
+
+niniX
+
+> t=1
+
+r⊤ 
+
+> t,S
+
+Jit,j γj
+
++ 12niniX
+
+> t=1
+
+γ⊤ 
+
+> j
+
+J⊤ 
+
+> it,j
+
+Jit,j γj + λdamp 
+
+2 γ⊤ 
+
+> j
+
+γj .
+
+The constant term is 
+
+Q(0) = 12niniX
+
+> t=1
+
+∥rt,S ∥22.
+
+The linear term can be written as 
+
+− 1
+
+niniX
+
+> t=1
+
+J⊤ 
+
+> it,j
+
+rt,S 
+
+!⊤
+
+γj .Thus the gradient at zero is 
+
+gi,j |S = − 1
+
+niniX
+
+> t=1
+
+J⊤ 
+
+> it,j
+
+rt,S .
+
+Next, collect the quadratic terms. The curvature matrix multiplying 12 γ⊤ 
+
+> j
+
+Hγ j is 
+
+HGN  
+
+> i,j |S
+
+= 1
+
+niniX
+
+> t=1
+
+J⊤ 
+
+> it,j
+
+Jit,j + λdamp I. 
+
+Therefore, up to that additive constant, the local quadratic approximation has the form 
+
+Q(γj ) = Q(0) + g⊤ 
+
+> i,j |S
+
+γj + 12 γ⊤ 
+
+> j
+
+HGN  
+
+> i,j |S
+
+γj .
+
+By Part 1, its reduction from opening feature j is 
+
+e∆i(j | S) = 12 g⊤
+
+> i,j |S
+
+
+
+HGN 
+
+> i,j |S
+
+−1
+
+gi,j |S .
+
+This is the corresponding Gauss–Newton feature-opening score. Because λdamp > 0, the curvature is positive definite. In the scalar linear case Jit,j = xit,j , with λdamp = λridge , this expression reduces exactly to Equation (2). Finally, note what this calculation does and does not claim. It proves exact optimality for the local quadratic approximation. It does not claim that this quantity equals the improvement after fully refitting all parameters of the expanded student. That is why the main algorithm uses this score only to rank candidate additions or swaps, and then performs full validation refits before accepting a move. Additional experimental results 
+
+Dataset Prediction target Population split Task r p n Range of ni Budgets k
+
+ACS Income Income State Regression 10 10 883,984 50,008–195,665 {6, 10 }
+
+NHANES child lead Blood lead level Age band Regression 3 60 27,862 7,474–10,650 {6, 10 }
+
+NHANES adult lead Blood lead level Age band Regression 3 84 47,900 11,110–18,559 {6, 10 }
+
+HELOC Credit risk Credit-file age tertile Classification 3 21 9,870 3,225–3,380 {6, 10 }
+
+UCI Adult (sex) Income over $50K Sex Classification 2 102 30,162 9,782–20,380 {6, 10 }
+
+UCI Adult (race+sex) Income over $50K Race+sex Classification 6 97 29,645 294–18,038 {6, 10 }
+
+UCI Adult (age) Income over $50K Age tertile Classification 3 101 30,162 9,445–10,448 {6, 10 }
+
+COVID-19 symptoms log(1 + adm 1d) (h = 0 ) State Regression 43 2,110 36,772 723–950 {6, 10 }
+
+Total population definitions 73 
+
+Table 2: Dataset overview. The eight population definitions correspond to six prediction tasks drawn from five datasets. n and the range of ni report post-filter observation counts. Teacher / selector model Dataset HGB/HGB HGB/Ridge Ridge/HGB Ridge/Ridge 
+
+(a) Deployed evaluation student: HGB 
+
+UCI Adult (sex) 0.215 ±0.007 0.164 ±0.005 
+
+0.208 ±0.011 0.161 ±0.008 0.214 ±0.007 0.163 ±0.005 0.207 ±0.012 0.160 ±0.010 
+
+UCI Adult (race+sex) 0.149 ±0.015 0.011 ±0.010 0.146 ±0.007 0.006 ±0.011 
+
+0.152 ±0.013 0.017 ±0.017 
+
+0.142 ±0.008 0.009 ±0.009 
+
+UCI Adult (age) 0.207 ±0.004 0.119 ±0.001 
+
+0.209 ±0.006 0.121 ±0.006 
+
+0.207 ±0.004 0.119 ±0.001 
+
+0.209 ±0.006 0.121 ±0.006 
+
+HELOC 0.050 ±0.022 0.028 ±0.013 0.051 ±0.009 0.020 ±0.019 0.055 ±0.015 0.026 ±0.015 
+
+0.059 ±0.005 0.032 ±0.018 
+
+ACS Income 0.251 ±0.001 0.226 ±0.001 
+
+0.247 ±0.001 0.222 ±0.000 
+
+0.251 ±0.001 0.226 ±0.001 
+
+0.247 ±0.001 0.222 ±0.000 
+
+NHANES adult lead 0.118 ±0.028 
+
+0.076 ±0.037 0.116 ±0.030 
+
+0.080 ±0.026 
+
+0.116 ±0.030 
+
+0.080 ±0.026 
+
+0.116 ±0.030 
+
+0.080 ±0.026 
+
+NHANES child lead 0.170 ±0.032 
+
+0.089 ±0.022 0.160 ±0.027 0.081 ±0.024 0.159 ±0.029 
+
+0.096 ±0.036 
+
+0.158 ±0.028 0.073 ±0.006 
+
+(b) Deployed evaluation student: Ridge 
+
+UCI Adult (sex) 0.184 ±0.010 0.160 ±0.012 
+
+0.180 ±0.007 0.158 ±0.009 0.181 ±0.007 0.157 ±0.009 0.180 ±0.007 0.158 ±0.009 
+
+UCI Adult (race+sex) 0.151 ±0.009 0.040 ±0.025 
+
+0.156 ±0.012 
+
+0.042 ±0.041 0.153 ±0.008 0.047 ±0.019 0.150 ±0.014 0.041 ±0.040 
+
+UCI Adult (age) 0.178 ±0.001 
+
+0.112 ±0.006 0.180 ±0.001 0.112 ±0.003 
+
+0.178 ±0.001 
+
+0.112 ±0.006 0.180 ±0.001 0.112 ±0.003 
+
+HELOC 0.104 ±0.008 0.078 ±0.002 0.107 ±0.011 
+
+0.081 ±0.004 
+
+0.104 ±0.008 0.078 ±0.002 0.107 ±0.011 0.080 ±0.003 
+
+ACS Income 0.188 ±0.002 0.171 ±0.001 0.188 ±0.002 
+
+0.170 ±0.001 
+
+0.188 ±0.002 0.171 ±0.001 0.188 ±0.002 
+
+0.170 ±0.001 
+
+NHANES adult lead 0.100 ±0.014 0.077 ±0.028 
+
+0.110 ±0.019 0.082 ±0.029 0.110 ±0.019 0.082 ±0.029 0.110 ±0.019 0.082 ±0.029 
+
+NHANES child lead 0.111 ±0.005 0.095 ±0.005 0.114 ±0.004 0.093 ±0.012 0.105 ±0.016 0.091 ±0.017 
+
+0.118 ±0.005 
+
+0.095 ±0.010 
+
+(c) Deployed evaluation student: Random Forest 
+
+UCI Adult (sex) 0.208 ±0.004 0.170 ±0.006 
+
+0.203 ±0.008 0.167 ±0.007 0.206 ±0.003 0.168 ±0.003 0.202 ±0.008 0.166 ±0.007 
+
+UCI Adult (race+sex) 0.152 ±0.011 0.031 ±0.027 
+
+0.159 ±0.013 
+
+0.034 ±0.030 0.154 ±0.011 0.046 ±0.020 0.150 ±0.016 0.034 ±0.026 
+
+UCI Adult (age) 0.198 ±0.002 0.120 ±0.005 
+
+0.201 ±0.004 0.123 ±0.002 
+
+0.198 ±0.002 0.120 ±0.005 
+
+0.201 ±0.004 0.123 ±0.002 
+
+HELOC 0.103 ±0.006 0.078 ±0.006 0.105 ±0.008 0.083 ±0.013 0.102 ±0.005 0.078 ±0.007 
+
+0.106 ±0.009 0.084 ±0.012 
+
+ACS Income 0.230 ±0.001 0.205 ±0.001 
+
+0.227 ±0.001 0.201 ±0.002 
+
+0.230 ±0.001 0.205 ±0.002 
+
+0.227 ±0.001 0.201 ±0.002 
+
+NHANES adult lead 0.113 ±0.025 0.078 ±0.025 
+
+0.106 ±0.028 0.068 ±0.020 0.106 ±0.028 0.068 ±0.020 0.106 ±0.028 0.068 ±0.020 
+
+NHANES child lead 0.161 ±0.019 
+
+0.080 ±0.019 0.147 ±0.014 0.067 ±0.011 0.157 ±0.021 
+
+0.100 ±0.027 
+
+0.150 ±0.019 0.074 ±0.014 
+
+(d) Deployed evaluation student: ExtraTrees 
+
+UCI Adult (sex) 0.182 ±0.003 0.156 ±0.006 
+
+0.181 ±0.004 
+
+0.156 ±0.006 0.182 ±0.002 
+
+0.155 ±0.004 0.181 ±0.004 0.155 ±0.006 
+
+UCI Adult (race+sex) 0.137 ±0.007 0.031 ±0.025 
+
+0.143 ±0.010 
+
+0.034 ±0.030 0.134 ±0.008 0.043 ±0.012 0.137 ±0.015 0.032 ±0.023 
+
+UCI Adult (age) 0.177 ±0.002 0.110 ±0.008 0.177 ±0.002 0.110 ±0.004 0.177 ±0.002 0.110 ±0.008 0.177 ±0.002 0.110 ±0.004 
+
+HELOC 0.102 ±0.003 0.082 ±0.001 0.107 ±0.007 
+
+0.085 ±0.002 
+
+0.102 ±0.003 0.083 ±0.001 
+
+0.108 ±0.008 0.085 ±0.002 
+
+ACS Income 0.199 ±0.002 0.177 ±0.001 
+
+0.196 ±0.002 0.173 ±0.002 0.198 ±0.002 0.176 ±0.002 0.196 ±0.002 0.173 ±0.002 
+
+NHANES adult lead 0.121 ±0.022 0.084 ±0.034 
+
+0.117 ±0.021 0.081 ±0.027 0.117 ±0.022 0.080 ±0.029 0.117 ±0.022 0.080 ±0.029 
+
+NHANES child lead 0.147 ±0.017 0.076 ±0.033 0.123 ±0.017 0.052 ±0.048 
+
+0.149 ±0.021 0.096 ±0.032 
+
+0.141 ±0.015 0.072 ±0.014 
+
+Table 3: PopFS model ablations at k = 6 and α = 0 . Each cell reports population-average (top) and worst-population (bottom) held-out label utility as mean ± one standard deviation over three seeds; higher is better. Column labels give the teacher/selector model, and panels fix the deployed evaluation student. HGB denotes histogram gradient boosting. Bold marks the highest mean within each panel and metric. These runs come from the model-ablation store and use a utility scale that is not numerically aligned with the main k = 6 gain table. Population-balanced Standard DRO Dataset PopFS PopFS-Screen DRFS Lasso XGBoost Lasso XGBoost UCI Adult (sex) 
+
+0.0871 ±0.0011 0.1181 ±0.0040 
+
+0.0925 ±0.0009 0.1275 ±0.0037 0.1060 ±0.0129 0.1429 ±0.0127 0.0921 ±0.0020 0.1261 ±0.0055 0.0914 ±0.0023 0.1253 ±0.0075 0.0918 ±0.0023 0.1252 ±0.0071 0.0902 ±0.0015 0.1236 ±0.0066 
+
+UCI Adult (race+sex) 
+
+0.0837 ±0.0013 0.1272 ±0.0066 
+
+0.0983 ±0.0023 0.1524 ±0.0035 0.0901 ±0.0056 0.1394 ±0.0145 0.0859 ±0.0022 0.1322 ±0.0081 0.0849 ±0.0027 0.1312 ±0.0035 0.0852 ±0.0015 0.1312 ±0.0081 0.0864 ±0.0015 0.1337 ±0.0061 
+
+HELOC 
+
+0.1962 ±0.0023 0.2037 ±0.0026 0.2035 ±0.0068 0.2084 ±0.0055 0.2032 ±0.0042 0.2077 ±0.0042 0.1952 ±0.0014 
+
+0.1982 ±0.0032 
+
+0.1956 ±0.0032 0.1984 ±0.0043 0.1952 ±0.0014 
+
+0.1982 ±0.0032 0.1951 ±0.0036 
+
+0.2009 ±0.0027 
+
+ACS Income 
+
+0.3269 ±0.0412 0.4199 ±0.0503 
+
+0.3645 ±0.0461 0.4662 ±0.0790 0.9278 ±0.1359 1.0597 ±0.1073 0.3392 ±0.0304 0.4502 ±0.0633 0.3377 ±0.0397 0.4256 ±0.0725 0.3392 ±0.0304 0.4502 ±0.0633 0.3395 ±0.0293 0.4348 ±0.0671 
+
+NHANES child lead 
+
+0.7967 ±0.0128 
+
+0.9040 ±0.0454 0.8114 ±0.0241 
+
+0.9012 ±0.0344 
+
+0.8370 ±0.0212 0.9434 ±0.0735 0.8274 ±0.0222 0.9232 ±0.0559 0.8160 ±0.0156 0.9230 ±0.0280 0.8289 ±0.0197 0.9094 ±0.0322 0.8122 ±0.0166 0.9268 ±0.0445 
+
+Table 4: Held-out predictive loss at k = 6 . Each cell reports population-average (top) and worst-population (bottom) loss as mean 
+
+± one standard deviation over three seeds; lower is better. Regression rows report mean squared error, whereas classification rows report Brier score. Bold marks the lowest mean for each metric. 
+
+Population-balanced Standard DRO Dataset PopFS PopFS-Screen DRFS Lasso XGBoost Lasso XGBoost UCI Adult (sex) 
+
+0.2220 ±0.0023 0.1717 ±0.0029 
+
+0.2013 ±0.0055 0.1538 ±0.0106 –
+
+0.2140 ±0.0025 0.1653 ±0.0032 0.1951 ±0.0030 0.1596 ±0.0056 0.2192 ±0.0025 0.1678 ±0.0030 0.2080 ±0.0082 0.1602 ±0.0099 
+
+UCI Adult (race+sex) 
+
+0.1428 ±0.0074 0.0038 ±0.0034 0.0990 ±0.0081 0.0164 ±0.0164 –
+
+0.1428 ±0.0059 0.0070 ±0.0070 0.1420 ±0.0059 
+
+0.0210 ±0.0109 0.1553 ±0.0068 
+
+0.0148 ±0.0080 0.1395 ±0.0073 0.0148 ±0.0148 
+
+UCI Adult (age) 
+
+0.2137 ±0.0033 0.1217 ±0.0017 
+
+0.2045 ±0.0014 0.1143 ±0.0004 –
+
+0.2042 ±0.0090 0.1196 ±0.0051 0.1697 ±0.0191 0.1024 ±0.0109 0.2082 ±0.0026 0.1201 ±0.0016 0.2029 ±0.0027 0.1144 ±0.0016 
+
+HELOC 
+
+0.0379 ±0.0020 0.0224 ±0.0022 0.0380 ±0.0004 0.0219 ±0.0048 0.0368 ±0.0034 0.0194 ±0.0041 0.0365 ±0.0003 0.0248 ±0.0047 0.0388 ±0.0021 0.0231 ±0.0019 0.0365 ±0.0003 0.0248 ±0.0047 
+
+0.0405 ±0.0024 0.0260 ±0.0009 
+
+ACS Income 
+
+0.2589 ±0.0004 0.2344 ±0.0010 0.2589 ±0.0004 0.2344 ±0.0010 –
+
+0.2589 ±0.0004 0.2344 ±0.0010 0.2589 ±0.0004 0.2344 ±0.0010 0.2589 ±0.0004 0.2344 ±0.0010 0.2589 ±0.0004 0.2344 ±0.0010 
+
+NHANES adult lead 
+
+0.1430 ±0.0179 0.0928 ±0.0157 
+
+0.1233 ±0.0157 0.0879 ±0.0141 –
+
+0.1246 ±0.0162 0.0885 ±0.0165 0.1182 ±0.0198 0.0805 ±0.0182 0.1209 ±0.0164 0.0848 ±0.0146 0.1103 ±0.0133 0.0648 ±0.0148 
+
+NHANES child lead 
+
+0.1688 ±0.0161 
+
+0.0837 ±0.0116 0.1358 ±0.0104 0.0650 ±0.0074 –
+
+0.1586 ±0.0157 0.0845 ±0.0152 0.1612 ±0.0128 
+
+0.0896 ±0.0114 
+
+0.1605 ±0.0191 0.0779 ±0.0172 0.1315 ±0.0114 0.0666 ±0.0068 
+
+Table 5: Held-out label utility at k = 10 and α = 0 . Each cell reports population-average (top) and worst-population (bottom) utility as mean ± one standard error over three seeds; higher is better. Bold marks the highest available mean for each metric, and dashes indicate that an aligned result was unavailable or did not finish within the computational budget. The entries use the 
+
+k = 10 α-sweep utility scale and are directly comparable within this table, but not numerically aligned with the main k = 6 
+
+gain table. For ACS Income, k = p = 10 , so every available method selects all features and the results coincide.
