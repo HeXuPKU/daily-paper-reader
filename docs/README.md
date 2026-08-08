@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-07</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-08</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 19 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 12 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>5</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>14</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>7</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-07 21:18:15 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-08 20:56:21 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读19篇论文，聚焦单倍型扰动解析阿尔茨海默病位点与多视图细胞表征学习。最值得关注：HaploPerturb通过低秩copula构建单倍型扰动，显著提升序列-功能分析精度；互补转录组视图方案突破基因重建局限。建议优先精读这两篇，可结合速读中的纵向临床推断与序列建模方法拓展应用。</p>
+<p>今日完成12篇文献筛选，精读5篇、速读7篇，聚焦精神健康监测与医疗编码解释两大方向。最值得关注的是《All of Us》项目中 wearable 监测结合多基因风险预测抑郁症（9.0分），以及多 ICD 编码的可解释表示方法（8.0分）。下一步可优先了解穿戴设备数据在心理疾病早期预警中的实际应用价值。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -74,9 +74,9 @@
     <strong class="dpr-home-dashboard-count">5 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="HaploPerturb: Low-rank copula construction of haplotype perturbations improves sequence-to-function analysis of Alzheimer&#x27;s disease loci">HaploPerturb: Low-rank copula construction of haplotype perturbations improves sequence-to-function analysis of Alzheimer&#x27;s disease loci</span></li><li><span class="dpr-home-dashboard-paper-title" title="Beyond Gene Reconstruction: Learning Cell Representations through Complementary Transcriptomic Views">Beyond Gene Reconstruction: Learning Cell Representations through Complementary Transcriptomic Views</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Comparative Study of Feature Selection Methods for EHR Diagnosis Codes in Opioid Use Disorder Prediction">A Comparative Study of Feature Selection Methods for EHR Diagnosis Codes in Opioid Use Disorder Prediction</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Longitudinal wearable monitoring and polygenic risk for incident major depressive disorder in the All of Us Research Program">Longitudinal wearable monitoring and polygenic risk for incident major depressive disorder in the All of Us Research Program</span></li><li><span class="dpr-home-dashboard-paper-title" title="xMICD: Explainable Representation of Multiple ICD Codes">xMICD: Explainable Representation of Multiple ICD Codes</span></li><li><span class="dpr-home-dashboard-paper-title" title="Beyond Gene Reconstruction: Learning Cell Representations through Complementary Transcriptomic Views">Beyond Gene Reconstruction: Learning Cell Representations through Complementary Transcriptomic Views</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -84,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">14 篇</strong>
+    <strong class="dpr-home-dashboard-count">7 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="INCLAIR: Inception-Based Longitudinal Clinical Anomaly Detection with Informed Reasoning">INCLAIR: Inception-Based Longitudinal Clinical Anomaly Detection with Informed Reasoning</span></li><li><span class="dpr-home-dashboard-paper-title" title="Doubly Robust Functional Representation Learning for Longitudinal Causal Inference with Irregular Histories">Doubly Robust Functional Representation Learning for Longitudinal Causal Inference with Irregular Histories</span></li><li><span class="dpr-home-dashboard-paper-title" title="Evolutionary Curriculum Learning Improves Biological Sequence Modeling">Evolutionary Curriculum Learning Improves Biological Sequence Modeling</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="ANCHOR-RE: An Agentic Neuro-Symbolic Framework for Grounded Biomedical Relation Extraction">ANCHOR-RE: An Agentic Neuro-Symbolic Framework for Grounded Biomedical Relation Extraction</span></li><li><span class="dpr-home-dashboard-paper-title" title="CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction">CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Risk-Aware Quantile Learning for Personalized Dynamic Treatment Regimes">Risk-Aware Quantile Learning for Personalized Dynamic Treatment Regimes</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>11</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>7</strong></span></div>
 </section>
 </div>
 
