@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-08</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-09</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 12 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 16 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>5</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>7</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>6</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>10</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-08 20:56:21 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-09 20:47:33 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日完成12篇文献筛选，精读5篇、速读7篇，聚焦精神健康监测与医疗编码解释两大方向。最值得关注的是《All of Us》项目中 wearable 监测结合多基因风险预测抑郁症（9.0分），以及多 ICD 编码的可解释表示方法（8.0分）。下一步可优先了解穿戴设备数据在心理疾病早期预警中的实际应用价值。</p>
+<p>今日精读6篇、速读10篇，聚焦医学AI与统计稳健性两大方向。最值得关注的是两个满分精读工作：PatTree提出自动化多模态图患者表示，Patients-like-me则用变分LM-GNN实现可解释临床预测。下一步建议优先复现或试用这两项方法，并留意CIGTSurv在生存预测中的三模态对齐思路。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">5 篇</strong>
+    <strong class="dpr-home-dashboard-count">6 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Longitudinal wearable monitoring and polygenic risk for incident major depressive disorder in the All of Us Research Program">Longitudinal wearable monitoring and polygenic risk for incident major depressive disorder in the All of Us Research Program</span></li><li><span class="dpr-home-dashboard-paper-title" title="xMICD: Explainable Representation of Multiple ICD Codes">xMICD: Explainable Representation of Multiple ICD Codes</span></li><li><span class="dpr-home-dashboard-paper-title" title="Beyond Gene Reconstruction: Learning Cell Representations through Complementary Transcriptomic Views">Beyond Gene Reconstruction: Learning Cell Representations through Complementary Transcriptomic Views</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="PatTree: a novel approach for automated creation of multimodal, graph-based patient representations for medical classification tasks">PatTree: a novel approach for automated creation of multimodal, graph-based patient representations for medical classification tasks</span></li><li><span class="dpr-home-dashboard-paper-title" title="Patients-like-me: A Variational LM--GNN Framework for Explainable Clinical Prediction">Patients-like-me: A Variational LM--GNN Framework for Explainable Clinical Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction">CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -84,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">7 篇</strong>
+    <strong class="dpr-home-dashboard-count">10 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="ANCHOR-RE: An Agentic Neuro-Symbolic Framework for Grounded Biomedical Relation Extraction">ANCHOR-RE: An Agentic Neuro-Symbolic Framework for Grounded Biomedical Relation Extraction</span></li><li><span class="dpr-home-dashboard-paper-title" title="CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction">CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Risk-Aware Quantile Learning for Personalized Dynamic Treatment Regimes">Risk-Aware Quantile Learning for Personalized Dynamic Treatment Regimes</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CIGTSurv: Clinical Information Guided Tri-modal Survival Prediction with Local Prototype Association and Global Feature Alignment">CIGTSurv: Clinical Information Guided Tri-modal Survival Prediction with Local Prototype Association and Global Feature Alignment</span></li><li><span class="dpr-home-dashboard-paper-title" title="Augmented Inverse Hybrid Weighting: Robust Inference under Deterministic and Random Distribution Shifts">Augmented Inverse Hybrid Weighting: Robust Inference under Deterministic and Random Distribution Shifts</span></li><li><span class="dpr-home-dashboard-paper-title" title="xMICD: Explainable Representation of Multiple ICD Codes">xMICD: Explainable Representation of Multiple ICD Codes</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>7</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>6</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>4</strong></span></div>
 </section>
 </div>
 
