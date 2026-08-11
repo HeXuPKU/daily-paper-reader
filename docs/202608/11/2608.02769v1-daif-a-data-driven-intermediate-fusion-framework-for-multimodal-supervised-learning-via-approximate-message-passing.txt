@@ -1,0 +1,4435 @@
+Title: DAIF: A Data-Driven Intermediate Fusion Framework for Multimodal Supervised Learning via Approximate Message Passing
+
+URL Source: https://arxiv.org/pdf/2608.02769v1
+
+Published Time: Wed, 05 Aug 2026 00:06:10 GMT
+
+Number of Pages: 48
+
+Markdown Content:
+# DAIF: A Data-Driven Intermediate Fusion Framework for Multimodal Supervised Learning via Approximate Message Passing 
+
+## Sagnik Nandy ∗ Samriddha Lahiry † Pragya Sur ‡ Subhabrata Sen §
+
+## August 5, 2026 
+
+Abstract 
+
+Multimodal supervised learning seeks to leverage multiple heterogeneous data sources to improve predictive performance. A central challenge is determining the fusion granularity across modalities: over-integration may amplify noise while under-integration fails to exploit cross-modal dependence. Existing approaches rely on pre-specified fusion architectures, from early to late fusion, that may not adapt to the underlying dependence structure among modalities. We propose DAIF, a data adaptive intermediate fusion framework that combines random matrix theory and non-parametric dependence measures to learn fusion structure directly from data. We operate under a Bayesian multimodal factor model where the prior on the latent factors determines the cross-modal dependence. Our method clusters modalities based on estimated intermodal dependence, then performs clusterwise empirical Bayes estimation of the priors. These estimated priors are used to construct denoisers within an approximate message passing (AMP) framework, yielding denoised low-dimensional features that borrow strength across related modalities while preserving modality-specific signal. The resulting embeddings are used for downstream supervised prediction. We evaluate the framework through simulations under varying dependence structures and signal regimes, comparing against several benchmark methods, and demonstrate its practical utility on two multimodal datasets, namely a trimodal TEA-seq dataset (Swanson et al., 2021) and TCGA-BRCA dataset (Goldman et al., 2020). In the first example, we predict the expression level of a T-cell differentiation marker protein and in the second case we analyze patient survival prediction based on multimodal information. Our method competes with or outperforms the state-of-the-art techniques in both prediction problems, demonstrating its versatility across diverse supervised learning tasks. 
+
+# 1 Introduction 
+
+Modern data acquisition technologies allow users to collect multiple complementary pieces of information about the profiled subjects simultaneously. These give rise to rich multimodal datasets. The availability of such data has the potential to substantially improve the efficiency and accuracy of supervised learning by enabling principled integration of complementary information across modalities, enabling highly accurate pre-diction in settings where the features from individual component modalities are noisy and high-dimensional. Indeed, such supervised multimodal learning pipelines have been successfully deployed in the analysis of biological datasets, leveraging diverse data sources including genomic, proteomic, metabolomic, lipidomic, and phenomic measurements (Uyar et al., 2025; Gentles et al., 2015; Guan et al., 2022; Zhao et al., 2019; Dombowsky et al., 2025; Lakkis et al., 2022). In this paper, we study a supervised multimodal learning prob-lem in which the goal is to predict a response y using features collected from multiple modalities x1, . . . , x m.We keep the prediction setting general to accommodate a wide range of supervised learning tasks including 
+
+> ∗
+
+Ohio State University. Email: nandy.15@osu.edu .
+
+> †
+
+National University of Singapore. Email: slahiry@nus.edu.sg .
+
+> ‡
+
+Harvard University. Email: pragya@fas.harvard.edu .
+
+> §
+
+Harvard University. Email: subhabratasen@fas.harvard.edu .
+
+1arXiv:2608.02769v1 [stat.ME] 3 Aug 2026 predicting continuous, binary or categorical response as well as survival risk in time-to-event analyses. The individual modality measurements may also differ substantially in their dimensionality and signal strengths. In many application domains, it is empirically observed that intermodal dependence and the association between the response and the observed features across modalities are mediated by a lower-dimensional col-lection of latent factors (Anceschi et al., 2024). The supervised learning workflow in these settings typically involves constructing low-dimensional embeddings from the observed features by information integration across modalities and followed by training a supervised predictor using the engineered features. The infor-mation fusion can enhance signal strength in the learned representations and improve the recovery of latent structure by borrowing strength across complementary data sources. However, a fundamental and often overlooked question in this context is: which modalities should be fused? Insufficient integration may fail to exploit the full potential of multimodal data, resulting in weak or uninformative representations. In contrast, excessive integration may force together unrelated or weakly related modalities; in this case, one neglects the clustering among the modes, and is thus forced to estimate the complete signal (the shared signal and the modality specific signals) from the finite data available. Statistically, this often leads to the challenging problem of high-dimensional estimation from insufficient data. One stands to gain significantly over this approach by only integrating information across strongly linked modalities. In the literature (Boulahia et al., 2021; Ding et al., 2022; Liang et al., 2025), this problem is commonly addressed through three broad architectural paradigms for feature engineering: (I) Late Fusion: Each modality is modeled independently to produce modality-specific predictions, which are then combined at the decision level to obtain the final prediction (Snoek et al., 2005), (II) Intermediate Fusion: Information from multiple modalities is partially fused during feature learning, typically by sharing representations or interactions among selected modalities, while others are processed independently (Boulahia et al., 2021), and (III) Early Fusion: All modalities are jointly embedded into a single unified latent representation, which is subsequently used for downstream prediction tasks (Wu and Goodman, 2018; Srivastava and Salakhutdinov, 2014). These three paradigms of information integration have been successfully deployed across a wide range of biomedical applications (Guarrasi et al., 2025; Cahan et al., 2023; Uyar et al., 2025; Yang et al., 2025a) as well as in computer vision (Boulahia et al., 2021; Hu et al., 2024). A significant limitation of many existing data-fusion pipelines is that the choice of fusion architecture is largely ad hoc , often guided by domain expertise rather than inferred from the data. In such approaches, the fusion architecture is fixed a priori . This might often lead to undesirable performance in datasets where the choice of the fusion granularity depends on the composition of the data under study. For example, in Section 1.1, we consider predicting the expression of a T-cell differentiation marker in a trimodal single cell dataset (Swanson et al., 2021). We observe that depending on the cell type under consideration, either early or late fusion has better predictive performance (cf. Figure 1). Therefore, one can easily imagine that in a generic supervised learning problem involving such datasets, the most efficient granularity of fusion will be determined by the relative abundance of different cell-types in the sample. In this case, pre-fixing the fusion architecture might lead to a loss of efficiency and a more desirable framework would determine the appropriate granularity of fusion in a fully data-driven manner. In this paper, we propose DAIF, a data adaptive framework for learning the appropriate fusion granularity and for performing data integration that preserves modality-specific structure while enhancing shared signals. 
+
+## 1.1 An illustration from computational biology 
+
+To illustrate the challenge of selecting an appropriate fusion granularity, we consider a supervised predic-tion task in a multiomic single-cell data. Recent advances allow simultaneous profiling of transcriptomic, epigenomic, and proteomic layers at single-cell resolution (Mimitou et al., 2021; Stoeckius et al., 2017; Swanson et al., 2021). A representative example is TEA-seq (Swanson et al., 2021), which jointly profiles nuclear mRNA expression, chromatin accessibility (ATAC), and antibody-derived tags (ADTs) measuring cell-surface protein abundance. These modalities exhibit sharply different statistical properties. Proteomic measurements from curated antibody panels are typically low-dimensional with high signal-to-noise ratios, whereas RNA and ATAC data are extremely high-dimensional and sparse (e.g., 36 ,601 genes and 66 ,828 ATAC peaks versus 48 proteins 2Figure 1: Prediction of CD45RA protein expression from RNA (2,000 HVGs), normalized ATAC counts (5,000 HV ATAC reads), and normalized expression of 39 HV cell-surface protein markers on TEA-seq data (Swanson et al., 2021). The DAIF predictor is trained on 4 ,560 randomly selected cells and evaluated on 1,141 held-out test cells. Each panel shows per-celltype RMSE overlaid on the UMAP of denoised test embeddings; the bottom table reports per-cell-type RMSE, with bold entries marking the best method. Early fusion ( K “ 1, OrchAMP) and late fusion ( K “ 3, EB-PCA) achieve comparable aggregate RMSE (2 .687 and 2 .685, respectively) yet differ substantially at the cell-type level, motivating data adaptive fusion granularity selection. across 8 ,213 cells). RNA and ATAC are strongly coupled biologically, since chromatin accessibility regulates gene expression, while ADTs are only weakly linked to ATAC due to post-transcriptional regulation. This heterogeneity makes fusion granularity both practically important and statistically nontrivial, and it is precisely what DAIF is designed to learn from data. Figure 1 illustrates a prediction task where the goal is to predict CD45RA expression—a key marker of T cell differentiation—from RNA, ATAC, and the remaining cell-surface protein measurements. We apply DAIF, which clusters modalities using an empirical dependence measure Centered Kernel Alignment; (CKA Kornblith et al. (2019)) and integrates modalities within the same cluster using Approximate Message Passing (AMP). The number of clusters, selected by the gap statistic (Tibshirani et al., 2001), determines the fusion granularity: K “ 1 recovers early fusion (OrchAMP; Nandy and Ma (2024)), K “ 3 recovers late fusion (EB-PCA; Zhong et al. (2022)), and intermediate values yield partial fusion. Strikingly, no single fusion strategy uniformly dominates across cell types. B cell progenitors and CD14 `
+
+Monocytes are better predicted under late fusion, while CD16 ` Monocytes and CD4 Naive cells favor early fusion. This variation is unsurprising: different cell populations may rely on different combinations of modalities for faithful protein expression prediction, and a fixed fusion architecture cannot adapt to the relative abundance of the cell types in the sample to choose the most efficient fusion strategy. DAIF addresses this by learning the appropriate fusion granularity from data and automatically takes into account the relative abundance of different cell-types in the observed sample. It thereby selects the architecture that favors efficient prediction for the majority of the cells. We explore this dataset further in Section 5.1. 
+
+## 1.2 Major Contributions 
+
+Our major contributions in this paper are as follows. 
+
+Bayesian modelling of varying granularity of intermodal dependence. In Section 2, we propose a Bayesian multimodal factor model for the multimodal features that employs a structured prior decomposing the features into components corresponding to strongly dependent modalities. This formulation flexibly interpolates between complete dependence and independence across modalities. It further allows intermodal dependence to be mediated by latent features of differing dimensions, accommodating heterogeneity across data sources. This contrasts with common integration methods such as multiset canonical correlation analysis 3(Kettenring, 1971) and JIVE (Lock et al., 2013), which assume dependence through shared latent factors, an assumption that can be restrictive and less interpretable in heterogeneous settings. Cooperative component analysis (CoCA) (Ding et al., 2024) provides an intermediate-fusion based dimension reduction technique that interpolates between PCA and CCA. Unlike DAIF, however, CoCA focuses on recovering a shared linear component across views, whereas DAIF preserves modality-specific latent structure while enabling nonlinear information integration through data adaptive clustering and cluster-wise empirical Bayes denoising within an AMP pipeline. Our framework is closely related to Anceschi et al. (2024), but extends it by allowing random loading matrices and latent factors of varying dimensions across modalities. This flexibility is important in the context of multimodal analyses, particularly in single cell genomics, where it is well understood that the biological signals in the modalities are captured by varying numbers of latent factors (Hao et al., 2021). 
+
+A data adaptive intermediate fusion pipeline. In Section 3, we propose DAIF, an empirical Bayes pipeline for integrating and engineering high-dimensional multimodal features. The pipeline first learns the clustering structure in the prior via hierarchical clustering, using similarity measures based on non-parametric notions of dependence, such as Centered Kernel Alignment (Kornblith et al., 2019). This yields a fully data adaptive determination of fusion granularity and distinguishes our approach by learning the fusion architecture directly from the data. We then estimate cluster-specific priors using empirical Bayes and leverage them to integrate information across modalities. We show that our clustering based estimation framework leads to consistent estimation of the priors provided the true prior indeed exhibits a clustered structure and the components within each cluster are strongly dependent (cf. Theorem 6.1). Our integration pipeline builds upon a variant of the Approximate Message Passing framework (AMP) proposed in Montanari and Venkataramanan (2021) and later developed by Zhong et al. (2022) and Nandy and Ma (2024) which leverages the estimated prior. The algorithm alternates between power iteration using the feature matrices to recover the low-rank factors, followed by Bayesian shrinkage toward the mean of estimated priors and a debiasing step to remove the impact of past iterates 1. This debiasing allows us to track the asymptotic properties of the iterates through state evolution recursions (cf. Theorem 6.2). We combine the information across modalities via the shrinkage step; we show that the resulting iterates are Bayes optimal estimators for the true signals (cf. Theorem 6.3) under mild conditions. The novelty of our procedure is underscored by the use of clustered priors with clusters estimated from the observed data, thus enabling data driven intermediate fusion when modalities are only partially dependent. The estimated features can be used for downstream multimodal unsupervised analysis or used to train a predictor to predict the responses. Algorithms for multimodal integration have also been proposed in Yang et al. (2025b), Tabanelli et al. (2025), Gerbelot and Berthier (2023) and Rossetti and Reeves (2023) for integrating information across symmetric data matrices and correlated data tensors. However, these existing approaches either integrate all the modalities or treat the inter-modal dependence as a known, oracle-level property of the problem (Gerbelot and Berthier, 2023). In particular, they do not learn the underlying dependence in a data adaptive manner. In a recent work, Liang et al. (2025) propose Meta Fusion , a fascinating data-driven framework for selecting among alternative fusion architectures. The method is agnostic to the data distribution; however, the supporting theoretical guarantees require significantly restrictive assumptions compared to DAIF. 
+
+Test-time prediction. The estimated loading matrices obtained from DAIF can be decomposed into a weighted sum of the true loading matrices in the data generating process and independent Gaussian noise. If the test observations share the same loading matrices across modalities (which is a reasonable assumption in our setting), we can use this decomposition to project the test observations onto the same latent space as the training data. In turn, this enables the learned predictor to predict the response on test data. The details of projection of test data features and prediction of test response using the projected features are outlined in Section 3.4. 
+
+Numerical experiments and applications to biological datasets. We benchmark DAIF against popular data integration pipelines on two fronts: recovery of latent features and prediction of held-out responses. We present our numerical experiments in Section 4. When the sample size is large and the signal strength is low, we observe that DAIF outperforms the other AMP-based benchmarks. Furthermore, DAIF is about 10 times more accurate than the non-AMP based integration benchmarks both in terms of recovering the latent embeddings and predicting the unknown response.  
+
+> 1In the AMP literature (Bayati and Montanari, 2011), the debiasing step is termed Onsager correction .
+
+4We further validate DAIF on two real datasets: a trimodal single-cell dataset from Swanson et al. (2021), where we predict the expression level of a marker protein from genomic, epigenomic, and proteomic features (cf. Section 5.1); and a trimodal TCGA-BRCA dataset from Goldman et al. (2020), where we predict survival risk (cf. Section 5.2). In both settings, DAIF outperforms competing integration-based prediction pipelines in computational biology. 
+
+Theoretical justification of the DAIF framework. The theoretical results about the consistency of prior estimation based on hierarchical clustering and asymptotic properties of the iterates produced in the DAIF algorithm are presented in Section 6. All the proofs are relegated to the appendices. 
+
+## 1.3 Related Work 
+
+The idea of multimodal integration traces back to the seminal concept of Canonical Correlation Analysis (Hotelling, 1936) and its multi-set generalizations (Kettenring, 1971). This classical line of literature assumes the same modality dimensions, a restrictive condition for many real multimodal integration tasks, particularly in computational biology. For example, in Hao et al. (2021), the authors use different latent dimensions for modeling the transcriptomic and proteomic modalities, whereas a similar convention of using different latent dimensions for distinct modalities is also adopted in the variational autoencoder based approach of Gayoso et al. (2021). Another approach of multimodal integration is through multimodal factor models (Lock et al., 2013; Feng et al., 2018; Prothero et al., 2024; Gaynanova and Li, 2019; Sergazinov et al., 2026) which extend the idea of canonical correlation by positing shared low-dimensional latent structure across views. In Yang and Ma (2025), the authors recently established rigorous performance guarantees, revealing both the power of multi-matrix pooling and failure modes under partial subspace sharing. The above procedures also require same latent dimension for the shared signal component and sometimes impose the stronger requirement that the correlated signal complement is actually identical across the different modalities. This restrictive assumption can be avoided in our prior-based framework. A complementary approach is through multimodal spectral analysis, namely Stacked-SVD or SVD on individual modalities and stacking the singular vectors. In Ma and Ma (2026), the authors prove minimax optimality of Stack-SVD when modalities share an identical singular subspace and characterize phase-transition failures under partial sharing, while Baharav et al. (2025) compares Stack-SVD against SVD-Stack under proportional asymptotics, formalizing the statistical tradeoff between early and late spectral fusion. However, stacked-SVD also requires identical dimensions across modalities and SVD-stack can be naively improved by using EB-PCA based reconstruction followed by stacking of the embeddings. The EB-PCA based framework is a special case of our general DAIF pipeline and does not provide the opportunity of data integration in embedding construction when the modalities are strongly related. Therefore, it is expected that under strong multimodal dependence DAIF will outperform both EB-PCA followed by stacking and SVD-Stack. In computational biology, dominant approaches involve complete data integration, including weighted nearest-neighbor graph-based Seurat v4 (Hao et al., 2021), MOFA+ (Argelaguet et al., 2020), and variational au-toencoder based totalVI (Gayoso et al., 2021) and Multigrate (Litinetskaya et al., 2025). Complete fusion is appropriate when modalities are strongly dependent, but fusing weakly linked modalities can inject noise and degrade downstream inference. DAIF in contrast allows data-based determination of the right fusion granularity which might lead to better performance. Furthermore, DAIF also comes with rigorous statisti-cal guarantees (cf. Section 6) for convergence; in contrast, many popular scRNA-seq pipelines lack similar theoretical guarantees. In the supervised setting, the primary fusion mechanism studied statistically is early fusion (Yuan et al., 2014; Gentles et al., 2015). Recently, Ding et al. (2022) provides the first statistical motivation for bridging early and late fusion through their multi-view cooperative learning framework, though without a formal char-acterization of prediction error. JAFAR (Anceschi et al., 2024) provides an alternative Bayesian supervised dimensional reduction framework; unfortunately, it is also restricted to early fusion. However, supervised dimension reduction is problematic when annotations are unreliable or circularly derived from the same molecular measurements, as is common in single-cell sequencing. In a different direction, Gui et al. (2025) approached the data integration problem through contrastive learning. However, their method does not pro-5vide a mechanism for selectively fusing modality subsets. Information theoretic properties of multiview data has been extensively studied in Mayya and Reeves (2019), Reeves (2017) and Barbier and Reeves (2020). Finally, Approximate message passing based multimodal integration has also been studied for two modalities in Keup and Zdeborov´ a (2025), and Ma and Nandy (2023). In recent work, Liang et al. (2025) study supervised multi-modal learning, and focus on data-driven choice of the fusion granularity. They propose a new method Meta-Fusion to address this problem. This method constructs multiple student predictors based on unimodal and multimodal representations that encompass early-, intermediate-, and late-fusion strategies. The principal strength of this framework is its flexibility with respect to both the feature extractors and the downstream prediction task. In contrast, DAIF adopts a linear factor-based feature extraction mechanism while retaining considerable flexibility in the choice of the prediction model. This additional structure enables a substantially sharper theoretical analysis in the high-dimensional regime: the guarantees for DAIF cover broad, potentially non-Gaussian latent factors and high-dimensional modalities. In contrast, the theory developed for Meta-Fusion relies on Gaussian latent factors. The two direct predecessors of DAIF are EB-PCA (Zhong et al., 2022) and OrchAMP (Nandy and Ma, 2024), both grounded in Approximate Message Passing. EB-PCA applies AMP with a non-parametric empirical Bayes prior to a single data matrix, achieving Bayes-optimal recovery in spiked models. OrchAMP extends this to multiple modalities under a dependent multifactor model, fusing all views simultaneously for optimal joint signal recovery. In our framework, applying EB-PCA independently to each modality corresponds to late fusion, while OrchAMP-style joint denoising corresponds to early fusion. DAIF interpolates the gap between these two extremes: by clustering modalities according to an empirical measure of pairwise dependence and applying AMP-based denoising within each cluster, it achieves an intermediate fusion granularity that adapts to the data and subsumes both predecessors as special cases. 
+
+## 1.4 Notations 
+
+For any natural number n P N, we shall denote the set t1, . . . , n u by rns. The notation Rk denotes the set of k dimensional vectors with real coordinates. For a vector a P Rk, the Euclidean norm is denoted by }a}2.The notation Rkˆℓ denotes the set of k ˆ ℓ matrices with real entries. All the matrices will be denoted by upper-case bold letters throughout the text. For any matrix A, Ai˚ denotes its i-th row and A˚i its i-th column. Furthermore, Aij denotes its pi, j q-th entry. For any F Ď t 1, . . . , n u, the submatrix formed by the rows with indices in F is denoted by AF,˚ and the submatrix formed by the columns with indices in 
+
+F is denoted by A˚,F . Next, for A P Rkˆk, AJ denotes its transpose and Tr pAq “ řki“1 Aii denotes its trace. The Frobenius norm of a matrix A is denoted by }A}F and the spectral norm of A is denoted by 
+
+}A}op . The notation diag pa1, . . . , a kq defines a k ˆ k diagonal matrix with the j-th diagonal element aj for 
+
+j P r ks. For a vector v P Rn, vb2 denotes the n ˆ n matrix vv J. For two matrices A and B, A ĺ B means 
+
+B ´ A is positive semi-definite. The class of all m ˆ m dimensional positive definite matrices is denoted by 
+
+Sm 
+
+> `
+
+. The notation μn w
+
+ÝÑ μ means that the sequence of measures μn converges weakly to μ. For a sequence of random variables Xn, we write Xn a.s.
+
+ÝÝÑ X to denote that Xn converges to X almost surely. For two random variables X and Y , the notation X d
+
+“ Y implies that their distributions are equal. Next, suppose 
+
+θ „ π and X :“ f pθ, Zq, where Z is a random object independent of θ. Then we shall denote the conditional expectation of gpθq where g is any arbitrary measurable function given X by Eπ rgpθq | Xs. In this notation, the expectation is taken over the randomness induced by the posterior distribution πpθ | Xq.62 Statistical model behind our approach 
+
+## 2.1 A multimodal factor model 
+
+In this paper, we consider the following factor model for the high-dimensional feature matrices tXh P Rnˆph :
+
+h P r msu :
+
+Xh “ 1
+
+?n UhDhV J 
+
+> h
+
+` Zh, (2.1) where Uh P Rnˆrh , Vh P Rphˆrh , and Dh P Rrhˆrh is diagonal with strictly decreasing positive entries, so that pDhq11 ą ¨ ¨ ¨ ą p Dhqrhrh ą 0. The entries of the noise matrices tZh P Rnˆph : h P r msu are independently and identically distributed according to the standard Gaussian distribution. Furthermore, we operate in the proportional asymptotic regime where ph{n Ñ γh P p 0, 8q for all h P r ms, as n Ñ 8 .The intrinsic dimensions of the features are assumed to satisfy r1, . . . , r m “ Op1q. In addition to the high-dimensional modalities, we also consider rm low-dimensional feature matrices t ĂXℓ : ℓ “ 1, . . . , rmu modeled as 
+
+ĂXℓ “ rUℓLJ 
+
+> ℓ
+
+` rZℓ, (2.2) where rUℓ P Rnˆrrℓ , Lℓ P Rrrℓˆrrℓ , and rZℓ P Rnˆrrℓ , with rrℓ “ Op1q for all ℓ P r rms. The matrices tLℓ : ℓ P r rmsu 
+
+are assumed to be symmetric and positive definite. We assume that the entries of t rZℓ : ℓ P r rmsu are sam-pled i.i.d from the standard Gaussian distribution and are independent of the collection tXh : h P r msu .In the foregoing formulation, the signals are captured through UhDhV J 
+
+> h
+
+for h P rms and rUℓLJ 
+
+> ℓ
+
+for 
+
+ℓ P r rms. To ensure that the signal component separates out from the noise component, we assume that 
+
+pDhqjj ą γ´1{4 
+
+> h
+
+for all j P r rhs and h P r ms. In particular, the collection of subject-specific latent feature vectors 
+
+!`pU1qi˚, . . . , pUmqi˚, p rU1qi˚, . . . , p rUĂmqi˚
+
+˘ : i “ 1, . . . , n 
+
+)
+
+constitutes the latent representation asso-ciated with the n observational units and are therefore the target of the feature engineering step. To enforce identifiability, we assume pUhqJUh « nIrh and pVhqJVh « phIrh for all h P r ms 2. Therefore, the columns of Uh and Vh are approximately the left and right singular vectors of the signal component in Xh, endowing them with natural interpretability. Next, we model the response vector y “ p y1, . . . , y nqJ as a function of the subject-level signatures. Let 
+
+gp¨ | θq denote a parametric family of distributions, and suppose that 
+
+yi ind 
+
+„ gp¨ | θiq, θi “ f
+
+´
+
+pU1qi˚, . . . , pUmqi˚, p rU1qi˚, . . . , p rUĂmqi˚
+
+¯
+
+, i “ 1, . . . , n. (2.3) Here, the response distribution gp¨ | θq is assumed to be known. The regression function f p¨q is assumed to be known up to a finite-dimensional set of unknown parameters, which are estimated from the data. For instance, taking gpx | θq “ ϕpx ´ θq for x P R, where ϕpxq “ p 2πq´1{2 exp p´ x2{2q, and taking f puq “ βJu,yields the usual linear regression model with standard normal errors. We provide additional examples in Section 4. For notational clarity, define the disjoint modality index sets EH :“ r ms, EL :“ t m ` 1, . . . , m ` rmu, and 
+
+E :“ EH Y EL “ r m ` rms. For each e P E, define the corresponding latent vector and latent dimension by 
+
+Ue :“
+
+#
+
+Ue, e P EH,
+
+rUe´m, e P EL, ρe :“
+
+#
+
+re, e P EH,
+
+rre´m, e P EL.
+
+For any C Ď E, we further define CH :“ C X EH, and CL :“ t ℓ P r rms : m ` ℓ P Cu. Finally, let rH :“ řmh“1 rh,
+
+rL :“ řĂmℓ“1 rrℓ, and r :“ rH ` rL.
+
+> 2See Assumption 6.1 for a formal statement.
+
+72.2 Cluster based prior on subject signatures 
+
+We postulate that the multimodal dependence is captured through a latent prior μ on the subject signatures 
+
+U1, . . . , Um and rU1, . . . , rUĂm. Formally, 
+
+´
+
+pU1qi˚, . . . , pUmqi˚, p rU1qi˚, . . . , p rUĂmqi˚
+
+¯ i.i.d 
+
+„ μ. (2.4) The prior μ is supported on Rr . Furthermore, we assume that the rows of V1, . . . , Vm are mutually indepen-dent with pVhqi˚ i.i.d 
+
+„ νh, for i P r phs and h P r ms.Next, we assume the following structure for the prior μ. Consider the partition of E into K disjoint subsets 
+
+C1, . . . , CK and assume that 
+
+μ :“
+
+> K
+
+â
+
+> k“1
+
+μk pt Ue : e P Ckuq . (2.5) This clusterwise product structure is natural from the viewpoint of graphical models (Jordan, 1998; Lauritzen, 1996), where conditional independence or factorization assumptions are commonly used to encode sparse dependence among a collection of random variables. In our setting, the assumption states that modalities within the same group may exhibit arbitrary dependence, whereas modalities belonging to different groups are independent under the prior. In particular, the dependence graph is assumed to be a collection of disjoint cliques where the modalities within a clique are assumed to be dependent, whereas those in disjoint connected components are assumed to be independent. This structure naturally induces three distinct granularities of intermodal dependence: (1) Complete dependence (K “ 1), (2) Intermediate dependence (1 ă K ă m ` rm), and (3) Independence (K “ m ` rm). Importantly, the partition C1, . . . , CK is not assumed to be known a priori. Thus, the proposed framework does not rely on an oracle specification of the inter-modal dependence structure, but instead seeks to learn this structure from the data. This provides a principled mechanism for adaptive information sharing across related modalities while avoiding unnecessary pooling across unrelated ones. 
+
+# 3 Methodology 
+
+In this section, we formally introduce DAIF. The major steps in the algorithm are as follows: 
+
+Clustered Empirical Bayes. We begin by computing the top rh singular vectors of each ĎXh “ Xh{?n,given by pU pc  
+
+> h
+
+, V pc  
+
+> h
+
+q, rescaled so that pU pc  
+
+> h
+
+qJU pc  
+
+> h
+
+“ nIrh and pV pc  
+
+> h
+
+qJV pc  
+
+> h
+
+“ phIrh for h P r ms. We assume 
+
+rh are known; in practice, they are selected via scree plots by identifying an elbow in the singular value distri-bution. We construct a similarity measure by computing pairwise dependence between all modality-specific representations, including tU pc  
+
+> h
+
+, U pc  
+
+> h1
+
+u, tU pc  
+
+> h
+
+, ĂXℓu, and t ĂXℓ, ĂXℓ1 u. For each modality pair, we compute row-wise similarities between the corresponding matrices and average them to form a similarity matrix, which is used for hierarchical clustering. To quantify similarity between the modalities, we can employ non-parametric measures of dependence like Centered Kernel Alignment (CKA) (Kornblith et al., 2019), distance correlation (Sz´ ekely et al., 2007), nearest neighbor-based measures (Deb et al., 2020), and mutual information-based methods such as InfoNCE (van den Oord et al., 2018). These measures are close to zero under independence and approach one under strong dependence, while capturing nonlinear relationships. For our mathematical analysis and experiments, we consistently use CKA with Gaussian kernel as the measure of dependence. A detailed discussion on the relative strengths and weaknesses of the above-mentioned measures of inde-pendence is provided in Section A. We convert similarities to dissimilarities by subtracting from one and apply hierarchical clustering with UPGMA-based average linkage (Sokal and Michener, 1958) to obtain clus-ters pCk, k P r pKs. Within each estimated cluster pCk, we estimate the prior μk using tU pc  
+
+> h
+
+: h P pCk, Hu and 
+
+t ĂXℓ : ℓ P pCk, Lu, where pCk, H :“ pCk X EH, and pCk, L :“ t ℓ P r rms : m ` ℓ P pCku. This step constitutes the empirical Bayes component of our pipeline. The estimation of the prior under the product structure imposed by the learned clusters mitigates the curse of dimensionality associated with high-dimensional prior estimation in 8Data              
+
+> tXhu,tĂXℓu
+> SVD
+> tUpc
+> hu ` t ĂXℓu
+> Compute Pairwise similarity ℵn
+> Hierarchical clustering
+> pC1, . . . , pCK
+> EB prior per cluster
+> pμ1ˆ ¨ ¨ ¨ ˆ pμK
+> OrchAMP within pCkfor
+> Titerations Embeddings
+> pFT, 1, . . . , pFT,m
+> Downstream prediction
+> discover integrate
+
+Figure 2: Thematic diagram for the DAIF pipeline finite samples. At the same time, since the clusters are inferred from the data, the pipeline provides fully data adaptive intermediate fusion. 
+
+Feature extraction using Orchestrated Approximate Message Passing. Given the estimated prior, we recover the low-dimensional latent factors from tXh : h P r msu using Orchestrated Approximate Message Passing (Nandy and Ma, 2024). The algorithm alternates between an Onsager-corrected power iteration (Zhong et al., 2022) and a Bayesian denoising step using the estimated clustered prior from the previous step, which shrinks the iterates toward the prior mean. This shrinkage stabilizes the iterates via noise correction and facilitates information sharing across modalities within each cluster, effectively borrowing strength from strongly dependent modalities encoded by the estimated prior. The use of a clustered prior naturally induces an intermediate fusion scheme, enabling feature integration at the level of modality groups rather than enforcing full or no fusion. For low-dimensional modalities, power iteration is unnecessary; instead, we directly apply Bayesian denoising to shrink the raw features toward the estimated prior using information from related modalities from the same cluster. This yields a sequence of estimates t pFt,h , rUt,ℓ :
+
+h P r ms, ℓ P r rmsu of the latent subject signatures tUh, rUℓ : h P r ms, ℓ P r rmsu for downstream analysis, along with a sequence of estimates t pVt,h : h P r msu of the loading matrices tVh : h P r msu .
+
+Predictor training and test prediction. At the test stage, directly estimating the low-rank embeddings from the high-dimensional features via singular value decomposition is inappropriate since typically ntst ! ph
+
+for the high-dimensional modalities. Instead, we use the estimated loading matrices pVT,h (obtained after T
+
+AMP iterations) and project the test features Xtst  
+
+> h
+
+corresponding to the high-dimensional modalities onto the latent space via ordinary least squares to obtain pU tst ,ols  
+
+> h
+
+. Using properties of the AMP iterates (cf. Theorem 6.4), these projected features can be represented as Gaussian perturbation of the true test latent factors U tst  
+
+> h
+
+which are predictive for the response y. To align the asymptotic distribution of the training and test-time representations, we rescale the Onsager-corrected training embeddings pFT,h by right-multiplying them with p pΣLT,h q´1 pD´1 
+
+> h
+
+. The resulting embeddings have the same asymptotic distribution as the test-time OLS embeddings pU tst ,ols  
+
+> h
+
+. We use the rescaled embeddings to train a predictor Hp ¨ , θ q by minimizing, with respect to θ, the loss function Lθ p¨q defined in (3.17), which explicitly accounts for the Gaussian perturbations present in the training embeddings. The predictor architecture is kept flexible and depends on the application. In our experiments (cf. Sections 4.3–4.4), we consider both linear and neural-network predictors, using the former for linear link functions and the latter for nonlinear ones. The trained predictor is finally applied to t pU tst ,ols  
+
+> h
+
+: h P r msu to obtain the test predictions. We provide a thematic diagram for the pipeline in Figure 2 and a pseudo-code style summary of our procedure in Algorithm 1. 93.1 Initialization and clustered empirical Bayes estimation 
+
+We initialize the AMP-based feature reconstruction using the appropriately rescaled top-rh principal com-ponents tp U pc  
+
+> h
+
+, V pc  
+
+> h
+
+q : h P r msu of the matrices ĎXh :“ Xh{?n for all h P r ms. As n, p h Ñ 8 , these empirical singular vectors satisfy 3
+
+U pc  
+
+> h
+
+« Uhp xM Lh qJ ` Zpc ,ℓ h p pΣLh q1{2, V pc  
+
+> h
+
+« Vhp xM Rh qJ ` Zpc ,r 
+
+> h
+
+p pΣRh q1{2, (3.1) where Zpc ,ℓ h P Rnˆrh and Zpc ,r 
+
+> h
+
+P Rphˆrh have i.i.d. standard normal entries. Here, xM ‹ 
+
+> h
+
+“ diag p pm‹
+
+> 1,h
+
+, . . . , pm‹
+
+> rh,h
+
+q
+
+and pΣ‹ 
+
+> h
+
+“ diag ppσ‹
+
+> 1,h
+
+, . . . , pσ‹
+
+> rh,h
+
+q for ‹ P t L, R u, where the diagonal entries are given by 
+
+pσLi,h :“ 1 ` p pD2
+
+> h
+
+qii 
+
+p pD2
+
+> h
+
+qii t1 ` γhp pD2
+
+> h
+
+qii u , pmLi,h :“ p 1 ´ pσLi,h q1{2,
+
+pσRi,h :“ 1 ` γhp pD2
+
+> h
+
+qii 
+
+γhp pD2
+
+> h
+
+qii t1 ` p pD2
+
+> h
+
+qii u , pmRi,h :“ p 1 ´ pσRi,h q1{2, for h P r ms and i P r rhs. (3.2) Furthermore, t pDh P Rrhˆrh : h P r msu are diagonal matrices with entries given by 
+
+p pD2
+
+> h
+
+qii :“ γhpDpc  
+
+> h
+
+q2 
+
+> ii
+
+´ p 1 ` γhq ` 
+
+b
+
+rγhpDpc  
+
+> h
+
+q2 
+
+> ii
+
+´ p 1 ` γhqs 2 ´ 4γh
+
+2γh
+
+, h P r ms, i P r rhs, (3.3) where tDpc  
+
+> h
+
+: h P r msu are defined in (H.1). For a unified notation, we write pU init  
+
+> e
+
+:“ U pc  
+
+> e
+
+when e P r ms and 
+
+pU init  
+
+> e
+
+:“ ĂXe´m when e P t m ` 1, . . . , m ` rmu.Using (3.1), we can conclude that the dependence across the principal components are mediated by the dependence of the true latent matrices tUh : h P r msu and t rUℓ : ℓ P r rmsu . In the hierarchical clustering step, we aim to construct a dissimmilarity matrix N P Rpm`Ămqˆp m`Ămq, for e, e 1 P E, such that Nee 1 P r 0, 1s.Furthermore, Nee 1 “ 0 should imply that the modalities e and e1 are dependent, and Nee 1 “ 1 should imply that the modalities e and e1 are independent. For each pair e, e 1 P E, let ℵn denote an empirical non-parametric measure of dependence between two matrices with n rows, and define the empirical affinity psee 1 :“ ℵnp pU init  
+
+> e
+
+, pU init  
+
+> e1
+
+q. In our implementation, we take ℵnp pU init  
+
+> e
+
+, pU init  
+
+> e1
+
+q :“ CKA p pU init  
+
+> e
+
+, pU init  
+
+> e1
+
+q, where CKA refers to centered kernel alignment (Kornblith et al., 2019) between the two sets of vectors (formally defined in (A.1)). We define the dissimilarity matrix 
+
+N P Rpm`Ămqˆp m`Ămq entrywise by 
+
+Nee 1 :“ 1 ´ psee 1 , e, e 1 P E. (3.4) To estimate μk for any cluster pCk, we optimize the non-parametric likelihood induced by (3.1) as follows: 
+
+pμk :“ arg max    
+
+> mkPPpRprkq
+
+Lkpt pU init  
+
+> e
+
+: e P pCku; mkq, where prk :“ ř  
+
+> ePpCk
+
+ρe, (3.5) and PpRprk q is an appropriate class of distributions supported on Rprk . The final empirical Bayes estimate of μ is given by pμ :“ pμ1 ˆ ¨ ¨ ¨ ˆ pμK . Similarly, for any modality h P r ms, we obtain the estimate pνh of 
+
+νh, the prior distribution on the right latent factors of modality h, as pνh :“ arg max nhPPhpRrh q LrhpV pc  
+
+> h
+
+; nhq,
+
+where PhpRrh q is a modality specific prior class chosen to model νh. They are later utilized in the AMP iterations in Section 3.2. In our implementations, we use Gaussian mixture models with isotropic component covariances. Observe that the estimation of pμ fuses information across modalities only if there is evidence that they are related; this ensures data adaptive fusion, and improves downstream performance 4.          
+
+> 3See Proposition H.1 for a formalization of the approximation.
+> 4The precise forms of the likelihoods tLk:kP r Ksu and tLrh:hP r msu are provided in Section H.4.
+
+10 Algorithm 1 Data Adaptive Intermediate Fusion (DAIF) 
+
+Input: High-dimensional modalities tXhumh“1, low-dimensional modalities t ĂXℓuĂmℓ“1, response y, ranks 
+
+trhumh“1 and trrℓuĂmℓ“1, AMP iterations T , clustering and prediction hyperparameters. 
+
+Output: Integrated embeddings UT P Rnˆr and pre-trained predictor Hp ¨ , pθpred q. 
+
+> 1:
+
+Phase 1: PCA Initialization  
+
+> 2:
+
+For each h P r ms, compute the truncated SVD of ĎXh “ Xh{?n. to obtain pU pc  
+
+> h
+
+, Dpc  
+
+> h
+
+, V pc  
+
+> h
+
+q, and derive initialization quantities pDh, xM Lh , xM Rh , pΣLh , pΣRh via (3.2)–(3.3). Set pU init  
+
+> h
+
+Ð U pc  
+
+> h
+
+for h P EH and 
+
+pU init  
+
+> ℓ
+
+Ð ĂXℓ for ℓ P EL. 
+
+> 3:
+
+Phase 2: Modality Clustering  
+
+> 4:
+
+Compute dissimilarity matrix N via (3.4) and apply hierarchical clustering to obtain pC1, . . . , pCK (see Section B).  
+
+> 5:
+
+Phase 3: Empirical Bayes Prior Estimation  
+
+> 6:
+
+For each h P r ms, estimate column prior pνh; for each k P r Ks, estimate cluster prior pμk via (3.5) (see Section H.4).  
+
+> 7:
+
+Phase 4: AMP Feature Extraction  
+
+> 8:
+
+Initialize AMP iterates: pG0,h Ð V pc  
+
+> h
+
+, pU´1,h Ð U pc  
+
+> h
+
+p pΣLh q1{2, xM R 
+
+> 0,h
+
+Ð xM Rh , pSR 
+
+> 0,h
+
+Ð pΣRh , for all 
+
+h P r ms. 
+
+> 9:
+
+for t “ 0 to T ´ 1 do  
+
+> 10:
+
+Column denoising, power iteration, and left state evolution for each h P r ms via (3.6), (3.9), (3.11): update pVt,h , pSLt,h , xM Lt,h , pFt,h . 
+
+> 11:
+
+Row denoising, power iteration, and right state evolution for each k P r Ks, h P pCk, H via (3.7), (3.10), (3.11): update pUt,h , pSRt`1,h , xM Rt`1,h , pGt`1,h . 
+
+> 12:
+
+Low-dimensional denoising for each k P r Ks, ℓ P pCk, L via (3.12): update rUt,ℓ . 
+
+> 13:
+
+end for  
+
+> 14:
+
+Set sUT Ð “ pUT, 1 ¨ ¨ ¨ pUT,m rUT, 1 ¨ ¨ ¨ rUT, Ăm
+
+‰. 
+
+> 15:
+
+Phase 5: Downstream Prediction  
+
+> 16:
+
+For each h P r ms, compute pU rsc  
+
+> h
+
+as defined in (3.13).  
+
+> 17:
+
+Optimize pθpred via (3.18) and return predictor Hp ¨ , pθpred q defined in (3.16).  
+
+> 18:
+
+return sUT , Hp ¨ , pθpred q.
+
+## 3.2 Feature extraction using Approximate Message Passing 
+
+The principal component scores tU pc  
+
+> h
+
+, V pc  
+
+> h
+
+: h P r msu are iteratively refined using Approximate Message Passing (Montanari and Venkataramanan, 2021) to reconstruct the latent features U1, . . . , Um. In that direction, we consider the following iterates for t ě 0: initialize pG0,h “ V pc  
+
+> h
+
+, and pU´1,h “ U pc  
+
+> h
+
+p pΣLh q1{2 for 
+
+h P r ms. For each cluster pCk and each modality h P r ms, consider 
+
+pVt,h “ vt,h p pGt,h ; pνhq (3.6) 
+
+pFt,h “ ĎXh pVt,h ´ γh pUt´1,h p pJRt,h p pGt,h ; pνhqq J
+
+pUt,h “ ut,h,k 
+
+´! pFt,e : e P pCk, H
+
+)
+
+,
+
+! ĂXℓ : ℓ P pCk, L
+
+)
+
+; pμk
+
+¯
+
+(3.7) 
+
+pGt`1,h “ ĎXJ 
+
+> h
+
+pUt,h ´ pVt,h 
+
+´ pJLt,h,k 
+
+´! pFt,e : e P pCk, H
+
+)
+
+,
+
+! ĂXℓ : ℓ P pCk, L
+
+)
+
+; pμk
+
+¯¯ J
+
+. (3.8) In the above, for all h P r ms and k P r Ks, ut,h,k : Rprk Ñ Rrh for h P pCk, H (where prk is defined in (3.5)) and 
+
+vt,h : Rrh Ñ Rrh are defined as 
+
+vt,h pyhq “ Epνh
+
+”
+
+Vh
+
+ˇˇˇ xM Rt,h Vh ` p pΣRt,h q1{2Zh,R “ yh
+
+ı
+
+, (3.9) 11 ut,h,k 
+
+`txe : e P pCk, Hu, trxℓ : ℓ P pCk, Lu˘ “ Epμk
+
+”
+
+Uh
+
+ˇˇˇ ␣ xM Lt,e Ue ` p pΣLt,e q1{2Ze,L “ xe : e P pCk, H
+
+(,
+
+␣ pLℓ rUℓ ` rZℓ,L “ rxℓ : ℓ P pCk, L
+
+(ı
+
+, (3.10) where pU1, . . . , U m, rU1, . . . , rUĂmq „ pμ and Vh „ pνh for all h P r ms, where pμ and pνh are the estimated priors. The random vectors tZs,L : s P r msu , tZh,R : h P r msu , and t rZrs,L : rs P r rmsu have independent Np0, 1q
+
+entries, are mutually independent, and are independent of pU1, . . . , U m, rU1, . . . , rUĂmq and tVh : h P r msu . The state-evolution matrices are defined as follows: let xM R 
+
+> 0,h
+
+“ xM Rh and pΣR 
+
+> 0,h
+
+“ pΣRh and for all t ě 0, 
+
+xM Lt,h :“ pΣLt,h pDh, pΣLt,h :“ 1
+
+n p pVt,h qJ pVt,h , xM Rt`1,h :“ pΣRt`1,h pDh, pΣRt`1,h :“ 1
+
+n p pUt,h qJ pUt,h , (3.11) where pDh is defined in (3.3) for all h P r ms . Furthermore, the estimates pLℓ for the matrices Lℓ for ℓ P r rms
+
+are given by 
+
+pLℓ :“
+
+ˆ 1
+
+n ĂXJ 
+
+> ℓ
+
+ĂXℓ ´ Irrℓ
+
+˙1{2
+
+, for ℓ P r rms.In (3.6), the denoiser vt,h p¨q is applied row-wise to its matrix argument, and the associated Onsager correction 
+
+pJRt,h p pGt,h ; pνhq is obtained by computing the Jacobian of vt,h p¨q at each row of pGt,h and averaging across rows (cf. Section C of the appendix for details). Similarly, in (3.7), the denoiser ut,h,k p¨q is applied row-wise to the collection of matrices in its argument. The corresponding Onsager term pJLt,h,k in (3.8) is computed by evaluating the Jacobian row-wise, restricting to the columns associated with modality h, and then averaging over rows (again, see Section C of the appendix for details). The low-dimensional latent signals rU1, . . . , rUĂm are estimated by Bayesian denoising motivated by (2.2) and (2.4). In particular, for all ℓ P pCk, we define 
+
+rUt,ℓ “ rut,ℓ,k 
+
+´! pFt,s : s P pCk, H
+
+)
+
+,
+
+! ĂXrs : rs P pCk, L
+
+)
+
+; pμk
+
+¯
+
+, (3.12) where the denoiser rut,ℓ,k : Rprk Ñ Rrrℓ is given by 
+
+rut,ℓ,k 
+
+`txs : s P pCk, Hu, trxrs : rs P pCk, Lu˘ “ Epμk
+
+” rUℓ
+
+ˇˇˇ ␣ xM Lt,s Us ` p pΣLt,s q1{2Zs,L “ xs : s P pCk, H
+
+(,
+
+␣ pLrs rUrs ` Zrs,L “ rxrs : rs P pCk, L
+
+(ı
+
+,
+
+and is applied row-wise to the matrices in its arguments. The collections pU1, . . . , U m, rU1, . . . , rUĂmq, tZs,L :
+
+s P r msu , and t rZrs,L : rs P r rmsu are as defined in (3.9) and (3.10). The foregoing scheme alternates between power iteration and Bayesian denoising to refine the noisy latent estimates obtained from the principal components, namely tU pc  
+
+> h
+
+, V pc  
+
+> h
+
+: h P r msu . The power iteration step amplifies the low-rank signal ensuring greater correlation of the estimates with the true latents, while the Onsager correction removes the bias introduced by repeatedly applying the same data matrix across iterations, thereby ensuring that the iterates behave approximately like the true latent variables corrupted by Gaussian noise. This asymptotic Gaussianity can be used to construct empirical Bayes denoisers without any MCMC iterations, which shrink the iterates toward the estimated prior mean by borrowing information across samples and related modalities while being considerably fast. The cluster based priors, learned adaptively from the data, further prevent over-shrinkage by integrating information only across mutually informative modalities. The resulting embeddings sUt “
+
+” pUt, 1 ¨ ¨ ¨ pUt,m rUt, 1 ¨ ¨ ¨ rUt, Ăm
+
+ı
+
+P Rnˆr , provide a low-dimensional representation of the observational units for downstream unsupervised analysis. 
+
+## 3.3 Downstream prediction using extracted embeddings 
+
+We now describe our algorithm for downstream prediction using the extracted embeddings after T AMP iterations. While AMP-based methods allow us to construct embeddings pUT,h and rUT,ℓ for the training 12 data, the validity of such constructions relies on the availability of a large number of samples. Consequently, AMP-based embedding construction is not feasible for the test data, where the sample size is comparatively small. Therefore, the features used for prediction in the test samples are obtained by projecting the test observations onto the estimated loading spaces spanned by the columns of pVT,h . To maintain parity between the distributions of the training and test embeddings, the features pFT,h obtained from the AMP iterations (3.6)-(3.8) are rescaled as follows 5:
+
+pU rsc  
+
+> h
+
+:“ pFt,h p pΣLT,h q´1 pD´1 
+
+> h
+
+, for h P r ms. (3.13) The state evolution of the AMP algorithm (Theorem 6.2) can be leveraged to show that 
+
+pU rsc  
+
+> h
+
+« Uh ` p pD´1 
+
+> h
+
+p pΣLT,h q´1 pD´1 
+
+> h
+
+q1{2Zh, rsc , (3.14) where the entries Zh, rsc are i.i.d standard Gaussian and independent of U1, . . . , Um, and rU1, . . . , rUĂm. Based on the foregoing representation, we estimate the unknown link function g in (2.3) from y and the collections 
+
+t pU rsc  
+
+> h
+
+: h P r msu , and t ĂXℓ : ℓ P r rmsu by optimizing the following parametric loss function Lθ : pRˆRr qbn Ñ R
+
+in terms of the parameter θ P Rr . The dimension of the parameter depends on the model architecture. To define the loss function, first define 
+
+U pred  
+
+> e
+
+“
+
+#
+
+Ue ` p pD´1 
+
+> e
+
+p pΣLT,e q´1 pD´1 
+
+> e
+
+q1{2Ze, rsc if e P EH
+
+pLe´m rUe´m ` Ze´m,L if e P EL, (3.15) where Z1,rsc , . . . , Z m, rsc are vectors of dimensions r1, . . . , r m that are mutually independent, independent of 
+
+pU1, . . . , U m, rU1, . . . , rUĂmq and have i.i.d standard Gaussian entries. Similarly, Z1,L , . . . , Z Ăm,L are vectors of dimensions rr1, . . . , rrĂm that are mutually independent, independent of the collection pU1, . . . , U m, rU1, . . . , rUĂmq
+
+and tZ1,rsc , . . . , Z m, rsc u and have i.i.d standard Gaussian entries. Now, define the empirical counterpart 
+
+pU pred  
+
+> e
+
+“
+
+# pU rsc  
+
+> e
+
+if e P EH
+
+ĂXe´m if e P EL.
+
+For any θ P Rr , consider arbitrary cluster-wise predictors gk,θ : Rprk Ñ R, and define the aggregated predictor 
+
+H : Rr ˆ Rr Ñ R as 
+
+Hpx, θ q :“ Epμ
+
+« Kÿ
+
+> k“1
+
+gk,θ 
+
+´
+
+tUe : e P pCku
+
+¯ ˇˇˇˇˇ␣U pred  
+
+> e
+
+“ xe : e P r m ` rms(ff 
+
+, (3.16) where xe is a vector that collects the entries of x corresponding to modality e and the collection of vectors 
+
+tU pred  
+
+> e
+
+: e P r m ` rmsu are defined in (3.15) with pU1, . . . , U m, rU1, . . . , rUĂmq „ pμ.Now, the loss function is defined as 
+
+Lθ py, t pU rsc  
+
+> h
+
+: h P r msu , t ĂXℓ : ℓ P r rmsuq :“ 1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+L
+
+´
+
+yi, Hptp pU pred  
+
+> e
+
+qi˚ : e P r m ` rmsu , θ q
+
+¯
+
+, (3.17) where L quantifies the discrepancy between the observed response yi and the prediction produced by H
+
+from the estimated latent features of the i-th observation. We intentionally keep the loss function general to accommodate diverse supervised learning objectives. For continuous responses, one can adopt the squared error loss given by Lpy, Hpxqq :“ p y ´ Hpxqq 2, whereas for binary response one can adopt the binary cross entropy loss given by Lpy, Hpxqq :“ ´ y log Hpxq ´ p 1 ´ yq log p1 ´ Hpxqq . We optimize Lθ to obtain 
+
+pθpred :“ arg min 
+
+> θPRr
+
+Lθ py, t pU rsc  
+
+> h
+
+: h P r msu , t ĂXℓ : ℓ P r rmsuq . (3.18) Our loss function is motivated by Hu et al. (2022) which builds on related techniques in errors in variable regression developed in (Fan and Truong, 1993; Delaigle et al., 2009) and related works. This objective 
+
+> 5An alternative sample-splitting based approach is described in Section E.
+
+13 can be minimized by approximating the posterior expectation by averaging over MCMC samples from the posterior and any open source optimization module like Adam (Kingma and Ba, 2017). In the special case of linear predictor, when it is assumed that all gk,θ for k P r Ks are linear functions of the co-ordinates of θ
+
+corresponding to cluster pCk, i.e., 
+
+gk,θ puq :“ θJ 
+
+> k
+
+u, where u P Rprk , and θ :“ p θ1, . . . , θ K q P Rr ,the optimization in (3.18) reduces to finding the ordinary least squares estimator of y using the covariates 
+
+t sU pred  
+
+> t,h
+
+: h P r msu and t rU pred  
+
+> ℓ
+
+: ℓ P r rmsu defined as follows: 
+
+sU pred  
+
+> h
+
+:“ upred 
+
+> T,h,k
+
+´! pU rsc  
+
+> e
+
+: e P pCk, H
+
+)
+
+,
+
+! ĂXℓ : ℓ P pCk, L
+
+)
+
+; pμk
+
+¯
+
+, where h P pCk, H, (3.19) 
+
+rU pred  
+
+> ℓ
+
+:“ rupred 
+
+> T,ℓ,k
+
+´! pU rsc  
+
+> e
+
+: e P pCk, H
+
+)
+
+,
+
+! ĂXℓ : ℓ P pCk, L
+
+)
+
+; pμk
+
+¯
+
+, where ℓ P pCk, L.
+
+In the foregoing display, the denoiser functions are defined as 
+
+upred 
+
+> T,h,k
+
+`txe : e P pCku˘ :“ Epμk
+
+”
+
+Uh
+
+ˇˇˇ!
+
+U pred  
+
+> e
+
+“ xe : e P pCk
+
+)ı 
+
+and 
+
+rupred 
+
+> T,ℓ,k
+
+`txe : e P pCku˘ :“ Epμk
+
+” rUℓ
+
+ˇˇˇ!
+
+U pred  
+
+> e
+
+“ xe : e P pCk
+
+)ı 
+
+,
+
+where the collection pU pred 1 , . . . , U pred  
+
+> m
+
+, U pred 1 , . . . , U pred  
+
+> Ăm
+
+q is defined in (3.15) with 
+
+pU1, . . . , U m, rU1, . . . , rUĂmq „ pμ. 
+
+## 3.4 Prediction on test samples 
+
+Now consider a test sample with multimodal features tXtst  
+
+> h
+
+: h P r msu (high-dimensional) and t rXtst  
+
+> ℓ
+
+: ℓ P r rmsu 
+
+(low-dimensional), and an unknown response ytst generated as follows. 
+
+Xtst  
+
+> h
+
+“ 1
+
+?n VhDhU tst  
+
+> h
+
+` Ztst  
+
+> h
+
+P Rph , for h P r ms, rXtst  
+
+> ℓ
+
+“ Lℓ rU tst  
+
+> ℓ
+
+` rZtst  
+
+> ℓ
+
+P Rrrℓ , for ℓ P r rms, (3.20) where pU tst  
+
+> 1
+
+, . . . , U tst  
+
+> m
+
+, rU tst  
+
+> 1
+
+, . . . , rU tst  
+
+> Ăm
+
+q „ μ. The noise vectors tZtst  
+
+> h
+
+: h P r msu and t rZtst  
+
+> ℓ
+
+: ℓ P r rmsu have independent standard Gaussian entries, are mutually independent, and are independent of both the latent variables and the training data. The latent vectors pU tst  
+
+> 1
+
+, . . . , U tst  
+
+> m
+
+, rU tst  
+
+> 1
+
+, . . . , rU tst  
+
+> Ăm
+
+q are also independent of the training data. Finally, the test response ytst is generated from (2.3), independently of the training data. Based on (3.20), we adopt an ordinary least squares (OLS) approach to estimate the latent factors U tst  
+
+> 1
+
+, . . . , U tst 
+
+> m
+
+corresponding to the test data. Specifically, define pRT,h :“ n´1 ¨ pVT,h pDh P Rphˆrh . For each h P r ms, we form the test-time OLS embedding pU tst ,ols  
+
+> h
+
+:“ n´1{2 ¨ ` pRJ 
+
+> T,h
+
+pRT,h 
+
+˘´1 pRJ
+
+> T,h
+
+Xtst  
+
+> h
+
+P Rrh . One can again use Theorem 6.2 to show that pU tst ,ols  
+
+> h
+
+« Uh ` p pD´1 
+
+> h
+
+p pΣLT,h q´1 pD´1 
+
+> h
+
+q1{2Ztst ,ols  
+
+> h
+
+, where Ztst ,ols  
+
+> h
+
+„ Nrh p0, Irh q for all 
+
+h P r ms. Therefore, the distribution of the features used for training the predictor Hp¨q match that of the features derived from the test observations during inference. This allows us to use the trained predictor for prediction on the test data. In this direction, define 
+
+pU tst  
+
+> e
+
+“
+
+# pU tst ,ols  
+
+> e
+
+if e P EH
+
+rXtst  
+
+> e´m
+
+if e P EL.
+
+Then, the test response is predicted by evaluating the pre-trained predictor (defined in (3.16)) on the denoised test embeddings as follows: 
+
+pytst :“ Hpt pU tst  
+
+> e
+
+: e P r m ` rmsu , pθpred q, (3.21) where pθ is obtained from (3.18). Note that H uses pμ estimated from the training data. 14 Observe that when the number of clusters is m` rm, so that each modality forms its own cluster, information is integrated only at the prediction stage. This corresponds to late fusion . In this regime, the AMP component reduces to applying Empirical Bayes PCA (Zhong et al., 2022) separately to the high-dimensional modalities and denoising the low-dimensional modalities separately, followed by using the reconstructed features in the supervised learning stage. On the other hand, when the number of clusters is one, information is fused across all modalities both during feature engineering and prediction. In this regime, the AMP component reduces to Orchestrated Approximate Message Passing (Nandy and Ma, 2024) applied jointly across all modalities. Therefore, DAIF subsumes these two existing pipelines by adaptively interpolating between them based on the evidence of inter-modal dependence present in the data. Other than these two extreme cases, everything else corresponds to intermediate fusion. 
+
+# 4 Numerical Experiments 
+
+In this section, we benchmark the performance of DAIF against several widely used multimodal data inte-gration techniques. Our evaluation considers both recovery of the underlying latent factors and predictive performance in a downstream supervised task. As benchmarks, we compare the performance of DAIF in terms of latent factor reconstruction against two AMP-based pipelines, EB-PCA (Zhong et al., 2022), and OrchAMP (Nandy and Ma, 2024), along with 
+
+AJIVE (Feng et al., 2018), multiview canonical correlation analysis ( MCCA ) (Kettenring, 1971), generalized canonical correlation analysis ( GCCA ) (Afshin-Pour et al., 2012), and a version of hierarchical PCA. The detailed implementation of each non-AMP-based method is described in Section D. For supervised response prediction, we construct predictors using the features reconstructed by each method and also consider the supervised cooperative learning approach of Ding et al. (2022). We consider m “ 3 high-dimensional feature modalities X1 P Rnˆp1 , X2 P Rnˆp2 , and X3 P Rnˆp3 generated according to (2.1). To operate in the proportional asymptotic regime, we set p1 “ t0.25 nu, p2 “ t0.8nu, and 
+
+p3 “ t3nu. The rows of U1 P Rnˆ2 are generated as pU1qi˚ i.i.d
+
+„ Unif t˘ 1ub2. To generate the rows of 
+
+U2 P Rnˆ3, we take pU2qi, 1:2 “ p U1qi˚ for all i P r ns. The third column of U2 is independently generated as 
+
+pU2qi3 i.i.d
+
+„ 0.25 δp´ ?2q ` 0.5 δ0 ` 0.25 δp?2q for i P r ns. The rows of U3 P Rnˆ2 are generated independently from Gb2, where G is the distribution of pW ´ ErWsq{ aVar pWq, where W :“ sgn pUq ˆ | U ` ϵ|1{3, with 
+
+U „ Unif t˘ 1u and ϵ „ Np0, 0.1q. The rows of V1 P Rp1ˆ2 are generated independently from Unif t˘ 1ub2,those of V2 P Rp2ˆ3 are generated independently from Hb3 where H is the distribution of V{?1.25 where 
+
+V „ 0.5 Np´ 1, 0.25 q ` 0.5 Np1, 0.25 q, and finally, those of V3 P Rp3ˆ2 are generated independently from Laplace p1{?2qb2. The signal strengths are controlled via diagonal matrices Dh with pDhqii “ 5i for i P r rhs,where r1 “ 2, r 2 “ 3 and r3 “ 2. The above choices ensure that the prior distributions for the latents are heterogeneous across the modalities and vary over different classes of distribution. In particular, the rows of U1 are generated from a balanced discrete prior, whereas the rows of U2 are partially correlated with U1 but have an additional independent coordinate, yielding an unbalanced discrete prior with richer cluster structure. By contrast, the rows of U3
+
+are generated independently of the first two modalities and have a continuous non-Gaussian distribution. Similarly, the right latent factors are chosen to cover qualitatively different tails and support behaviors. The rows of V1 are discretely supported, the rows of V2 are continuously supported with sub-Gaussian tails, and the rows of V3 have sub-exponential tails. Next, we consider the generation of the response vectors for the supervised learning experiments. The response vector y is generated according to (2.3), with gp ¨ | θiq „ Npθi, 0.01 q. To generate the mean θi
+
+according to (2.3), we consider two link functions: 1. Linear link: f1
+
+`pU1qi˚, pU2qi˚, pU3qi˚
+
+˘ “ βJ 
+
+> 1
+
+pU1qi˚ ` βJ 
+
+> 2
+
+pU2qi˚ ` βJ 
+
+> 3
+
+pU3qi˚,2. Single-index link: f2
+
+`pU1qi˚, pU2qi˚, pU3qi˚
+
+˘ “ p βJ 
+
+> 1
+
+pU1qi˚ ` βJ 
+
+> 2
+
+pU2qi˚q2 ` βJ 
+
+> 3
+
+pU3qi˚,where the entries of β :“ p β1, β 2, β 3qJ are generated independently as Unif t˘ 1u.15 Method n “ 3000 n “ 3500 n “ 4000 n “ 4500 n “ 5000                                                 
+
+> Modality 1 pE1q
+> EB-PCA 0.057(0.001) 0.058(0.001) 0.056(0.001) 0.055(0.001) 0.054(0.001) DAIF 0.012(0.000) 0.012(0.000) 0.011(0.000) 0.011(0.000) 0.011(0.000)
+> OrchAMP 0.015(0.001) 0.014(0.001) 0.014(0.001) 0.012(0.001) 0.013(0.001)
+> Modality 2 pE2q
+> EB-PCA 0.023(0.002) 0.022(0.002) 0.022(0.002) 0.016(0.001) 0.019(0.002) DAIF 0.015(0.000) 0.014(0.000) 0.014(0.000) 0.014(0.000) 0.013(0.000)
+> OrchAMP 0.017(0.001) 0.017(0.001) 0.017(0.001) 0.015(0.001) 0.016(0.001)
+> Modality 3 pE3q
+> EB-PCA 0.005(0.000) 0.005(0.000) 0.005(0.000) 0.005(0.000) 0.005(0.000)
+> DAIF 0.005(0.000) 0.005(0.000) 0.005(0.000) 0.005(0.000) 0.005(0.000)
+> OrchAMP 0.031(0.000) 0.031(0.000) 0.032(0.001) 0.032(0.000) 0.031(0.000)
+
+Table 1: Average reconstruction error Ek per modality across sample sizes (mean with standard error in parentheses). EB-PCA : no fusion (3 clusters); DAIF : intermediate fusion (2 clusters, CKA clustering); 
+
+OrchAMP : complete fusion (1 cluster). Bold = best mean per column. 
+
+## 4.1 Effect of sample size on feature reconstruction. 
+
+In this experiment, we compare the performance of DAIF in reconstructing U1, U2 and U3 with EB-PCA and OrchAMP as a function of sample size n. In that direction, we vary the sample size n Pt3000 , 3500 , 4000 , 4500 , 5000 u. In the hierarchical clustering step, we use CKA with Gaussian kernel to construct the similarity measures, and the AMP is run for T “ 10 iterations. To measure the reconstruction errors, we define 
+
+Ek :“ 1
+
+n2
+
+››› pUk pU J 
+
+> k
+
+´ UkU J
+
+> k
+
+›››2
+
+> F
+
+, k “ 1, 2, 3.
+
+Each experiment is repeated over 50 independent runs, and Table 1 reports the averaged errors. As seen from the table, DAIF substantially improves reconstruction for latent factors across all the modalities. For modality 3 ( U3), which is independent of other modalities, both EB-PCA and DAIF have equal performance. While EB-PCA is an oracle procedure that is aware of this independence, DAIF shows remarkable adaptation by learning such a relation from the observations. The performance degradation in OrchAMP can be explained by the difficulty in estimating high-dimensional priors with finite samples, a classic phenomenon observed in high-dimensional non-parametric procedures. Across all sample sizes and replications, DAIF consistently grouped modalities 1 and 2 in a single cluster and identified modality 3 as a separate cluster. 
+
+## 4.2 Comparing DAIF against multimodal benchmarks 
+
+In this experiment, we benchmark DAIF against AJIVE , GCCA , MCCA , and a version of hierarchical PCA described in Appendix D. We compare the performance of each method in recovering the latent factors as a                                                    
+
+> Modality nDAIF-CKA AJIVE MCCA GCCA HPCA
+> E1
+> 2000 0.013(0.001) 0.183(0.001) 0.371(0.002) 0.366(0.002) 0.367(0.002) 2500 0.013(0.001) 0.184(0.001) 0.374(0.001) 0.369(0.001) 0.370(0.001) 3000 0.012(0.001) 0.182(0.001) 0.371(0.002) 0.366(0.002) 0.366(0.002)
+> E2
+> 2000 0.016(0.001) 2.119(0.001) 0.140(0.001) 0.140(0.001) 0.144(0.001) 2500 0.015(0.000) 2.117(0.001) 0.139(0.001) 0.139(0.001) 0.142(0.001) 3000 0.015(0.000) 2.116(0.001) 0.137(0.001) 0.137(0.001) 0.139(0.001)
+> E3
+> 2000 0.006(0.000) 2.003(0.001) 0.035(0.000) 0.035(0.001) 0.036(0.000) 2500 0.006(0.000) 2.003(0.001) 0.035(0.000) 0.035(0.000) 0.036(0.000) 3000 0.005(0.000) 2.003(0.001) 0.035(0.000) 0.035(0.000) 0.035(0.000)
+
+Table 2: Average reconstruction error Ek per modality across sample sizes (mean with standard error in parentheses). DAIF-CKA : AMP with CKA-based clustering (2 clusters). Bold = best mean per row. 16 Method n “ 3000 n “ 3500 n “ 4000 n “ 4500 n “ 5000                               
+
+> Linear link, linear
+> EB-PCA 0.028(0.002) 0.027(0.002) 0.027(0.002) 0.024(0.001) 0.024(0.002) DAIF-CKA 0.022(0.001) 0.022(0.001) 0.023(0.001) 0.023(0.001) 0.021(0.001)
+> OrchAMP 0.035(0.002) 0.034(0.001) 0.036(0.002) 0.033(0.000) 0.034(0.002)
+> Non-linear link, neural net
+> EB-PCA 0.260(0.057) 0.330(0.063) 0.258(0.045) 0.189(0.034) 0.259(0.058) DAIF-CKA 0.207(0.037) 0.251(0.041) 0.233(0.038) 0.185(0.031) 0.214(0.040)
+> OrchAMP 0.242(0.038) 0.270(0.040) 0.277(0.046) 0.203(0.030) 0.268(0.058)
+
+Table 3: Average prediction error across sample sizes (mean with standard error in parentheses). DAIF-CKA : AMP with CKA-based clustering (2 clusters); EB-PCA : no fusion (3 clusters); OrchAMP : complete fusion (1 cluster). Bold = best mean per column within each block. function of n, which we vary in t2000 , 2500 , 3000 u. In this experiment, we repeat each trial independently for 25 iterations and average the reconstruction error for all five competing methods. For DAIF, we use 10 AMP iterations and CKA as the similarity measure for the hierarchical clustering step. The results are summarized in Table 2. Our results indicate that intermediate fusion via the AMP-based pipeline consistently achieves the lowest reconstruction error across all n, substantially outperforming classical multiview methods (AJIVE , MCCA , GCCA ). The main reason why DAIF achieves the superior performance is that the traditional methods rely on the assumption that the intermodal dependence is driven through some shared latent factors whose dimension is the same across modalities, whereas DAIF provides the flexibility to have an intermodal dependence mediated through latent factors of different dimensions across the modalities. This provides DAIF an edge where there might not exist a common latent space that controls the intermodal dependence, but all dimensions of each latent factor across different modalities are dependent. Furthermore, the hierarchical clustering-based intermediate fusion also provides DAIF an additional advantage when the intermodal dependence is low by preventing overintegration. The existing pipelines do not provide such flexibility in determining the granularity of data integration from the data. Instead, they integrate all modalities by projecting them into a shared latent space. 
+
+## 4.3 Effect of Sample Size on Prediction Accuracy 
+
+We evaluate DAIF for downstream supervised learning. We compare it against the performance of similar embeddings derived from EB-PCA or OrchAMP. In particular, this experiment is designed to evaluate the effectiveness of intermediate fusion in supervised learning objectives with multimodal features. For this experiment, the response y is generated according to the procedure described at the beginning of the section with both linear and single-index links. We evaluate the performance of predicting the response 
+
+y using the reconstructed embeddings from DAIF, EB-PCA and OrchAMP as a function of training sample size n which we vary in t3000 , 3500 , 4000 , 4500 , 5000 u. Test data containing t0.1nu samples are separately generated using the same data-generating mechanism as the training data. Observe that the data-generating mechanism in (2.1) for the training features involves a division by ?ntrn in the signal component to ensure the signal-to-noise ratio in the problem is Op1q. To ensure alignment of the distributions of the test and training features, we generate the test features using the same scaling by ?ntrn instead of ?ntst . First we use 10 AMP iterations for all three procedures, and use CKA as a similarity measure for the hierarchical clustering in DAIF to estimate the loading matrices V1, V2 and V3. Then we consider the rescaled training features pU rsc 1 , pU rsc 2 and pU rsc 3 (cf. (3.13)). For the linear-link function, we use a linear predictor fitted by regressing the training response y on the denoised projections sU pred  
+
+> 1
+
+, sU pred  
+
+> 2
+
+and sU pred  
+
+> 3
+
+(cf. (3.19)). For the single-index link, we consider a non-linear architecture where for all k P r Ks, the clusterwise predictors 
+
+gθ,k in (3.17) are two-layer neural networks with 32 hidden units and ReLU link function and train the predictor by minimizing Lθ as in (3.17) with Lpy, Hpxqq “ p y ´ Hpxqq 2. The estimated loading matrices constructed from the training features are also used to project the test features as described in Section 3.4. The learned predictors are applied to reconstructed test embeddings to predict the test response (cf. (3.21)). 17 n DAIF-CKA AJIVE MCCA GCCA HPCA 3000 0.223(0.039) 28.983(4.617) 28.920(4.619) 28.924(4.619) 28.925(4.619) 3500 0.260(0.043) 36.015(5.566) 35.959(5.567) 35.962(5.566) 35.962(5.566) 4000 0.239(0.040) 33.757(5.337) 33.705(5.335) 33.705(5.337) 33.704(5.335) 
+
+Table 4: Prediction error (MSE) across sample sizes n. Lower is better; per-row minima are bold. The prediction accuracy is measured using 
+
+Epred :“ 1
+
+ntest 
+
+ÿ
+
+> iPItest
+
+ppytst ,i ´ yiq2,
+
+where pytst is the predicted test response. The results are summarized in Table 3. We observe that across all combinations of n, link, and predictor, intermediate fusion outperforms the other two fusion strategies in terms of the prediction accuracy. 
+
+## 4.4 Comparing prediction performance against popular fusion benchmarks 
+
+In this experiment, we compare the performance of intermediate fusion with some popular multimodal supervised learning frameworks. As benchmarks, we consider the popular multimodal dimension reduction pipelines AJIVE , MCCA , and GCCA to construct a low-dimensional embedding and fit a linear regression to predict the response y using the denoised embeddings. The same procedure is adapted for DAIF. It can be verified that in the DAIF framework, this amounts to using the linear-architecture for Hpx, θ q (as defined in (3.16)) for all k “ 1, . . . , K . In this experiment, we adopted the same data generating mechanism as in Section 4.3, except we only consider the linear link. The test data is projected to the same latent space as the training embeddings. For DAIF, we adopt the same procedure as described in Section 4.3. The techniques used for test prediction for the other methods are outlined in Section D. The prediction performance on test data is compared for all benchmarks using Epred described in the previous section. Our results are summarized in Table 4. We also consider the cooperative learning based on ℓ1 penalty (henceforth referred to as Coop-Lasso ) frame-work from Ding et al. (2022) as a benchmark for intermediate fusion-based prediction with multimodal features. In this framework, we minimize 
+
+J pθq :“ 12n }y ´ p X1θ1 ` X2θ2 ` X3θ3q} 22 ` ρ
+
+2n
+
+ÿ
+
+> măm1
+
+}Xmθm ´ Xm1 θm1 }22 ` ÿ
+
+> m
+
+λpm
+
+}θm}1,
+
+to estimate θ1 P Rp1 , θ 2 P Rp2 and θ3 P Rp3 . The final estimate is given by pytst :“ xJ 
+
+> 1,tst
+
+pθ1 ` xJ 
+
+> 2,tst
+
+pθ2 ` xJ 
+
+> 3,tst
+
+pθ3.The hyperparameters ρ and λ are selected by assessing the prediction performance on a held-out validation subset consisting of a random subset of the training data (consisting of 20% of the training samples). The regularization parameter λ is selected by first computing the full Lasso path on the stacked prediction block with ρ “ 0, then evaluating each candidate λ on a fixed held-out validation set (20% of training data) and picking the one minimizing validation MSE. This chosen λ is subsequently frozen while ρ is tuned separately over a coarse grid 0 .0, 0.5, 2.0 using the same validation split. However, since the above optimization is difficult to perform for large sample size (another advantage of DAIF is that it is extremely scalable for large sample sizes), for this experiment, we vary the sample size in n P t 1000 , 1500 , 2000 u. The results are summarized in Table 5, and we observe that across all sample sizes DAIF based predictor outperforms the pipeline from Ding et al. (2022). 
+
+# 5 Real data analysis 
+
+To demonstrate the prowess of DAIF for supervised learning problems, we consider two real data analysis scenarios. 18 Method n “ 1000 n “ 1500 n “ 2000 DAIF 0.0415(0.0035) 0.0276(0.0017) 0.0252(0.0010) 
+
+Coop. Lasso 0.8051(0.0998) 0.9092(0.0907) 0.7338(0.0870) Table 5: Prediction error across sample sizes n. Lower is better; per-column minima are bold. 
+
+## 5.1 A TEA-seq data analysis 
+
+In this experiment, we analyzed the trimodal TEA-seq PBMC dataset of Swanson et al. (2021) (also analyzed in Nandy and Ma (2024)), consisting of RNA expression (approximately 36 ,601 genes), chromatin accessibility (approximately 66 ,828 ATAC features), and 48 surface proteins measured on 8 ,213 cells. After standard quality-control filtering, 6 ,335 cells were retained. We used the 2 ,000 most variable genes, 5 ,000 most variable ATAC features, and 40 highly variable protein markers. The protein marker CD45RA was treated as the continuous response, while the remaining 39 proteins were used as low-dimensional predictors. Cell-type labels were obtained by label transfer from the CITE-seq reference dataset of Stuart et al. (2019). Each modality was normalized for sequencing depth and transformed via x Þ Ñ log p1 ` xq, yielding data matrices X1 P R6335 ˆ2000 (RNA), X2 P R6335 ˆ5000 (ATAC), and ĂX P R6335 ˆ39 (ADT), consistent with the multimodal factor model in (2.1)–(2.2). Our goal was to pre-train a predictor for CD45RA expression using Algorithm 1 on a subset of training cells and evaluate prediction on a smaller held-out test set using (3.21). After preprocessing the whole dataset, we used a random subset of 4 ,560 cells for training the predictor and 1 ,141 cells as test units. Throughout, we use a linear predictor and the loss function Lθ is defined using Lpy, Hpxqq “ p y ´ Hpxqq 2. As described in Section 4.3, pre-training under this linear model by optimizing (3.18) reduces to fitting a linear regression model using OLS with CD45RA expression as the response and the denoised rescaled embeddings defined in (3.19) as covariates. Test predictions are obtained by constructing denoised embeddings for the test cells and applying the pre-trained regression coefficients. Prediction accuracy is measured by 
+
+RMSE tst “
+
+d 1
+
+ntst 
+
+ÿ
+
+> iPItst
+
+ppytst ,i ´ yiq2.
+
+We compare DAIF (using CKA similarity in Algorithm 1) against MOFA+ (Argelaguet et al., 2020), Multi-grate (Litinetskaya et al., 2025), JAFAR (Anceschi et al., 2024), and multimodal cooperative regression (Ding et al., 2022). For DAIF, we consider three fusion regimes: early fusion (K “ 1), late fusion (K “ 3), and 
+
+intermediate fusion , where the number of clusters K is selected via the gap statistic (Tibshirani et al., 2001) applied to the CKA-based modality dissimilarity matrix. Since the gap statistic only compares K “ 1, 2, we separately evaluate K “ 3. The gap statistic selected K “ 1, reflecting the strong dependence among modal-ities. Furthermore, in DAIF, we applied 10 AMP iterations with PCA ranks rRNA “ 20 and rATAC “ 15 across all fusion regimes. For the prior estimation, we modeled the prior classes used in the empirical Bayes steps using isotropic Gaussian mixture models with number of components ranging in t1, . . . , t 3
+
+?nuu and selected the model with minimum BIC. 6
+
+Table 6 summarizes the prediction results. DAIF with early fusion achieves RMSE « 2.69, outperforming JA-FAR, cooperative regression, MOFA+, and Multigrate, while closely matching the best performer EB-PCA (DAIF with K “ 3). Since OrchAMP and EB-PCA arise as special cases of DAIF, these results demon-       
+
+> 6We used open source Rimplementations of MOFA+ (Argelaguet et al., 2020), and JAFAR (Anceschi et al., 2024), and a similar Python implementation of Multigrate for our experiments. For MOFA+, we used 30 factors for the joint embeddings from all modalities. For JAFAR, we first computed the top 100 left singular vectors of the RNA and ATAC views via PCA, then used JAFAR to jointly infer 30-dimensional per-modality factor loadings and response coefficients from the training data (PCA transformed RNA and ATAC along with 39 protein features) via Gibbs sampling; test-set predictions were obtained by analytically projecting held-out cells onto the posterior factor loadings at each MCMC draw and averaging the resulting linear predictions across draws. Multigrate (Litinetskaya et al., 2025) is a one-layer variational autoencoder-based method where we used 70 dimensions for the joint encoder encoding all modalities. The resulting embeddings were used to train downstream predictors of CD45RA using linear regression.
+
+19 DAIF-CKA (K=1) DAIF-CKA (K=3) JAFAR Co-op. Reg. MOFA+ Multigrate       
+
+> RMSE tst 2.6867 2.6854 2.6999 2.7513 2.7317 3.3368
+
+Table 6: CD45RA prediction on TEA-seq. Lower RMSE is better. DAIF-CKA for K “ 1 corresponds to OrchAMP (Nandy and Ma, 2024) and DAIF-CKA for K “ 3 corresponds to EB-PCA (Zhong et al., 2022). Gap statistic based number of clusters selection resulted in choosing K “ 1. strate the competitiveness of the proposed AMP-based prediction framework relative to existing multimodal integration pipelines. 
+
+## 5.2 A TCGA-BRCA survival analysis 
+
+We analyzed a trimodal genomic dataset from The Cancer Genome Atlas Breast Cancer (TCGA-BRCA) cohort (The Cancer Genome Atlas Network, 2012), obtained from the UCSC Xena platform (Goldman et al., 2020). Three molecular modalities were available: bulk RNA-seq gene expression (RSEM log 2-normalized; approximately 20,530 genes), copy number variation (CNV; GISTIC2 continuous log-ratio scores across approximately 24,776 genes), and DNA methylation measured on an Illumina 450k array (approximately 485,577 CpG sites). Survival data consisted of overall survival (OS) event indicators and follow-up times in days. Restricting to primary tumor samples and intersecting patients across all three modalities yielded 772 aligned patients. After removing patients with missing or non-positive follow-up times, 769 patients remained (101 OS events). Following the pre-processing steps in Section F, we obtained two high-dimensional feature matrices X1 P R769 ˆ2000 (RNA-seq) and X2 P R769 ˆ5000 (M-transformed methylation intensities for 5000 highly variable CpG sites), along with a low-dimensional feature matrix ĂX P R769 ˆ5 derived from the CNV matrix. 7 A stratified split produced a training set of 615 patients (81 events) and a test set of 154 patients (20 events). The prediction task is overall survival: using all three modalities, we pre-train a risk score on the training patients and predict survival risk for held-out test patients. In Algorithm 1, we use rRNA “ 10 and rMeth “ 8ranks for the high-dimensional modalities. A linear Cox proportional hazards model is then fitted on the rescaled AMP embeddings pU rsc 1 P R615 ˆ10 (RNA modality), pU rsc 2 P R615 ˆ8 (DNA methylation modality) (cf. (3.13)), and ĂX P R615 ˆ5 after accounting for the Gaussian noise in the features. Let tp Ti, δ iq : i P Itrain u
+
+denote the observed survival times and survival event indicators for the training patients, and define the risk set at time Ti by RpTiq “ t j P Itrain : Tj ě Tiu. Let D “ ř 
+
+> iPItrain
+
+δi be the total number of training events. If Ui “ pp U1qi˚, pU2qi˚, p rU3qi˚q P R23 denote the true latents and pUi “ pp pU rsc 1 qi˚, p pU rsc 2 qi˚, p ĂX3qi˚q P R23 
+
+denote the estimated latents, then we optimize the following surrogate of the Cox profile likelihood in the error-in-variables setting determined by (3.14): 
+
+Lpθq “ Epμ
+
+»—– 1
+
+D
+
+ÿ
+
+> iPItrain
+> δi“1
+
+¨˝θJUi ´ log ÿ
+
+> jPRpTiq
+
+exp `θJUj
+
+˘˛‚ˇˇˇˇˇ pU
+
+fi ffi fl , (5.1) where pU :“ p pU J 
+
+> 1
+
+, . . . , pU J 
+
+> n
+
+qJ P R615 ˆ23 and pμ is the clustered empirical Bayes prior used in the AMP iterations (3.6)-(3.8). The optimization yields the estimated weight vector pθ. At test time, the predicted log-risk for patient i P Itest is pRi “ pθJEpμrU tst  
+
+> i
+
+| pU tst  
+
+> i
+
+s, where pU tst  
+
+> i
+
+“ pp pU tst ,ols 1 qi˚, p pU tst ,ols 2 qi˚, ĂXtst  
+
+> i˚
+
+q P R23 and Ui “
+
+> 7Although the original CNV matrix is high-dimensional, only a transformed low-dimensional component (discussed in Sec-tion F) satisfies the normality assumption.
+
+20 DAIF-CKA (K=1) DAIF-CKA (K=2) DAIF-CKA (K=3) MOFA+ Multigrate Train C-index 0.7389 0.7397 0.7397 0.7458 0.7585 Test C-index 0.7367 0.7359 0.7375 0.7335 0.6313 
+
+Table 7: TCGA-BRCA overall survival prediction (test C-index). Higher is better; bold indicates the best test C-index. DAIF-CKA for K “ 1 correspond to OrchAMP (Nandy and Ma, 2024) and DAIF-CKA for 
+
+K “ 3 corresponds to EB-PCA (Zhong et al., 2022). DAIF-CKA for K “ 2 uses the gap statistic to select the number of clusters, which resulted in choosing K “ 2. 
+
+pp U tst  
+
+> 1
+
+qi˚, pU tst  
+
+> 2
+
+qi˚, rU tst  
+
+> i˚
+
+q P R23 . Prediction accuracy is evaluated using the concordance index Test C-index “
+
+¨˚˚˝ÿ 
+
+> i,j PItest
+> TiăTj, δ i“1
+
+1
+
+´pRi ą pRj
+
+¯˛‹‹‚¨˚˚˝ÿ 
+
+> i,j PItest
+> TiăTj, δ i“1
+
+1
+
+˛‹‹‚
+
+> ´1
+
+,
+
+which ranges from 0 to 1 (perfect alignment) with 0 .5 corresponding to random alignment. An analogous measure Train C-index can be defined for the training data. We compare DAIF against MOFA+ (Argelaguet et al., 2020) and Multigrate (Litinetskaya et al., 2025). For the baseline methods, embeddings are first constructed through data integration, followed by fitting a linear Cox proportional hazards model (minimizing (5.1) without the conditional expectation correction) to estimate θ. This estimator is then used to predict risk on the held-out test set. For DAIF, Gap statistic selected K “ 2, indicating the need for intermediate fusion. Again K “ 3 was assessed separately since the gap statistic based selection cannot cover this boundary case. We used 10 AMP iterations and the same BIC-based GMM component selection procedure as in Section 5.1. The results are summarized in Table 7. The best test C-index (0 .738) is attained by DAIF with K “ 3. An interesting feature of this application is that, although the gap statistic favors K “ 2 over K “ 1, and this preference is also reflected in the training C-index, which is maximized by DAIF with K “ 2 among the AMP-based implementations, the test performance is better for K “ 1 than for K “ 2. We believe that this discrepancy is primarily due to the limited training sample size, which may prevent the trained model from generalizing reliably to the test data. However, all AMP-based pipelines outperform MOFA+ and Multigrate, showing that DAIF extends successfully from linear regression to survival prediction. While MOFA+ remains competitive (test C-index 0 .734), Multigrate exhibits substantial overfitting in this train-test split: despite achieving the highest training C-index (0 .759), its test C-index drops to 0 .631, highlighting the instability of deep generative approaches in this small-sample, high-censoring regime. 
+
+# 6 Theoretical Properties of DAIF 
+
+In this section, we present the theoretical results underlying the DAIF algorithm. Specifically, the results established here provide rigorous justification for the various components of the algorithm introduced in Section 3. We begin by establishing the theoretical guarantees for the clustered empirical Bayes estimator described in Section 3.1. The principal technical contribution is Theorem 6.1, which shows that the cluster based prior estimation procedure in Phases 2 and 3 of Algorithm 1 yields an estimator pμ that converges weakly to the true prior μ, under suitable assumptions on its components μ1, . . . , μ K .We next turn to feature extraction via AMP, as described in Section 3.2. Building upon the oracle-equivalence result above, Theorem 6.2 establishes the asymptotic characterization of the iterates 
+
+t pFt,h , pGt,h : t ě 0, h P r msu .
+
+21 Once consistency of the data adaptively estimated prior has been established, the remaining analysis follows by suitably extending the multimodal empirical Bayes AMP framework developed in Nandy and Ma (2024). We then leverage these asymptotic characterizations in Theorem 6.3 to show that the AMP iterates achieve Bayes-optimal estimation of the signals. The proof of this theorem likewise follows by adapting the techniques developed in Theorem 5.3 of Nandy and Ma (2024). Finally, we consider the downstream prediction problem based on the AMP iterates, as described in Sec-tion 3.3. In particular, Theorem 6.4 provides a rigorous justification for the approximation in (3.14), thereby establishing the theoretical justification behind the construction of the loss Lθ in (3.17). 
+
+## 6.1 Consistency of the clustered empirical Bayes prior 
+
+We start by noting that consistency results for empirical Bayes were established in Lemma B.2 of Zhong et al. (2022) for the special case K “ m, rm “ 0, and in Lemma 5.2 of Nandy and Ma (2024) for the single-cluster setting K “ 1. Our setting is substantially more challenging because neither the latent clustering structure nor the corresponding factorization of the prior is known a priori. Instead, both must be inferred from the same data that are subsequently used to estimate the component distributions. Theorem 6.1 shows that this fully data adaptive procedure, including both estimation of the latent clusters and their incorporation into the maximum-likelihood estimator, does not introduce any additional first-order asymptotic error in the estimated prior. Consequently, the proposed estimator achieves the same first-order asymptotic behavior as an oracle estimator that has access to the true clustering structure. Let us adopt the following assumption. 
+
+Assumption 6.1 (Initialization assumptions) . The following conditions hold. 1. pU1, . . . , U m, rU1, . . . , rUĂmq „ μ, EμrUhU J 
+
+> h
+
+s “ Irh , Eμr rUℓ rU J 
+
+> ℓ
+
+s “ Irrℓ , for all h P r ms and ℓ P r rms.2. Vh „ νh and Eνh rVhV J 
+
+> h
+
+s “ Irh , for h P r ms.3. The collection of the latent factors tU1, . . . , Um, rU1, . . . , rUĂmu is independent of the loading matrices 
+
+tV1, . . . , Vmu.
+
+4. For all h P r ms and k P r rhs, the signal strengths satisfy pDhqkk ą γ´1{4 
+
+> h
+
+.
+
+5. For the theoretical analysis, we adopt the population-alignment convention that, for every h P r ms
+
+and j P r rhs, the signs of the empirical singular vectors are chosen such that pU pc  
+
+> h
+
+qJ˚j pUhq˚j ě 0 and 
+
+pV pc  
+
+> h
+
+qJ˚j pVhq˚j ě 0.
+
+First, we focus on consistency of the estimated prior pμ obtained from (3.5). We use the clusters pC1, . . . , pCK
+
+estimated from data using the dissimilarity matrix defined in (3.4). 
+
+Theorem 6.1. Assume that the true prior μ in (2.4) satisfies the cluster-wise product structure in (2.5) . Let 
+
+C1, . . . , CK denote the true modality clusters. Suppose that the estimated clusters pC1, . . . , pCK are obtained by hierarchical clustering with the dissimilarity matrix N defined in (3.4) . Suppose that there exist deterministic population affinity scores tsee 1 : e, e 1 P Eu such that 
+
+inf  
+
+> kPr Ks
+
+inf 
+
+> e,e 1PCk
+> e‰e1
+
+see 1 ě ∆sep , and sup  
+
+> k‰k1
+> ePCk, e 1PCk1
+
+see 1 “ 0,
+
+and that the empirical affinities used in (3.4) satisfy max e,e 1PE |psee 1 ´ see 1 | a.s.
+
+ÝÑ 0. Then the maximum like-lihood estimator pμ obtained from (3.5) is weakly consistent; that is, pμ w
+
+Ñ μ, almost surely, as n Ñ 8 .Furthermore, for all h P r ms, the estimated priors pνh w
+
+ÝÑ νh as ph Ñ 8 .
+
+The foregoing theorem demonstrates that if the measure of independence is able to separate the related and unrelated modalities sufficiently well, then empirical Bayes using the estimated clusters does not lead to additional approximation error in the “large n” asymptotics. 22 6.2 Asymptotic behaviour and optimality of the AMP algorithm 
+
+Next, we focus on the performance of data integration and denoising using the AMP-based pipeline. We assume the following regularity conditions on the priors μ and tνh : h P r msu .
+
+Assumption 6.2 (Regularity assumptions) . Let μ P P and νh P Ph for all h P r ms. We assume that these parameter spaces satisfy the following regularity properties. 1. For any collection of positive definite matrices tAh, B h P Rrhˆrh : h P r msu and tAℓ P Rrrℓˆrrℓ : ℓ P r rmsu 
+
+and μ P P, there exists an open neighborhood Oμ of μ in the topology of weak convergence, such that for pU1, . . . , U m, rU1, . . . , rUĂmq „ μ, Y Gh „ Nrh pAhUh, B hq, and rY Gℓ „ Nrrℓ pAℓ rUℓ, I rrℓ q, the functions 
+
+uGh px1, . . . , x m, rx1, . . . , rxĂm; μq “ Eμ
+
+“Uh | Y G 
+
+> 1
+
+“ x1, . . . , Y Gm “ xm, rY G 
+
+> 1
+
+“ rx1, . . . , rY G 
+
+> Ăm
+
+“ rxĂm
+
+‰,
+
+ruGℓ px1, . . . , x m, rx1, . . . , rxĂm; μq “ Eμ
+
+“ rUℓ | Y G 
+
+> 1
+
+“ x1, . . . , Y Gm “ xm, rY G 
+
+> 1
+
+“ rx1, . . . , rY G 
+
+> Ăm
+
+“ rxĂm
+
+‰,
+
+are uniformly Lipschitz over the neighborhood Oμ for all h P r ms and ℓ P r rms.2. For any positive definite matrices ARh , B Rh P Rrhˆrh and νh P Pνh , h P r ms, there exists an open neigh-borhood Oνh of νh in the topology of weak convergence, such that for Vh „ νh, Y Gh,R „ Nrh pARh Vh, B Rh q,
+
+the function vGh px; νhq “ Eνh rVh | Y Gh,R “ xs is uniformly Lipschitz over the neighborhood Oνh for all 
+
+h P r ms.
+
+These assumptions on the latent generating priors are mild and are satisfied by many standard priors used in empirical Bayes modeling. We provide some examples of common classes of prior in Appendix G satisfying the foregoing assumption. These regularity assumptions ensure that the estimated denoisers and Onsager corrections are consistent for the oracle denoisers constructed with the true data-generating priors. This ensures empirical Bayes estimation of the priors does not induce any additional error in the asymptotic limit. Both sets of Assumptions are commonly adopted in the literature (cf. Assumption 5.1 (Zhong et al., 2022) and Assumption 5.1 (Nandy and Ma, 2024)). Recall the definition of pseudo-Lipschitz functions from (5.1) of Nandy and Ma (2024) 8. Then under the aforementioned assumptions, we have the following theorem. 
+
+Theorem 6.2. Define the alignment matrices tp M ‹
+
+> t,h
+
+, Σ‹
+
+> t,h
+
+q : h P r ms, ‹ P t L, R u, t ě 1u as follows: 
+
+ΣLt,h “ γhEνh
+
+”
+
+Eνh rVh | Vt,h sb2ı
+
+, M Lt,h “ ΣLt,h Dh,
+
+ΣRt`1,h “ Eμ
+
+„
+
+Eμ
+
+”
+
+Uh | t Ut,h : h P r msu , t rXℓ : ℓ P r rmsu 
+
+ıb2ȷ
+
+and M Rt`1,h “ ΣRt`1,h Dh,
+
+where Ut,h “ M Lt,h Uh ` p ΣLt,h q1{2Zt,L,h , Vt,h “ M Rt,h Vh ` p ΣRt,h q1{2Zt,R,h , and rXℓ “ Lℓ rUℓ ` rZℓ. Here 
+
+pU1, . . . , U m, rU1, . . . , rUĂmq „ μ, Vh „ νh, and the noise vectors tZt,L,h : h P r msu , tZt,R,h : h P r msu , and 
+
+t rZℓ : ℓ P r rmsu have independent standard normal entries and are mutually independent of the latent variables for each t ě 1. Then, under Assumption 6.2 and the conditions of Theorem 6.1, for any pseudo-Lipschitz functions φ : Rr Ñ R and tϑh : Rrh Ñ Ru, as n, p h Ñ 8 , for all t ě 1, we almost surely have 
+
+lim 
+
+> nÑ8
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+φ
+
+´
+
+p pFt, 1qi˚, . . . , p pFt,m qi˚, p ĂX1qi˚, . . . , p ĂXĂmqi˚, pU1qi˚, . . . , pUmqi˚, p rU1qi˚, . . . , p rUĂmqi˚
+
+¯
+
+“ Eμ
+
+”
+
+φ
+
+´
+
+Ut, 1, . . . , U t,m , rX1, . . . , rXĂm, U 1, . . . , U m, rU1, . . . , rUĂm
+
+¯ı 
+
+,
+
+lim 
+
+> nÑ8
+
+1
+
+phphÿ
+
+> j“1
+
+ϑh
+
+´
+
+p pGt,h qj˚, pVhqj˚
+
+¯
+
+“ Eνh rϑhpVt,h , V hqs , for all h P r ms,
+
+The important takeaway from Theorem 6.2 is that the consistency of pμ and pνh are enough to ensure that the double use of data arising from using the same training data for prior estimation and AMP iterations 
+
+> 8For the sake of completeness, we repeat the definition in (H.2).
+
+23 do not induce any additional bias in the asymptotic behavior of the iterates. The asymptotic properties of the empirical Bayes AMP iterates (3.6)-(3.8) are same as the iterates constructed with oracle knowledge of the priors. This property is driven by Assumption 6.2. Now, proceeding as in the proof of Theorem 5.2 and 5.3 of Nandy and Ma (2024) we can show the following theorem. 
+
+Theorem 6.3. Suppose the true priors μ and νh for all h P r ms satisfy the fixed point equations in (5.13) of Nandy and Ma (2024). Then, if the conditions of Theorem 6.2 hold, we have the following. 
+
+lim  
+
+> tÑ8
+
+lim 
+
+> nÑ8
+
+1
+
+np h
+
+E
+
+”
+
+}UhDhV J 
+
+> h
+
+´ pUt,h Dh pV J
+
+> t,h
+
+}2
+
+> F
+
+ı
+
+“ lim 
+
+> nÑ8
+
+1
+
+np h
+
+E
+
+„›››UhDhV J 
+
+> h
+
+´ E
+
+”
+
+UhDhV J 
+
+> h
+
+| X1, . . . , Xm, ĂX1, . . . , ĂXĂm
+
+ı› ››2
+
+> F
+
+ȷ
+
+.
+
+Proof. The proof of the above theorem follows by using Theorem 6.2 and the techniques outlined in Theo-rem 5.3 of Nandy and Ma (2024). 
+
+## 6.3 OLS pre-training for downstream prediction 
+
+Finally, we formalize the normal approximation to the rescaled training embeddings t pU rsc  
+
+> h
+
+: h P r msu and the OLS projected test embeddings t pU tst ,ols  
+
+> h
+
+: h P r msu defined in Section 3.3. 
+
+Theorem 6.4. Consider the rescaled training features t pU rsc  
+
+> h
+
+: h P r msu defined in (3.13) . Assume that 
+
+ΣLT,h ą 0 and Dh ą 0 for all h P r ms. For any pseudo-Lipschitz function ψ : Rr Ñ R, as n, p h Ñ 8 , we almost surely have 
+
+lim 
+
+> nÑ8
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+ψ
+
+´
+
+p pU rsc 1 qi˚, . . . , p pU rsc  
+
+> m
+
+qi˚, p ĂX1qi˚, . . . , p ĂXĂmqi˚
+
+¯
+
+“ E
+
+”
+
+ψ
+
+´
+
+U1 ` p D´11 pΣLT, 1q´1D´11 q1{2Zrsc 
+
+> T, 1
+
+, . . . , U m ` p D´1 
+
+> m
+
+pΣLT,m q´1D´1 
+
+> m
+
+q1{2Zrsc 
+
+> T,m
+
+, rX1, . . . , rXĂm
+
+¯ı 
+
+, (6.1) 
+
+where Zrsc 
+
+> T,h
+> i.i.d
+
+„ Nrh p0, Irh q for all h P r ms. Furthermore, the test-time OLS embeddings t pU tst ,ols  
+
+> h
+
+: h P r msu 
+
+satisfy 
+
+pU tst ,ols 
+
+> hd
+
+ÝÑ U tst  
+
+> h
+
+` p D´1 
+
+> h
+
+pΣLT,h q´1D´1 
+
+> h
+
+q1{2Ztst ,ols  
+
+> h
+
+, where Ztst ,ols 
+
+> h
+> i.i.d
+
+„ Nrh p0, Irh q, for all h P r ms. (6.2) The theorem above justifies the use of the rescaled AMP embeddings pU rsc  
+
+> h
+
+(3.13) in training the predictor in (3.17). Furthermore, since the asymptotic distribution of the training features approximately (we use this qualifier to emphasize the differences between the two distinct notions of asymptotic distribution for the training and test embeddings) aligns with that of the OLS projected test embeddings, the foregoing theorem also justifies plugging in pU tst ,ols  
+
+> h
+
+in the fitted predictor to obtain the test predictions. 
+
+# 7 Discussion 
+
+In this paper, we introduced DAIF, a data adaptive intermediate fusion framework for supervised learning. In contrast to existing intermediate fusion approaches which commonly use fixed fusion architectures, we learn the fusion granularity based on the data. To this end, we cluster the data modalities using non-parametric measures of dependence. Having recovered the latent clustering structure, we perform cluster-wise empirical Bayes estimation of priors. These priors are subsequently used to construct denoisers in an Approximate Message Passing (AMP) framework. The AMP algorithm yields low-dimensional representations which fuse information across the related modalities. These representations are then used for downstream supervised 24 learning. We derive rigorous theoretical guarantees for our method. In our experiments, our method consis-tently outperforms prior methods on synthetic data. We collect here two directions for future inquiry. The current method uses a separate spectral initialization from each modality. This initialization succeeds provided the signal strength in each modality is sufficiently high (technically, it should be above the Baik-Ben Arous-Peche (BBP) threshold). What happens if the signal in some of the modalities is weak, although the overall signal in the data is sufficiently strong? We believe it should be possible to design better spectral initialization algorithms, which combine the signal strength across modalities. There has been some preliminary progress in this direction in Du et al. (2026); Yang et al. (2026). It would be interesting to develop analogous spectral algorithms for the current problem and investigate its performance for downstream empirical Bayes learning. We leave this for future work. Our current method uses a Gaussian mixture model based empirical Bayes to learn the prior within each cluster. An alternative is to use non-parametric maximum likelihood-based empirical Bayes as in Zhong et al. (2022). The latter strategy is reasonable if the dimensions of the priors are relatively small (maybe at most 10). For larger ambient dimensions, non-parametric empirical Bayes methods are expected to become impractical due to their substantial sample size requirements. Moreover, the Gaussian mixture model approximation of the prior class employed in this paper may suffer from limited representational capacity in complex datasets featuring transitional cell states that are poorly separated. To mitigate these limitations, it would be fruitful to explore empirical Bayes methods that incorporate ideas from machine learning. For instance, Tang and Yang (2021) and Cheng et al. (2020) combine variational autoencoders with empirical Bayes estimation, while Meier et al. (2026) leverage diffusion-based denoising in the context of single-cell applications. Transformer-based approaches (Teh et al., 2025) and methods grounded in Hyv¨ arinen’s score matching (Ghosh et al., 2025) have also been employed in empirical Bayes denoising. Extending these techniques to the DAIF framework represents a compelling direction for future work. 
+
+## Use of Generative AI 
+
+We have used GPT for reviewing the content, checking the mathematical arguments and copyediting the manuscript. Furthermore, we have used Claude code to implement the codes in Sections 4 and 5. We have carefully verified all AI generated content and take full responsibility for their correctness. 
+
+## Acknowledgment 
+
+S.N. gratefully acknowledges support from JobsOhio STEM Education Faculty Startup Award (GR142894). P.S. gratefully acknowledges support from the National Science Foundation (DMS CAREER 2440824) and the Office of Naval Research (N00014-26-1-2144). S.S. gratefully acknowledges support from NSF (DMS CA-REER 2239234), ONR (N00014-23-1-2489) and AFOSR (FA9950-23-1-0429). Furthermore, we acknowledge Ohio State University’s ASC Unity cluster for providing the computational resources used in this study. 
+
+# References 
+
+B. Afshin-Pour, G. A. Hossein-Zadeh, S. C. Strother, and H. Soltanian-Zadeh. Enhancing reproducibility of fmri statistical maps using generalized canonical correlation analysis in npairs framework. NeuroImage ,60(4):1970–1981, 2012. N. Anceschi, F. Ferrari, D. B. Dunson, and H. Mallick. Bayesian joint additive factor models for multiview learning. arXiv preprint arXiv:2406.00778 , 2024. R. Argelaguet, D. Arnol, D. Bredikhin, Y. Deloro, B. Velten, J. C. Marioni, and O. Stegle. Mofa+: astatistical framework for comprehensive integration of multi-modal single-cell data. Genome Biology , 21 (1):111, 2020. 25 T. Z. Baharav, P. B. Nicol, R. A. Irizarry, and R. Ma. Stacked svd or svd stacked? a random matrix theory perspective on data integration. arXiv preprint arXiv:2507.22170 , 2025. J. Baik, G. Ben Arous, and S. P´ ech´ e. Phase transition of the largest eigenvalue for nonnull complex sample covariance matrices. The Annals of Probability , 33(5):1643–1697, 2005. J. Barbier and G. Reeves. Information-theoretic limits of a multiview low-rank symmetric spiked matrix model. In 2020 IEEE International Symposium on Information Theory (ISIT) , pages 2771–2776, 2020. doi: 10.1109/ISIT44484.2020.9173970. M. Bayati and A. Montanari. The dynamics of message passing on dense graphs, with applications to compressed sensing. IEEE Transactions on Information Theory , 57(2):764–785, February 2011. F. Benaych-Georges and R. R. Nadakuditi. The singular values and vectors of low rank perturbations of large rectangular random matrices. J. Multivar. Anal. , 111:120–135, Oct. 2012. S. Y. Boulahia, A. Amamra, M. R. Madi, and S. Daikh. Early, intermediate and late fusion strategies for robust deep learning-based multimodal action recognition. Machine Vision and Applications , 32(6):121, Sep 2021. H. J. Brascamp and E. H. Lieb. On extensions of the brunn–minkowski and pr´ ekopa–leindler theorems, including inequalities for log concave functions, and with an application to the diffusion equation. Journal of Functional Analysis , 22(4):366–389, 1976. N. Cahan, E. Klang, E. M. Marom, S. Soffer, Y. Barash, E. Burshtein, E. Konen, and H. Greenspan. Multimodal fusion models for pulmonary embolism mortality prediction. Scientific Reports , 13:7544, May 2023. W. Cheng, G. Darnell, S. Ramachandran, and L. Crawford. Generalizing variational autoencoders with hierarchical empirical bayes. arXiv preprint arXiv:2007.10389 , 2020. N. Deb, P. Ghosal, and B. Sen. Measuring association on topological spaces using kernels and geometric graphs. arXiv preprint arXiv:2010.01768 , 2020. A. Delaigle, J. Fan, and R. J. Carroll. A design-adaptive local polynomial estimator for the errors-in-variables problem. Journal of the American Statistical Association , 104(485):348–359, 2009. D. Y. Ding, S. Li, B. Narasimhan, and R. Tibshirani. Cooperative learning for multiview analysis. Proceedings of the National Academy of Sciences , 119(38):e2202113119, 2022. D. Y. Ding, A. Green, M. W. Sun, and R. Tibshirani. Coca: Cooperative component analysis. arXiv preprint arXiv:2407.16870 , 2024. A. Dombowsky, D. B. Dunson, D. B. Madut, M. P. Rubach, and A. H. Herring. Bayesian learning of clinically meaningful sepsis phenotypes in northern tanzania. The Annals of Applied Statistics , 19(3):2193–2217, 2025. H. Du, H. Hu, and S. Lepsveridze. Optimal spectral algorithms for correlated two-view models in high dimensions. arXiv preprint arXiv:2605.19364 , 2026. J. Fan and Y. K. Truong. Nonparametric regression with errors in variables. The Annals of Statistics , 21 (4):1900–1925, 1993. Q. Feng, M. Jiang, J. Hannig, and J. Marron. Angle-based joint and individual variation explained. Journal of multivariate analysis , 166:241–265, 2018. I. Gaynanova and G. Li. Structural learning and integrative decomposition of multi-view data. Biometrics ,75(4):1121–1132, 2019. A. Gayoso, Z. Steier, R. Lopez, J. Regier, K. L. Nazor, A. Streets, and N. Yosef. Joint probabilistic modeling of single-cell multi-omic data with totalvi. Nature methods , 18(3):272–282, 2021. 26 A. J. Gentles, S. V. Bratman, L. J. Lee, J. P. Harris, W. Feng, R. V. Nair, D. B. Shultz, V. S. Nair, C. D. Hoang, R. B. West, S. K. Plevritis, A. A. Alizadeh, and M. Diehn. Integrating tumor and stromal gene expression signatures with clinical indices for survival stratification of early-stage non–small cell lung cancer. Journal of the National Cancer Institute , 107(10), 2015. C. Gerbelot and R. Berthier. Graph-based approximate message passing iterations. Information and Infer-ence: A Journal of the IMA , 12(4):2562–2628, Dec. 2023. S. Ghosh, N. Ignatiadis, F. Koehler, and A. Lee. Stein’s unbiased risk estimate and hyv¨ arinen’s score matching. arXiv preprint arXiv:2502.20123 , 2025. M. J. Goldman, B. Craft, M. Hastie, K. Repeˇ cka, F. McDade, A. Kamath, A. Banerjee, Y. Luo, D. Rogers, A. N. Brooks, J. Zhu, and D. Haussler. Visualizing and interpreting cancer genomics data via the xena platform. Nature Biotechnology , 38(6):675–678, Jun 2020. ISSN 1546-1696. A. Gretton, K. Fukumizu, C. H. Teo, L. Song, B. Sch¨ olkopf, and A. J. Smola. A kernel statistical test of independence. In Proceedings of the 21st International Conference on Neural Information Processing Systems , page 585–592, 2007. F. Guan, T. Ni, W. Zhu, L. K. Williams, L.-B. Cui, M. Li, J. Tubbs, P.-C. Sham, and H. Gui. Integrative omics of schizophrenia: from genetic determinants to clinical classification and risk prediction. Molecular psychiatry , 27(1):113–126, 2022. V. Guarrasi, F. Aksu, C. M. Caruso, F. Di Feola, A. Rofena, F. Ruffini, and P. Soda. A systematic review of intermediate fusion in multimodal deep learning for biomedical applications. Image and Vision Computing ,158:105509, 2025. Y. Gui, C. Ma, and Z. Ma. Multi-modal contrastive learning adapts to intrinsic dimensions of shared latent variables. In Advances in Neural Information Processing Systems , volume 38, pages 122364–122409, 2025. Y. Hao, S. Hao, E. Andersen-Nissen, W. M. Mauck, S. Zheng, A. Butler, M. J. Lee, A. J. Wilk, C. Darby, M. Zager, P. Hoffman, M. Stoeckius, E. Papalexi, E. P. Mimitou, J. Jain, A. Srivastava, T. Stuart, L. M. Fleming, B. Yeung, A. J. Rogers, J. M. McElrath, C. A. Blish, R. Gottardo, P. Smibert, and R. Satija. Integrated analysis of multimodal single-cell data. Cell , 184(13):3573–3587.e29, 2021. H. Hotelling. Relations between two sets of variates. Biometrika , 28(3/4):321–377, 1936. Z. Hu, Z. T. Ke, and J. S. Liu. Measurement error models: From nonparametric methods to deep neural networks. Statistical Science , 37(4):473–493, 2022. Z. Hu, S. Jia, and M. Rostami. An intermediate fusion vit enables efficient text-image alignment in diffusion models. arxiv preprint: 2403.16530 , 2024. W. Jiang and C.-H. Zhang. General maximum likelihood empirical Bayes estimation of normal means. The Annals of Statistics , 37(4):1647 – 1684, 2009. M. I. Jordan, editor. Learning in Graphical Models , volume 89 of NATO Science Series D . Springer Dordrecht, 1998. J. R. Kettenring. Canonical analysis of several sets of variables. Biometrika , 58(3):433–451, 1971. C. Keup and L. Zdeborov´ a. Optimal thresholds and algorithms for a model of multi-modal learning in high dimensions. Journal of Statistical Mechanics: Theory and Experiment , 2025(9):093302, 2025. J. Kiefer and J. Wolfowitz. Consistency of the maximum likelihood estimator in the presence of infinitely many incidental parameters. The Annals of Mathematical Statistics , 27(4):887–906, 1956. D. P. Kingma and J. Ba. Adam: A method for stochastic optimization. arxiv preprint: 1412.6980 , 2017. S. Kornblith, M. Norouzi, H. Lee, and G. Hinton. Similarity of neural network representations revisited. In 
+
+International conference on machine learning , pages 3519–3529. PMlR, 2019. 27 J. Lakkis, A. Schroeder, K. Su, M. Y. Y. Lee, A. C. Bashore, M. P. Reilly, and M. Li. A multi-use deep learning method for cite-seq and single-cell rna-seq data integration with cell surface protein prediction and imputation. Nature Machine Intelligence , 4(11):940–952, 2022. S. L. Lauritzen. Graphical Models . Number 17 in Oxford Statistical Science Series. Clarendon Press, Oxford, 1996. ISBN 0198522193. A. J. Lee. U-Statistics: Theory and Practice , volume 110 of Statistics: Textbooks and Monographs . Marcel Dekker, 1990. Z. Liang, A. Qu, and B. Shahbaba. Meta fusion: A unified framework for multimodality fusion with mutual learning. arXiv preprint arXiv:2507.20089 , 2025. A. Litinetskaya, M. Schulman, F. Curion, A. Szalata, A. Omidi, M. Lotfollahi, and F. Theis. Integration and querying of multimodal single-cell data with poe-vae. In Research in Computational Molecular Biology ,pages 345–348, 2025. E. F. Lock, K. A. Hoadley, J. S. Marron, and A. B. Nobel. Joint and individual variation explained (jive) for integrated analysis of multiple data types. The Annals of Applied Statistics , 7(1):523–542, 2013. doi: 10.1214/12-AOAS597. Z. Ma and R. Ma. Optimal estimation of shared singular subspaces across multiple noisy matrices. IEEE Transactions on Information Theory , 72(5):3277–3300, 2026. Z. Ma and S. Nandy. Community detection with contextual multilayer networks. IEEE Transactions on Information Theory , 69(5):3203–3239, 2023. doi: 10.1109/TIT.2023.3238352. V. Mayya and G. Reeves. Mutual information in community detection with covariate information and cor-related networks. In 2019 57th Annual Allerton Conference on Communication, Control, and Computing (Allerton) , pages 602–607, 2019. doi: 10.1109/ALLERTON.2019.8919733. D. Meier, S. Yu, S. Nandy, P. Ghosal, and K. Gan. Clustering by denoising: Latent plug-and-play diffusionfor single-cell embeddings. In International Conference on Learning Representations , 2026. E. P. Mimitou, C. A. Lareau, K. Y. Chen, A. L. Zorzetto-Fernandes, Y. Hao, Y. Takeshima, W. Luo, T.-S. Huang, B. Z. Yeung, E. Papalexi, P. I. Thakore, T. Kibayashi, J. B. Wing, M. Hata, R. Satija, K. L. Nazor, S. Sakaguchi, L. S. Ludwig, V. G. Sankaran, A. Regev, and P. Smibert. Scalable, multimodal profiling of chromatin accessibility, gene expression and protein levels in single cells. Nature Biotechnology , 39(10): 1246–1258, 2021. A. Montanari and R. Venkataramanan. Estimation of low-rank matrices via approximate message passing. 
+
+The Annals of Statistics , 49(1):321–345, 2021. S. Nandy and Z. Ma. Multimodal data integration and cross-modal querying via orchestrated approximate message passing. arXiv preprint arXiv:2407.19030 , 2024. D. Paul. Asymptotics of sample eigenstructure for a large dimensional spiked covariance model. Statistica Sinica , 17(4):1617–1642, 2007. J. Prothero, M. Jiang, J. Hannig, Q. Tran-Dinh, A. Ackerman, and J. S. Marron. Data integration via analysis of subspaces (divas). TEST , 33(3):633–674, 2024. G. Reeves. Additivity of information in multilayer networks via additive gaussian noise transforms. In 
+
+2017 55th Annual Allerton Conference on Communication, Control, and Computing (Allerton) , pages 1064–1070, 2017. doi: 10.1109/ALLERTON.2017.8262855. R. Rossetti and G. Reeves. Approximate message passing for the matrix tensor product model. arXiv preprint arXiv:2306.15580 , 2023. 28 R. Sergazinov, A. Taeb, and I. Gaynanova. A spectral framework for multi-view subspace learning using the product of projections. Biometrika , 113(2):asaf088, 04 2026. C. G. Snoek, M. Worring, and A. W. Smeulders. Early versus late fusion in semantic video analysis. In 
+
+Proceedings of the 13th annual ACM international conference on Multimedia , pages 399–402, 2005. R. R. Sokal and C. D. Michener. A statistical method for evaluating systematic relationships. The University of Kansas Science Bulletin , 38:1409–1438, 1958. N. Srivastava and R. Salakhutdinov. Multimodal learning with deep boltzmann machines. The Journal of Machine Learning Research , 15(1):2949–2980, 2014. M. Stoeckius, C. Hafemeister, W. Stephenson, B. Houck-Loomis, P. K. Chattopadhyay, H. Swerdlow, R. Satija, and P. Smibert. Simultaneous epitope and transcriptome measurement in single cells. Na-ture Methods , 14(9):865–868, 2017. T. Stuart, A. Butler, P. Hoffman, C. Hafemeister, E. Papalexi, W. M. Mauck, 3rd, Y. Hao, M. Stoeckius, P. Smibert, and R. Satija. Comprehensive integration of Single-Cell data. Cell , 177(7):1888–1902.e21, June 2019. E. Swanson, C. Lord, J. Reading, A. T. Heubeck, P. C. Genge, Z. Thomson, M. D. Weiss, X.-j. Li, A. K. Savage, R. R. Green, T. R. Torgerson, T. F. Bumol, L. T. Graybuck, and P. J. Skene. Simultaneous trimodal single-cell measurement of transcripts, epitopes, and chromatin accessibility using tea-seq. eLife ,10:e63632, apr 2021. G. J. Sz´ ekely, M. L. Rizzo, and N. K. Bakirov. Measuring and testing dependence by correlation of distances. 
+
+The Annals of Statistics , 35(6):2769 – 2794, 2007. H. Tabanelli, P. Mergny, L. Zdeborova, and F. Krzakala. Computational thresholds in multi-modal learning via the spiked matrix-tensor model. arXiv preprint arXiv:2506.02664 , 2025. R. Tang and Y. Yang. On empirical bayes variational autoencoder: An excess risk bound. In Conference on Learning Theory , pages 4068–4125. PMLR, 2021. A. Teh, M. Jabbour, and Y. Polyanskiy. Solving empirical bayes via transformers. arXiv preprint arXiv:2502.09844 , 2025. The Cancer Genome Atlas Network. Comprehensive molecular portraits of human breast tumours. Nature ,490(7418):61–70, 2012. R. Tibshirani, G. Walther, and T. Hastie. Estimating the number of clusters in a data set via the gap statistic. Journal of the Royal Statistical Society Series B: Statistical Methodology , 63(2):411–423, 07 2001. B. Uyar, T. Savchyn, A. Naghsh Nilchi, A. Sarigun, R. Wurmus, M. M. Shaik, B. Gr¨ uning, V. Franke, and A. Akalin. Flexynesis: A deep learning toolkit for bulk multi-omics data integration for precision oncology and beyond. Nature Communications , 16(1):8261, 2025. A. van den Oord, Y. Li, and O. Vinyals. Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 , 2018. M. Wu and N. Goodman. Multimodal generative models for scalable weakly-supervised learning. Advances in neural information processing systems , 31, 2018. X. Yang, Y. Li, J. Wang, Y. Jia, Z. Yi, and M. Chen. Utilizing multimodal artificial intelligence to advance cardiovascular diseases. Precision Clinical Medicine , 8(3):pbaf016, 07 2025a. X. Yang, B. Lin, and S. Sen. Fundamental limits of community detection from multi-view data: Multi-layer, dynamic and partially labeled block models. The Annals of Statistics , 53(6):2728–2756, Dec. 2025b. 29 X. Yang, S. Sen, and Y. M. Lu. Sharp spectral thresholds for multi-view spiked wigner models. arXiv preprint arXiv:2605.19894 , 2026. Y. Yang and C. Ma. Estimating shared subspace with ajive: the power and limitation of multiple data matrices. arXiv preprint arXiv:2501.09336 , 2025. Y. Yuan, E. M. Van Allen, L. Omberg, N. Wagle, A. Amin-Mansour, A. Sokolov, L. A. Byers, Y. Xu, K. R. Hess, L. Diao, L. Han, X. Huang, M. S. Lawrence, J. N. Weinstein, J. M. Stuart, G. B. Mills, L. A. Garraway, A. A. Margolin, G. Getz, and H. Liang. Assessing the clinical utility of cancer genomic and proteomic data across tumor types. Nature Biotechnology , 32(7):644–652, 2014. J. Zhao, Q. Feng, P. Wu, R. A. Lupu, R. A. Wilke, Q. S. Wells, J. C. Denny, and W.-Q. Wei. Learning from longitudinal data in electronic health record and genetic data to improve cardiovascular event prediction. 
+
+Scientific Reports , 9(1):717, 2019. X. Zhong, C. Su, and Z. Fan. Empirical bayes pca in high dimensions. Journal of the Royal Statistical Society Series B , 84(3):853–878, 2022. 
+
+# A Discussion on measures of dependence 
+
+In this paper, we use the centered kernel alignment (CKA) from Kornblith et al. (2019) as a measure of dependence. This measure is defined as follows: Fix ϱ2 ą 0 and consider two modality latent matrices 
+
+pU init  
+
+> e
+
+P Rnˆre and pU init  
+
+> e1
+
+P Rnˆre1 , let Ke P Rnˆn and Ke1 P Rnˆn be defined as RBF kernel matrices, 
+
+pK‹qij “ exp 
+
+¨˚˝´
+
+›››p pU init  
+
+> ‹
+
+qi˚ ´ p pU init  
+
+> ‹
+
+qj˚
+
+›››2
+
+2ϱ2
+
+˛‹‚, where ‹ P t e, e 1u.Let rKe “ HKeH, where H “ In ´ 1 
+
+> n
+
+1n1J 
+
+> n
+
+is the centering matrix. Here 1n P Rn denotes the all ones vector. The biased HSIC estimator between modalities e and e1 is defined as 
+
+HSIC e,e 1 “ 1
+
+n2 Tr 
+
+´ rKe rKe1
+
+¯
+
+, where for any matrix A P Rnˆn, Tr pAq :“ řni“1pAqii . (A.1) Then CKA between modalities indexed by e and e1 is defined as: CKA e,e 1 :“ HSIC e,e 1
+
+aHSIC e,e HSIC e1,e 1
+
+.
+
+This normalization makes CKA bounded between zero and one whenever the denominator is nonzero. More-over, at the population level, HSIC vanishes if and only if the two random elements are independent (the kernel should be a characteristic kernel e.g. the Gaussian kernel) (Gretton et al., 2007). Thus, CKA provides a convenient normalized kernel-based measure of dependence between latent modality representations. Although CKA is mathematically convenient and builds on the widely used HSIC criterion (Gretton et al., 2007), other dependence measures can also be used as the function ℵn in Algorithm 1. One alternative is distance correlation (Sz´ ekely et al., 2007), which avoids the explicit choice of a kernel bandwidth parameter and is instead defined through pairwise distances. A potential drawback, however, is that pairwise Euclidean distances can be affected by distance concentration in high-dimensional settings and can also be sensitive to the relative scaling of different modalities. Another possibility is to use nearest-neighbor-based measures of association, such as the one proposed in Deb et al. (2020). These measures have appealing population-level characterizations of dependence. For instance, they can distinguish independence from dependence and, at the other extreme, characterize when one random object is a measurable function of another. However, nearest-neighbor constructions may become 30 unstable or statistically inefficient in high-dimensional latent spaces, especially when the effective sample size is limited. Finally, one may also consider mutual-information-based objectives, such as InfoNCE (van den Oord et al., 2018), which are widely used in contrastive learning. Such approaches can be powerful when the goal is to learn representations that maximize shared information across modalities. However, they typically require additional modeling choices, such as the construction of positive and negative pairs, the specification of a critic or scoring function, and often an embedding of different modalities into a common representation space. In settings where the modality-specific latent signatures have different dimensions or different geometric interpretations, such a common embedding may not be natural. Overall, CKA offers a simple, normalized, and kernel-based measure of dependence that can be directly applied to latent variables of different dimensions. For this reason, we adopt it as our default choice in Algorithm 1. Nevertheless, the proposed framework is modular: CKA can be replaced by other valid dependence measures when they are better suited to the geometry, dimensionality, or scientific goals of a particular application. 
+
+# B Details of the hierarchical clustering 
+
+Given the dissimilarity matrix N P Rpm`Ămqˆp m`Ămq defined in (3.4), to compute the clusters we use the in-built hierarchical clustering module in scipy with the average linkage criterion (UPGMA) (Sokal and Michener, 1958): 
+
+dpA, B q “ 1
+
+|A|| B|
+
+ÿ
+
+> iPA
+
+ÿ
+
+> jPB
+
+Dij .
+
+This produces a dendrogram over the pm ` rmq modalities. If a fixed number of clusters is provided, as in Section 4 then we cut the dendrogram to ensure that many clusters. However, in real data applications (Sections 5.1 and 5.2), where the number of clusters is not apparent, we cut the dendrogram at a range of heights according to the number of clusters varying between 1 and m ` rm ´ 1. Then the threshold optimizing the gap statistic Tibshirani et al. (2001) is chosen and used for the downstream pipeline. The late fusion setting with m ` rm many clusters is always evaluated separately. To compute the dissimilarity matrix, we used the centered Kernel discrepancy (Kornblith et al., 2019) where we use the Gaussian kernel with bandwidth 1. This default choice is adopted across all numerical simulations and data examples. 
+
+# C Further details about the implementation of the Approximate Message Passing framework 
+
+In this section, we provide additional details regarding the implementation of the Approximate Message Passing (AMP) iterations described in Section 3.2. In particular, we clarify the rowwise application of the denoiser functions appearing in (3.6), (3.7), and (3.12), along with the corresponding Jacobian terms used in the Onsager corrections. We begin with the denoisers associated with the high-dimensional modalities. For each h P r ms, the matrix-valued denoised embeddings vt,h p pGt,h ; pνhq P Rphˆrh is obtained by applying vt,h p ¨ ; pνhq to the rows of pGt,h 
+
+as follows: 
+
+pvt,h p pGt,h ; pνhqq j˚ :“ vt,h pp pGt,h qj˚; pνhq, for all j P r phs.
+
+Next, consider the denoisers associated with the latent factors corresponding to the high-dimensional modal-ities. For each k P r Ks and h P r ms, we define 
+
+ut,h,k 
+
+´
+
+t pFt,e : e P Ck, Hu, t ĂXℓ : ℓ P Ck, Lu; pμk
+
+¯
+
+P Rnˆrh
+
+31 through rowwise application of the denoiser function in (3.10). Specifically, 
+
+´
+
+ut,h,k 
+
+´
+
+t pFt,e : e P Ck, Hu, t ĂXℓ : ℓ P Ck, Lu; pμk
+
+¯¯ 
+
+> i˚
+
+:“ ut,h,k 
+
+´
+
+tp pFt,e qi˚ : e P Ck, Hu, tp ĂXℓqi˚ : ℓ P Ck, Lu; pμk
+
+¯
+
+,
+
+for all i P r ns.Similarly, for the low-dimensional modalities, we define 
+
+rut,ℓ,k 
+
+´
+
+t pFt,e : e P Ck, Hu, t ĂXt, rℓ : rℓ P Ck, Lu; pμk
+
+¯
+
+P Rnˆrrℓ
+
+through the rowwise rule 
+
+´rut,ℓ,k 
+
+´
+
+t pFt,e : e P Ck, Hu, t ĂXt, rℓ : rℓ P Ck, Lu; pμk
+
+¯¯ 
+
+> i˚
+
+:“ rut,ℓ,k 
+
+´
+
+tp pFt,e qi˚ : e P Ck, Hu, tp ĂXt, rℓqi˚ : rℓ P Ck, Lu; pμk
+
+¯
+
+,
+
+for all ℓ P r rms, i P r ns, and k P r Ks.We now describe the Jacobian terms appearing in the Onsager corrections. Recall that these terms account for the correlation introduced across AMP iterations and play a fundamental role in ensuring the asymptotic Gaussianity of the effective noise variables. We first consider the Jacobian of the denoiser function vt,h p¨ ; pνhq : Rrh Ñ Rrh , which we denote by 
+
+dvt,h p¨ ; pνhq : Rrh Ñ Rrhˆrh . For each h P r ms, the corresponding Jacobian average is defined as 
+
+JRt,h :“ 1
+
+phphÿ
+
+> i“1
+
+dvt,h 
+
+`p pGt,h qi˚; pνh
+
+˘.
+
+Next, consider the denoisers ut,h,k p¨q for h P r ms and k P r Ks. For a fixed cluster k P r Ks, let Ih denote the collection of coordinate indices corresponding to the h-th high-dimensional modality among all coordinates associated with the modalities in Ck. Further, let dut,h,k : Rrk Ñ Rrhˆrk denote the Jacobian of the denoiser 
+
+ut,h,k p¨q with respect to its vector input. Then the corresponding Onsager matrix is defined by 
+
+JLt,h :“
+
+«
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+dut,h,k 
+
+`p pFt,i k, 1 qi˚, . . . , p pFt,i k,r k qi˚, p ĂXt,j k, 1 qi˚, . . . , p ĂXt,j k, rrk qi˚; pμk
+
+˘ff 
+
+> ˚Ih
+
+.
+
+The Jacobian matrices defined above are used in the Onsager correction terms appearing in the AMP recursions. These corrections remove the first-order bias introduced by the iterative reuse of the data matrix and ensure that the effective iterates asymptotically behave like signal-plus-Gaussian-noise models, thereby enabling the application of empirical Bayes denoisers calibrated using the estimated prior distributions. 
+
+# D Implementation of baseline procedures in Section 4 
+
+In Section 4.2, we compare DAIF with AJIVE Feng et al. (2018), MCCA Kettenring (1971), GCCA Afshin-Pour et al. (2012), and a version of hierarchical PCA. We used the built-in implementation of AJIVE, MCCA, and GCCA from the multiblock package in Python .For the experiments in Section 4.2 and 4.4, in each of these methods, we construct an estimate of pUshared P R2
+
+of the shared subspace between the modalities (all of AJIVE, MCCA, and GCCA make the restrictive assumption that the shared signal lies in a common subspace of reduced dimension). The choice of 2 for the dimension of the shared latent space is dictated by the data generating mechanism. The contributions of individual components Ih are constructed by the best rank rh ´ 2 approximation of I˝ 
+
+> h
+
+:“ Xh ´ Jh, where 
+
+Jh :“ pUshared pU J
+
+> shared
+
+Xh, where Xh is the data matrix. The final estimate pUh of Uh is given by the top rh
+
+left singular vectors of Ih ` Jh (multiplied by ?n) for h “ 1, 2, 3. For the hierarchical PCA (HPCA) benchmark, we concatenate all modality matrices into Xct :“ r X1 X2 X3s P 
+
+Rnˆp p1`p2`p3q. Then, we compute the rank 2 truncated SVD to obtain joint score pUshared P Rnˆ2 and in-dividual loadings pLh for h “ 1, 2, 3 (the loadings are computed by splitting the global loading matrix into 32 Method n “ 3000 n “ 3500 n “ 4000 n “ 4500 n “ 5000                               
+
+> Linear link, linear
+> EB-PCA 0.025(0.002) 0.027(0.002) 0.026(0.002) 0.026(0.002) 0.025(0.001) DAIF-CKA 0.024(0.001) 0.024(0.001) 0.024(0.001) 0.023(0.001) 0.022(0.001)
+> OrchAMP 0.036(0.002) 0.034(0.002) 0.035(0.002) 0.034(0.001) 0.033(0.000)
+> Non-linear link, neural net
+> EB-PCA 0.263(0.053) 0.286(0.049) 0.273(0.051) 0.211(0.039) 0.248(0.050) DAIF-CKA 0.196(0.032) 0.233(0.037) 0.208(0.033) 0.171(0.028) 0.187(0.032)
+> OrchAMP 0.229(0.034) 0.289(0.051) 0.244(0.041) 0.188(0.029) 0.208(0.033)
+
+Table 8: Average prediction error across sample sizes (mean with standard error in parentheses) with sample splitting for training feature construction. DAIF-CKA : AMP with CKA-based clustering (2 clusters); EB-PCA : no fusion (3 clusters); OrchAMP : complete fusion (1 cluster). Bold = best mean per column within each block. appropriate blocks corresponding to the modality dimensions). The individual component pIh is computed as the best rank rh ´ 2 approximation of pI˝ 
+
+> h
+
+:“ Xh ´ pUshared pLJ 
+
+> h
+
+. The final embedding pUh is the top rh
+
+truncated left singular vector matrix of pIh ` pUshared pLJ 
+
+> h
+
+. This is in effect a generalization of the stacked SVD procedure from Baharav et al. (2025), accounting for different ranks in different modalities. Across all the benchmarking methods, one also obtains the right singular vectors pVh for h “ 1, . . . , m in the final step of the construction of the embeddings. In Section 4.4, we train the predictor by fitting a linear regression of the training response ytrn using the covariates Xh pVhp pV J 
+
+> h
+
+pVhq´1 for all four competing benchmarks using the estimated loading matrices pVh in the final truncated SVD step of the construction for all four benchmarks. The test data is similarly projected as p pV J 
+
+> h
+
+pVhq´1 pV J 
+
+> h
+
+Xtst  
+
+> h
+
+for h “ 1, 2, 3 and the trained predictor is applied on the projected scores. 
+
+# E A sample splitting based training feature construction method 
+
+Observe that the construction of predictor features for the high-dimensional modalities in the training and the test arms of DAIF are different. While the training features t pU rsc  
+
+> h
+
+: h P r msu are constructed by rescaling the Onsager corrected embedding t pFT,h : h P r msu (cf. (3.13)), the test features t pU tst ,ols  
+
+> h
+
+: h P r msu are obtained by projecting the test observations onto the column space of t pRT,h : h P r msu using ordinary least squares. The same OLS projection based approach is not suitable for construction of the training features since the dependence between pRT,h and Xh ensures that the projected features do not satisfy (3.14) invalidating the rationale behind the construction in (3.16). Nevertheless, one might adopt a sample splitting approach where the predictor is trained on a held out fraction of the training sample that never sees the construction of pRT,h . This removes the dependence between the projector and the data being projected which in turn restores (3.14) for the resulting embeddings generated through OLS projection. While this procedure is perfectly reasonable when the number of training samples is large, it might lead to suboptimal performance when the number of training samples is low but the feature dimension is large. Recall that the validity of AMP state evolution relies on proportional asymptotics which requires the number of samples used in the AMP iterations (3.6)-(3.8) to be comparable to the feature dimensions in the high-dimensional modalities. Furthermore, the efficiency of the empirical Bayes prior estimation also requires large number of training samples. Therefore, sample-splitting based feature reconstruction might fail in settings with a small number of training examples. To investigate the performance of sample splitting based feature reconstruction, we considered a synthetic experiment using the same setting as Section 4.3. The only difference is that we use 70% of the training data to construct pV AMP  
+
+> T,h
+
+using AMP iterations (3.6)-(3.8) run for T “ 10 iterations. The estimated loading 33 DAIF-CKA (K=1) DAIF-CKA (K=2) DAIF-CKA (K=3) MOFA+ Multigrate Train C-index 0.8201 0.8165 0.8098 0.9079 0.9913 Test C-index 0.6019 0.6089 0.6003 0.6873 0.5157 
+
+Table 9: TCGA-BRCA overall survival prediction (test C-index) with sample splitting for training feature construction. Higher is better; bold indicates the best test C-index. DAIF-CKA for K “ 1 correspond to OrchAMP (Nandy and Ma, 2024) and DAIF-CKA for K “ 3 corresponds to EB-PCA (Zhong et al., 2022). DAIF-CKA for K “ 2 uses the gap statistic to select the number of clusters, which resulted in choosing 
+
+K “ 2. matrices are used to construct 
+
+pRAMP  
+
+> T,h
+
+:“ 10.7 ntrn 
+
+pV AMP  
+
+> T,h
+
+pDh.
+
+The training features supplied to the objective in (3.18) are then obtained as 
+
+pU rsc  
+
+> h
+
+:“ ĎXhead  
+
+> h
+
+pRAMP  
+
+> T,h
+
+pp pRAMP  
+
+> T,h
+
+qJ pRAMP  
+
+> T,h
+
+q´1 P Rp0.3¨ ntrn qˆ rh ,
+
+where ĎXhead  
+
+> h
+
+:“ Xhead  
+
+> h
+
+{?0.7 ntrn for h P r ms and Xhead  
+
+> h
+
+is the data matrix constructed from the training data by restricting to the subset of held-out observations reserved for predictor training (30% of the total training data). The rest of the pipeline, proceeds as in Section 4.3. The results of the experiment are outlined in Table 8 and the trend is similar to Table 3. This similarity can be attributed to large number of training samples. Next, we performed the same TCGA-BRCA data analysis described in Section 5.2 using sample splitting. This experiment provides a stress test for the method since the number of training samples is limited (615 patients). We again held out 30% of the training samples (184 patients) for estimating pθ by optimizing (5.1) and used the rest for representation learning (431 patients). The rest of the experiment was the same as Section 5.2 and the results are outlined in Table 9. We observe that MOFA+ outperforms all AMP-based pipelines exposing the limitation of sample splitting while using AMP and empirical Bayes-based pipeline when the sample size is limited. 
+
+# F Pre-processing TCGA data 
+
+Each modality was preprocessed as follows. For RNA-seq, features with more than 20% missing values were discarded, remaining missing values were imputed by gene-wise medians, and the 2,000 most variable genes were retained and z-scored, yielding X1 P R769 ˆ2000 . For methylation, CpG sites with more than 20% missingness were dropped (leaving approximately 395,582 sites), missing values were imputed by site-wise medians, the 5,000 most variable sites were selected, beta values were transformed to M-values via 
+
+M “ log 2pβ{p 1 ´ βqq , clipped to r´ 10 , 10 s, and z-scored, yielding X2 P R769 ˆ5000 . CNV required a two-stage reduction to serve as the low-dimensional modality in the model of (2.2). In the first stage, features with more than 20% missingness were discarded, missing values were imputed by zero (corresponding to diploid copy number), and the 1,000 most variable genes were retained and z-scored. In the second stage, the 5 genes with highest marginal variance were selected from this subset; per-feature noise variances τ 2 
+
+> j
+
+were estimated by removing the top 3 signal principal components and computing column-wise residual variances; and each feature was divided by ˆ τj so that residual noise is approximately N p0, 1q per column. This standardized matrix X3 P R769 ˆ5 was used as the third modality. After the entire pre-processing the data is split into training and test subsets. 34 G Examples of priors satisfying the regularity assumption 
+
+We now give several concrete classes of latent generating priors for which Assumption 6.2 holds. The argument is stated for a generic Gaussian observation model, since both parts of Assumption 6.2 are special cases of this setup. Let U P Rr have prior distribution π P P, and suppose that Y | U „ Nq pAU, Bq, where A P Rqˆr is fixed and 
+
+B P Rqˆq is positive definite. Define the Bayes denoiser mπ pyq :“ Eπ rU | Y “ ys. Observe that the generic setting described here can be mapped to the settings in either parts of Assumption 6.2 through appropriate choices of A and B. The individual denoisers uGh and ruGℓ are simply coordinate blocks of mπ where π “ μ.Similarly, the right denoiser vGh corresponds to the same construction with U “ Vh and π “ νh. Next, we use the following property of mπ .
+
+Lemma G.1. Assume that B is positive definite and that Eπ }U }22 ă 8 . Then 
+
+∇y mπ pyq “ Cov π pU | Y “ yqAJB´1. (G.1) 
+
+Consequently, 
+
+}∇y mπ pyq} op ď } Cov π pU | Y “ yq} op }AJB´1}op .
+
+In particular, if 
+
+sup 
+
+> yPRq
+
+}Cov π pU | Y “ yq} op ď Cπ , uniformly over π P P,then mπ is uniformly Lipschitz over P with Lipschitz constant at most Cπ }AJB´1}op .
+
+The proof of the lemma is provided in Appendix G.1. From the foregoing lemma, to prove that mπ is Lipschitz uniformly over a local neighborhood of the true prior π in the topology of weak convergence, it suffices to control the posterior covariance uniformly over such a neighborhood. Now, consider the following proposition providing examples of classes of priors P satisfying Assumption 6.2. 
+
+Proposition G.1. Assume that the Gaussian noise covariance satisfies B ľ bI q for some b ą 0. Then Assumption 6.2 holds if the latent prior class P (or, equivalently Ph for h P r ms) is one of the following. 1. The class of priors supported on a common compact set, 
+
+Pcomp pM q :“ t π : supp pπq Ď t u P Rr : }u}2 ď M uu , M ă 8 .
+
+2. The compact Gaussian parameter class 
+
+PGauss :“ ␣Nr pm, Σq : }m}2 ď M, λ Ir ĺ Σ ĺ λIr
+
+( ,
+
+where M ă 8 and 0 ă λ ď λ ă 8 .3. The class of uniformly strongly log-concave priors Plogconv having density satisfying dπ puq9 exp t´ Vπ puqu ,where 
+
+∇2Vπ puq ľ c0Ir for every u P Rr , and π P Plogconv ,
+
+with a common constant c0 ą 0.4. The class of finite homoscedastic Gaussian mixtures 
+
+π “
+
+> J
+
+ÿ
+
+> a“1
+
+waNr pma, Σq,
+
+where J ď Jmax , wa ě wmin ą 0, řJa“1 wa “ 1, }ma}2 ď M , and 
+
+λIr ĺ Σ ĺ λIr .
+
+35 In each case, the posterior-mean denoiser mπ pyq :“ Eπ rU | Y “ ys is globally Lipschitz in y, uniformly over 
+
+π P P. Consequently, it is uniformly Lipschitz over a relative weak neighborhood of every π0 P P.
+
+In particular, the assumption holds for the discrete priors used by the non-parametric maximum likelihood estimator, as well as for Gaussian, compactly supported, strongly log-concave, and regular finite-mixture priors. In particular, the Gaussian mixture classes used to model the latent priors in the experiments of Sections 4 and 5 satisfy Assumption 6.2. 
+
+## G.1 Proof of Lemma G.1 
+
+For y P Rq and u P Rr , define the Gaussian likelihood kernel 
+
+Ly puq :“ exp 
+
+"
+
+´ 12 py ´ AuqJB´1py ´ Auq
+
+*
+
+.
+
+The normalizing constant of the posterior distribution is 
+
+Dpyq :“
+
+ż
+
+Ly puq dπ puq,
+
+and the numerator of the posterior mean is 
+
+N pyq :“
+
+ż
+
+uL y puq dπ puq.
+
+Thus mπ pyq “ N pyq{ Dpyq. First observe that 
+
+∇y log Ly puq “ ´ B´1py ´ Auq “ B´1pAu ´ yq.
+
+Therefore, 
+
+∇y Ly puq “ Ly puqB´1pAu ´ yq.
+
+Since N pyq is vector-valued, its derivative with respect to y is an r ˆ q matrix. Differentiating N pyq gives 
+
+∇y N pyq “ 
+
+ż
+
+upAu ´ yqJB´1Ly puq dπ puq.
+
+Similarly, 
+
+∇y Dpyq “ 
+
+ż
+
+B´1pAu ´ yqLy puq dπ puq.
+
+Equivalently, 
+
+t∇y Dpyqu J “
+
+ż
+
+pAu ´ yqJB´1Ly puq dπ puq.
+
+By the quotient rule, 
+
+∇y mπ pyq “ ∇y N pyq
+
+Dpyq ´ N pyq
+
+Dpyqt∇y Dpyqu J
+
+Dpyq .
+
+Using the posterior distribution induced by π and the observation Y “ y, this becomes 
+
+∇y mπ pyq “ Eπ
+
+“U pAU ´ yqJ | Y “ y‰ B´1 ´ Eπ rU | Y “ ys Eπ
+
+“pAU ´ yqJ | Y “ y‰ B´1.
+
+Expanding the two terms, 
+
+Eπ
+
+“U pAU ´ yqJ | Y “ y‰ “ Eπ rU U J | Y “ ysAJ ´ Eπ rU | Y “ ysyJ,
+
+and 
+
+Eπ rU | Y “ ys Eπ
+
+“pAU ´ yqJ | Y “ y‰ “ Eπ rU | Y “ ysEπ rU | Y “ ysJAJ ´ Eπ rU | Y “ ysyJ.
+
+36 After some algebraic manipulation, we get 
+
+∇y mπ pyq “ ␣Eπ rU U J | Y “ ys ´ Eπ rU | Y “ ysEπ rU | Y “ ysJ( AJB´1
+
+“ Cov π pU | Y “ yqAJB´1.
+
+Taking operator norms yields 
+
+}∇y mπ pyq} op ď } Cov π pU | Y “ yq} op }AJB´1}op .
+
+If the posterior covariance is uniformly bounded by Cπ , then the mean-value theorem gives, for any y, y 1 P Rq ,
+
+}mπ pyq ´ mπ py1q} 2 ď Cπ }AJB´1}op }y ´ y1}2.
+
+This proves the claim. 
+
+## G.2 Proof of Proposition G.1 
+
+Let us begin with the compactly supported prior class Pcomp pM q such that 
+
+PU „π r} U }2 ď M s “ 1, for all π P Pcomp pM q.Then, for every y,
+
+}Cov π pU | Y “ yq} op ď Eπ
+
+“}U }22 | Y “ y‰ ď M 2.
+
+Therefore, by (G.1), 
+
+}∇y mπ pyq} op ď M 2}AJB´1}op ď M 2}A}op 
+
+b , for all π P Pcomp pM q.Thus mπ is globally Lipschitz in y, uniformly over all priors π P Pcomp pM q supported on the same ball. This proves the claim for compactly supported priors. Next, suppose that π “ Nr pm, Σq P PGauss . The posterior covariance in this setting is given by 
+
+ΣU |Y “ Σ ´ ΣAJ `AΣAJ ` B˘´1 AΣ,
+
+and hence 
+
+0 ĺ ΣU |Y ĺ Σ ĺ λIr .
+
+Thus, the posterior covariance is uniformly bounded by λ. By Lemma G.1, this implies 
+
+}∇y mπ pyq} op ď MΣ}AJB´1}op ď λ}A}op 
+
+b ,
+
+uniformly over π P PGauss . Therefore, the posterior mean in this setting is globally Lipschitz. If π P Plogconv has density 
+
+dπ puq 9 exp t´ V puqu du 
+
+with respect to Lebesgue measure on Rr , where V is twice continuously differentiable and satisfies ∇2V puq ľ
+
+c0Ir for all u P Rr and π P Plogconv , for some c 0 ą 0. The posterior density of U given Y “ y is proportional to exp 
+
+"
+
+´V puq ´ 12 py ´ AuqJB´1py ´ Auq
+
+*
+
+.
+
+The Hessian of the negative log-posterior is given by 
+
+∇2V puq ` AJB´1A ľ c0Ir .
+
+37 By the Brascamp-Lieb covariance inequality (Brascamp and Lieb, 1976), 
+
+}Cov π pU | Y “ yq} op ď Eπ
+
+„›››`∇2V pU q ` AJB´1A˘´1›››op 
+
+ˇˇˇ Y “ y
+
+ȷ
+
+ď c´10 ,
+
+uniformly in y. Hence 
+
+}∇y mπ pyq} op ď c´10 }AJB´1}op ď }A}op 
+
+c0b , for all π.Thus, strongly log-concave priors with curvature uniformly bounded below by c 0 ą 0 satisfy the required Lipschitz condition. Finally, consider the homoscedastic Gaussian mixture class where π “ řJa“1 waNr pma, Σq and wa ą 0 for all a P r Js. Conditional on the cluster label C “ a, the posterior covariance is C :“ `Σ´1 ` AJB´1A˘´1 ,
+
+which does not depend on a or y and satisfies C ĺ Σ ĺ λIr . The corresponding posterior mean is 
+
+ηapyq “ C `Σ´1ma ` AJB´1y˘ .
+
+Consequently, ηapyq ´ ηbpyq “ CΣ´1pma ´ mbq, which is independent of y. Define 
+
+L0 :“ sup  
+
+> λIrĺΣĺλIr
+
+›››`Σ´1 ` AJB´1A˘´1 Σ´1
+
+›››op 
+
+ă 8 .
+
+Then max a,b }ηapyq ´ ηbpyq} 2 ď 2M L 0. By the conditional covariance decomposition, Cov π pU | Y “ yq “ Eπ rCov pU | Y “ yq | Y “ ys ` Cov π pEπ rU | Y “ ys | Y “ yq .
+
+The first term equals C, while the second term is the covariance of the discrete random vector taking the value ηapyq with probability qapyq. Therefore, Cov π pU | Y “ yq “ C `
+
+> J
+
+ÿ
+
+> a“1
+
+qapyq`ηapyq ´ ηpyq˘` ηapyq ´ ηpyq˘J,
+
+where ηpyq :“ řJa“1 qapyqηapyq “ Eπ rU | Y “ ys. Since ηpyq is a convex combination of η1pyq, . . . , η J pyq, for every a P r Js,
+
+}ηapyq ´ ηpyq} 2 ď max  
+
+> bPr Js
+
+}ηapyq ´ ηbpyq} 2 ď 2M L 0.
+
+Consequently, 
+
+}Cov π pU | Y “ yq} op ď } C}op `
+
+> J
+
+ÿ
+
+> a“1
+
+qapyq} ηapyq ´ ηpyq} 22 ď λ ` 4M 2L20,
+
+uniformly over y P Rr and over all priors in the mixture class. 
+
+# H Theoretical details on clustered empirical Bayes 
+
+## H.1 Initialization and nuisance parameter estimation 
+
+The clustered empirical Bayes component of DAIF relies on the asymptotic behavior of the top principal components of the high-dimensional feature matrices. Recall that the initialization step is based on the best rank-rh approximation 1
+
+n U pc  
+
+> h
+
+Dpc  
+
+> h
+
+pV pc  
+
+> h
+
+qJ, (H.1) 38 where Dpc  
+
+> h
+
+contains the top rh singular values of ĎXh, and the singular vectors are rescaled so that pU pc  
+
+> h
+
+qJU pc  
+
+> h
+
+“
+
+nIrh and pV pc  
+
+> h
+
+qJV pc  
+
+> h
+
+“ phIrh . Throughout, we fix the signs of the empirical singular vectors by imposing 
+
+pU pc  
+
+> h
+
+qJ˚j pUhq˚j ě 0, pV pc  
+
+> h
+
+qJ˚j pVhq˚j ě 0,
+
+for all h P r ms and j P r rhs.Our analysis relies on asymptotic characterizations of empirical singular vectors from random matrix theory (Benaych-Georges and Nadakuditi, 2012; Baik et al., 2005; Paul, 2007), combined with Gaussian mixture deconvolution results underlying empirical Bayes denoising (Kiefer and Wolfowitz, 1956; Zhong et al., 2022; Jiang and Zhang, 2009). To formalize these limits, define pseudo-Lipschitz test functions, following (Nandy and Ma, 2024, (5.1)). In other words, φ : Rs Ñ R is pseudo-Lipschitz is it satisfies 
+
+|φpxq ´ φpyq| ď Cp1 ` } x}2 ` } y}2q} x ´ y}2, x, y P Rs, (H.2) for some constant C ą 0. In the literature, such functions are also referred as pseudo-Lipschitz of order 2. Using this definition, we restate Proposition 5.1 of Nandy and Ma (2024) characterizing the asymptotic properties of the empirical principal component embeddings. 
+
+Proposition H.1 (Proposition 5.1 of Nandy and Ma (2024)) . Suppose Assumption 6.1 holds. Consider pseudo-Lipschitz functions φ : Rr Ñ R and tϑh : Rrh Ñ R for h P r msu . Then, if ph{n “ γh for all h P r ms
+
+as n, p h Ñ 8 , almost surely we have 
+
+lim 
+
+> nÑ8
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+φ
+
+´
+
+pU pc 1 qi˚, . . . , pU pc  
+
+> m
+
+qi˚, p ĂX1qi˚, . . . , p ĂXĂmqi˚
+
+¯
+
+“ Eμ
+
+”
+
+φ
+
+´
+
+Y pc 1 , . . . , Y pc  
+
+> m
+
+, rX1, . . . , rXĂm
+
+¯ı 
+
+,
+
+lim 
+
+> nÑ8
+
+1
+
+phphÿ
+
+> j“1
+
+ϑhpp V pc  
+
+> h
+
+qj˚q “ Eνh
+
+”
+
+ϑhpY pc 
+
+> R,h
+
+q
+
+ı
+
+, for all h P r ms,where Y pc  
+
+> h
+
+“ M Lh Uh ` p ΣLh q1{2Zpc  
+
+> L,h
+
+P Rrh , Y pc  
+
+> R,h
+
+“ M Rh Vh ` p ΣRh q1{2Zpc  
+
+> R,h
+
+P Rrh , and rXℓ “ Lℓ rUℓ ` rZℓ P Rrrℓ .
+
+Here pU1, . . . , U m, rU1, . . . , rUĂmq „ μ, Vh „ νh, and the noise vectors tZpc 
+
+> L,h
+
+uhPr ms, tZpc 
+
+> R,h
+
+uhPr ms, and t rZℓuℓPr Ăms
+
+have independent standard normal entries and are mutually independent of the latent variables. Furthermore, the alignment matrices tp M ‹ 
+
+> h
+
+, Σ‹
+
+> h
+
+q : h P r ms, ‹ P t L, R uu are defined as follows: 
+
+M ‹ 
+
+> h
+
+“ diag pm‹
+
+> 1,h
+
+, . . . , m ‹
+
+> rh,h
+
+q, Σ‹ 
+
+> h
+
+“ diag pσ‹
+
+> 1,h
+
+, . . . , σ ‹
+
+> rh,h
+
+q, ‹ P t L, R u,
+
+where 
+
+σLi,h :“ 1 ` p D2
+
+> h
+
+qii 
+
+pD2
+
+> h
+
+qii t1 ` γhpD2
+
+> h
+
+qii u , σRi,h :“ 1 ` γhpD2
+
+> h
+
+qii 
+
+γhpD2
+
+> h
+
+qii t1 ` p D2
+
+> h
+
+qii u , (H.3) 
+
+mLi,h :“
+
+b
+
+1 ´ σLi,h , mRi,h :“
+
+b
+
+1 ´ σRi,h ,
+
+for all h P r ms and i P r rhs. Moreover, on an appropriate common probability space, there exist mutually independent matrices tZpc  
+
+> L,h
+
+: h P r msu with i.i.d. standard Gaussian entries such that, for every h P r ms,
+
+1
+
+n
+
+›››U pc  
+
+> h
+
+´ UhpM Lh qJ ´ Zpc 
+
+> L,h
+
+pΣLh q1{2
+
+›››2
+
+> F
+> a.s.
+
+ÝÝÑ 0. (H.4) The matrices tp M ‹ 
+
+> h
+
+, Σ‹
+
+> h
+
+q : h P r ms, ‹ P t L, R uu in (H.3) are approximated by tp xM ‹ 
+
+> h
+
+, pΣ‹
+
+> h
+
+q : h P r ms, ‹ P t L, R uu 
+
+(defined in (3.2)) by plugging the estimator pDh from (3.3) into (H.3). For the low-dimensional modalities, we additionally estimate the loading matrices tLℓ : ℓ P r rmsu using pLℓ :“
+
+´ 1 
+
+> N
+
+ĂXJ 
+
+> ℓ
+
+ĂXℓ ´ Irrℓ
+
+¯1{2
+
+. The following lemma establishes consistency of these nuisance parameter estimates. 
+
+Lemma H.1. As n Ñ 8 , the following hold almost surely: 1. For all h P r ms, pDh a.s 
+
+ÝÝÑ Dh, as n Ñ 8 .
+
+39 2. For all ℓ P r rms, pLℓ a.s 
+
+ÝÝÑ Lℓ, as n Ñ 8 .3. For all h P r ms and ‹ P t L, R u, xM ‹
+
+> ha.s.
+
+ÝÝÑ M ‹ 
+
+> h
+
+and pΣ‹
+
+> ha.s.
+
+ÝÝÑ Σ‹
+
+> h
+
+, as n Ñ 8 ,where all the convergences hold in Frobenius norm. Proof. The proof of the above theorem follows using Proposition H.1 and the techniques adopted to prove Lemma 5.1 of Nandy and Ma (2024). 
+
+## H.2 Clustering of Modalities 
+
+In this section, we analyze the theoretical properties underlying the success of the hierarchical clustering algorithm to recover the modality clusters C1, . . . , CK . In that direction, we assume the following condition on the independence measure, which ensures that the misclassification error asymptotically goes to zero. 
+
+Assumption H.1 (Clustering assumptions) . For every e, e 1 P E, let see 1 P r 0, 1s denote a deterministic population affinity score. We assume that there exists ∆sep ą 0 such that 
+
+inf  
+
+> kPr Ks
+
+inf 
+
+> e,e 1PCk
+> e‰e1
+
+see 1 ě ∆sep , and sup  
+
+> k‰k1
+> ePCk, e 1PCk1
+
+see 1 “ 0. (H.5) 
+
+Assumption H.2 (Uniform convergence of empirical affinities) . Let psee 1 denote the empirical affinity used to construct the dissimilarity matrix in (3.4) . We assume that 
+
+max  
+
+> e,e 1PE
+
+|psee 1 ´ see 1 | a.s.
+
+ÝÑ 0, where see 1 satisfies (H.5) .
+
+For Gaussian-kernel CKA used in our implementation, Assumption H.2 is verified in the following lemma using its V-statistic representation. 
+
+Lemma H.2. Consider the random vectors tY pc  
+
+> h
+
+: h P r msu and t rXℓ : ℓ P r rmsu defined in Proposition H.1. For a unified notation, let us denote U init  
+
+> e
+
+:“ Y pc  
+
+> e
+
+if e P EH, and U init  
+
+> e
+
+:“ rXe´m if e P EL. For each e, e 1 P E,define the empirical affinity 
+
+psee 1 :“ CKA 
+
+´ pU init  
+
+> e
+
+, pU init 
+
+> e1
+
+¯
+
+(H.6) 
+
+and the corresponding population affinity as 
+
+see 1 :“ He,e 1
+
+aHe,e He1,e 1
+
+, (H.7) 
+
+where for independent copies pXe, Xe1 q and pYe, Ye1 q of pU init  
+
+> e
+
+, U init  
+
+> e1
+
+q we have 
+
+He,e 1 :“ EXe,Ye,Xe1 ,Ye1 rRϱpXe, YeqRϱpXe1 , Ye1 qs ` EXe,Ye rRϱpXe, Yeqs EXe1 ,Ye1 rRϱpXe1 , Ye1 qs ´ 2 EXe,X e1
+
+“EYe rRϱpXe, Yeqs ˆ EYe1 rRϱpXe1 , Ye1 qs ‰ .
+
+In the foregoing expression, for two vectors x, y of same dimension, Rϱpx, y q :“ exp p´} x ´ y}2{p 2ϱ2qq . Then 
+
+psee 1 a.s.
+
+ÝÑ see 1 .
+
+Since |E| “ m ` rm “ Op1q, the above convergence further implies 
+
+max  
+
+> e,e 1PE
+
+|psee 1 ´ see 1 | a.s.
+
+ÝÑ 0.
+
+Under Assumptions H.1 and H.2, we have the following theorem about consistency of modality clustering. 40 Theorem H.1. Consider the clusters pC1, . . . , pCK obtained by applying average-linkage hierarchical clustering to the dissimilarity matrix Nee 1 “ 1 ´ psee 1 for e, e 1 P E. If K, m, rm “ Op1q and Assumptions H.1 and H.2 hold, then with probability 1 ␣ pC1, . . . , pCK
+
+( “ ␣C1, . . . , CK
+
+(
+
+Equivalently, with probability one, there exists N0 ă 8 such that, for every n ě N0, there exists a permutation 
+
+Πn : rKs Ñ r Ks satisfying 
+
+pCΠnpkq “ Ck, for all k P r Ks.where for two sets A, B, we denote A ∆ B : “ p A X Bcq Y p Ac X Bq.Proof. Write 
+
+spA, B q :“ 1
+
+|A|| B|
+
+ÿ
+
+> ePA
+
+ÿ
+
+> e1PB
+
+see 1
+
+for the population average similarity between two nonempty disjoint sets A, B Ď E, and define its empirical counterpart 
+
+pspA, B q :“ 1
+
+|A|| B|
+
+ÿ
+
+> ePA
+
+ÿ
+
+> e1PB
+
+psee 1 .
+
+By Assumption H.2, there exists an almost sure event Ω 0 of probability one such that, on Ω 0,max  
+
+> e,e 1
+
+|psee 1 ´ see 1 | Ñ 0.
+
+Then for every ω P Ω0 and all nonempty disjoint A, B Ď E,
+
+|pspA, B q ´ spA, B q| ď max  
+
+> e,e 1
+
+|psee 1 ´ see 1 |.
+
+Hence, for all sufficiently large n,max  
+
+> A,B
+
+|pspA, B q ´ spA, B q| ď ∆sep 
+
+3 ,
+
+where the maximum is over all nonempty disjoint subsets A, B Ď E.We shall prove the result by induction on the stage of hierarchical clustering. Observe that at the initial stage, since the initial clusters are singletons, every empirical cluster (singleton) is contained in the true cluster up to permutation of cluster labels. Therefore for the initial stage the result holds. Now consider any stage of the hierarchical clustering algorithm and assume that every current empirical cluster is contained in one of the true clusters up to permutation of cluster labels. Let A and B be two current clusters contained in the same true cluster Ck. Then, by Assumption H.1, 
+
+spA, B q “ 1
+
+|A|| B|
+
+ÿ
+
+> ePA
+
+ÿ
+
+> e1PB
+
+see 1 ě ∆sep .
+
+Therefore, for all sufficiently large n,
+
+pspA, B q ě spA, B q ´ ∆sep 
+
+3 ě 2∆ sep 
+
+3 .
+
+On the other hand, if A Ď Ck and B Ď Cℓ with k ‰ ℓ, then by Assumption H.1 spA, B q “ 0. Hence 
+
+pspA, B q ď ∆sep 
+
+3 .
+
+Thus, for all sufficiently large n, for every pair of disjoint sets A and B within the true clusters the average similarity is strictly larger than the average similarity for every pair of disjoint sets A and B which lies in 41 separate true clusters. Consequently, average-linkage clustering can only merge two current clusters that are contained in the same true cluster (up to permutation of labels). By induction over the agglomerative steps, no merge ever crosses a true cluster boundary before all true clusters have been formed. Since the algorithm stops when K clusters remain, and the true partition has exactly K clusters, the resulting partition must equal tC1, . . . , CK u (up to permutation of labels). This proves the claim on Ω 0, and therefore the claim holds true. A natural corollary of the above theorem and Lemma H.2 is the following. 
+
+Corollary H.1. If psee 1 is defined using (H.6) , then then if μ satisfies Assumption H.1 with see 1 defined by 
+
+(H.7) , with probability one, there exists N0 ă 8 such that, for every n ě N0, there exists a permutation 
+
+Πn : rKs Ñ r Ks satisfying 
+
+pCΠnpkq “ Ck, for all k P r Ks.
+
+This corollary justifies the use of CKA with Gaussian kernel in DAIF. 
+
+## H.3 Proof of Lemma H.2 
+
+First define matrices U init  
+
+> e
+
+P Rnˆrh where the rows pU init  
+
+> e
+
+qi˚ are i.i.d. copies of U init  
+
+> e
+
+defined in Lemma H.2 and consider the surrogate kernel 
+
+pK‹qij “ exp 
+
+˜
+
+´
+
+››pU init  
+
+> ‹
+
+qi˚ ´ p U init  
+
+> ‹
+
+qj˚
+
+››2
+
+2ϱ2
+
+¸
+
+, where ‹ P t e, e 1u,using the oracle random vectors. Let rKe “ HKeH, where H “ In ´ 1 
+
+> n
+
+11 J, and consider the centered HSIC estimator between modalities e and e1 defined as 
+
+ĆHSIC e,e 1 “ 1
+
+n2 Tr 
+
+´ rKe rKe1
+
+¯
+
+,
+
+Based on the aforementioned definition, the population CKA between modalities indexed by e and e1 is defined as: 
+
+ĆCKA e,e 1 :“ ĆHSIC e,e 1
+
+bĆHSIC e,e ĆHSIC e1,e 1
+
+.
+
+Let us fix arbitrary e, e 1 P r m ` rms. We prove that 
+
+ĆCKA e,e 1 a.s 
+
+ÝÝÑ He,e 1
+
+aHe,e He1,e 1
+
+, as n Ñ 8 . (H.8) Note that it is enough to prove that ĆHSIC e,e 1 a.s. 
+
+ÝÝÑ He,e 1 , as the convergence of the diagonal terms He,e and 
+
+He1,e 1 can be shown similarly. Then the conclusion follows using the continuity of the normalized ratio on the right hand side of (H.8). Let ␣` U init  
+
+> i,e
+
+, U init 
+
+> i,e 1
+
+˘( ni“1 be i.i.d. copies of `U init  
+
+> e
+
+, U init 
+
+> e1
+
+˘.Now note that: 
+
+ĆHSIC e,e 1 “ 1
+
+n2 Tr pHKeHKe1 q, H “ In ´ 1
+
+n 11 J.
+
+Therefore 
+
+HKeH “
+
+ˆ
+
+In ´ 1
+
+n 11 J
+
+˙
+
+Ke
+
+ˆ
+
+In ´ 1
+
+n 11 J
+
+˙
+
+,
+
+and hence 
+
+ĆHSIC e,e 1 “ 1
+
+n2 Tr 
+
+„ˆ 
+
+Ke ´ 1
+
+n 11 JKe ´ 1
+
+n Ke11 J ` 1
+
+n2 11 JKe11 J
+
+˙
+
+Ke1
+
+ȷ
+
+42 “ 1
+
+n2 Tr pKeKe1 q ´ 1
+
+n3 Tr p11 JKeKe1 q ´ 1
+
+n3 Tr pKe11 JKe1 q ` 1
+
+n4 Tr p11 JKe11 JKe1 q.
+
+We evaluate each term separately. Since the kernel matrices are symmetric, Tr pKeKe1 q “ 
+
+> n
+
+ÿ
+
+> i,j “1
+
+pKeqij pKe1 qij .
+
+Furthermore, Tr p11 JKeKe1 q “ 1JKeKe1 1 “
+
+> n
+
+ÿ
+
+> i“1
+
+˜ nÿ
+
+> j“1
+
+pKeqij 
+
+¸ ˜ nÿ
+
+> k“1
+
+pKe1 qik 
+
+¸
+
+,
+
+and similarly Tr pKe11 JKe1 q “ 
+
+> n
+
+ÿ
+
+> i“1
+
+˜ nÿ
+
+> j“1
+
+pKeqij 
+
+¸ ˜ nÿ
+
+> k“1
+
+pKe1 qik 
+
+¸
+
+.
+
+Finally, Tr p11 JKe11 JKe1 q “ p 1JKe1qp 1JKe1 1q “ 
+
+˜ nÿ
+
+> i,j “1
+
+pKeqij 
+
+¸ ˜ nÿ
+
+> i,j “1
+
+pKe1 qij 
+
+¸
+
+.
+
+Substituting the aforementioned identities yields 
+
+ĆHSIC e,e 1 “ 1
+
+n2
+
+> n
+
+ÿ
+
+> i,j “1
+
+pKeqij pKe1 qij `
+
+˜
+
+1
+
+n2
+
+> n
+
+ÿ
+
+> i,j “1
+
+pKeqij 
+
+¸ ˜ 
+
+1
+
+n2
+
+> n
+
+ÿ
+
+> i,j “1
+
+pKe1 qij 
+
+¸
+
+´ 2
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+˜
+
+1
+
+n
+
+> n
+
+ÿ
+
+> j“1
+
+pKeqij 
+
+¸ ˜ 
+
+1
+
+n
+
+> n
+
+ÿ
+
+> j“1
+
+pKe1 qij 
+
+¸
+
+.
+
+Therefore, 
+
+ĆHSIC e,e 1 “ An ` Bn ´ 2Cn,
+
+where 
+
+An “ 1
+
+n2
+
+> n
+
+ÿ
+
+> i,j “1
+
+pKeqij pKe1 qij , Bn “
+
+˜
+
+1
+
+n2
+
+> n
+
+ÿ
+
+> i,j “1
+
+pKeqij 
+
+¸ ˜ 
+
+1
+
+n2
+
+> n
+
+ÿ
+
+> i,j “1
+
+pKe1 qij 
+
+¸
+
+,
+
+and 
+
+Cn “ 1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+˜
+
+1
+
+n
+
+> n
+
+ÿ
+
+> j“1
+
+pKeqij 
+
+¸ ˜ 
+
+1
+
+n
+
+> n
+
+ÿ
+
+> j“1
+
+pKe1 qij 
+
+¸
+
+.
+
+Since the RBF kernel satisfies 0 ď Rϱpx, y q ď 1, all kernels above are bounded. Next, we note that An is a V-statistic where the arguments within the kernel have finite dimensions. We shall use the strong law of large numbers for V-statistics which follows from the SLLN for U-Statistics (cf. page 122 of Lee (1990)) and the relation between U-statistics and V-statistics (cf. page 183 of Lee (1990)). Using the SLLN for V-statistics, we have 
+
+An a.s. 
+
+ÝÝÑ EXe,Ye,Xe1 ,Ye1 rRϱpXe, YeqRϱpXe1 , Ye1 qs , as n Ñ 8 . (H.9) where pXe, Xe1 q and pYe, Ye1 q are independent copies of pU init  
+
+> e
+
+, U init  
+
+> e1
+
+q. Similarly, as n Ñ 8 
+
+1
+
+n2
+
+> n
+
+ÿ
+
+> i,j “1
+
+pKeqij a.s. 
+
+ÝÝÑ EXe,Ye rRϱpXe, Yeqs , and 1
+
+n2
+
+> n
+
+ÿ
+
+> i,j “1
+
+pKe1 qij a.s. 
+
+ÝÝÑ EXe1 ,Ye1 rRϱpXe1 , Ye1 qs .
+
+43 Consequently, 
+
+Bn a.s. 
+
+ÝÝÑ E rRϱpXe, Yeqs E rRϱpXe1 , Ye1 qs , as n Ñ 8 . (H.10) Next, observe that 
+
+Cn “ 1
+
+n3
+
+> n
+
+ÿ
+
+> i,j,k “1
+
+Rϱ
+
+`pU init  
+
+> e
+
+qi˚, pU init  
+
+> e
+
+qj˚
+
+˘ Rϱ
+
+`pU init  
+
+> e1
+
+qi˚, pU init  
+
+> e1
+
+qk˚
+
+˘ .
+
+Let Zi “ `pU init  
+
+> e
+
+qi˚, pU init  
+
+> e1
+
+qi˚
+
+˘ for i P r ns, and for any zℓ “ p xℓ, x 1
+
+> ℓ
+
+q P Rρe`ρe1 , define the third-order kernel 
+
+hpz1, z 2, z 3q “ Rϱpx1, x 2qRϱpx1
+
+> 1
+
+, x 1
+
+> 3
+
+q.
+
+Then 
+
+Cn “ 1
+
+n3
+
+> n
+
+ÿ
+
+> i,j,k “1
+
+hpZi, Zj , Zkq.
+
+Since 0 ď Rϱ ď 1, the kernel h is bounded. Therefore, the strong law for V -statistics gives 
+
+Cn a.s. 
+
+ÝÝÑ E rhpZ1, Z2, Z3qs .
+
+Consider independent copies tXe, Ye, Zeu of U init  
+
+> e
+
+and tXe1 , Ye1 , Ze1 u of U init  
+
+> e1
+
+. Observe that 
+
+Z1 d
+
+“ p Xe, Xe1 q, Z2 d
+
+“ p Ye, Ye1 q, Z3 d
+
+“ p Ze, Ze1 q,
+
+we have 
+
+E rhpZ1, Z2, Z3qs “ E rRϱpXe, YeqRϱpXe1 , Ze1 qs “ EXe,Xe1
+
+“EYe rRϱpXe, Yeqs EYe1 rRϱpXe1 , Ye1 qs ‰ ,
+
+where the last line follows since Z1, Z2, Z3 are i.i.d copies of pU init  
+
+> e
+
+, U init  
+
+> e1
+
+q. Therefore 
+
+Cn a.s. 
+
+ÝÝÑ EXe,Xe1
+
+“EYe rRϱpXe, Yeqs EYe1 rRϱpXe1 , Ye1 qs ‰ . (H.11) Combining (H.9), (H.10), and (H.11), we conclude that 
+
+ĆHSIC e,e 1 a.s. 
+
+ÝÝÑ He,e 1 , as n Ñ 8 . (H.12) and implying (H.8). Next, we show that 
+
+ĆCKA e,e 1 ´ CKA e,e 1 a.s. 
+
+ÝÝÑ 0, as n Ñ 8 .Once again it is enough to show that 
+
+ĆHSIC e,e 1 ´ HSIC e,e 1 a.s. 
+
+ÝÝÑ 0, as n Ñ 8 .since the convergence of the diagonal terms follow similarly. For the RBF kernel 
+
+Rϱpx, y q “ exp 
+
+ˆ
+
+´ }x ´ y}2
+
+2ϱ2
+
+˙
+
+,
+
+the derivatives are bounded, so that by direct computation one can verify that following the Lipschitz bound 
+
+|Rϱpx, y q ´ Rϱpx1, y 1q| ď 1
+
+ϱ
+
+`}x ´ x1} ` } y ´ y1}˘ .
+
+holds. Therefore, for ‹ P t e, e 1u|p K‹qij ´ p K‹qij | ď 1
+
+ϱ
+
+´
+
+}p pU init  
+
+> ‹
+
+qi˚ ´ p U init  
+
+> ‹
+
+qi˚} ` }p pU init  
+
+> ‹
+
+qj˚ ´ p U init  
+
+> ‹
+
+qj˚}
+
+¯
+
+.
+
+44 Consequently, for ‹ P t e, e 1u}K‹ ´ K‹}F ď 2?nϱ } pU init  
+
+> ‹
+
+´ U init  
+
+> ‹
+
+}F . (H.13) Recall the definition of the centered kernel matrix rK from Section A. Since }H}op ď 1, we have: 
+
+} rK‹ ´ rK‹}F ď } K‹ ´ K‹}F .
+
+Hence, 
+
+ˇˇˇHSIC e,e 1 ´ ĆHSIC e,e 1
+
+ˇˇˇ “ 1
+
+n2
+
+ˇˇˇTr 
+
+´ rKe rKe1 ´ rKe rKe1
+
+¯ˇ ˇˇ
+
+ď 1
+
+n2
+
+´
+
+} rKe ´ rKe}F } rKe1 }F ` } rKe}F } rKe1 ´ rKe1 }F
+
+¯
+
+.
+
+Since all kernel entries are bounded by 1, we have } rKe1 }F ď n, and } rKe}F ď n. Therefore, 
+
+ˇˇˇHSIC e,e 1 ´ ĆHSIC e,e 1
+
+ˇˇˇ ď 1
+
+n p} Ke ´ Ke}F ` } Ke1 ´ Ke1 }F q .
+
+Using (H.13), we obtain 
+
+ˇˇˇHSIC e,e 1 ´ ĆHSIC e,e 1
+
+ˇˇˇ ď 2
+
+ϱ?n
+
+´
+
+}U init  
+
+> e
+
+´ pU init  
+
+> e
+
+}F ` } U init  
+
+> e1
+
+´ pU init  
+
+> e1
+
+}F
+
+¯
+
+.
+
+By the Frobenius coupling in (H.4) (alternatively, (D.1) of Nandy and Ma (2024)), we have 1
+
+?n }U init  
+
+> ‹
+
+´ pU init  
+
+> ‹
+
+}F a.s. 
+
+ÝÝÑ 0 for ‹ P t e, e 1u,
+
+and hence we have ˇˇˇHSIC e,e 1 ´ ĆHSIC e,e 1
+
+ˇˇˇ Ñ 0, almost surely. Using (H.12), the lemma follows. 
+
+## H.4 Empirical Bayes with clustered priors 
+
+Next, we focus on the accuracy of the prior estimation step. For each estimated cluster pCk define 
+
+prk :“ ÿ 
+
+> hPpCk, H
+
+rh ` ÿ 
+
+> ℓPpCk, L
+
+rrℓ.
+
+Consider the functions F k : Rprk Ñ R as follows. Fkpt xe : xe P Rρe , e P pCku; mkq :“
+
+# ż # ź 
+
+> ePpCk, H
+
+| pΣLe |´1{2 ¨ ϕρe
+
+´
+
+p pΣLe q´1{2pxe ´ xM Le ueq
+
+¯ +
+
+ˆ
+
+# ź 
+
+> ePpCk, L
+
+ϕρe
+
+´
+
+xe ´ pLeue
+
+¯ +
+
+dmkpt ue : e P pCkuq ,
+
+where for any d P N, ϕdp¨q denotes the density of the standard Gaussian distribution in d dimensions. Consequently, the likelihood considered in (3.5) is given by Lkpt pU init  
+
+> e
+
+: e P pCku; mkq :“
+
+> n
+
+ź
+
+> i“1
+
+Fkptp pU init  
+
+> e
+
+qi˚ : e P pCku; mkq.
+
+45 Next, consider F R 
+
+> h
+
+: Rrh Ñ R as follows. Fr
+
+> h
+
+pvh; nhq :“
+
+# ż
+
+| pΣRh |´1{2 ¨ ϕrh
+
+´
+
+p pΣRh q´1{2pvh ´ xM Rh vhq
+
+¯
+
+dnhpvhq.
+
+Then the likelihood L rhpV pc  
+
+> h
+
+; nhq is defined as LrhpV pc  
+
+> h
+
+; nhq :“
+
+> ph
+
+ź
+
+> j“1
+
+Fr
+
+> h
+
+pp V pc  
+
+> h
+
+q˚j ; nhq
+
+Next, using the idea behind the proof of Lemma H.2 along with Theorem H.1 we shall prove Theorem 6.1. 
+
+Proof of Theorem 6.1. First observe that permutation of cluster labels do not change the measure pμ1 ˆ ¨ ¨ ¨ ˆ 
+
+pμK . Therefore, without loss of generality, we can assume that for all n P N, Π n in Theorem H.1 is the identity permutation (or we relabel the estimated clusters to match the true clusters). Let us denote 
+
+Eclust :“
+
+#
+
+D N0, such that for all n ě N0,
+
+> K
+
+ď
+
+> k“1
+
+t pCk ∆ Cku “ H 
+
++
+
+.
+
+By Assumptions H.1 and H.2, Theorem H.1 implies that the estimated modality partition agrees almost surely with the true partition for all sufficiently large n (after relabeling). In particular, PpEclust q “ 1. Therefore, 
+
+P
+
+”pμ w
+
+ÝÑ μ
+
+ı
+
+“ Prpμ w
+
+ÝÑ μ and Eclust s.
+
+On Eclust , pCk “ Ck for all k P r Ks. Furthermore, since the mixing class Pk has finite second moments and satisfies the local uniform Lipschitz condition in Assumption 6.2, Proposition H.1 imply that all the conditions of Corollary B.7 of Zhong et al. (2022) are satisfied. Therefore, using Corollary B.7 and Lemma H.1, we can conclude that the solutions pμ1, . . . , pμK obtained from (3.5) satisfies lim sup 
+
+> nÑ8
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+log Fkptp pU init  
+
+> e
+
+qi˚ : e P Cku; pμkq
+
+Fkptp pU init  
+
+> e
+
+qi˚ : e P Cku; μkq ě 0, almost surely. Similarly, using Corollary B.7 of Zhong et al. (2022) and Lemma H.1, we can also conclude that for all 
+
+h P r ms, the MLE pνh :“ arg max nh LrhpV pc  
+
+> h
+
+; nhq satisfies lim sup 
+
+> phÑ8
+
+1
+
+phphÿ
+
+> j“1
+
+log Fr
+
+> h
+
+pp V pc  
+
+> h
+
+qj˚; pνhq
+
+Fr
+
+> h
+
+pp V pc  
+
+> h
+
+qj˚; νhq ě 0, almost surely. Then, using Lemma B.2 of Zhong et al. (2022), it follows that 
+
+pμk w
+
+ÝÑ μk, for all k P r Ks, and pνh w
+
+ÝÑ νh, for all h P r ms, almost surely. Finally, since pμ “ pμ1 ˆ ¨ ¨ ¨ ˆ pμK and μ “ μ1 ˆ ¨ ¨ ¨ ˆ μK , therefore pμ w
+
+ÝÑ μ, almost surely, proving the theorem. 
+
+## H.5 Proof of Theorem 6.2 
+
+By Theorem 6.1, we have pμ w
+
+Ñ μ and pνh w
+
+Ñ νh almost surely for all h P r ms. Moreover, Lemma H.1 establishes almost-sure consistency of the estimated nuisance parameters. Assumption 6.2 ensures that the posterior-mean denoisers are uniformly Lipschitz over weak neighborhoods of the true priors. Consequently, Lemmas G.2 and G.3 of Nandy and Ma (2024) imply that, at every fixed iteration, the empirical-Bayes denoisers and their averaged Jacobians converge to their oracle counterparts. The empirical-Bayes AMP iterates are therefore asymptotically equivalent, in normalized Frobenius norm, to the corresponding oracle AMP iterates as described in Section 5.2.2 of Nandy and Ma (2024). Therefore the stated limits follow from Theorem 5.1 of Nandy and Ma (2024). 46 H.6 Proof of Theorem 6.4 
+
+First, we focus on the rescaled training embeddings. For brevity, define 
+
+pAh :“ ` pΣLT,h 
+
+˘´1 pD´1 
+
+> h
+
+, Ah :“ `ΣLT,h 
+
+˘´1D´1 
+
+> h
+
+, pFh :“ pFT,h .
+
+Since rh “ Op1q for all h P r ms, using the definitions of pΣLT,h P Rrhˆrh (3.11) and ΣLT,h P Rrhˆrh (Theo-rem 6.2), we can invoke Theorem 6.2 with the pseudo-Lipschitz function x Þ Ñ x2 to conclude that lim  
+
+> nÑ8
+
+} pΣLT,h ´ ΣLT,h }F “ 0, almost surely for all h P r ms.Again, since rh “ Op1q for all h P r ms, ΣLT,h ą 0 and Dh ą 0, continuity of matrix inversion and Lemma H.1 yields 
+
+} pAh ´ Ah}op a.s.
+
+Ñ 0 for every h P r ms. (H.14) Next, we show that replacing the estimated normalization matrices t pAh : h P r msu by their population limits 
+
+tAh : h P r msu does not affect the empirical average. In that direction, for each i P r ns, define the collection of rescaled embeddings and their oracle counterparts 
+
+Qn,i :“
+
+´
+
+p pF1qi˚ pA1, . . . , p pFmqi˚ pAm, p ĂX1qi˚, . . . , p ĂXĂmqi˚
+
+¯
+
+,
+
+Q˝ 
+
+> n,i
+
+:“
+
+´
+
+p pF1qi˚A1, . . . , p pFmqi˚Am, p ĂX1qi˚, . . . , p ĂXĂmqi˚
+
+¯
+
+.
+
+Then, we have 1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+}Qn,i ´ Q˝
+
+> n,i
+
+}22 “
+
+> m
+
+ÿ
+
+> h“1
+
+1
+
+n
+
+››› pFhp pAh ´ Ahq
+
+›››2
+
+> F
+
+ď
+
+> m
+
+ÿ
+
+> h“1
+
+" 1
+
+n } pFh}2
+
+> F
+
+*
+
+} pAh ´ Ah}2op .
+
+By Theorem 6.2 applied to the pseudo-Lipschitz function pf1, . . . , f m, rx1, . . . , rxĂmq Þ Ñ } fh}22, we get lim sup 
+
+> nÑ8
+
+1
+
+n } pFh}2 
+
+> F
+
+“ E
+
+„›››UhpM LT,h qJ ` ZT,h pΣLT,h q1{2
+
+›››22
+
+ȷ
+
+ă 8 , almost surely. (H.15) Together with (H.14), this implies 1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+}Qn,i ´ Q˝
+
+> n,i
+
+}22a.s.
+
+ÝÑ 0. (H.16) Since ψ is pseudo-Lipschitz, using (H.2) and Cauchy–Schwarz inequality, there exists C ą 0 such that 1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+ˇˇψpQn,i q ´ ψpQ˝
+
+> n,i
+
+qˇˇ
+
+ď C
+
+#
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+`1 ` } Qn,i }2 ` } Q˝
+
+> n,i
+
+}2
+
+˘2
+
++1{2 #
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+}Qn,i ´ Q˝
+
+> n,i
+
+}22
+
++1{2
+
+. (H.17) By (H.15) and (H.16), we have lim sup 
+
+> nÑ8
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+}Qn,i }22 ă 8 , lim sup 
+
+> nÑ8
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+}Q˝
+
+> n,i
+
+}22 ă 8 , almost surely. 47 Therefore, by (H.16) and (H.17), we get lim sup 
+
+> nÑ8
+
+1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+ˇˇψpQn,i q ´ ψpQ˝
+
+> n,i
+
+qˇˇ2 “ 0, almost surely. Now define the modified function 
+
+ψ˝pf1, . . . , f m, rx1, . . . , rxĂmq :“ ψ pf1A1, . . . , f mAm, rx1, . . . , rxĂmq .
+
+As A1, . . . , Am are fixed matrices with finite operator norm, ψ˝ is also pseudo-Lipschitz. Therefore, Theo-rem 6.2 gives 1
+
+n
+
+> n
+
+ÿ
+
+> i“1
+
+ψpQ˝
+
+> n,i
+
+q a.s.
+
+ÝÑ E
+
+”
+
+ψ`UT, 1A1, . . . , U T,m Am, rX1, . . . , rXĂm
+
+˘ı
+
+, as n Ñ 8 .where tUT,h : h P r msu are defined in Theorem 6.2. By the state-evolution identity M LT,h “ ΣLT,h Dh, we obtain 
+
+pM LT,h qJAh “ DhΣLT,h pΣLT,h q´1D´1 
+
+> h
+
+“ Irh .
+
+Therefore, 
+
+UT,h Ah d
+
+“ Uh ` Zrsc 
+
+> T,h
+
+pΣLT,h q1{2pΣLT,h q´1D´1 
+
+> h
+
+.
+
+The Gaussian term in the right of the foregoing expression has covariance D´1 
+
+> h
+
+pΣLT,h q´1D´1 
+
+> h
+
+. Hence, (6.1) follows. Next, we focus on the OLS projected test embeddings tU tst ,ols  
+
+> h
+
+: h P r msu . In this case, one can use Theorem 6.2 and retrace the arguments in Theorem 5.4 of Nandy and Ma (2024) to conclude (6.2). 48

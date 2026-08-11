@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-10</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-11</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 12 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>4</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>8</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>3</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>9</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-10 21:15:49 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-11 21:20:04 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共读12篇论文，精读2篇、速读8篇，聚焦AI医学与生物信息学前沿方法。</p>
-<p>最值得关注：细胞表示学习新框架（8.0分）与多模态病人图表示方法（8.0分）双双获最高分，可在基因与临床数据融合上深入探究。</p>
-<p>明日建议优先精读这两篇高分论文，并结合速读中的可解释ICD编码与检索增强问答扩展应用场景。</p>
+<p>今日12篇论文聚焦虚拟细胞扰动建模与临床预测，其中精读两篇高分工作。最值得关注基因几何条件流匹配模型（9.0分）与级联智能体扰动预测框架（8.0分）。下步可围绕二者在实际患者数据上的验证与可解释性展开比较。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -73,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">4 篇</strong>
+    <strong class="dpr-home-dashboard-count">3 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Beyond Gene Reconstruction: Learning Cell Representations through Complementary Transcriptomic Views">Beyond Gene Reconstruction: Learning Cell Representations through Complementary Transcriptomic Views</span></li><li><span class="dpr-home-dashboard-paper-title" title="PatTree: a novel approach for automated creation of multimodal, graph-based patient representations for medical classification tasks">PatTree: a novel approach for automated creation of multimodal, graph-based patient representations for medical classification tasks</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Comparative Study of Feature Selection Methods for EHR Diagnosis Codes in Opioid Use Disorder Prediction">A Comparative Study of Feature Selection Methods for EHR Diagnosis Codes in Opioid Use Disorder Prediction</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling">Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling</span></li><li><span class="dpr-home-dashboard-paper-title" title="CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction">CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Sparse departures from independence in two-way tables: a heteroscedasticity profile and detection boundary, an adaptive higher-criticism gate, and an assumption-lean exact anchor">Sparse departures from independence in two-way tables: a heteroscedasticity profile and detection boundary, an adaptive higher-criticism gate, and an assumption-lean exact anchor</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -86,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">8 篇</strong>
+    <strong class="dpr-home-dashboard-count">9 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="xMICD: Explainable Representation of Multiple ICD Codes">xMICD: Explainable Representation of Multiple ICD Codes</span></li><li><span class="dpr-home-dashboard-paper-title" title="Retrieval Augmented Biomedical Question Answering with Weak Question Recovery and Neural Reranking for BioASQ Task 14b">Retrieval Augmented Biomedical Question Answering with Weak Question Recovery and Neural Reranking for BioASQ Task 14b</span></li><li><span class="dpr-home-dashboard-paper-title" title="CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction">CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="A Comparative Study of Feature Selection Methods for EHR Diagnosis Codes in Opioid Use Disorder Prediction">A Comparative Study of Feature Selection Methods for EHR Diagnosis Codes in Opioid Use Disorder Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Risk-Aware Quantile Learning for Personalized Dynamic Treatment Regimes">Risk-Aware Quantile Learning for Personalized Dynamic Treatment Regimes</span></li><li><span class="dpr-home-dashboard-paper-title" title="bioMoR: Biology-Guided Mixture-of-Recursions for Effective Genomic Learning">bioMoR: Biology-Guided Mixture-of-Recursions for Effective Genomic Learning</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>7</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>8</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 </div>
 
