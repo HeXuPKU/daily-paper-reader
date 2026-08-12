@@ -1,0 +1,2253 @@
+Title: SVI-DAG: A Structured Variational Inference Approach to Bayesian Causal Discovery
+
+URL Source: https://arxiv.org/pdf/2608.04930v1
+
+Published Time: Thu, 06 Aug 2026 01:21:05 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# SVI-DAG : A Structured Variational Inference Approach to Bayesian Causal Discovery 
+
+Shrenik Zinage ∗
+
+Massachusetts Institute of Technology 
+
+shrenik@mit.edu 
+
+## Abstract 
+
+Bayesian causal discovery seeks to determine the posterior distribution of causal theories, which are interpreted as directed acyclic graphs (DAGs) that explain the observed data. The resulting posterior allows systematic reasoning regarding epistemic uncertainty within these theories. Nonetheless, finding such graphs is difficult due to identifiability problems and limited observational data. Furthermore, precisely approximating posterior over graphs is challenging given vast range of potential DAGs. Recent Bayesian approaches have addressed some of these challenges, yet they remain limited as they fail to encode dependencies between edges, and lack principled ways to incorporate domain knowledge as inductive biases during the search process. To overcome these limitations, we propose 
+
+SVI-DAG , a structured variational inference approach to Bayesian causal discovery using observational data and prior beliefs that uses normalizing flows to model dependencies between edges, supporting expressive and multimodal posterior learning over DAGs. To mitigate mode seeking behaviour in evidence lower bound optimization and promote mode coverage, we use stein variational gradient descent to update the node potentials using a kernel in acyclicity space. We evaluate SVI-DAG against 5 state-of-the-art Bayesian DAG learning methods and demonstrate superior performance in uncertainty quantification while remaining competitive in terms of structural accuracy. The code is available at https: //github.com/shrenikvz/SVI-DAG .
+
+## 1 Introduction 
+
+Understanding causal relationships from data (Sch¨ olkopf et al., 2021) remains a central problem across science and engineering. Causal discovery—the task of inferring which variables directly influence others—allows researchers to move beyond mere associations and reason about the consequences of interventions in complex systems. Such a capability holds the potential to accelerate progress across a broad range of domains, including epidemiology (Tennant et al., 2021), climate science (Runge et al., 2019), economics (Imbens, 2020), psychology (Foster, 2010), and beyond. Causal relationships are commonly represented as directed acyclic graphs (DAGs) (Peters et al., 2017), where nodes correspond to variables and directed edges encode direct causal influences. Learning the DAG from data, however, constitutes a formidable combinatorial problem (Heinze-Deml et al., 2018), as the number of admissible DAGs grows super-exponentially with the number of variables and with purely observational data, the true DAG may be identifiable only up to its Markov equivalence class (MEC) 2.This fundamental identifiability limitation motivates a Bayesian treatment (Friedman and Koller, 2003), wherein the goal is to approximate the posterior distribution over all DAGs that explain the data. Recent work on safe and trustworthy AI (Bengio et al., 2026) further argues that epistemic 
+
+> ∗This work was conducted while the author was a PhD student at Purdue University, independently of the author’s dissertation research.
+> 2The Markov equivalence class is the set of DAGs that encode the same conditional independencies. Preprint. arXiv:2608.04930v1 [cs.LG] 5 Aug 2026
+
+uncertainty over causal theories is essential for building non-agentic Scientist AI (Bengio et al., 2025) systems that provide reliable predictions and can serve as guardrails against overconfident decision making. Existing Bayesian approaches to DAG learning have made substantial progress, yet several limitations remain. A predominant assumption is that edges are modeled as independent random variables, thereby disregarding the rich dependencies that exist between edges. Failing to capture these dependencies leads to difficulty in capturing the multimodal structure of posterior. Moreover, existing Bayesian methods largely lack principled mechanisms for incorporating domain knowledge, which limits their capacity to guide the search toward structurally plausible regions of hypothesis space. 
+
+Our Approach. To address these shortcomings, we introduce SVI-DAG , a structured variational inference (SVI) approach to Bayesian causal discovery. Our core contributions are as follows: • We propose a differentiable Bayesian approach to causal discovery that encodes dependen-cies between edge logits using conditional normalizing flows to support expressive and multimodal learning over DAGs. • Our approach provides a principled way to incorporate domain knowledge as an inductive bias using a new type of prior that adapts based on how strong or weak the prior beliefs are using a Beta-Bernoulli distribution. We further show that this construction induces a tractable Logistic-Beta prior over the edge logits. • To mitigate mode seeking behavior in evidence lower bound (ELBO) optimization, we use stein variational gradient descent (SVGD) to update node potentials using kernel in acyclicity space. This improves mode coverage and quantification of epistemic uncertainty. 
+
+## 2 Related Works 
+
+Given the vast literature on causal discovery (Squires and Uhler, 2023), we focus exclusively on approaches that pose causal discovery as an optimization problem (Vowels et al., 2022). 
+
+Causal Discovery. A foundational shift in causal discovery began with NOTEARS (Zheng et al., 2018), which reformulated combinatorial DAG search as a continuous optimization problem. This idea was extended to nonlinear settings using graph neural networks (Yu et al., 2019), gradient based neural DAG learning (Lachapelle et al., 2019), and graph autoencoder architectures (Ng et al., 2019). Further improvements include DAGs with No Curl (Yu et al., 2021) which improves efficiency via a curl free condition, and methods using acyclicity such as DAGMA (Bello et al., 2022). Complementary approaches introduced masked gradients (Ng et al., 2022) or analyzed interaction of sparsity and acyclicity penalties (Ng et al., 2020) while NoDAGs-Flow (Sethuraman et al., 2023) relaxed the acyclicity assumption entirely, learning nonlinear cyclic causal structures via normalizing flows. On combinatorial side, BOSS (Andrews et al., 2023) demonstrated that efficient order score search can rival continuous relaxation methods in speed and accuracy, while Ban et al. (2024) proposed differentiable structure learning over partial topological orderings that flexibly interpolates between unconstrained and fully ordered search. Bridging constraint based and score based paradigms, Zhou et al. (2025) reformulated conditional independence testing differentiably, allowing end-to-end gradient based learning with statistical guarantees of constraint based methods. These methods demonstrate strong empirical performance but typically return point estimates and do not quantify uncertainty over graph structures. 
+
+Bayesian Causal Discovery. For Bayesian approaches, early differentiable methods include D-VAE (Zhang et al., 2019), which encodes DAGs in a latent space via variational autoencoders. VCN (Annadani et al., 2021) and BCD Nets (Cundy et al., 2021) introduced variational inference (VI) formulations over graph structures, while DiBS (Lorch et al., 2021) proposed a differentiable particle based framework. Concurrent lines of work explored differentiable DAG sampling (Charpentier et al., 2022), tractable marginal uncertainty computation (Wang et al., 2022), and amortized inference for both static (Lorch et al., 2022) and temporal (L¨ owe et al., 2022) settings. GFlowNets emerged as a powerful alternative, allowing diverse posterior sampling over structures (Deleu et al., 2022) and joint inference over graphs and parameters (Nishikawa-Toomey et al., 2022; Deleu et al., 2023). More recently, BayesDAG (Annadani et al., 2023) introduced gradient based posterior inference with 2improved scalability, ProDAG (Thompson et al., 2024) proposed projected VI to enforce acyclicity, and meta learning formulations (Dhir et al., 2024) have been explored to generalize across tasks. 
+
+## 3 Methodology 
+
+3.1 Preliminaries and Notations 3.1.1 Causal Graph and Structural Causal Model 
+
+Let G = ( V, E ) be a DAG on the variable set V = {X1, . . . , X m} where Xi represents a random variable. Let A ∈ { 0, 1}m×m be the adjacency matrix encoding the causal relationships among the 
+
+m variables with entries Aij = 1 if there is a directed edge Xj → Xi in G and 0 otherwise. Let 
+
+Xi ⊆ R denote the sample space for node Xi, and define the joint sample space X = X1 × · · · × X m.Let D = {x(n)}Nn=1 be the dataset, where each observation is a tuple x(n) = ( x(n)1 , . . . , x (n) 
+
+> m
+
+) ∈ X 
+
+with x(n) 
+
+> i
+
+∈ X i. A structural causal model (SCM) states that each variable is generated as a function of its parents plus some exogenous noise. We denote by XPa( i) the set of parental nodes of Xi so that there is an edge from Xj ∈ XPa( i) to Xi in DAG G. Formally, for each node i ∈ { 1, . . . , m },
+
+Xi = fi
+
+ XPa( i); θi
+
+ + ϵi,
+
+where fi(·; θi) is a deterministic function with parameters θi and and ϵi’s are independent noise variables with strictly positive densities w.r.t Lebesgue measure. If noise variables are Gaussian and functions fi are not linear or constant, then additive noise model (ANM) is structurally identifiable (Peters et al., 2014; Hoyer et al., 2008). Causality typically assumes structural assignments do not form cycles and they induce a DAG (Pearl, 2009). 
+
+3.1.2 Bayesian Structure Learning 
+
+Our goal is to approximate the posterior distribution over all possible DAGs A and associated parameters θ = {θ1, . . . , θ m} in a neural network based SCM (NCM). Specifically, we target the posterior over structures and parameters p(A, θ | D ) ∝ p(D | A, θ ) p(θ | A) p(A) with a prior over parameters p(θ | A) and graphs p(A) (Friedman and Koller, 2003). The likelihood is: 
+
+p(D | A, θ ) = 
+
+> N
+
+Y
+
+> n=1
+> m
+
+Y
+
+> i=1
+
+p x(n) 
+
+> i
+
+| x(n)Pa( i); θi
+
+,
+
+where the dependency on A is implicit in the parent index sets Pa( i). Concretely, assuming the noise is Gaussian, p(Xi | XPa( i), θ i) = N  Xi | fi(XPa( i); θi), σ 2
+
+> i
+
+. Each θi determines conditional distribution of Xi given its parents respecting the DAG structure A.
+
+3.2 Our Approach 
+
+In this section, we detail each component of the SVI-DAG algorithm which is specifically designed to address some of the critical challenges in causal structure learning. 
+
+3.2.1 Domain Informed Prior over Adjacency Matrix 
+
+We start by defining a prior over the DAGs. A common choice is Bij ∼ Bernoulli( pij ). The parameters pij encode prior beliefs about edge presence. To improve robustness to misspecified prior beliefs, we introduce a hierarchical prior over B. For each ordered pair (i, j ) with i̸ = j, we introduce πij ∈ (0 , 1) such that p(Bij | πij ) = πBij  
+
+> ij
+
+(1 − πij )1−Bij . Instead of fixing πij to the prior value pij , we place a hyper prior on πij using a Beta distribution πij ∼ Beta 
+
+
+
+αij , β ij 
+
+
+
+. We choose hyperparameters so that Beta-density mode is pij given by 
+
+αij = νij pij + 1 , βij = νij (1 − pij ) + 1 , νij = νmin + κ |pij − 0.5|η for i̸ = j, 
+
+where νij > 0 is a concentration parameter that is strictly increasing in |pij − 0.5| when κ > 0 and 
+
+νmin , κ, and η are constants. This choice assigns higher concentration to nominal beliefs farther from 0.5 (see Figure 1). As νij → ∞ , the marginal Beta–Bernoulli prior over each free edge Bij 
+
+3converges to a Bernoulli( pij ) prior (see Proposition B.1 in appendix B). Let Π = {πij }i̸=j . We sample edges as Bij ∼ Bernoulli( πij ), which gives the joint prior as 
+
+p(B, Π) ∝ Y
+
+> i̸=j
+
+Bernoulli( Bij | πij ) Beta 
+
+
+
+πij | νij pij + 1 , ν ij (1 − pij ) + 1 
+
+
+
+.                                     
+
+> 00.10.20.30.40.50.60.70.80.910510 15 20
+> p
+> Density
+> ν=νmin +κ|p−0.5|η,(νmin = 1 , κ = 500 , η = 2)
+> p= 0 .05 , ν = 102 .2p= 0 .1, ν = 81 .0
+> p= 0 .3, ν = 21 .0p= 0 .5, ν = 1 .0
+> p= 0 .7, ν = 21 .0p= 0 .9, ν = 81 .0
+> p= 0 .95 , ν = 102 .2
+
+Figure 1: Adaptive domain informed prior over adjacency matrix 
+
+Marginalizing over πij recovers a Beta-Bernoulli model over Bij . Since causal graphs are acyclic, we enforce acyclicity in the prior by construction (Annadani et al., 2023). We introduce a binary free edge matrix B ∈{0, 1}m×m with zero diagonal and a vector of node poten-tials r = ( r1, . . . , r m)T ∈ Rm. Let’s define acyclic mask and induced adjacency by 
+
+M (r) = P (r) L P (r)T , A = B ⊙ M (r),
+
+where ⊙ denotes the Hadamard product. For any (B, r ),
+
+A is a DAG (see Theorem B.3 in appendix). Moreover, for any DAG A, there always exists a corresponding pair 
+
+(B, r ) such that A = B ⊙ M (r) (Annadani et al., 2023; Yu et al., 2021). We therefore place joint prior on the free edges and potentials p(B, Π, r ) ∝ p(B, Π) N (r |
+
+0, σ 2 
+
+> r
+
+Im). This construction enforces acyclicity, so no additional acyclicity indicator or penalty is required. The permutation P (r) is well defined when entries of r are pairwise distinct. Since p(r) is Gaussian, this condition holds almost surely. By analytically marginalizing over Π (see Derivation A.1 in appendix A), we have 
+
+p(B, r ) = 
+
+Y
+
+> i̸=j
+
+B(Bij + αij , β ij + 1 − Bij )
+
+B(αij , β ij )
+
+ N  r | 0, σ 2 
+
+> r
+
+Im
+
+ ,
+
+where B denotes the Beta function. Under this formulation, pij is the nominal mode of the latent edge probability πij , not the exact finite νij marginal probability of Bij . The latter is αij /(αij + βij )
+
+which approaches pij as νij → ∞ .
+
+3.2.2 Prior over NCM Parameters conditioned on the Adjacency Matrix 
+
+Next, conditional on A, we place a prior on NCM parameters θ = {θ1, . . . , θ m}. We consider a prior 
+
+p(θ | A) = N
+
+
+
+θ | μp(A), diag  σ2 
+
+> p
+
+(A)
+
+=
+
+> dθ
+
+Y
+
+> k=1
+
+N θk | μp,k (A), σ 2
+
+> p,k
+
+(A),
+
+where dθ is the dimensionality and μp(A) ∈ Rdθ and σp(A) ∈ (0 , ∞)dθ are deterministic functions of A. In the simplest case, these functions are constant (for example, zero mean and fixed variance), but the notation permits dependence on A. The joint prior factorizes as p(A, θ ) = p(θ | A) p(A).
+
+3.2.3 ELBO without Normalizing Flow 
+
+By marginalizing Π in the prior to get p(B, r ) (see Derivation A.1 in appendix A) and rearranging terms (see Derivation A.2 in appendix A), we have the ELBO as ELBO (ϕ) = Eqϕ(B,r )
+
+h
+
+Eqϕ(θ|A)[log p(D | A, θ )] 
+
+| {z }
+
+> expected log likelihood
+
+− DKL (qϕ(θ | A) ∥ p(θ | A)) 
+
+| {z } 
+
+> KL divergence for θ
+
+i
+
+− DKL (qϕ(B, r ) ∥ p(B, r )) 
+
+| {z }   
+
+> KL divergence for Band r
+
+.
+
+where qϕ(θ | A) and qϕ(B, r ) denotes the conditional and structural guides. 
+
+Remark 3.1 . Note that the above ELBO is not equivalent to the ELBO defined using qϕ(A) under deterministic map A = B ⊙ M (r) because the pushforward from (B, r ) to A is many-to-one. If 
+
+qϕ(A) and p(A) are defined as the pushforwards of qϕ(B, r ) and p(B, r ), then Proposition B.2 implies DKL 
+
+ qϕ(B, r ) ∥ p(B, r ) ≥ DKL 
+
+ qϕ(A) ∥ p(A). Consequently, an ELBO written directly in terms of A is at least as tight as the ELBO in (B, r ) space. However, the induced prior p(A) is generally intractable, whereas p(B, r ) admits a simple factorized form. We therefore work with Eq. A.1 for computational tractability, even though ELBO in A space would be tighter. 43.3 Soft Relaxation for Adjacency Matrix and Acyclicity 
+
+Since B is discrete, we cannot differentiate with respect to Bij . We therefore introduce a continuous relaxation for B via the Gumbel-Softmax trick (Jang et al., 2016; Maddison et al., 2016; Ng et al., 2022). For each (i, j ) with i̸ = j, we introduce a learnable edge logit γij ∈ R and a temperature 
+
+T > 0. We draw logistic noise Rij 
+
+> iid
+
+∼ Logistic(0 , 1) implemented as Rij = log Uij − log(1 −
+
+Uij ), Uij 
+
+> iid
+
+∼ Uniform(0 , 1) . Equivalently, Rij can be generated as the difference of two i.i.d. 
+
+Gumbel (0 , 1) variables. We use the same noise to define both a hard Bernoulli sample and its differentiable relaxation: 
+
+Bij = 1{γij + Rij > 0}, ˜Bij = σ
+
+
+
+(γij + Rij )/T 
+
+
+
+, σ(x) = 1 /(1 + e −x), (1) where Bii = ˜Bii = 0 . Then Bij ∼ Bernoulli( σ(γij )) , while ˜Bij ∈ (0 , 1) converges pointwise to Bij as T → 0, except on the probability-zero event γij + Rij = 0 (Ng et al., 2022). For the order, let P (r) be the hard permutation obtained by sorting r. We also define a backward surrogate through the Sinkhorn operator S (Adams and Zemel, 2011). For τ > 0, let S0(r) = r oT ,where o = ( m, m − 1, . . . , 1) T , and applying KS alternating row and column normalizations to 
+
+exp( S0(r)/τ ) we have 
+
+Pτ,K S (r) = SKS (exp( S0(r)/τ )) , Mτ,K S (r) = Pτ,K S (r) L P τ,K S (r)T .
+
+Double stochasticity is guaranteed in the KS → ∞ limit. More importantly, even an exactly doubly stochastic nonpermutation matrix generally makes Mτ,K S (r) dense, so this relaxed order mask is not generally acyclic and can have positive entries in both directions. Lemma B.4 (see appendix B) states that Pτ,K S (r) → P (r) and Mτ,K S (r) → M (r) as τ → 0 and KS → ∞ . We distinguish the hard DAG from its soft backward surrogate as 
+
+A = B ⊙ M (r), ˜A = ˜B ⊙ Mτ,K S (r) ⊙ (1m×m − Im), AST = ˜A + sg( A − ˜A), (2) where M (r) = P (r)LP (r)T and sg is stop-gradient. Thus AST = A in the forward pass and every evaluated graph is a binary DAG by Theorem B.3. The diagonal factor removes self-loops from ˜A,but does not make the finite-temperature relaxation acyclic. 
+
+3.4 Forward Model                                   
+
+> −6−4−2024600.20.40.60.811.2
+> γp(γ)
+> ν=νmin +κ|p−0.5|η,(νmin = 1 , κ = 500 , η = 2)
+> p= 0 .05 , ν = 102 .2p= 0 .1, ν = 81 .0
+> p= 0 .3, ν = 21 .0p= 0 .5, ν = 1 .0
+> p= 0 .7, ν = 21 .0p= 0 .9, ν = 81 .0
+> p= 0 .95 , ν = 102 .2logit( p)
+
+Figure 2: Induced prior over edge logits 
+
+We now define forward model using Bayesian MLP for node i that uses the parent XPa( i) as input and outputs a prediction ˆXi. Formally, ˆXi = fi
+
+ XPa( i); θi
+
+. To incorporate adjacency, let X = ( X1, . . . , X m)T and let 
+
+(AST )i denote the ith row of the straight-through matrix in Eq. 2. We define 
+
+gi(x; θi) = fi
+
+ (AST )i ⊙ x; θi
+
+.
+
+Since AST = A in the forward pass, the evaluated input zeros every nonparent exactly and all likelihood values cor-respond to a hard DAG. During backpropagation, deriva-tives are routed through the generally cyclic relaxation ˜A. These straight through derivatives are biased surrogate gradients. 
+
+3.5 ELBO with Normalizing Flow 
+
+In many applications, the assumption that qϕ(B) factorizes independently across edges can be restrictive. SVI (Rezende and Mohamed, 2015) addresses this limitation by constructing a more expressive qϕ(B). We define a standard base distribution p0(z) for edge latent variables. We introduce an invertible conditional map Tϕ : Rm(m−1) × Rm → Rm(m−1) , parameterized by ϕ.The transformation gives γ as a function of z and r given by γ = Tϕ(z; r). By rearrangement (see Derivation A.3 in appendix A), we have the revised ELBO as 
+
+ELBO( ϕ, ψ ) = Er∼qψ (r) Ez∼p0 EB∼p(·| Tϕ(z;r)) 
+
+h
+
+Eqϕ(θ|A)
+
+log p(D | A, θ )| {z }
+
+> expected log likelihood
+
+− DKL 
+
+ qϕ(θ | A) ∥ p(θ | A)| {z } 
+
+> KL divergence for θ
+
++ log det ∂T ϕ(z; r)
+
+∂z − log p0(z) + log p Tϕ(z; r)i
+
+− DKL 
+
+ qψ (r) ∥ p(r)| {z }
+
+> KL divergence for potentials
+
+.
+
+(3) 5Under Derivation A.4 (see appendix A) and the modeling choice that model and guide share the hard conditional p(B | γ), the domain informed prior now enters through prior over edge logits p(γ) (see Figure 2) as 
+
+p(γ) = Y
+
+> i̸=j
+
+1
+
+B(αij , β ij ) σ(γij )αij  1 − σ(γij )βij 
+
+, σ(x) = 1 /(1 + e−x).
+
+Remark 3.2 . Had we instead placed a Bernoulli prior Bij ∼ Bernoulli( pij ) on each edge, the edge probability would be deterministic (i.e., πij = pij ). Equivalently, p(πij ) = δ(πij − pij ), and the logit transformation would induce p(γij ) = δ(γij − logit( pij )) . Hence, a fixed Bernoulli prior induces a degenerate prior over γ rather than an absolutely continuous density. This is not suitable to our formulation, since qϕ(γ | r) is continuous—so the KL divergence DKL (qϕ(γ | r) ∥ p(γ)) to this degenerate prior diverges unless the flow collapses to the same point mass. The Beta prior over 
+
+πij avoids this issue and gives the Logistic-Beta density. We further note that although the prior over πij is parameterized to have mode pij , this mode is not preserved under the nonlinear logit transformation. In particular, logit( pij ) is the image of the mode in πij space, whereas the mode of the Logistic-Beta density over γij is log( αij /β ij ). Consequently, the peaks of p(γ) need not align exactly with logit( pij ), as seen in Figure 2. A single sample Monte Carlo (MC) estimator of revised ELBO is unbiased and practical in high dimension. The straight through backward pass is generally a biased gradient estimator. If both 
+
+qϕ(θ | A) and p(θ | A) are diagonal Gaussians with strictly positive component scales, their KL divergence has the closed form 
+
+DKL 
+
+ qϕ(θ | A) ∥ p(θ | A) = 12
+
+Pdθ
+
+> k=1
+
+"   
+
+> σ2
+> ϕ,k (A)
+> σ2
+> p,k (A)
+
++
+
+ μϕ,k (A)−μp,k (A)
+
+2  
+
+> σ2
+> p,k (A)
+
+− 1 + 2 log σp,k (A) 
+
+> σϕ,k (A)
+
+#
+
+. (4) 
+
+3.6 Updating Node Potentials with SVGD using a Kernel defined in Relaxed Acyclicity Space 
+
+Note that, even with a dependent guide, standard VI maximizes the ELBO, which is equivalent to minimizing the reverse KL divergence DKL (qϕ∥p). For multimodal posteriors, this reverse KL objective can be mode-seeking (Blei et al., 2017; Zhang et al., 2018). In particular, it encourages the approximation to concentrate on a single mode, largely to avoid allocating mass to low-density posterior regions. Consequently, although a mixture-of-Gaussians guide for r could, in principle, represent multiple modes, standard ELBO optimization would still not guarantee recovery of all posterior modes. To promote mode coverage, we replace the parametric guide over r with a nonpara-metric particle approximation and update the particles using SVGD (Liu and Wang, 2016). If we condition the revised ELBO (see Equation 3) on a fixed r, we have 
+
+L(ϕ; r) = Ez∼p0 EB∼p(·| Tϕ(z;r)) 
+
+h
+
+Eqϕ(θ|A)
+
+log p(D | A, θ )| {z }
+
+> expected log likelihood
+
+− DKL 
+
+ qϕ(θ | A) ∥ p(θ | A)| {z } 
+
+> KL divergence for θ
+
++ log det ∂T ϕ(z; r)
+
+∂z − log p0(z) + log p Tϕ(z; r)i
+
+.
+
+(5) This constitutes a genuine lower bound on the conditional log evidence L(ϕ; r) ≤ log p(D | r).More precisely, defining ∆ϕ(r) = DKL (qϕ(γ, B, θ | r) ∥ p(γ, B, θ | D , r )) , the standard variational identity gives log p(D | r) − L (ϕ; r) = ∆ ϕ(r) ≥ 0. To introduce repulsive diversity pressure over node orders without assigning a density to a finite set of particles, we construct a proper target directly from the fixed r conditional bound. Specifically, for a fixed ϕ, we define 
+
+Zϕ =
+
+Z
+
+p(r) exp {L (ϕ; r)} dr, ˜pϕ(r | D ) = Z−1 
+
+> ϕ
+
+p(r) exp {L (ϕ; r)}.
+
+If 0 < p (D) < ∞ and r 7 → L (ϕ; r) is measurable, the nonnegativity ∆ϕ(r) ≥ 0 implies 0 < Z ϕ ≤
+
+p(D). Hence, ˜pϕ(r | D ) constitutes a proper, lower-bound-induced target that relates to the exact potential posterior by 
+
+˜pϕ(r | D ) = p(r | D ) exp {− ∆ϕ(r)}
+
+Ep(r|D )[exp {− ∆ϕ(r)}] .
+
+Thus, ˜pϕ(r | D ) = p(r | D ) holds if and only if ∆ϕ(r) is constant for p(r | D ) almost every r
+
+including, in particular, the special case of an exact conditional guide. Assume that r 7 → L (ϕ; r) is 6differentiable on the interior of each order chamber. This requires the flow, likelihood, and parameter guide to be differentiable there and an integrable function that allows differentiation under the continuous expectations. The derivative of a sampled hard threshold is not this exact derivative. It would require an analytic finite sum or an unbiased discrete score estimator. Under these assumptions, away from tie hyperplanes, the score is ∇r log ˜ pϕ(r | D ) = ∇r [L(ϕ; r) + log p(r)] . The hard permutation can make L and ˜pϕ(r | D ) discontinuous across tie hyperplanes, even though these hyperplanes carry prior measure zero. We maintain a finite set {r(k)}Kpart  
+
+> k=1
+
+purely as optimization variables. Holding these particles fixed, the exact conditional objective average that we optimize over ϕ is K−1part 
+
+PKpart  
+
+> k=1
+
+L(ϕ; r(k)). Notably, this is not a global ELBO for an empirical guide over 
+
+r. Let’s define the continuously differentiable, positive-definite Gaussian kernel kM (ψ, ψ ′) and let ψ(r) = vec( Mτ,K S (r)) . Its pullback kr (r, r ′) = kM (ψ(r), ψ (r′)) is, in turn, a continuously differentiable, positive-definite kernel on potential space. Applying the standard smooth-target SVGD formula to this score gives the particle update rule 
+
+r(k) ← r(k) + ηr
+
+1
+
+Kpart 
+
+> Kpart
+
+X
+
+> j=1
+
+h
+
+kr (r(j), r (k))∇r(j) log ˜ pϕ(r | D ) + ∇r(j) kr (r(j), r (k))
+
+i
+
+. (6) Here, ∇r(j) kr differentiates through ψ(r(j)). The second term in the bracket is the repulsive force that helps in mode coverage. 
+
+3.7 Reparameterization Trick for Estimating Gradients 
+
+In order to calculate gradients, let fi be an L-layer MLP with parameters θ that contain weights and biases {W (l), b (l)}Ll=1 such that W (l) ∈ Rd(l)out ×d(l)in and b(l) ∈ Rd(l)out . We approximate the conditional posterior over network parameters with a Gaussian guide. In software the hypernetwork Hϕ receives 
+
+AST since its forward value is exactly A, this evaluates the same density as qϕ(θ | A) while routing a surrogate derivative through ˜A:
+
+qϕ(θ | AST ) = N
+
+
+
+θ | μϕ(AST ), diag  σ2
+
+> ϕ
+
+(AST )
+
+=
+
+> dθ
+
+Y
+
+> k=1
+
+N θk | μϕ,k (AST ), σ 2
+
+> ϕ,k
+
+(AST ),
+
+where (μϕ, ρ ϕ) = Hϕ(AST ) and σϕ = softplus( ρϕ) = log(1 + exp( ρϕ)) , which enforces positivity. The conditioning is therefore explicit and differentiable. Changing AST changes the full variational posterior over θ through Hϕ.
+
+θ = μϕ(AST ) + σϕ(AST ) ⊙ ϵ, ϵ ∼ N (0 , I dθ ),
+
+which preserves differentiability through both Hϕ and the predictors fi. ˜B is reparameterized using the Gumbel-Sigmoid relaxation as shown in Eq. 1. We refer the reader to Appendix A.6 for the pseudo code and computational complexity of SVI-DAG algorithm. 
+
+## 4 Results and Discussion 
+
+We evaluate SVI-DAG against five state-of-the-art (SOTA) Bayesian DAG learning methods on linear synthetic data, nonlinear synthetic data and real data using brier score, expected structural hamming distance (SHD), expected F1 score, and area under the receiver operating characteristic curve (AUROC). The rationale underlying the selection of these metrics is provided in appendix C. 
+
+Datasets. To isolate effect of domain informed prior, we use a two node graph with data generated from ANM with Gaussian noise, where small graph size makes role of prior tractable to analyze. For synthetic experiments at scale, we generate linear and nonlinear structural equation models over Erd˝ os–R´ enyi (ER) DAGs with 25 and 50 nodes. For real data, we evaluate on Sachs dataset. 
+
+Baselines. We focus our evaluation on Bayesian methods to DAG learning and compare with 
+
+ProDAG (Thompson et al., 2024), BayesDAG (Annadani et al., 2023), DDS (Charpentier et al., 2022), 
+
+BCD Nets (Cundy et al., 2021), and DIBS (Lorch et al., 2021). Appendix E describes the hyperparam-eters used for benchmarking these algorithms. 74.1 Effect of Domain Informed Prior Linear (DAG not identi fi able from data) Nonlinear (DAG identi fi able from data) Incorr. Noninf. Corr. 84.7 15.3 40.1 42.5 17.4 83.2 16.8 13.3 86.4 80.3 14.5 95.2 0 25 50 75 100 0 25 50 75 100 Posterior mass (%) X1 → X2 (true) X1 ← X2 X1 X2 
+
+> Incorr. Noninf. Corr.
+
+Figure 3: Effect of prior on 2 node graph 
+
+Figure 3 illustrates effect of prior on a 2 node graph using 1000 samples, chosen to balance influence of likelihood and prior. Af-ter optimization, we draw 10000 hard posterior DAG samples 
+
+A = B ⊙ M (r), r sampled uniformly from the SVGD particles, γ
+
+from q(γ | r), hard Bernoulli edges B = 1{γ + R > 0} and the hard permutation mask M (r) = P (r) L P (r)⊤, so every sample is a binary DAG and report the proportion of samples assigned to 
+
+x1 → x2, x1 ← x2, and x1 ⊥⊥ x2. With ground truth x1 → x2,linear Gaussian setting (non-identifiable) shows that prior dominates orientation: an incorrect prior (p = 0.01 correct, 0.99 incorrect) con-centrates mass on the wrong direction (84.7%), a noninformative prior (p = 0.5) gives balanced posterior, and correct prior (p = 0.99 correct, 0.01 incorrect) shifts mass to true direction (83.2%). In nonlinear Gaussian setting (identifiable), prior acts primarily as regularizer: the incorrect prior suppresses both edges, concentrating 86.4% on x1 ⊥⊥ x2, while a correct prior sharpens posterior and assigns highest mass to x1 → x2 (95.2%). 
+
+4.2 Linear Synthetic Data 10 2.0 10 2.5 10 3.0 10 3.5 10 4.0                 
+
+> Sample size
+> 0.04 0.06 0.08 0.10
+> Brier score
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 40 60 80 100
+> Expected SHD
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 20 40 60 80
+> Expected  F1 score (%)
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 70 80 90 100
+> AUROC (%)
+> SVI-DAG ProDAG BayesDAG DiBS DDS BCD Nets
+
+Figure 4: Results on synthetic data generated from linear ER DAGs with p = 25 nodes and s = 40 
+
+edges under Gaussian noise. Each point denotes sample mean, and accompanying error bars indicate standard error, both computed across 5 independent draws of the dataset. 10 2.0 10 2.5 10 3.0 10 3.5 10 4.0                 
+
+> Sample size
+> 0.02 0.04 0.06
+> Brier score
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 100 200 300
+> Expected SHD
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 20 40 60 80
+> Expected  F1 score (%)
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 50 60 70 80 90 100
+> AUROC (%)
+> SVI-DAG ProDAG BayesDAG DiBS DDS BCD Nets
+
+Figure 5: Results on synthetic data generated from linear ER DAGs with p = 50 nodes and s = 80 
+
+edges under Gaussian noise. Each point denotes sample mean, and accompanying error bars indicate standard error, both computed across 5 independent draws of the dataset. Figures 4 and 5 presents results on datasets generated from linear ER DAGs with p = 25 , s = 40 and 
+
+p = 50 , s = 80 across increasing sample sizes. Since the underlying structure is identifiable only up to its MEC, all metrics are evaluated at CPDAG level. SVI-DAG achieves lower Brier scores and higher AUROC across most of the sample sizes, indicating improved uncertainty quantification and better separation, while remaining competitive with baselines in terms of E-SHD, and E-F1 score. 
+
+4.3 Nonlinear Synthetic Data 
+
+Figures 6 and 7 presents results on datasets generated from nonlinear ER DAGs with p = 25 , s = 40 
+
+and p = 50 , s = 80 across increasing sample sizes. In this setting, the underlying DAG is identifiable, and all metrics are therefore evaluated at the DAG level. We can observe that SVI-DAG attains a 810 2.0 10 2.5 10 3.0 10 3.5 10 4.0                 
+
+> Sample size
+> 0.04 0.05 0.06 0.07
+> Brier score
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 40 60 80 100
+> Expected SHD
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 020 40
+> Expected  F1 score (%)
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 60 70 80 90
+> AUROC (%)
+> SVI-DAG ProDAG BayesDAG DiBS DDS BCD Nets
+
+Figure 6: Results on synthetic data generated from nonlinear ER DAGs with p = 25 nodes and 
+
+s = 40 edges under Gaussian noise. Each point denotes the sample mean, and the accompanying error bars indicate the standard error, both computed across 5 independent draws of the dataset. 10 2.0 10 2.5 10 3.0 10 3.5 10 4.0                 
+
+> Sample size
+> 0.02 0.03 0.04
+> Brier score
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 100 200 300 400
+> Expected SHD
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 010 20 30 40 50
+> Expected  F1 score (%)
+> 10 2.010 2.510 3.010 3.510 4.0
+> Sample size
+> 50 60 70 80 90
+> AUROC (%)
+> SVI-DAG ProDAG BayesDAG DiBS DDS BCD Nets
+
+Figure 7: Results on synthetic data generated from nonlinear ER DAGs with p = 50 nodes and 
+
+s = 80 edges under Gaussian noise. Each point denotes sample mean, and accompanying error bars indicate standard error, both computed across 5 independent draws of the dataset. lower Brier score and higher AUROC across most sample sizes, while also staying competitive with other algorithms in this setting as well. 
+
+4.4 Real Data 
+
+Table 1: Performance on Sachs dataset. The average and standard errors are measured over 10-fold cross-validation splits of data. The best value of each DAG metric is indicated in bold. 
+
+Brier score ( ↓) Exp. SHD ( ↓) Exp. F1 score ( ↑) AUROC ( ↑)
+
+SVI-DAG 0.185 ± 0.007 25.70 ± 0.92 28.95 ± 1.73 58.16 ± 2.27 
+
+ProDAG 0.159 ± 0.003 19.68 ± 0.35 14.32 ± 1.54 52.95 ± 1.81 
+
+BayesDAG 0.174 ± 0.008 28.66 ± 0.78 26.75 ± 2.08 62.23 ± 1.93 
+
+DDS 0.168 ± 0.004 24.62 ± 0.56 23.21 ± 1.52 51.35 ± 2.18 
+
+BCD Nets 0.153 ± 0.004 20.94 ± 0.50 10.79 ± 2.16 55.91 ± 2.07 
+
+DiBS 0.180 ± 0.004 40.74 ± 0.50 27.78 ± 0.74 65.63 ± 2.07 
+
+> Table 3: Wall-clock time per train/evaluate on the Sachs dataset on an A100-40GB GPU.
+
+Time per run (s) 
+
+SVI-DAG 134.2 ± 30.9 
+
+ProDAG 100.2 ± 4.1 
+
+BayesDAG 266.5 ± 13.0 
+
+DDS 65.1 ± 1.9 
+
+BCD Nets 151.1 ± 2.5 
+
+DiBS 5.6 ± 0.7 
+
+The flow cytometry dataset (Sachs et al., 2005) is a standard benchmark for causal discovery in biological systems, con-sisting of 7466 samples over 11 variables and 18 edges corre-sponding to phosphoproteins and phospholipids. Tables 1 and 2 provides the performances on Sachs dataset using DAG and CPDAG metrics. We can observe that SVI-DAG outperforms other algorithms in terms of F1 score for DAG metrics and AUROC for CPDAG metrics. Table 3 reports the computational time of the algorithms on this dataset. We can see comparable computational time of SVI-DAG with other algorithms. We note that all results reported for SVI-DAG in this paper correspond to a single choice of normaliz-ing flow—neural spline flows. The performance of SVI-DAG is largely governed by this choice, and our algorithm has been deliberately developed to be flow-agnostic, so that any normalizing flow can be substituted in. Hence, the comparisons presented here should not be taken too seriously. 9Table 2: Performance on Sachs dataset. The average and standard errors are measured over 10-fold cross-validation splits of data. The best value of each CPDAG metric is indicated in bold.                                                                            
+
+> Brier score ( ↓)Exp. SHD ( ↓)Exp. F1 score ( ↑)AUROC ( ↑)
+> SVI-DAG 0.237 ±0.016 23.08 ±0.87 54.05 ±2.07 70.17 ±2.28
+> ProDAG 0.267 ±0.001 17.36 ±0.07 31.55 ±0.64 62.70 ±0.90
+> BayesDAG 0.247 ±0.010 26.38 ±0.42 50.10 ±1.36 62.88 ±1.42
+> DDS 0.240 ±0.005 23.02 ±0.29 43.46 ±0.91 68.91 ±1.30
+> BCD Nets 0.259 ±0.002 18.68 ±0.16 26.30 ±1.61 56.65 ±1.62
+> DiBS 0.215 ±0.003 35.49 ±0.22 54.46 ±0.29 66.80 ±1.10
+
+## 5 Conclusion 
+
+We presented SVI-DAG , a differentiable Bayesian approach to causal discovery using observational data and prior beliefs that uses normalizing flows to encode dependencies between edges for expres-sive and multimodal learning over DAGs. Empirically, we demonstrate that SVI-DAG achieves better uncertainty quantifcation and competitive performance with SOTA Bayesian methods in terms of accuracy. 
+
+## 6 Acknowledgment 
+
+The author gratefully acknowledges the computing resources provided by Purdue University, and thanks Prof. Ilias Bilionis for access to these resources and for the freedom to pursue this line of work during the author’s doctoral studies. 
+
+## References 
+
+Ryan Prescott Adams and Richard S Zemel. Ranking via sinkhorn propagation. arXiv preprint arXiv:1106.1925 , 2011. Bryan Andrews, Joseph Ramsey, Ruben Sanchez Romero, Jazmin Camchong, and Erich Kummerfeld. Fast scalable and accurate discovery of dags using the best order score search and grow shrink trees. Advances in neural information processing systems , 36:63945–63956, 2023. Yashas Annadani, Jonas Rothfuss, Alexandre Lacoste, Nino Scherrer, Anirudh Goyal, Yoshua Bengio, and Stefan Bauer. Variational causal networks: Approximate bayesian inference over causal structures. arXiv preprint arXiv:2106.07635 , 2021. Yashas Annadani, Nick Pawlowski, Joel Jennings, Stefan Bauer, Cheng Zhang, and Wenbo Gong. Bayesdag: Gradient-based posterior inference for causal discovery. Advances in Neural Information Processing Systems , 36:1738–1763, 2023. Taiyu Ban, Lyuzhou Chen, Xiangyu Wang, Xin Wang, Derui Lyu, and Huanhuan Chen. Differentiable structure learning with partial orders. Advances in Neural Information Processing Systems , 37: 117426–117455, 2024. Kevin Bello, Bryon Aragam, and Pradeep Ravikumar. Dagma: Learning dags via m-matrices and a log-determinant acyclicity characterization. Advances in Neural Information Processing Systems ,35:8226–8239, 2022. Yoshua Bengio, Michael Cohen, Damiano Fornasiere, Joumana Ghosn, Pietro Greiner, Matt Mac-Dermott, S¨ oren Mindermann, Adam Oberman, Jesse Richardson, Oliver Richardson, et al. Su-perintelligent agents pose catastrophic risks: Can scientist ai offer a safer path? arXiv preprint arXiv:2502.15657 , 2025. Yoshua Bengio, Stephen Clare, Carina Prunkl, Maksym Andriushchenko, Ben Bucknall, Malcolm Murray, Rishi Bommasani, Stephen Casper, Tom Davidson, Raymond Douglas, et al. International ai safety report 2026. arXiv preprint arXiv:2602.21012 , 2026. 10 David M Blei, Alp Kucukelbir, and Jon D McAuliffe. Variational inference: A review for statisticians. 
+
+Journal of the American statistical Association , 112(518):859–877, 2017. Bertrand Charpentier, Simon Kibler, and Stephan G¨ unnemann. Differentiable DAG Sampling. 
+
+International Conference on Learning Representations , 2022. Chris Cundy, Aditya Grover, and Stefano Ermon. Bcd nets: Scalable variational approaches for bayesian causal discovery. Advances in Neural Information Processing Systems , 34:7095–7110, 2021. Tristan Deleu, Ant´ onio G´ ois, Chris Emezue, Mansi Rankawat, Simon Lacoste-Julien, Stefan Bauer, and Yoshua Bengio. Bayesian structure learning with generative flow networks. In Uncertainty in Artificial Intelligence , pages 518–528. PMLR, 2022. Tristan Deleu, Mizu Nishikawa-Toomey, Jithendaraa Subramanian, Nikolay Malkin, Laurent Charlin, and Yoshua Bengio. Joint bayesian inference of graphical structure and parameters with a single generative flow network. Advances in Neural Information Processing Systems , 36:31204–31231, 2023. Anish Dhir, Matthew Ashman, James Requeima, and Mark van der Wilk. A meta-learning approach to bayesian causal discovery. arXiv preprint arXiv:2412.16577 , 2024. Conor Durkan, Artur Bekasov, Iain Murray, and George Papamakarios. Neural spline flows. Advances in neural information processing systems , 32, 2019. E Michael Foster. Causal inference and developmental psychology. Developmental psychology , 46 (6):1454, 2010. Nir Friedman and Daphne Koller. Being bayesian about network structure. a bayesian approach to structure discovery in bayesian networks. Machine learning , 50(1):95–125, 2003. Christina Heinze-Deml, Marloes H Maathuis, and Nicolai Meinshausen. Causal structure learning. 
+
+Annual Review of Statistics and Its Application , 5:371–391, 2018. Patrik Hoyer, Dominik Janzing, Joris M Mooij, Jonas Peters, and Bernhard Sch¨ olkopf. Nonlinear causal discovery with additive noise models. Advances in neural information processing systems ,21, 2008. Guido W Imbens. Potential outcome and directed acyclic graph approaches to causality: Relevance for empirical practice in economics. Journal of Economic Literature , 58(4):1129–1179, 2020. Eric Jang, Shixiang Gu, and Ben Poole. Categorical reparameterization with gumbel-softmax. arXiv preprint arXiv:1611.01144 , 2016. Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980 , 2014. S´ ebastien Lachapelle, Philippe Brouillard, Tristan Deleu, and Simon Lacoste-Julien. Gradient-based neural dag learning. arXiv preprint arXiv:1906.02226 , 2019. Qiang Liu and Dilin Wang. Stein variational gradient descent: A general purpose bayesian inference algorithm. Advances in neural information processing systems , 29, 2016. Lars Lorch, Jonas Rothfuss, Bernhard Sch¨ olkopf, and Andreas Krause. DiBS: Differentiable Bayesian Structure Learning. Advances in Neural Information Processing Systems , 2021. Lars Lorch, Scott Sussex, Jonas Rothfuss, Andreas Krause, and Bernhard Sch¨ olkopf. Amortized inference for causal structure learning. Advances in Neural Information Processing Systems , 35: 13104–13118, 2022. Sindy L¨ owe, David Madras, Richard Zemel, and Max Welling. Amortized causal discovery: Learning to infer causal graphs from time-series data. In Conference on Causal Learning and Reasoning ,pages 509–525. PMLR, 2022. 11 Chris J Maddison, Andriy Mnih, and Yee Whye Teh. The concrete distribution: A continuous relaxation of discrete random variables. arXiv preprint arXiv:1611.00712 , 2016. Ignavier Ng, Shengyu Zhu, Zhitang Chen, and Zhuangyan Fang. A graph autoencoder approach to causal structure learning. arXiv preprint arXiv:1911.07420 , 2019. Ignavier Ng, AmirEmad Ghassami, and Kun Zhang. On the role of sparsity and dag constraints for learning linear dags. Advances in Neural Information Processing Systems , 33:17943–17954, 2020. Ignavier Ng, Shengyu Zhu, Zhuangyan Fang, Haoyang Li, Zhitang Chen, and Jun Wang. Masked gradient-based causal structure learning. In Proceedings of the 2022 SIAM International Conference on Data Mining (SDM) , pages 424–432. SIAM, 2022. Mizu Nishikawa-Toomey, Tristan Deleu, Jithendaraa Subramanian, Yoshua Bengio, and Laurent Charlin. Bayesian learning of causal structure and mechanisms with gflownets and variational bayes. arXiv preprint arXiv:2211.02763 , 2022. Judea Pearl. Causality . Cambridge university press, 2009. Jonas Peters, Joris M Mooij, Dominik Janzing, and Bernhard Sch¨ olkopf. Causal discovery with continuous additive noise models. The Journal of Machine Learning Research , 15(1):2009–2053, 2014. Jonas Peters, Dominik Janzing, and Bernhard Scholkopf. Elements of causal inference: foundations and learning algorithms . MIT press, 2017. Danilo Rezende and Shakir Mohamed. Variational inference with normalizing flows. In International conference on machine learning , pages 1530–1538. PMLR, 2015. Jakob Runge, Sebastian Bathiany, Erik Bollt, Gustau Camps-Valls, Dim Coumou, Ethan Deyle, Clark Glymour, Marlene Kretschmer, Miguel D Mahecha, Jordi Mu˜ noz-Mar´ ı, et al. Inferring causation from time series in earth system sciences. Nature communications , 10(1):2553, 2019. Karen Sachs, Omar Perez, Dana Pe’er, Douglas A Lauffenburger, and Garry P Nolan. Causal protein-signaling networks derived from multiparameter single-cell data. Science , 2005. Bernhard Sch¨ olkopf, Francesco Locatello, Stefan Bauer, Nan Rosemary Ke, Nal Kalchbrenner, Anirudh Goyal, and Yoshua Bengio. Toward causal representation learning. Proceedings of the IEEE , 109(5):612–634, 2021. Muralikrishnna G Sethuraman, Romain Lopez, Rahul Mohan, Faramarz Fekri, Tommaso Biancalani, and Jan-Christian H¨ utter. Nodags-flow: Nonlinear cyclic causal structure learning. In International Conference on Artificial Intelligence and Statistics , pages 6371–6387. PMLR, 2023. Chandler Squires and Caroline Uhler. Causal structure learning: A combinatorial perspective. 
+
+Foundations of Computational Mathematics , 23(5):1781–1815, 2023. Peter WG Tennant, Eleanor J Murray, Kellyn F Arnold, Laurie Berrie, Matthew P Fox, Sarah C Gadd, Wendy J Harrison, Claire Keeble, Lynsie R Ranker, Johannes Textor, et al. Use of directed acyclic graphs (dags) to identify confounders in applied health research: review and recommendations. 
+
+International journal of epidemiology , 50(2):620–632, 2021. Ryan Thompson, Edwin V Bonilla, and Robert Kohn. Prodag: Projected variational inference for directed acyclic graphs. arXiv preprint arXiv:2405.15167 , 2024. Matthew J Vowels, Necati Cihan Camgoz, and Richard Bowden. D’ya like dags? a survey on structure learning and causal discovery. ACM Computing Surveys , 55(4):1–36, 2022. Benjie Wang, Matthew R Wicker, and Marta Kwiatkowska. Tractable uncertainty for structure learning. In International Conference on Machine Learning , pages 23131–23150. PMLR, 2022. Yue Yu, Jie Chen, Tian Gao, and Mo Yu. Dag-gnn: Dag structure learning with graph neural networks. In International conference on machine learning , pages 7154–7163. PMLR, 2019. 12 Yue Yu, Tian Gao, Naiyu Yin, and Qiang Ji. Dags with no curl: An efficient dag structure learning approach. In International Conference on Machine Learning , pages 12156–12166. Pmlr, 2021. Cheng Zhang, Judith B¨ utepage, Hedvig Kjellstr¨ om, and Stephan Mandt. Advances in variational inference. IEEE transactions on pattern analysis and machine intelligence , 41(8):2008–2026, 2018. Muhan Zhang, Shali Jiang, Zhicheng Cui, Roman Garnett, and Yixin Chen. D-vae: A variational autoencoder for directed acyclic graphs. Advances in neural information processing systems , 32, 2019. Xun Zheng, Bryon Aragam, Pradeep K Ravikumar, and Eric P Xing. Dags with no tears: Continuous optimization for structure learning. Advances in neural information processing systems , 31, 2018. Jincheng Zhou, Mengbo Wang, Anqi He, Yumeng Zhou, Hessam Olya, Murat Kocaoglu, and Bruno Ribeiro. Differentiable constraint-based causal discovery. arXiv preprint arXiv:2510.22031 , 2025. 13 Appendix 
+
+This Appendix includes additional details for the paper, “SVI-DAG: A Structured Variational Infer-ence Approach to Bayesian Causal Discovery”. 
+
+## A Theory 
+
+A.1 Derivation of p(B, r )
+
+We start from the construction that enforces acyclicity by mapping the free edge matrix B ∈{0, 1}m×m and the potentials r ∈ Rm to the adjacency A = B ⊙ M (r) where M (r) is the acyclic mask induced by the order defined by r. The joint prior over B, the latent edge probabilities 
+
+Π = {πij }i̸=j , and r is 
+
+p(B, Π, r ) ∝
+
+Y
+
+> i̸=j
+
+Bernoulli( Bij | πij ) Beta( πij | αij , β ij )
+
+ N  r | 0, σ 2 
+
+> r
+
+Im
+
+ ,
+
+with Bii = 0 for all i and with independence between r and the set of free edges in the prior. The factors are 
+
+Bernoulli( Bij | πij ) = πBij  
+
+> ij
+
+(1 − πij )1−Bij , Beta( πij | αij , β ij ) = παij −1 
+
+> ij
+
+(1 − πij )βij −1
+
+B(αij , β ij ) ,
+
+where B denotes the Beta function. Our goal is to integrate out πij to get the marginal prior on (B, r ).For a fixed ordered pair (i, j ) with i̸ = j we compute 
+
+p(Bij ) = 
+
+Z 10
+
+Bernoulli( Bij | πij ) Beta( πij | αij , β ij ) dπ ij .
+
+Substituting the explicit forms gives 
+
+p(Bij ) = 1
+
+B(αij , β ij )
+
+Z 10
+
+πBij +αij −1 
+
+> ij
+
+(1 − πij )(1 −Bij )+ βij −1 dπ ij .
+
+The integral equals a Beta function with updated parameters, which gives the standard Beta Bernoulli marginal 
+
+p(Bij ) = B(Bij + αij , β ij + 1 − Bij )
+
+B(αij , β ij ) .
+
+Using independence across ordered pairs in the prior and independence of r from B in the prior, we get the full marginal as 
+
+p(B, r ) = 
+
+Y
+
+> i̸=j
+
+B(Bij + αij , β ij + 1 − Bij )
+
+B(αij , β ij )
+
+ N  r | 0, σ 2 
+
+> r
+
+Im
+
+ .
+
+The diagonal constraint Bii = 0 excludes self loops and is implemented by masking the diagonal of 
+
+B. Note that instead of p(Bij = 1) = pij and p(Bij = 0) = 1 − pij we have 
+
+p(Bij = 1) = αij 
+
+αij + βij 
+
+, p(Bij = 0) = βij 
+
+αij + βij 
+
+,
+
+for a chosen finite νij . This completes the derivation. 
+
+A.2 Derivation of ELBO without the normalizing flow 
+
+Given A = B ⊙ M (r), which is a deterministic function of (B, r ) alone, we have the full joint model as p(B, Π, r, θ, D) = p(B, Π, r ) p(θ | A) p(D | A, θ ). The posterior is 
+
+p(B, Π, r, θ | D ) = p(B, Π, r, θ, D)
+
+R p(B, Π, r, θ, D) dB d Π dr dθ .
+
+14 Since this posterior is intractable, we approximate it with a variational distribution 
+
+qϕ(B, Π, r, θ ) = qϕ(B, Π, r ) qϕ(θ | A), A = B ⊙ M (r).
+
+Here ϕ denotes the collection of variational parameters for B, Π, r, and θ. We begin by writing the evidence as log p(D) = log R p(B, Π, r, θ, D) dB d Π dr dθ. By definition, the ELBO is ELBO (ϕ) = Eqϕ(B, Π,r,θ ) [log p(B, Π, r, θ, D) − log qϕ(B, Π, r, θ )] .
+
+Using p(B, Π, r, θ, D) = p(D | A, θ ) p(θ | A) p(B, Π, r ), we have ELBO (ϕ) = Eqϕ(B, Π,r,θ )[log p(D | A, θ ) + log p(θ | A) + log p(B, Π, r ) − log qϕ(B, Π, r, θ )] .
+
+If we assume independence between structural variables and parameter variables in the guide, we can factorize: 
+
+qϕ(B, Π, r, θ ) = qϕ(B, Π, r ) qϕ(θ | A),
+
+so that 
+
+log qϕ(B, Π, r, θ ) = log qϕ(B, Π, r ) + log qϕ(θ | A).
+
+By linearity of expectation and the definition of the KL divergence ( DKL (q∥p) = Eq [log q − log p]), the ELBO can then be rearranged as: ELBO (ϕ) = Eqϕ(B, Π,r )
+
+h
+
+Eqϕ(θ|A)[log p(D | A, θ ) + log p(θ | A)] 
+
+− Eqϕ(θ|A)[log qϕ(θ | A)] + log p(B, Π, r ) − log qϕ(B, Π, r )
+
+i
+
+= Eqϕ(B, Π,r )
+
+h
+
+Eqϕ(θ|A)[log p(D | A, θ )] 
+
+i
+
+− Eqϕ(B, Π,r )
+
+h
+
+DKL (qϕ(θ | A) ∥ p(θ | A)) 
+
+i
+
+− DKL (qϕ(B, Π, r ) ∥ p(B, Π, r )) .
+
+If we analytically marginalize Π in the prior to get p(B, r ) (see Derivation A.1) we have 
+
+p(B, r ) = 
+
+Y
+
+> i̸=j
+
+B (Bij + αij , β ij + 1 − Bij )
+
+B (αij , β ij )
+
+ N (r | 0, σ 2 
+
+> r
+
+Im),
+
+where B represents the Beta function. Since Π is an auxiliary latent variable, marginalizing it out does not change the evidence p(D). We therefore perform variational inference directly on the collapsed model 
+
+p(D, B, r, θ ) = p(D | A, θ ) p(θ | A) p(B, r ), A = B ⊙ M (r),
+
+and the corresponding guide qϕ(B, r ) qϕ(θ | A). The ELBO of this collapsed model is ELBO (ϕ) = Eqϕ(B,r )
+
+h
+
+Eqϕ(θ|A)[log p(D | A, θ )] 
+
+| {z }
+
+> expected log likelihood
+
+− DKL (qϕ(θ | A)∥p(θ | A)) 
+
+| {z } 
+
+> KL divergence for θ
+
+i
+
+− DKL (qϕ(B, r )∥p(B, r )) 
+
+| {z }   
+
+> KL divergence for Band r
+
+. (A.1) 
+
+A.3 Derivation of ELBO with Normalizing Flow 
+
+We derive the ELBO when the edge logits γ are generated by a conditional normalizing flow Tϕ and acyclicity is enforced by construction. The construction uses a free edge matrix B with zero diagonal and a vector of node potentials r ∈ Rm. The adjacency matrix used inside the model is given by 
+
+A = B ⊙ M (r), M (r) = P (r) L P (r)T ,
+
+where P (r), L, and M (r) are as defined in the main text. Note that a factorization where qϕ(A)
+
+assumes independence between r and γ prevents the model from capturing multiple modes in the DAG posterior. For example, if two DAGs fit the data equally well but imply different topological orders, an independent guide qϕ(r) qϕ(γ) forces the model to average edge probabilities across incompatible orders, which can give a dense graph that does not coincide with any high posterior DAG. So to represent multiple modes, we model dependence between r and γ. Let z ∼ p0(z) and 15 γ = Tϕ(z; r), where for each r, Tϕ(·; r) is a C1 diffeomorphism with nonzero Jacobian determinant. Assume 0 < p (D) < ∞, qψ (r) ≪ p(r), qϕ(γ | r) ≪ p(γ), qϕ(θ | A) ≪ p(θ | A), and integrability under qϕ,ψ of all displayed log-density terms, including the log likelihood. The induced conditional guide over γ is given by the change of variables 
+
+qϕ(γ | r) = p0
+
+ T −1 
+
+> ϕ
+
+(γ; r) det ∂T −1 
+
+> ϕ
+
+(γ; r)
+
+∂γ = p0(z) det ∂T ϕ(z; r)
+
+∂z 
+
+> −1
+
+.
+
+The hard DAG adjacency is a deterministic function of B and r. The joint model is 
+
+p(D, B, r, θ, γ ) = p(D | A, θ ) p(θ | A) p(B | γ) p(r) p(γ), (A.2) where p(B | γ) is the Bernoulli conditional and p(r) is the potential prior. Note that while the guide qϕ conditions γ on r, the prior p(r)p(γ) typically factorizes unless specific domain knowledge suggests otherwise. We have the joint guide as 
+
+qϕ,ψ (γ, B, r, θ ) = qϕ(γ | r) p(B | γ) qψ (r) qϕ(θ | A), (A.3) to avoid the collapse to a single mode over DAGs. By definition, 
+
+ELBO( ϕ, ψ ) = Eqϕ,ψ (γ,B,r,θ )
+
+h
+
+log p(D, B, r, θ, γ ) − log qϕ,ψ (γ, B, r, θ )
+
+i
+
+.
+
+Using Eq. A.2 and Eq. A.3 we expand 
+
+ELBO( ϕ, ψ ) = Eqψ (r) qϕ(γ|r) p(B|γ) qϕ(θ|A)
+
+h
+
+log p(D | A, θ ) + log p(θ | A) + log p(B | γ)+ log p(r) + log p(γ) − log qϕ(θ | A) − log p(B | γ)
+
+− log qψ (r) − log qϕ(γ | r)
+
+i
+
+. (A.4) We first integrate over θ conditionally on the hard adjacency A. The terms that depend on θ are 
+
+log p(D | A, θ ) + log p(θ | A) − log qϕ(θ | A). Therefore 
+
+ELBO( ϕ, ψ ) = Eqψ (r) qϕ(γ|r) p(B|γ)
+
+h
+
+Eqϕ(θ|A)
+
+log p(D | A, θ ) − DKL 
+
+ qϕ(θ | A) ∥ p(θ | A)
+
++ log p(B | γ) − log p(B | γ) + log p(r) − log qψ (r)
+
+i
+
+− Eqψ (r)
+
+DKL 
+
+ qϕ(γ | r) ∥ p(γ) . (A.5) The model and guide share the same hard Bernoulli conditional p(B | γ), so its two log-density terms cancel exactly. Separating the remaining terms for r gives 
+
+ELBO( ϕ, ψ ) = Eqψ (r) qϕ(γ|r) p(B|γ)
+
+h
+
+Eqϕ(θ|A)
+
+log p(D | A, θ ) − DKL 
+
+ qϕ(θ | A) ∥ p(θ | A)i
+
+− DKL 
+
+ qψ (r) ∥ p(r) − Eqψ (r)
+
+DKL 
+
+ qϕ(γ | r) ∥ p(γ) . (A.6) The domain informed prior is now incorporated in p(γ) (see Derivation A.4) as 
+
+p(γ) = Y
+
+> i̸=j
+
+1
+
+B(αij , β ij ) σ(γij )αij  1 − σ(γij )βij 
+
+, σ(x) = 11 + e−x ,
+
+Using Eq. A.3, we reparameterize the expectation over qϕ(γ | r) by z ∼ p0(z) and γ = Tϕ(z; r).The conditional KL divergence for the edge logits becomes 
+
+DKL 
+
+ qϕ(γ | r) ∥ p(γ) = Ez∼p0
+
+h
+
+log qϕ
+
+ Tϕ(z; r) | r − log p Tϕ(z; r)i
+
+= Ez∼p0
+
+h
+
+log p0(z) − log det ∂T ϕ(z; r)
+
+∂z − log p Tϕ(z; r)i
+
+.
+
+Substituting above equation into Eq. A.6 and changing variables in the inner expectations we get the reparameterized bound 
+
+ELBO( ϕ, ψ ) = Er∼qψ (r) Ez∼p0 EB∼p(·| Tϕ(z;r)) 
+
+h
+
+Eqϕ(θ|A)
+
+log p(D | A, θ )| {z }
+
+> expected log likelihood
+
+− DKL 
+
+ qϕ(θ | A) ∥ p(θ | A)| {z } 
+
+> KL divergence for θ
+
++ log det ∂T ϕ(z; r)
+
+∂z − log p0(z) + log p Tϕ(z; r)i
+
+− DKL 
+
+ qψ (r) ∥ p(r)| {z }
+
+> KL divergence for potentials
+
+.
+
+(A.7) 16 This is our revised ELBO. We define Tϕ as either a single flow transformation or a composition 
+
+T (K) 
+
+> ϕK
+
+◦ · · · ◦ T (1)  
+
+> ϕ1
+
+. In compositional case, the log determinant term in above equation decomposes as 
+
+log det ∂T ϕ(z; r)
+
+∂z =
+
+> K
+
+X
+
+> k=1
+
+log det ∂T ϕk (z(k−1) ; r)
+
+∂z (k−1) , z(k) = Tϕk (z(k−1) ; r), z (0) = z. 
+
+A.4 Logistic–Beta Prior on Edge Logits induced by the Domain Informed Prior 
+
+For each ordered pair (i, j ) with i̸ = j, let the edge probability πij ∈ (0 , 1) carry a domain informed Beta prior 
+
+πij ∼ Beta( αij , β ij ), p(πij ) = 1
+
+B(αij , β ij ) παij −1 
+
+> ij
+
+(1 − πij )βij −1,
+
+with hyperparameters constructed from our beliefs pij ∈ (0 , 1) and concentration νij > 0 via 
+
+αij = νij pij + 1 , βij = νij (1 − pij ) + 1 .
+
+In particular αij > 0 and βij > 0 (indeed αij , β ij ≥ 1), so the Beta density is proper. Let’s define the edge logit 
+
+γij = logit( πij ) = log πij 
+
+1 − πij 
+
+⇐⇒ πij = σ(γij ) = 11 + e −γij .
+
+The map γij 7 → σ(γij ) is a C1 diffeomorphism from R onto (0 , 1) , with strictly positive derivative, so the change of variables formula for densities applies. The Jacobian factor is 
+
+dπ ij 
+
+dγ ij 
+
+= σ(γij ) 1 − σ(γij ), (A.8) which is positive, so the absolute value may be dropped. By the change of variables formula, the prior density of edge logit γij induced by the Beta prior on πij is 
+
+p(γij ) = p(πij )  
+
+> πij =σ(γij )
+
+dπ ij 
+
+dγ ij 
+
+= 1
+
+B(αij , β ij ) σ(γij )αij −1
+
+| {z }  
+
+> from p(πij )
+
+ 1 − σ(γij )βij −1
+
+| {z }  
+
+> from p(πij )
+
+σ(γij ) 1 − σ(γij )| {z }
+
+> Jacobian in equation A.8
+
+= 1
+
+B(αij , β ij ) σ(γij )αij  1 − σ(γij )βij 
+
+.
+
+This is the Logistic-Beta density on edge logits. It is a proper density since γij 7 → σ(γij ) is a C1
+
+diffeomorphism of R onto (0 , 1) with Jacobian equation A.8, the substitution πij = σ(γij ) gives 
+
+Z
+
+> R
+
+p(γij ) dγ ij =
+
+Z 10
+
+p(πij ) dπ ij = 1 .
+
+Assuming independence across ordered pairs in the prior, 
+
+p(γ) = Y
+
+> i̸=j
+
+p(γij ) = Y
+
+> i̸=j
+
+1
+
+B(αij , β ij ) σ(γij )αij  1 − σ(γij )βij 
+
+.
+
+A.5 Closed Form KL for Gaussian p(θ | A)
+
+Let dθ be the dimension of θ. Suppose 
+
+qϕ(θ | A) = N μq (A), Σq (A), p(θ | A) = N μp(A), Σp(A),
+
+where Σq (A) = diag  σ2
+
+> ϕ
+
+(A) and Σp(A) = diag  σ2 
+
+> p
+
+(A) are diagonal with strictly positive entries 
+
+σϕ,k (A) > 0 and σp,k (A) > 0 for all k (so that Σq , Σp are positive definite and invertible), and 17 μq (A) = μϕ(A). These conditions hold in our model, since σϕ = softplus( ρϕ) > 0 and σp is a fixed positive prior scale. We derive a closed form for 
+
+DKL 
+
+ qϕ(θ | A) ∥ p(θ | A) = Eqϕ(θ|A)
+
+log qϕ(θ | A) − log p(θ | A).
+
+For any mean μ and positive definite covariance Σ,
+
+log N (θ; μ, Σ) = − 12
+
+
+
+dθ log(2 π) + log |Σ| + ( θ − μ)⊤Σ−1(θ − μ)
+
+
+
+.
+
+Therefore, 
+
+log qϕ(θ | A) = − 12
+
+
+
+dθ log(2 π) + log |Σq | + ( θ − μq )⊤Σ−1 
+
+> q
+
+(θ − μq )
+
+
+
+,
+
+log p(θ | A) = − 12
+
+
+
+dθ log(2 π) + log |Σp| + ( θ − μp)⊤Σ−1 
+
+> p
+
+(θ − μp)
+
+
+
+,
+
+where we suppress the explicit dependence on A inside μq , μ p, Σq , Σp for readability. Now taking the expectation under qϕ(θ | A), the dθ log(2 π) terms cancel and we have 
+
+DKL (q∥p) = Eq [log q − log p]= 12
+
+
+
+log |Σp| − log |Σq |
+
+
+
++ 12 Eq
+
+(θ − μp)⊤Σ−1 
+
+> p
+
+(θ − μp) − 12 Eq
+
+(θ − μq )⊤Σ−1 
+
+> q
+
+(θ − μq ).
+
+(A.9) Let δ = μq − μp. Since (θ − μp) = ( θ − μq ) + δ and Σ−1 
+
+> p
+
+is symmetric, we have 
+
+(θ − μp)⊤Σ−1 
+
+> p
+
+(θ − μp) = ( θ − μq )⊤Σ−1 
+
+> p
+
+(θ − μq ) + 2 δ⊤Σ−1 
+
+> p
+
+(θ − μq ) + δ⊤Σ−1 
+
+> p
+
+δ. 
+
+Taking Eq and using the Gaussian moments Eq [θ − μq ] = 0 and Eq
+
+(θ − μq )( θ − μq )⊤ = Σ q (so that Eq [( θ − μq )⊤M (θ − μq )] = tr( M Σq ) for any fixed M ) gives the standard identity: 
+
+Eq
+
+(θ − μp)⊤Σ−1 
+
+> p
+
+(θ − μp) = tr  Σ−1 
+
+> p
+
+Σq
+
+ + δ⊤Σ−1 
+
+> p
+
+δ. (A.10) Similarly, 
+
+Eq
+
+(θ − μq )⊤Σ−1 
+
+> q
+
+(θ − μq ) = tr  Σ−1 
+
+> q
+
+Σq
+
+ = dθ . (A.11) Now plugging Eq. A.10 and Eq. A.11 into Eq. A.9 gives 
+
+DKL (q∥p) = 12
+
+
+
+log |Σp| − log |Σq | − dθ + tr  Σ−1 
+
+> p
+
+Σq
+
+ + ( μq − μp)⊤Σ−1 
+
+> p
+
+(μq − μp)
+
+
+
+. (A.12) Since Σq = diag( σ2
+
+> ϕ
+
+) and Σp = diag( σ2 
+
+> p
+
+) are diagonal with strictly positive entries, we have 
+
+Σ−1 
+
+> p
+
+= diag(1 /σ 2 
+
+> p
+
+) and 
+
+log |Σp| − log |Σq | =
+
+> dθ
+
+X
+
+> k=1
+
+log σ2 
+
+> p,k
+
+−
+
+> dθ
+
+X
+
+> k=1
+
+log σ2 
+
+> ϕ,k
+
+= 2 
+
+> dθ
+
+X
+
+> k=1
+
+log σp,k 
+
+σϕ,k 
+
+,
+
+where the last equality uses log σ2 = 2 log σ (valid since σp,k , σ ϕ,k > 0), together with 
+
+tr  Σ−1 
+
+> p
+
+Σq
+
+ =
+
+> dθ
+
+X
+
+> k=1
+
+σ2
+
+> ϕ,k
+
+σ2
+
+> p,k
+
+, (μq − μp)⊤Σ−1 
+
+> p
+
+(μq − μp) = 
+
+> dθ
+
+X
+
+> k=1
+
+(μϕ,k − μp,k )2
+
+σ2
+
+> p,k
+
+.
+
+Substituting the diagonal expressions into Eq. A.12 and restoring the explicit A dependence we get, 
+
+DKL 
+
+ qϕ(θ | A) ∥ p(θ | A) = 12
+
+> dθ
+
+X
+
+> k=1
+
+" σ2
+
+> ϕ,k
+
+(A)
+
+σ2
+
+> p,k
+
+(A) +
+
+ μϕ,k (A) − μp,k (A)2
+
+σ2
+
+> p,k
+
+(A) − 1 + 2 log σp,k (A)
+
+σϕ,k (A)
+
+#
+
+.
+
+This is the desired closed form. 18 A.6 Pseudo Code and Computational Complexity Algorithm 1 SVI-DAG Algorithm 
+
+Inputs: Dataset D; priors (αij , β ij ); flow Tϕ; hypernetwork Hϕ; base p0(z); iterations Titr ;Sinkhorn iterations KS ; objective draws SMC ; temperatures T > 0, τ > 0; particles 
+
+Kpart ; step sizes ηϕ, η r
+
+Outputs: Variational parameters ϕ and posterior particles {r(k)}Kpart 
+
+> k=1
+
+1: Initialize parameters ϕ and particles {r(k)}Kpart  
+
+> k=1
+
+∼ N (0 , σ 2 
+
+> r
+
+Im)
+
+2: for t = 1 , . . . , T itr do 
+
+3: Compute particle wise objectives and gradients 
+
+4: for k = 1 , . . . , K part do 
+
+5: Compute Pτ,K S (r(k)) ← S KS
+
+  exp( S0(r(k))/τ ).
+
+6: Compute M (r(k)) ← P (r(k))LP (r(k))T .
+
+7: Compute Mτ,K S (r(k)) ← Pτ,K S (r(k)) L P τ,K S (r(k))T .
+
+8: for s = 1 , . . . , S MC do 
+
+9: Sample z(k,s ) ∼ p0 and set γ(k,s ) ← Tϕ(z(k,s ); r(k)).
+
+10: 11: Sample B(k,s ) ← 1{γ(k,s ) + R(k,s ) > 0}. ▷ Eq. 1 
+
+12: Sample ˜B(k,s ) ← σ(( γ(k,s ) + R(k,s ))/T ). ▷ Eq. 1 
+
+13: Set A(k,s ) ← B(k,s ) ⊙ M (r(k)) ⊙ (1m×m − Im).
+
+14: Set ˜A(k,s ) ← ˜B(k,s ) ⊙ Mτ,K S (r(k)) ⊙ (1m×m − Im).
+
+15: A(k,s )ST ← ˜A(k,s ) + sg( A(k,s ) − ˜A(k,s )). ▷ Eq. 2 
+
+16: (μ(k,s ) 
+
+> ϕ
+
+, ρ (k,s ) 
+
+> ϕ
+
+) ← Hϕ(A(k,s )ST ) and set σ(k,s ) 
+
+> ϕ
+
+← softplus( ρ(k,s ) 
+
+> ϕ
+
+).
+
+17: Sample ϵ(k,s ) ∼ N (0 , I dθ ) and set θ(k,s ) ← μ(k,s ) 
+
+> ϕ
+
++ σ(k,s ) 
+
+> ϕ
+
+⊙ ϵ(k,s ).
+
+18: Draw a minibatch D(k,s ) 
+
+> b
+
+⊂ { 1, . . . , N } and compute 
+
+bL(k,s )ELL ← N
+
+|D (k,s ) 
+
+> b
+
+|
+
+> m
+
+X
+
+> i=1
+
+X
+
+> n∈D (k,s )
+> b
+
+log pi
+
+ x(n) 
+
+> i
+
+| gi(x(n); θ(k,s ) 
+
+> i
+
+).
+
+19: Compute L(k,s )KL (ϕ; A(k,s )ST ) ▷ Eq. 4 
+
+20: L(k,s )flow ← log det ∂γ (k,s ) 
+
+> ∂z (k,s )
+
+− log p0(z(k,s )) + log p(γ(k,s )).
+
+21: bL(k,s ) ← bL(k,s )ELL − L (k,s )KL + L(k,s )flow .
+
+22: bL(k) ← S−1MC 
+
+PSMC  
+
+> s=1
+
+bL(k,s ). ▷ Eq. 5 
+
+23: Target score: g(k) ← ∇ ST 
+
+> r(k)
+
+  bL(k) + log p(r(k)).
+
+24: ψ(k) ← vec( M (k) 
+
+> τ,K S
+
+).
+
+25: Update particles via SVGD in relaxed acylicity space 
+
+26: for k = 1 , . . . , K part do 
+
+27: Φ(k) ← K−1
+
+> part
+
+PKpart 
+
+> j=1
+
+kM (ψ(j), ψ (k))g(j) + ∇r(j) kM (ψ(j), ψ (k)).
+
+28: r(k) ← r(k) + ηr Φ(k). ▷ Eq. 6 
+
+29: Update ϕ with particles held fixed 
+
+30: bJblock ← K−1
+
+> part
+
+P 
+
+> k
+
+bL(k).
+
+31: ϕ ← ϕ + ηϕ∇ST  
+
+> ϕ
+
+bJblock .
+
+32: return ϕ, {r(k)}Kpart  
+
+> k=1
+
+.We include the pseudo code for SVI-DAG in Algorithm 1. We choose neural spline flows (Durkan et al., 2019) for Tϕ as they provide expressive transformations while allowing tractable forward evaluation and log Jacobian computation. The most computationally intensive components are the formation of the relaxed acyclicity mask and particle interactions in the SVGD style update. For each particle, applying KS Sinkhorn normalizations to an m × m matrix costs O(KS m2),giving O(Kpart KS m2) work per training iteration. This is followed by the dense multiplication 19 Pτ,K S LP Tτ,K S that forms the generally cyclic relaxed acyclicity mask, imposing a worst case cost of O(Kpart m3). Forming the hard permutation mask can instead exploit permutation structure and does not create this cubic term. The SVGD style update requires pairwise kernel evaluations and gradients across the Kpart particles. Since the kernel uses vectorized relaxed masks u of length m2,this step adds O(K2
+
+> part
+
+m2). The particle computations before the interaction step can be batched on a GPU. If we are to include the SMC hard/soft edge and adjacency constructions, the overall algorithmic complexity is O(Kpart m3 + Kpart KS m2 + Kpart SMC m2 + K2
+
+> part
+
+m2), which aligns with standard cubic complexity of modern approaches to causal discovery (Thompson et al., 2024; Lorch et al., 2021; Bello et al., 2022; Annadani et al., 2023). This excludes the architecture and minibatch dependent costs of the flow, hypernetwork, likelihood, and their reverse mode derivatives, so it is not a bound on total runtime. 
+
+## B Supporting Statements and Proofs 
+
+Proposition B.1. Let’s fix p ∈ (0 , 1) and set αν = νp + 1 and βν = ν(1 − p) + 1 for ν > 0.Let πν ∼ Beta( αν , β ν ) and conditionally on πν we draw Bν ∼ Bernoulli( πν ). Then πν → p in probability as ν → ∞ and P(Bν = 1) = E[π] → p. Hence the Beta Bernoulli distribution converges to Bernoulli( p) in the large confidence limit. Proof. We have 
+
+E[πν ] = αν
+
+αν + βν
+
+= νp + 1 
+
+ν + 2 → p, 
+
+as ν → ∞ . Also 
+
+Var( πν ) = αν βν
+
+(αν + βν )2(αν + βν + 1) = ν2p(1 − p) + ν + 1 (ν + 2) 2(ν + 3) ∼ p(1 − p)
+
+ν → 0.
+
+The bias-variance identity gives 
+
+E(πν − p)2 = Var( πν ) +  E[πν ] − p2 = Var( πν ) + 
+
+ 1 − 2pν + 2 
+
+2
+
+→ 0.
+
+By Markov’s inequality, for every ε > 0,
+
+P |πν − p| > ε  ≤ E[( πν − p)2]
+
+ε2 → 0.
+
+Hence πν → p in probability. Finally, by the law of iterated expectations, 
+
+P(Bν = 1) = E[P(Bν = 1 | πν )] = E[πν ] = νp + 1 
+
+ν + 2 → p. 
+
+Thus the marginal law of Bν is Bernoulli( E[πν ]) and converges to Bernoulli( p).
+
+Proposition B.2. Let X be a measurable space and let T : X → Y be a measurable map. Let q and 
+
+p be probability measures on X with pushforwards qT and pT on Y. Then 
+
+DKL (q ∥ p) ≥ DKL (qT ∥ pT ), (B.1) 
+
+with equality if and only if a version of the conditional distributions satisfies q(· | y) = p(· | y) for qT
+
+almost every y. Specifically, for the deterministic mapping (B, r ) 7 → A = B ⊙ M (r), the divergence in the (B, r ) space provides an upper bound for the divergence in the adjacency matrix space A.Proof. Let X ∼ q and Y = T (X). By disintegration, there exist conditional probability measures 
+
+q(· | y) and p(· | y) such that 
+
+q(dx ) = q(dx | y) qT (dy ), p(dx ) = p(dx | y) pT (dy ).
+
+We begin by expressing the total KL divergence on the space X as an integral: 
+
+DKL (q ∥ p) = 
+
+Z
+
+> X
+
+log 
+
+ q(dx )
+
+p(dx )
+
+
+
+q(dx ).
+
+20 By substituting the disintegrated forms into the integrand, we have: 
+
+DKL (q ∥ p) = 
+
+Z
+
+> Y
+
+Z
+
+> X | y
+
+log 
+
+ qT (dy ) q(dx | y)
+
+pT (dy ) p(dx | y)
+
+
+
+q(dx | y) qT (dy ).
+
+We then use the properties of the logarithm to separate the marginal and conditional components: 
+
+DKL (q ∥ p) = 
+
+Z
+
+> Y
+
+log 
+
+ qT (dy )
+
+pT (dy )
+
+
+
+qT (dy ) + 
+
+Z
+
+> Y
+
+"Z
+
+> X | y
+
+log 
+
+ q(dx | y)
+
+p(dx | y)
+
+
+
+q(dx | y)
+
+#
+
+qT (dy ).
+
+The first term on the right hand side is the KL divergence between the pushforward measures, 
+
+DKL (qT ∥ pT ). The second term represents the expected conditional KL divergence, which we denote as EqT [DKL (q(· | y) ∥ p(· | y))] . The Gibbs inequality states that the KL divergence between any two probability measures is non negative. Therefore, if we assume the measures are well defined, then the conditional term satisfies: 
+
+Z
+
+> Y
+
+DKL (q(· | y) ∥ p(· | y)) qT (dy ) ≥ 0.
+
+This non negativity implies that DKL (q ∥ p) ≥ DKL (qT ∥ pT ) establishing the inequality. We can observe that for the inequality to become an equality, the conditional term must vanish. This occurs if and only if DKL (q(· | y) ∥ p(· | y)) = 0 for qT almost every y, which is equivalent to the condition that q(· | y) = p(· | y). In the context of our algorithm, this demonstrates that minimizing the divergence in the latent parameter space (B, r ) minimizes a conservative upper bound on the divergence between the actual graph distributions. 
+
+Theorem B.3. Let r ∈ Rm have pairwise distinct entries and let B ∈ { 0, 1}m×m have zero diagonal. Let’s define M (r) = P (r)LP (r)T and A = B ⊙ M (r). Then the directed graph with adjacency A
+
+is acyclic. Moreover for every binary DAG there exist potentials r and a free edge matrix B such that 
+
+A = B ⊙ M (r) (Annadani et al., 2023). Proof. Let’s define the permuted adjacency matrix sorted by the potentials r as 
+
+Asorted = P (r)T A P (r).
+
+Substituting A = B ⊙M (r) = B ⊙ P (r)LP (r)T  and using P T (C ⊙D)P = ( P T CP )⊙(P T DP )
+
+for permutation matrices, together with P (r)T P (r) = Im, we have 
+
+Asorted =  P (r)T B P (r) ⊙ L. 
+
+Since L is strictly lower triangular, Asorted is also strictly lower triangular (i.e., (Asorted )ij = 0 for all i ≤ j). A directed graph whose adjacency matrix can be permuted to be strictly lower triangular contains no cycles, because its edges respect the strict total order on vertices induced by the potentials 
+
+r. Thus, the graph defined by A is a DAG. Conversely, let G be an arbitrary DAG with binary adjacency matrix Atrue . Since G is acyclic, it admits a topological ordering. Let σ be a permutation of {1, . . . , m } consistent with it, so that every edge of G is mapped, under σ, into the strictly lower triangular support of L. We choose the potential vector r (with pairwise distinct entries, so that P (r)
+
+is well defined) such that its descending sort induces this permutation σ. Under this choice the mask 
+
+M (r) contains ones at all positions compatible with the topological order, hence the support of Atrue 
+
+is a subset of the support of M (r). Therefore, choosing B = Atrue ,
+
+B ⊙ M (r) = Atrue ⊙ M (r) = Atrue .
+
+Thus, every binary DAG can be represented by this construction. 
+
+Lemma B.4. Let m ≥ 2 and let r = ( r1, . . . , r m)T ∈ Rm have pairwise distinct entries. We define the score matrix S0(r) = r o T , where o = ( m, . . . , 1) T . For τ > 0 and KS ≥ 1, let Pτ,K S (r) denote the output obtained after KS alternating row and column normalizations applied to exp  S0(r)/τ ,and let 
+
+P ⋆τ (r) = lim   
+
+> KS→∞
+
+Pτ,K S (r)
+
+be its Sinkhorn limit, which exists and is the unique doubly stochastic solution of the entropic assignment problem because exp( S0(r)/τ ) has strictly positive entries (Sinkhorn–Knopp). Let 
+
+21 P (r) be the permutation matrix that sorts indices by descending potential, and set M ⋆τ (r) = 
+
+P ⋆τ (r) L P ⋆τ (r)T and M (r) = P (r) L P (r)T , where L is the strictly lower triangular matrix of ones. Then 
+
+P ⋆τ (r) → P (r) and M ⋆τ (r) → M (r) entrywise as τ → 0.
+
+Equivalently, for any iteration schedule KS (τ ) → ∞ with Pτ,K S (τ )(r)−P ⋆τ (r) max → 0 as τ → 0,one has Pτ,K S (τ )(r) → P (r) and Pτ,K S (τ )(r) L P τ,K S (τ )(r)T → M (r) entrywise (Annadani et al., 2023). Proof. We denote by Πm the set of m × m permutation matrices. For any P ∈ Πm associated with a permutation σ of {1, . . . , m }, we have the Frobenius inner product 
+
+⟨P, S 0(r)⟩ =
+
+> m
+
+X
+
+> i=1
+> m
+
+X
+
+> j=1
+
+Pij rioj =
+
+> m
+
+X
+
+> i=1
+
+ri oσ(i).
+
+Since o is strictly decreasing and the entries of r are pairwise distinct, the rearrangement inequality implies that this sum is uniquely maximized over Πm by pairing the largest component of r with the largest component of o, the second largest with the second largest, and so on. The unique maximizer is P (r). First let KS → ∞ at fixed τ > 0. By the Sinkhorn-Knopp theorem, Pτ,K S (r) → P ⋆τ (r),the unique doubly stochastic matrix solving the entropic assignment problem 
+
+P ⋆τ (r) = arg max  
+
+> P∈P m
+
+n
+
+⟨P, S 0(r)⟩ + τ H (P )
+
+o
+
+, (B.2) where Pm is the Birkhoff polytope and H(P ) = − P 
+
+> i,j
+
+Pij log Pij is the Shannon entropy. Now let τ → 0. Since H is bounded on the compact polytope Pm, any sequence of maximizers of equation B.2 converges to a maximizer of the linear objective P 7 → ⟨ P, S 0(r)⟩ over Pm. By the Birkhoff-von Neumann theorem and the previous paragraph this maximizer is the unique vertex P (r).Hence P ⋆τ (r) → P (r) entrywise as τ → 0. Finally, for any indices a, b ∈ { 1, . . . , m },
+
+ M ⋆τ (r) 
+
+> ab
+
+=
+
+> m
+
+X
+
+> i=1
+> m
+
+X
+
+> j=1
+
+ P ⋆τ (r) 
+
+> ai
+
+Lij 
+
+ P ⋆τ (r) 
+
+> bj
+
+,  M (r) 
+
+> ab
+
+=
+
+> m
+
+X
+
+> i=1
+> m
+
+X
+
+> j=1
+
+P (r)ai Lij P (r)bj .
+
+Since L is fixed and the sums are finite, entrywise convergence P ⋆τ (r) → P (r) gives M ⋆τ (r) →
+
+M (r) entrywise. The schedule statement then follows from the triangle inequality together with 
+
+Pτ,K S (τ )(r) − P ⋆τ (r) max → 0.
+
+## C Evaluation Metrics 
+
+We assess the quality of the learned posterior distribution using four metrics, each capturing a distinct aspects of structured recovery. Let q(G) represent the approximate posterior over graphs and let GGT 
+
+represent the ground truth causal graph. For each metric, we draw Ne posterior samples {G (i)}Ne
+
+> i=1
+
+with G(i) ∼ q(G) and report Monte Carlo estimates. 
+
+Expected SHD (E-SHD). The SHD( G, GGT ) counts the minimum number of edge additions, deletions, and reversals required to transform the estimated graph G into GGT . Because our method returns a distribution rather than a point estimate, we report the expected SHD under the approximate posterior: E-SHD = EG∼ q(G)
+
+SHD( G, GGT ) ≈ 1
+
+NeNeX
+
+> i=1
+
+SHD  G(i), GGT .
+
+Lower values indicate that posterior samples are, on average, structurally closer to the ground truth. This metric penalizes both missing and spurious edges as well as orientation errors, providing a comprehensive measure of structural accuracy. 22 Expected F1 score. For each posterior sample G(i), we treat every ordered pair (i, j ) as a binary classification problem: an edge is either present or absent. Precision is the fraction of predicted edges that appear in GGT , recall is the fraction of true edges recovered by G(i), and the F1 score is their harmonic mean. The expected F1 score averages this quantity over the approximate posterior: E-F1 = EG∼ q(G)
+
+F1( G, GGT ) ≈ 1
+
+NeNeX
+
+> i=1
+
+F1  G(i), GGT .
+
+Higher values reflect better balance between precision and recall across posterior samples. 
+
+Brier score. The Brier score evaluates the calibration of the posterior edge probabilities by measur-ing the mean squared error between the marginal posterior edge probabilities and the ground truth binary edge indicators. Let ˆpij = EG∼ q(G)[Aij ] denote the marginal posterior probability of edge 
+
+(i, j ) and let AGT  
+
+> ij
+
+∈ { 0, 1} denote the corresponding ground truth edge indicator. The Brier score is defined as 
+
+Brier = 1
+
+m(m − 1) 
+
+X
+
+> i̸=j
+
+ ˆpij − AGT 
+
+> ij
+
+2 .
+
+A lower Brier score indicates superior uncertainty quantification. A perfectly calibrated posterior that assigns probability one to true edges and zero to absent edges achieves a Brier score of zero. 
+
+AUROC. The AUROC measures the discriminative ability of the posterior edge probabilities 
+
+{ˆpij }i̸=j in distinguishing true edges from absent ones, treating the marginal probabilities as scores for a binary classifier. It equals the probability that a randomly chosen true edge receives a higher posterior probability than a randomly chosen absent edge. An AUROC of 100% indicates perfect separation, while 50% corresponds to chance level discrimination. Unlike the Brier score, the AUROC is threshold free and invariant to monotone transformations of the scores, making it a complementary measure of ranking quality. 
+
+CPDAG evaluation. In settings like linear synthetic data, where the DAG is identifiable only up to its MEC, point wise comparison against a single ground truth DAG would unfairly penalize methods that correctly recover the equivalence class but select a different representative. We therefore follow standard practice and convert both the ground truth DAG and each posterior sample to their corresponding CPDAGs (Peters et al., 2017) before computing the metrics above. A CPDAG represents a MEC by directing only those edges whose orientation is shared by every member of the class and leaving the remaining edges undirected. All four metrics are then evaluated at the CPDAG level, ensuring that methods are not penalized for orientation ambiguities that are inherently unresolvable from observational data alone. 
+
+## D Code and license 
+
+We use the following open source repositaries for comparison with the baselines: • ProDAG: https://github.com/ryan-thompson/ProDAG.jl (MIT license). • BayesDAG: https://github.com/microsoft/Project-BayesDAG (MIT license). • BCD: https://github.com/ermongroup/BCD-Nets (No license included). • DIBS: https://github.com/larslorch/dibs (MIT license). • DDS/VI-DP-DAG https://github.com/sharpenb/Differentiable-DAG-Sampling (No license included). 23 E Detailed Model Specifications and Hyperparameters. 
+
+Table E.1: Hyperparameters held fixed across the benchmark experiments. Experiment dependent settings are reported below the table and are intentionally excluded from the common entries. 
+
+Hyperparameter Value 
+
+SVI-DAG 
+
+Mini-batch size 64 
+
+Parameter optimizer Adam (Kingma and Ba, 2014) Global gradient-norm bound 1.0
+
+Number of ELBO MC samples 1
+
+Straight-through hard-adjacency estimator Enabled Concrete edge temperature T 0.3
+
+Final Sinkhorn temperature τ 0.1
+
+Number of Sinkhorn iterations KS 100 
+
+Sinkhorn implementation Log-space normalization Bayesian node model Two hidden layers of width 32 
+
+Node-model activation tanh 
+
+Node-model weight prior N (0 , 1) 
+
+Normalizing-flow family Rational-quadratic neural-spline coupling flow (Durkan et al., 2019) Number of flow blocks 5
+
+Number of spline bins 8
+
+Spline domain [−5, 5] 
+
+Number of SVGD particles Kpart 20 
+
+SVGD kernel RBF kernel on relaxed DAG-mask features Order-potential prior r ∼ N (0 , I ), i.e., σr = 1 
+
+Particle-gradient clipping Per-particle ℓ2-norm bound of 10 
+
+Base SVGD repulsion weight 1.0
+
+BayesDAG 
+
+Maximum epochs for the selected final model 150 
+
+Maximum epochs for each sparsity-grid proxy fit 25 
+
+Training batch size 128 
+
+Number of SG-MCMC chains 10 
+
+Permutation and SEM SG-MCMC step size 3 × 10 −4
+
+Variational-helper optimizer Adam, learning rate 5 × 10 −3
+
+Permutation SG-MCMC noise scale 0.1
+
+SEM-weight SG-MCMC noise scale 0.01 
+
+Model family Nonlinear ICGNN Number of hidden layers 2
+
+Hidden width 128 
+
+Activation ReLU Layer normalization Enabled Residual connections Enabled Input-permutation conditioning Disabled Variational normalization Enabled Number of Sinkhorn iterations 100 
+
+Permutation-relaxation temperature 0.2
+
+Sparsity proxy grid 4 geometrically spaced values Sparsity-grid range [10 , 10 3]
+
+Posterior samples per proxy fit 64 
+
+Validation holdout ⌊0.1n⌋ observations Selection of λ Smallest discrepancy between posterior mean edge count and the true sparsity level Continued on the next page 
+
+24 Table E.1 – continued from the previous page 
+
+Hyperparameter Value 
+
+BCD Nets 
+
+Number of optimization steps 15 ,000 
+
+ELBO MC batch size 256 
+
+Optimizer for P and L AdaBelief-style Optax scale by belief 
+
+Learning rate 10 −3
+
+Number of outer ELBO samples 1
+
+Permutation-network architecture Two-hidden-layer MLP Permutation-network hidden width 128 
+
+Permutation-network activation GeLU Permutation-logit soft bound 10 
+
+Gumbel–Sinkhorn temperature schedule 30 → 10 → 1, with changes at 5,000 and 
+
+10 ,000 steps Sinkhorn doubly-stochastic tolerance 0.01 
+
+Posterior permutation sampling Hard, with straight-through gradients Posterior over L Diagonal Gaussian over lower-triangular weights and log-noise scales Log-standard-deviation soft bound 10 
+
+Likelihood-noise parameterization One noise scale per node Lower-triangular weight prior Horseshoe Expected in-degree 1
+
+Horseshoe global scale τH = qd
+
+plog(1 /q d), where 
+
+qd = min {2/(d − 1) , 1}
+
+Log-noise prior standard deviation 3.0
+
+Permutation-network ℓ2 penalty 0
+
+DiBS 
+
+Number of SVGD steps 2,000 
+
+Number of particles Kpart 20 
+
+Optimizer RMSProp SVGD step size 0.005 
+
+Likelihood-gradient MC samples 128 
+
+Acyclicity-gradient MC samples 32 
+
+Acyclicity inverse-temperature slope β(t) = t
+
+Gumbel–softmax temperature 1.0
+
+Latent dimension k = d
+
+Latent prior standard deviation 1/√k
+
+Latent-graph kernel component Frobenius squared-exponential kernel Latent-kernel bandwidth 5.0
+
+Graph prior Erd˝ os–R´ enyi, with expected degree parameter 2
+
+ProDAG 
+
+Maximum number of training epochs 1,000 
+
+Early-stopping patience 5 epochs Optimizer Adam (Kingma and Ba, 2014) Learning rate 0.1
+
+Number of ELBO MC samples 100 
+
+Variational weight prior N (0 , 1) 
+
+Likelihood noise variance 1
+
+Initial projected adjacency W (0) 0
+
+Initial acyclicity penalty μ(1) 1
+
+Penalty update μ(t+1) = μ(t)/2
+
+Number of penalty stages 10 
+
+Maximum inner projection iterations 10 ,000 
+
+Training projection tolerance 10 −2
+
+Continued on the next page 
+
+25 Table E.1 – continued from the previous page                                        
+
+> Hyperparameter Value
+> Posterior projection tolerance 10 −4
+> Acyclicity threshold 0.1
+> Validation holdout ⌊0.1n⌋observations Number of sparsity-grid values 10
+> Minimum sparsity radius λmin 0
+> Maximum sparsity radius λmax Mean posterior ℓ1-norm obtained with
+> λ=∞
+> Selection of λMinimum validation reconstruction error
+> DDS /VI-DP-DAG
+> Maximum number of epochs 100
+> Early-stopping patience 20 validation evaluations Validation frequency Every 2epochs Training batch size 64
+> Optimizer Adam (Kingma and Ba, 2014) Masked-autoencoder learning rate 10 −3
+> DAG-parameter learning rate 10 −2
+> Training/validation split 80% /20%
+> Order relaxation Top-kSoftSort Sampling mode Hard, with straight-through gradients Order-relaxation temperature 1.0
+> Noise factor 1.0
+> Masked-autoencoder architecture Linear Hidden-layer widths (16 ,16 ,16)
+> Training loss ELBO Edge regularizer Bernoulli KL divergence Edge-regularizer weight 0.1
+> Prior edge probability 0.01
+
+Experiment-dependent settings. The common table excludes parameters whose values changed between experiments. For the synthetic Erd˝ os–R´ enyi (ER) benchmarks, (p, s ) denotes the number of nodes and directed edges, respectively. For reproducibility, the experiment-dependent settings were as follows. 
+
+SVI-DAG . The iteration budget was 6,000 for the two-node prior-sensitivity experiments, 2,500 for the Sachs protein-signaling experiment, and 1,500 for the linear and nonlinear ER benchmarks with (p, s ) ∈ { (25 , 40) , (50 , 80) }. The parameter learning rate and SVGD step size were 
+
+(10 −3, 10 −3) for the two-node experiments and (3 × 10 −3, 10 −1) for the ER and Sachs experiments. The flow-conditioner widths were (5 , 5) for the two-node experiments and 
+
+(64 , 64) for the ER and Sachs experiments. The two-node prior-sensitivity experiments used no straight-through warm-up, full-adjacency conditioning of the node hypernetworks, and no scale normalization of the order potentials. The ER and Sachs experiments used a full-run straight-through warm-up, row-wise adjacency conditioning, and scale-normalized order potentials. The two-node experiments additionally capped the SVGD repulsion norm at the attraction norm; this cap was disabled for the ER and Sachs experiments. The initial Sinkhorn temperature was 20 for the Sachs experiment and 0.1 for the two-node and synthetic ER experiments; the final Sinkhorn temperature was 0.1 in every experiment. The two-node and Sachs experiments learned graph-conditioned likelihood-noise scales using a log-noise prior centered at σ = 0 .1. The linear and nonlinear ER benchmarks with 
+
+(p, s ) ∈ { (25 , 40) , (50 , 80) } instead used fixed likelihood noise σ = 0 .5. The weight-space KL coefficient was 1 for the two-node and Sachs experiments and 0.01 for all synthetic ER experiments. 
+
+BayesDAG . The same nonlinear ICGNN architecture was used for the linear ER, nonlinear ER, and Sachs experiments. Thus, BayesDAG did not select a separate architecture according to whether the data-generating structural equations were linear or nonlinear. 26 DiBS . MarginalDiBS with the BGe score, inverse-temperature slope α(t) = t, and the score-function gradient estimator was used for the linear ER benchmarks with (p, s ) ∈{(25 , 40) , (50 , 80) } and for the Sachs experiment. JointDiBS with a nonlinear Gaussian likelihood was used for the nonlinear ER benchmarks with (p, s ) ∈ { (25 , 40) , (50 , 80) }.The nonlinear model used a single hidden layer of 10 ReLU units, inverse-temperature slope α(t) = 0 .05 t, and the reparameterization gradient estimator. It additionally used parameter-kernel bandwidth hθ = 500 and likelihood-noise standard deviation 0.1.
+
+ProDAG . The linear ProDAG model with projection step size 1/d was used for the linear ER benchmarks with (p, s ) ∈ {(25 , 40) , (50 , 80) } and for the Sachs experiment. The nonlinear ProDAG model was used for the nonlinear ER benchmarks with (p, s ) ∈{(25 , 40) , (50 , 80) }. It used one hidden layer of 10 ReLU units and projection step size 
+
+0.25 /d , where d denotes the number of variables. 
+
+BCD Nets and DDS . These methods used the same linear structural model for the linear ER, nonlinear ER, and Sachs experiments. In particular, neither wrapper selected a separate nonlinear architecture for the nonlinear ER benchmarks. 
+
+## F Broader impact & limitations 
+
+F.0.1 Broader impact statement 
+
+This work is concerned with understanding cause and effect relationships from data, with potential applications across empirical sciences, economics, epidemiology, and climate science. By explicitly quantifying epistemic uncertainty over causal structures and providing a principled mechanism to incorporate domain knowledge, our approach can support more calibrated decision making, expose biases present in the data, and allow reliable answers to causal queries in settings where data are scarce or the underlying DAG is not identifiable. As such, we envision this line of work to not have any significant negative impact. 
+
+F.0.2 Limitations 
+
+Though our approach has several strengths, it naturally has limitations. As with most Bayesian approaches that rely on variational inference, our framework lacks theoretical guarantees for exact posterior approximation. In particular, while the combination of normalizing flows and SVGD in the relaxed acyclicity space is designed to promote mode coverage, our method does not guarantee recovery of all DAGs within MEC. It can only aim to capture as many of them as possible, and some equivalent structures may remain underrepresented in the learned posterior. 27
