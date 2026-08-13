@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-12</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-13</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 16 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 9 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>6</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>10</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>3</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-12 21:27:06 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-13 21:09:48 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读6篇、速读10篇，聚焦虚拟细胞扰动建模与因果知识注入等前沿方法。</p>
-<p>两篇9分精读分别提出控制锚定残差流匹配和人类引导因果知识注入，值得重点关注。</p>
-<p>建议优先复现虚拟细胞建模新方法，并尝试结合多组学与影像融合做验证。</p>
+<p>今日聚焦虚拟细胞建模与因果知识注入，共处理9篇论文（精读6篇、速读3篇）。最值得关注的是两篇9.0分工作：控制锚定残差流匹配基因几何的细胞扰动建模，以及人类引导的因果知识注入。建议普通读者优先了解虚拟细胞在预测药物响应和疾病机制中的应用，同时可留意多组学与影像融合的肿瘤学研究。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -76,7 +74,7 @@
     <strong class="dpr-home-dashboard-count">6 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling">Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling</span></li><li><span class="dpr-home-dashboard-paper-title" title="Human-Guided Causal Knowledge Injection for Virtual Cells">Human-Guided Causal Knowledge Injection for Virtual Cells</span></li><li><span class="dpr-home-dashboard-paper-title" title="CIGTSurv: Clinical Information Guided Tri-modal Survival Prediction with Local Prototype Association and Global Feature Alignment">CIGTSurv: Clinical Information Guided Tri-modal Survival Prediction with Local Prototype Association and Global Feature Alignment</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling">Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling</span></li><li><span class="dpr-home-dashboard-paper-title" title="Human-Guided Causal Knowledge Injection for Virtual Cells">Human-Guided Causal Knowledge Injection for Virtual Cells</span></li><li><span class="dpr-home-dashboard-paper-title" title="CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction">CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction</span></li></ul>
   </div>
   <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>6</strong></span></div>
 </section>
@@ -86,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">10 篇</strong>
+    <strong class="dpr-home-dashboard-count">3 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="bioMoR: Biology-Guided Mixture-of-Recursions for Effective Genomic Learning">bioMoR: Biology-Guided Mixture-of-Recursions for Effective Genomic Learning</span></li><li><span class="dpr-home-dashboard-paper-title" title="DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology">DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology</span></li><li><span class="dpr-home-dashboard-paper-title" title="Decoding Phenotypes: A Framework for Fusing Genomic Language Models and Neuroimaging">Decoding Phenotypes: A Framework for Fusing Genomic Language Models and Neuroimaging</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology">DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology</span></li><li><span class="dpr-home-dashboard-paper-title" title="Decoding Phenotypes: A Framework for Fusing Genomic Language Models and Neuroimaging">Decoding Phenotypes: A Framework for Fusing Genomic Language Models and Neuroimaging</span></li><li><span class="dpr-home-dashboard-paper-title" title="Exact Conditional Distributions of Chi-Square-Family Statistics for Two-Way Contingency Tables, by Cell-Separable Dynamic Programming">Exact Conditional Distributions of Chi-Square-Family Statistics for Two-Way Contingency Tables, by Cell-Separable Dynamic Programming</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>6</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 </div>
 
