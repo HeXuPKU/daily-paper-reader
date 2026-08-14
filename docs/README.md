@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-13</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-14</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 9 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 12 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>6</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>3</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>3</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>9</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-13 21:09:48 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-14 19:56:18 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日聚焦虚拟细胞建模与因果知识注入，共处理9篇论文（精读6篇、速读3篇）。最值得关注的是两篇9.0分工作：控制锚定残差流匹配基因几何的细胞扰动建模，以及人类引导的因果知识注入。建议普通读者优先了解虚拟细胞在预测药物响应和疾病机制中的应用，同时可留意多组学与影像融合的肿瘤学研究。</p>
+<p>今日精读3篇、速读9篇，聚焦多组学与肿瘤AI基础模型。最值得看DoGMA（9.0）用中心法则引导多组学对齐与多任务学习，bioMoR（8.0）以生物学先验强化基因组编码。建议优先关注多组学基础模型在精准肿瘤学中的落地，可结合速读中的个性化治疗风险建模方法。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">6 篇</strong>
+    <strong class="dpr-home-dashboard-count">3 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling">Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling</span></li><li><span class="dpr-home-dashboard-paper-title" title="Human-Guided Causal Knowledge Injection for Virtual Cells">Human-Guided Causal Knowledge Injection for Virtual Cells</span></li><li><span class="dpr-home-dashboard-paper-title" title="CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction">CASCADE: An Agentic Regulatory Network Framework for Patient-Data-Validated Downstream Perturbation Prediction</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology">DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology</span></li><li><span class="dpr-home-dashboard-paper-title" title="bioMoR: Biology-Guided Mixture-of-Recursions for Effective Genomic Learning">bioMoR: Biology-Guided Mixture-of-Recursions for Effective Genomic Learning</span></li><li><span class="dpr-home-dashboard-paper-title" title="Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling">Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>6</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -84,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">3 篇</strong>
+    <strong class="dpr-home-dashboard-count">9 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology">DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology</span></li><li><span class="dpr-home-dashboard-paper-title" title="Decoding Phenotypes: A Framework for Fusing Genomic Language Models and Neuroimaging">Decoding Phenotypes: A Framework for Fusing Genomic Language Models and Neuroimaging</span></li><li><span class="dpr-home-dashboard-paper-title" title="Exact Conditional Distributions of Chi-Square-Family Statistics for Two-Way Contingency Tables, by Cell-Separable Dynamic Programming">Exact Conditional Distributions of Chi-Square-Family Statistics for Two-Way Contingency Tables, by Cell-Separable Dynamic Programming</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Risk-Aware Quantile Learning for Personalized Dynamic Treatment Regimes">Risk-Aware Quantile Learning for Personalized Dynamic Treatment Regimes</span></li><li><span class="dpr-home-dashboard-paper-title" title="BioM-JEPA: joint-embedding prediction of graph-connected gene blocks in single cells">BioM-JEPA: joint-embedding prediction of graph-connected gene blocks in single cells</span></li><li><span class="dpr-home-dashboard-paper-title" title="Debiased Machine Learning for Partially Linear Accelerated Failure Time Models">Debiased Machine Learning for Partially Linear Accelerated Failure Time Models</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>5</strong></span><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span></div>
 </section>
 </div>
 
