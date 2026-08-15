@@ -1,0 +1,3861 @@
+VOICE: A Vision-Omics Foundation Model Integrating Direct and
+Retrieval-Based Prediction of In-situ Single-Cell Gene Expression
+Xin Luo∗
+University of Michigan
+Ann Arbor, Michigan, USA
+luosanj@umich.edu
+Yicheng Tao∗
+University of Michigan
+Ann Arbor, Michigan, USA
+yctao@umich.edu
+Haoxuan Zeng∗
+University of Michigan
+Ann Arbor, Michigan, USA
+zchx@umich.edu
+Suyuan Wang
+University of Michigan
+Ann Arbor, Michigan, USA
+suyuanw@umich.edu
+Chenzi Ouyang
+University of Michigan
+Ann Arbor, Michigan, USA
+oooycz@umich.edu
+Meiqi Zhu
+University of Michigan
+Ann Arbor, Michigan, USA
+meiqizhu@umich.edu
+Kai Liu
+University of Michigan
+Ann Arbor, Michigan, USA
+kailiua@umich.edu
+Shuibing Chen†
+Weill Cornell Medicine
+New York, New York, USA
+shc2034@med.cornell.edu
+Jie Liu†
+University of Michigan
+Ann Arbor, Michigan, USA
+drjieliu@umich.edu
+Abstract
+Spatial transcriptomics can resolve gene expression at single-cell
+resolution, but it is costly, limited to targeted panels of a few hun-
+dred to thousand genes, and applicable to only a small number of
+samples. H&E imaging, by contrast, is cheap and collected routinely
+at scale. This makes predicting single-cell expression directly from
+morphology a practical way to bring molecular analysis to large tis-
+sue archives. We therefore present VOICE, a multimodal foundation
+model that predicts single-cell gene expression from H&E images
+using paired Xenium data. VOICE first aligns cell-centered H&E
+morphology from a pathology foundation model with single-cell
+expression embeddings from a transcriptome foundation model,
+trained using contrastive learning over 23 million cells. Next it
+predicts expression through two branches. One branch directly
+regresses expression from morphology. The other branch retrieves
+measured expression from similar reference cells, recovering genes
+that do not have morphological signal. Because genes vary in mor-
+phological predictability, VOICE fuses the two branches with a
+per-gene weight. After training, VOICE generalizes to held-out
+patients, slides, and partially overlapping gene panels from Xe-
+nium, and it consistently outperforms prior single-cell expression
+prediction methods on seven metrics.
+1
+Introduction
+Single-cell spatial transcriptomics technologies, including 10x Ge-
+nomics Xenium [13] and CosMx Spatial Molecular Imaging [12]
+data, enable transcriptomic profiling of individual cells while pre-
+serving their native tissue context. These assays provide an increas-
+ingly detailed view of how cellular states, tissue morphology, and
+local microenvironments interact in situ, creating new opportu-
+nities to study cell-type organization and spatially cellular inter-
+actions. However, single-cell spatial transcriptomics data remains
+costly and technically demanding. A single Xenium or CosMx slide
+typically costs several thousand US dollars, limited to its measured
+∗These authors contributed equally to this research.
+†Corresponding author.
+gene panels of a few hundred to thousand genes. In contrast, hema-
+toxylin and eosin (H&E) imaging is much cheaper and easy to
+acquire, which costs only a few tens of dollars per slide, two to
+three orders of magnitude less than Xenium and CosMx. H&E slides
+are also routinely collected at scale in both research studies and
+clinical applications. Learning transferable relationships between
+histological morphologies and molecular states among cells could
+therefore extend spatial molecular analysis to large retrospective
+tissue collections.
+Recent methods have demonstrated that cellular gene expres-
+sion can be inferred from H&E images by training with spatial
+transcriptomics data. For example, GHIST directly integrates paired
+histology and subcellular spatial transcriptomics to jointly model
+nuclear morphology, cell identity, local neighborhood composition,
+and single-cell gene expression [10]. sCellST uses weakly super-
+vised multiple-instance learning to decompose Visium spot-level
+gene expression into cell-level predictions [1]. These methods estab-
+lish that tissue morphology contains informative molecular signals,
+but their learned predictors are generally limited to a particular co-
+hort, tissue type, spatial platform, or predefined gene panel, which
+cannot learn morphology–molecular relationships that transfer
+across datasets. To resolve this limitation, recently there are a few
+foundation models trained to predict spatial transcriptomics from
+H&E images like OmiCLIP [3], STORM [26], and DeepSpot-M [19],
+inspired by the recent advances in general-purpose multimodal
+foundation models, including vision-language models and world
+models [6, 9, 14–16, 18, 21, 23, 27, 30, 32, 33]. However, these foun-
+dation models are primarily trained on spot-resolution data and
+treat all genes uniformly. In practice, some genes are strongly as-
+sociated with cell morphology and can be predicted directly from
+the image, while others are better estimated by referring to cells
+with similar transcriptomic profiles. A single prediction strategy is
+therefore unlikely to be optimal for all genes.
+In this work, we propose VOICE, a multimodal spatial foun-
+dation model that predicts single-cell gene expression from H&E
+using paired Xenium data. Our model first aligns cell-centered H&E
+1
+arXiv:2608.08366v1  [cs.CV]  8 Aug 2026
+
+
+, ,
+Xin Luo et al.
+morphology with single-cell transcriptomic foundation model in
+a shared embedding space through contrastive learning. Then it
+predicts gene expressions of every query cell by two complemen-
+tary branches from this space. One branch directly regresses gene
+expression from cell morphology, and the other branch retrieves ex-
+pression from reference cells whose aligned embeddings are closest
+to the query’s, recovering genes without morphological signal. Be-
+cause genes vary in morphological predictability, VOICE fuses the
+two branches’ predictions per gene to produce the final prediction.
+After training, VOICE generalizes to held-out patients and slides. It
+can predict genes measured in the target tissue’s test set but never
+seen in any training slides from the same tissue. Therefore, it can
+transfer knowledge of these genes from other tissues.
+We summarize our contributions as follows:
+• Panel-independent contrastive alignment. We align cell-
+level morphology from UNI2-h [2] with frozen scFounda-
+tion [11] expression embeddings using LoRA adaptation
+and a symmetric InfoNCE loss over 23 million cells from 15
+tissues and 75 slides. We represent cell morphology repre-
+sentation with a cell-mask pooling strategy, reducing noise
+from surrounding cells. This establishes a panel-independent
+vision–omics representation that links cellular morphology
+with gene-expression state.
+• Gene-supervised parametric continuation. Starting
+from the aligned checkpoint of UNI2-h, we attach an
+SE(2)-equivariant spatial-attention decoder and a count
+head over a shared 6,029-gene vocabulary pooled across all
+slides, and continue LoRA finetuning end-to-end, trained by
+a log-space MSE plus a negative-binomial likelihood. This
+count head is shared across slides and masked to each slide’s
+own panel, so heterogeneous panels train one predictor
+together, giving an accurate per-cell estimate.
+• Per-gene gated fusion of two branch prediction results.
+The cell morphology representation is shared by two predic-
+tion branches and is used to construct a reference-cell bank
+that stores image-derived reference features together with
+their measured expression profiles. One branch retrieves
+expression from similar cells, the other predicts morphology-
+related genes, so the two make partly independent errors.
+We fuse them with a per-gene convex gate whose weight is
+fit per gene to favor the more reliable branch to yield the
+final prediction.
+2
+Related Work
+Histology-based spatial transcriptomics prediction. Early methods
+predicted spot-level gene expression from H&E image patches [29].
+Foundation models such as OmiCLIP [3] improved spot-level ac-
+curacy and cross-cohort transfer through large-scale contrastive
+alignment of histology and spatial transcriptomic profiles, with
+its Loki platform estimating expression for a query patch by re-
+trieving and aggregating similar reference spots. These approaches,
+however, operate at the spot level and cannot resolve the cellular
+heterogeneity within each capture region.
+To reach single-cell resolution, one line of work trains on paired
+histology and subcellular spatial transcriptomics data. GHIST [10]
+jointly predicts cell type, morphology, neighborhood composition,
+and single-cell expression by combining cellular and tissue context.
+STORM [26] and DeepSpot-M [19] are multimodal foundation mod-
+els pretrained on spot-level data and adapted to high-resolution
+assays such as Xenium and CosMx. STORM couples histology, ex-
+pression, coordinates, and neighborhood in a hierarchical architec-
+ture, while DeepSpot-M uses heterogeneous molecular embeddings
+and gene queries to attend to image features, enabling adaptation
+to new cohorts from limited data. These directly supervised models
+resolve single cells but are typically trained per-tissue or per-panel,
+limiting their ability to generalize across datasets where different
+slides measure different gene sets.
+A separate line of work learns cell-level expression from
+spot-level supervision alone. sCellST [1] treats cells within each
+Visium spot as a bag and mean-pools per-cell predictions to
+match the observed spot expression. DeepSpot2Cell [20] follows a
+similar strategy but adds multiscale context from the cell and its
+neighboring spots. These methods avoid subcellular spatial data
+but face an underdetermined decomposition, as multiple cellular
+configurations can explain the same spot-level observation.
+Pathology foundation models. Self-supervised pretraining on large
+collections of whole-slide images has become a standard approach
+for learning transferable patch-level representations in computa-
+tional pathology [8]. Representative models include CTransPath,
+which combines contrastive learning with a hierarchical vision
+transformer, and UNI, which pretrains a ViT-L encoder on approx-
+imately 100,000 diagnostic slides [2, 25]. Although these models
+differ in architecture and pretraining strategy, both are designed
+primarily to capture histological morphology. Consequently, their
+embeddings capture rich visual patterns but do not explicitly
+represent gene-expression programs.
+Single-cell transcriptomic foundation models. Large-scale pretrain-
+ing on single-cell RNA-seq atlases has produced general-purpose
+cell embeddings that capture transcriptomic programs across
+tissues and conditions, notably scGPT [7], Geneformer [24], and
+scFoundation [11], which pretrains on over 50 million cells to
+produce unified cell and gene embeddings. These models define a
+semantically meaningful transcriptomic latent space but operate
+entirely on molecular measurements with no access to tissue
+morphology.
+3
+Methodology
+3.1
+Problem setting and notation
+Let S be a set of tissue slides, each slide 𝑠∈S provides a registered
+H&E whole-slide image together with a Xenium assay. For each of
+its 𝑁𝑠segmented cells, we observe its image centroid coordinate
+𝑝𝑖∈R2, a cell-boundary polygon Ω𝑖, and raw counts 𝑦𝑖∈Z𝐺𝑠
+≥0 for
+the𝐺𝑠genes measured by that slide’s panel. Writing 𝑧𝑖= log(1+𝑦𝑖),
+our goal is to predict 𝑧𝑖from H&E cell morphology and similar
+reference cells.
+VOICE learns the prediction of genes in two training stages and
+fuses the prediction results at per gene level from two branches
+(Fig. 1). Stage 1 aligns cell morphology with its gene-expression
+profile through contrastive learning. Specifically, LoRA is used to
+2
+
+
+VOICE: A Vision-Omics Foundation Model
+, ,
+Figure 1: Overview of VOICE. VOICE predicts a single cell’s gene expression from its H&E appearance in three stages.
+fine-tune the UNI2-h image encoder, producing an image adapter
+that maps morphological embeddings into the transcriptomic latent
+space defined by scFoundation [2, 11].Stage 2 continues finetuning
+the same image adapter against measured gene counts jointly with
+an SE(2) spatial decoder learning the relationship between each cell
+and its neighboring cells. The two prediction branches then use the
+same final morphology representation from the model, with one
+regressing gene expression from the cell morphology embedding,
+and the other retrieving similar reference cells from the cell em-
+bedding space. Finally, a per-gene gate fuses the two predictions,
+relying on the direct branch where morphology predicts a gene
+well and on retrieval otherwise.
+3.2
+Cell-resolved image features
+To encode cell morphology from H&E images, for each cell 𝑖, we
+extract a 55 𝜇m H&E field of view centered at 𝑝𝑖and resample it to
+224×224 pixels (Appendix A.2). This crop includes the surrounding
+region of the cell so that passing it through UNI2-h attends it to
+its neighborhood. UNI2-h converts the crop into a 16 × 16 grid of
+1536-dimensional patch tokens which interacts with other tokens
+to learn spatial relationship. However, if we pool over the whole
+crop, we would mix the cell with its neighborhood and wash out its
+own morphology signal. Therefore, we rasterize the cell boundary
+Ω𝑖within the image crop and compute the fractional overlap 𝑚𝑖𝑡∈
+[0, 1] between cell 𝑖and patch token v𝑖𝑡. The cell morphology
+representation is calculated as an overlap-weighted average of the
+patch token embeddings (Fig. 2).
+ℎ𝑖=
+Í256
+𝑡=1 𝑚𝑖𝑡𝑣𝑖𝑡
+Í256
+𝑡=1 𝑚𝑖𝑡
+,
+𝑣𝑖𝑡∈R1536.
+(1)
+Figure 2: Cell–patch overlap-weighted token pooling for cell
+morphology representation.
+Replacing the cell-mask pooling with a uniform average over the
+crop lowers All-gene PCC by 0.086 at a matched crop size (Appen-
+dix B.5).
+3.3
+Stage 1: contrastive LoRA alignment to
+transcriptomic embedding space
+Our aim in this stage is to align cell morphology representations to
+the transcriptomic embedding space, such that cells with similar
+transcriptomic profiles are also close in the morphology embedding
+space. We achieve this by contrastively aligning morphology embed-
+dings from UNI2-h image encoder with transcriptomic embeddings
+produced by scFoundation. The morphology representation is the
+embedding obtained by the cell-mask pooling Eq. (1) to the target
+cell.
+UNI2-h has 24 attention layers. We insert LoRA adapters (rank
+16, 𝛼= 32, dropout 0.05) into the query, key, value, and output
+projections of the final 12 attention layers, and leave all original
+weights frozen. Writing 𝑓𝜃for this adapted encoder followed by
+3
+
+
+, ,
+Xin Luo et al.
+the pooling of Eq. (1), we denote the adapted feature of cell 𝑖by
+ℎ𝜃
+𝑖= 𝑓𝜃(𝑥𝑖, Ω𝑖), where 𝑥𝑖is the cell’s crop and Ω𝑖is its boundary.
+To construct the transcriptomic alignment target, we pass each
+training cell’s measured expression profile through scFounda-
+tion [11], and the resulting embedding 𝑢𝑖∈R3072 is fixed. Because
+scFoundation represents each cell using its own unified gene
+vocabulary rather than the gene panel of a particular Xenium assay,
+cells measured with different panels are embedded in a common
+transcriptomic space. This allows the model to learn jointly from
+datasets with heterogeneous gene panels. We use two lightweight
+projection heads, 𝑔he : R1536 →R128 and 𝑔sc : R3072 →R128 to map
+the morphology feature ℎ𝜃
+𝑖and the transcriptomic embedding
+𝑢𝑖into one shared 128-dimensional space. We then optimize the
+symmetric CLIP objective [22], an InfoNCE loss, over a batch B
+that pulls each cell’s image and its own expression together while
+pushing apart mismatched pairs:
+LStage-1 = −
+1
+2|B|
+∑︁
+𝑖∈B
+"
+log
+𝑒⟨𝑎𝑖,𝑏𝑖⟩/𝜏𝑐
+Í
+𝑗∈B 𝑒⟨𝑎𝑖,𝑏𝑗⟩/𝜏𝑐
++ log
+𝑒⟨𝑎𝑖,𝑏𝑖⟩/𝜏𝑐
+Í
+𝑗∈B 𝑒⟨𝑎𝑗,𝑏𝑖⟩/𝜏𝑐
+#
+,
+(2)
+with 𝑎𝑖= 𝑔he(ℎ𝜃
+𝑖), 𝑏𝑖= 𝑔sc(𝑢𝑖) ( · denotes ℓ2 normalization) and a
+fixed temperature 𝜏𝑐= 0.07 to sharpen the softmax distribution
+into true pairs.
+We train the adapter and both projection heads for three epochs
+with AdamW optimizer. The adapter learning rate is 1.5 × 10−4, the
+projection-head learning rate is 10−3, weight decay is 0.01, and the
+first 150 updates linearly warm up the learning rates. In addition,
+we use GradCache to achieve a large effective contrastive batch of
+2048 cells while forwarding 128 cells at a time.
+Retrieval Prediction Given a bank of cells with known expression,
+we predict a query cell’s profile as a similarity-weighted average of
+its neighbours’ profiles,
+ˆ𝑦𝑖=
+𝐾
+∑︁
+𝑘=1
+𝑤𝑖𝑘log(1 + 𝑦𝜋𝑘(𝑖)),
+𝑤𝑖𝑘=
+exp  cos(ℎ𝜃
+𝑖,ℎ𝜃
+𝜋𝑘(𝑖))/𝜏
+Í
+𝑘′ exp  cos(ℎ𝜃
+𝑖,ℎ𝜃
+𝜋𝑘′ (𝑖))/𝜏 ,
+(3)
+where 𝜋𝑘(𝑖) indexes the 𝑘-th nearest bank cell under cosine sim-
+ilarity. We compare cells in the raw 1536-dimensional feature ℎ𝜃
+𝑖
+rather than in its 128-dimensional projection 𝑔he(ℎ𝜃
+𝑖), because the
+projection is trained only to align the two modalities and disregards
+morphology information that remains useful to identify similar
+cells. We use 𝐾= 200 neighbors and 𝜏= 0.03 in all experiments.
+The reference bank consists of cells from the same tissue for
+the query. It does not contain the query cell or the query cell’s
+slide, preventing self-retrieval and within-slide information leakage.
+Because different slides can measure different gene panels, retrieval
+is performed separately for each gene. A gene is predicted using
+only reference cells whose panels contain that gene. When the bank
+includes multiple slides, each gene is standardized separately within
+each slide before the cells are pooled. This reduces slide-specific
+differences in expression scale and sequencing depth. If none of the
+bank cell measures a requested gene, retrieval cannot predict it and
+returns zero.
+3.4
+Stage 2: Spatial Gene-Expression Prediction
+by Continued LoRA Fine-Tuning
+In Stage 2, we retain the LoRA-adapted encoder from Stage 1 and
+continue finetuning it jointly with a spatial decoder 𝐷𝜙to predict
+gene expressions. Because cellular expression is related to both a
+cell’s morphology and its local environment, the decoder predicts
+cell 𝑖from its feature ℎ𝜃
+𝑖together with the features and coordinates
+of cells in its spatial neighborhood N (𝑖). It uses an SE(2)-equivariant
+transformer [31] to aggregate this local context. For each target cell
+𝑖, the attention weight assigned to a neighboring cell 𝑗is computed
+as
+𝛼𝑖𝑗= softmax𝑗∈N(𝑖)
+ q⊤
+𝑖k𝑗
+√
+𝑑
++ 𝑏(𝑟𝑖𝑗)
+
+,
+(4)
+where q𝑖is the query embedding of target cell 𝑖, k𝑗is the key
+embedding of neighboring cell 𝑗, and 𝑑is their dimensionality. The
+relative distance between the two cells is 𝑟𝑖𝑗= ∥p𝑗−p𝑖∥2, where
+p𝑖and p𝑗denote their spatial coordinates. The scalar distance 𝑟𝑖𝑗is
+expanded using 𝐾Gaussian radial basis functions,
+𝜙𝑘(𝑟𝑖𝑗) = exp
+
+−(𝑟𝑖𝑗−𝜇𝑘)2
+2𝜎2
+
+,
+𝑘= 1, . . . , 𝐾,
+(5)
+where 𝜇𝑘is the center of the 𝑘-th basis function and 𝜎controls
+its width. The resulting radial basis embedding is mapped to the
+geometric bias𝑏(𝑟𝑖𝑗). The transformer then aggregates neighboring
+cell embeddings according to both morphological similarity and
+spatial separation. Because the attention depends only on relative
+distances, the decoder is invariant to global translations and rota-
+tions of the slide. The resulting neighborhood-aware representation
+is passed to the count prediction head.
+The count head is a two-layer MLP with a softplus output, so
+it yields one non-negative value 𝜇𝑖𝑔for every gene in cell 𝑖, over
+a shared gene vocabulary V pooled across all training slides. We
+train the decoder with two terms, a squared error in log space plus
+a negative-binomial (NB) likelihood in count space:
+LStage-2 =
+∑︁
+𝑖
+∑︁
+𝑔∈panel(𝑠𝑖)
+h   log(1+𝜇𝑖𝑔) −log(1+𝑦𝑖𝑔)2
+−
+1
+2 log NB 𝑦𝑖𝑔
+ 𝜇𝑖𝑔,𝜃𝑔
+ i
+,
+(6)
+where the cell’s predicted mean 𝜇𝑖= 𝐷𝜙({ℎ𝜃
+𝑗, 𝑝𝑗}𝑗∈N(𝑖)) is com-
+puted from the features and positions of the cells in its neighbor-
+hood N (𝑖), and 𝜃𝑔is a learnable per-gene dispersion used only by
+the NB term. The count head has one output for every gene in the
+pooled vocabulary V, whereas each slide measures only a subset
+of these genes. Slides with heterogeneous panels therefore train
+different subsets of the same shared head and collectively provide
+supervision across the full vocabulary. The two loss terms are com-
+plementary, with log-space MSE reducing the dominance of highly
+expressed genes, while the negative-binomial likelihood models
+gene-specific variability and overdispersion for sparsely expressed
+genes.
+For Stage 2 optimization, the first three LoRA-adapted attention
+blocks remain frozen, while the remaining nine are fine-tuned at
+4
+
+
+VOICE: A Vision-Omics Foundation Model
+, ,
+3 × 10−5 and the decoder at 10−4, using AdamW with 10−4 weight
+decay and 200 warm-up updates.
+3.5
+Stage 3: per-gene fusion of the direct and
+retrieval predictions
+Stages 1 and 2 result in gene expression predictions from two
+branches for the target cell. The final LoRA-adapted image en-
+coder is shared by both prediction branches. For each target cell,
+the direct branch passes its Stage-2 encoder feature ℎ𝜃
+𝑖to the spatial
+decoder of Eq. (6), producing ˆ𝐴𝑖𝑔. The retrieval branch uses the
+same feature ℎ𝜃
+𝑖to identify similar reference cells and obtains ˆ𝑅𝑖𝑔
+through the neighbor average of Eq. (3). Because the relative use-
+fulness of morphology-based inference and reference-cell retrieval
+varies across genes, Stage 3 combines the two predictions using a
+gene-specific weighted average:
+ˆ𝑦𝑖𝑔= 𝛽𝑔ˆ𝐴𝑖𝑔+ (1 −𝛽𝑔) ˆ𝑅𝑖𝑔,
+𝛽𝑔∈[0, 1],
+(7)
+The fusion weights are estimated separately for each tissue. Specif-
+ically, for each gene 𝑔, we first estimate a slide-specific weight for
+every training slide by searching over a grid of values in [0, 1]
+and selecting the value that maximizes the correlation between the
+fused prediction and ground-truth expression across all cells within
+that slide. The resulting slide-specific weights are then averaged
+across all training slides from the same tissue to obtain the tissue-
+level weight 𝛽𝑔. These tissue-level weights are fixed and applied to
+test slides from the corresponding tissue (Fig. 5).
+4
+Results
+4.1
+Experimental setup
+Data and model. We train VOICE at two data scales. VOICE-23M
+is trained on the full-scale training set of 75 human Xenium slides
+and 23,232,915 cells (Table 4). VOICE-7M is trained on a 24-slide
+subset to perform ablation studies to determine the best model
+architecture and training strategies and to assess the impact of data
+scaling compared to the 23-million-cell data set.
+For the evaluation dataset, we establish two different datasets
+composed of eight distinct Xenium slides. The first is in-slide
+evaluation set, including breast, lung, and skin slides, while the
+second is cross-slide evaluation set, including independent breast,
+lung, pancreas, kidney, and ovary slides. The in-slide cohort was
+defined to support same-slide comparisons under the common
+evaluation protocol adopted by prior methods, which commonly
+use these three tissue types. In contrast, the cross-slide cohort
+was designed to provide broader tissue coverage for evaluating
+generalization across both tissues and unseen slides.
+Evaluation metrics. For every benchmark method, we com-
+pute Pearson Correlation between predicted and measured
+log-transformed expression separately for each gene across all
+cells of a slide. We report seven metrics, each computed as an
+unweighted average across genes in the corresponding evaluation
+set: all genes in the evaluated panel (All); the top 20, 50, and 100
+highly variable genes (H20, H50, and H100), ranked by the variance
+of measured log-transformed expression; and the top 20, 50, and
+100 spatially variable genes (S20, S50, and S100), ranked by Moran’s
+(I) computed from measured log-transformed expression and cell
+coordinates. A prediction is considered unavailable when a gene is
+included in the evaluation panel but falls outside a method’s output
+gene set or not measured in any reference slide for retrieval-based
+methods. Such genes are assigned a correlation of 0 (Appendix A.4).
+Baselines. Of the methods surveyed in §2, we benchmark against
+those that (i) predict expression at single-cell resolution, and (ii)
+provide public code or pretrained weights, so that they can be
+run under a common protocol. Four methods meet both criteria:
+GHIST [10], sCellST [1], DeepSpot2Cell [20] and DeepSpot-M [19].
+Reproduction details are given in Appendix A.3.
+In-slide protocol. For every benchmark method, we divide each
+of the three in-slide evaluation slides into the same five contiguous
+vertical bands. In each fold, one band is held out for testing. We
+reserve an inner-validation strip from the other four bands and use
+the remaining cells for training. All methods use the same training,
+inner-validation, and test datasets while retain their own architec-
+tures, objective functions, and preprocessing pipelines. Each band
+serves as the test set once, so every cell on the slide is evaluated
+exactly once.
+For the VOICE direct branch, the pretrained image encoder is
+frozen, while the spatial decoder and count-prediction head are
+further finetuned. For the VOICE retrieval branch, reference cells
+are drawn from the same slide, excluding all cells in the held-out
+test band. For the VOICE fusion module, we find the per-gene
+weight on the training bands and transfer them to the test band.
+Cross-slide evaluation protocol. For every method, we evaluate the
+five cross-slide target slides without using them to train the model.
+Each method retains its own architecture, objective functions, and
+preprocessing pipeline. We evaluate all methods on each target
+slide’s gene set.
+For VOICE, we apply the pretrained model to each test slide
+without updating any model parameters, so the direct branch oper-
+ates in a zero-shot manner. The retrieval branch uses only training
+slides from the same tissue to construct its reference bank. A gene
+is retrieved only from reference slides on which that gene was
+measured. Before pooling cells from different reference slides, we
+standardize each gene within each slide to remove slide-specific
+shifts and scales. We fit the per-gene fusion weights on the same
+tissue’s training slides and transfer them to the test slide.
+Because different baselines predict different gene sets, we use
+three evaluation panels. The full target panel contains all transcript
+genes measured on the held-out Xenium test slide and compares
+DeepSpot-M with VOICE. The Xenium-shared panel contains genes
+present in both the Xenium test slide and the Xenium training
+slides used by baselines, and compares GHIST, DeepSpot2Cell,
+DeepSpot-M, and VOICE. The Visium-shared panel intersects the
+genes measured on the test slide with the 1,000 genes that have
+the highest log-transformed expression variance in the Visium
+training slides. These genes define both the training targets and
+the output gene set of the corresponding sCellST model. We use
+this panel to compare sCellST with VOICE; DeepSpot-M is also
+evaluated both zero-shot and after fine-tuning on the same-tissue
+Xenium training slides.
+5
+
+
+, ,
+Xin Luo et al.
+Table 1: In-slide comparison under five-fold cross-validation. The best reported result in each column is highlighted in bold.
+Breast
+Lung
+Skin
+Model
+All
+S20
+S50
+S100
+H20
+H50
+H100
+All
+S20
+S50
+S100
+H20
+H50
+H100
+All
+S20
+S50
+S100
+H20
+H50
+H100
+GHIST
+0.306
+0.741
+0.602
+0.524
+0.634
+0.583
+0.509
+0.163
+0.442
+0.394
+0.358
+0.524
+0.447
+0.385
+0.267
+0.672
+0.659
+0.528
+0.793
+0.633
+0.539
+sCellST
+0.094
+0.291
+0.205
+0.164
+0.204
+0.198
+0.153
+0.091
+0.263
+0.205
+0.171
+0.319
+0.246
+0.186
+0.105
+0.403
+0.327
+0.226
+0.291
+0.224
+0.186
+DeepSpot2Cell
+0.269
+0.671
+0.547
+0.464
+0.563
+0.496
+0.428
+0.109
+0.306
+0.273
+0.237
+0.363
+0.304
+0.247
+0.276
+0.711
+0.632
+0.540
+0.588
+0.513
+0.456
+DeepSpot-M (zero-shot)
+0.069
+0.183
+0.136
+0.122
+0.148
+0.129
+0.108
+0.044
+0.118
+0.107
+0.094
+0.103
+0.094
+0.079
+0.135
+0.392
+0.338
+0.248
+0.163
+0.221
+0.207
+DeepSpot-M (fine-tuned)
+0.421
+0.842
+0.729
+0.630
+0.761
+0.687
+0.600
+0.235
+0.519
+0.470
+0.440
+0.599
+0.506
+0.447
+0.432
+0.906
+0.842
+0.738
+0.856
+0.743
+0.665
+VOICE-7M
+0.422
+0.829
+0.712
+0.631
+0.747
+0.682
+0.605
+0.300
+0.671
+0.591
+0.534
+0.679
+0.590
+0.517
+0.450
+0.908
+0.849
+0.763
+0.859
+0.750
+0.677
+VOICE-23M
+0.464
+0.857
+0.758
+0.678
+0.788
+0.725
+0.648
+0.323
+0.716
+0.634
+0.567
+0.695
+0.606
+0.535
+0.478
+0.925
+0.868
+0.788
+0.872
+0.773
+0.699
+Table 2: Cross-slide generalization under baseline-compatible gene panels. Each baseline is evaluated on its supported gene panel, and VOICE is evaluated on the
+identical panel for a matched comparison. Results are reported for the top 20 and 50 spatially variable genes (S20 and S50) and highly variable genes (H20 and H50).
+Complete results, including All, S100, and H100, are provided in the appendix. The best result within each panel and tissue is highlighted in bold.
+Breast
+Lung
+Kidney
+Ovary
+Pancreas
+Model
+S20
+S50
+H20
+H50
+S20
+S50
+H20
+H50
+S20
+S50
+H20
+H50
+S20
+S50
+H20
+H50
+S20
+S50
+H20
+H50
+Full target panel
+DeepSpot-M (zero-shot)
+0.193
+0.184
+0.214
+0.196
+0.172
+0.148
+0.153
+0.136
+0.177
+0.127
+0.117
+0.108
+0.125
+0.081
+0.038
+0.057
+0.308
+0.260
+0.312
+0.223
+DeepSpot-M (fine-tuned)
+0.348
+0.339
+0.355
+0.332
+0.522
+0.447
+0.500
+0.437
+0.563
+0.479
+0.554
+0.473
+0.418
+0.323
+0.327
+0.283
+0.458
+0.378
+0.487
+0.360
+VOICE-7M
+0.424
+0.382
+0.469
+0.441
+0.601
+0.530
+0.653
+0.547
+0.489
+0.448
+0.456
+0.432
+0.464 0.390 0.439 0.381
+0.564
+0.510
+0.618 0.527
+VOICE-23M
+0.515 0.480 0.559 0.519 0.673 0.599 0.684 0.589 0.602 0.507 0.554 0.477
+0.433
+0.379
+0.420
+0.360
+0.566 0.517
+0.592
+0.519
+Xenium-shared gene panel
+GHIST
+0.367
+0.223
+0.327
+0.220
+0.280
+0.229
+0.281
+0.259
+0.333
+0.323
+0.405
+0.340
+0.230
+0.170
+0.297
+0.236
+0.245
+0.148
+0.279
+0.155
+DeepSpot2Cell
+0.231
+0.149
+0.215
+0.144
+0.312
+0.221
+0.280
+0.220
+0.165
+0.145
+0.187
+0.149
+0.267
+0.170
+0.247
+0.196
+0.181
+0.114
+0.162
+0.104
+DeepSpot-M (zero-shot)
+0.187
+0.125
+0.155
+0.124
+0.162
+0.123
+0.176
+0.122
+0.166
+0.139
+0.124
+0.108
+0.108
+0.068
+0.067
+0.080
+0.276
+0.173
+0.227
+0.163
+DeepSpot-M (fine-tuned)
+0.423
+0.304
+0.392
+0.294
+0.448
+0.387
+0.424
+0.421
+0.464
+0.457
+0.527
+0.458
+0.413
+0.299
+0.322
+0.270
+0.424
+0.269
+0.414
+0.273
+VOICE-7M
+0.487
+0.361
+0.460
+0.350
+0.564
+0.471
+0.557
+0.498
+0.495
+0.465
+0.512
+0.463
+0.474 0.369 0.439 0.358
+0.454
+0.315
+0.446
+0.319
+VOICE-23M
+0.511 0.395 0.494 0.381 0.598 0.492 0.573 0.508 0.517 0.482
+0.525
+0.465
+0.449
+0.359
+0.413
+0.344
+0.469 0.328 0.454 0.330
+Visium-shared gene panel
+sCellST
+0.170
+0.161
+0.144
+0.153
+0.083
+0.066
+0.094
+0.075
+0.100
+0.053
+0.077
+0.044
+0.109
+0.070
+0.100
+0.077
+0.113
+0.090
+0.117
+0.097
+DeepSpot-M (zero-shot)
+0.188
+0.196
+0.169
+0.195
+0.145
+0.125
+0.140
+0.118
+0.123
+0.102
+0.121
+0.097
+0.104
+0.057
+0.077
+0.056
+0.218
+0.179
+0.218
+0.172
+DeepSpot-M (fine-tuned)
+0.300
+0.294
+0.268
+0.308
+0.427
+0.369
+0.439
+0.369
+0.514
+0.460
+0.535
+0.449
+0.336
+0.249
+0.304
+0.252
+0.332
+0.271
+0.375
+0.261
+VOICE-7M
+0.390
+0.369
+0.384
+0.367
+0.478
+0.409
+0.488
+0.418
+0.442
+0.440
+0.460
+0.437
+0.389 0.292 0.384 0.305
+0.480
+0.391
+0.515
+0.394
+VOICE-23M
+0.481 0.430 0.475 0.438 0.558 0.479 0.544 0.480 0.534 0.481 0.566 0.474
+0.361
+0.286
+0.354
+0.301
+0.522 0.440 0.548 0.438
+4.2
+In-slide benchmark under five-fold
+cross-validation
+We compare all methods on the three slides containing breast, lung,
+and skin under the in-slide protocol described in Section 4.1. Ta-
+ble 1 compares task-specific models trained within each slide and
+two scales of VOICE. From the result, VOICE-23M achieves the
+highest PCC in all 21 reported comparisons, with consistent gains
+across breast, lung, and skin tissues. Compared with VOICE-7M, it
+improves every metric by 0.013–0.047, demonstrating the benefit of
+increasing training data scale. For example, the S50 PCC increases
+from 0.712 to 0.758 in breast, from 0.591 to 0.634 in lung, and from
+0.849 to 0.868 in skin. In detail, figure 3 provides cell and gene level
+views of these aggregate gains. On lung, VOICE predicts MYH11
+with 𝑟= 0.66, compared with 0.53 for DeepSpot-M, 0.41 for GHIST,
+and 0.06 for DeepSpot2Cell. In the enlarged region, its map more
+closely follows the measured boundary-localized pattern. Across
+breast and lung, VOICE also gives the highest median per-gene
+PCC in every displayed SVG and HVG subset.
+The ablation study in Table 6 demonstrates the effectiveness
+of the proposed fusion module. For VOICE-7M, fusion increases
+the macro-averaged all-gene PCC from 0.3810 to 0.3904 and out-
+performs the direct branch in all 21 slide-level metric comparisons,
+confirming that combining direct prediction with retrieval consis-
+tently improves predictive performance (Appendix B.4). The same
+table also ablates the two training stages, and Table 7 reports their
+separate contributions.
+4.3
+Cross-slide generalization to unseen slides
+VOICE-23M achieves the highest PCC among the baselines for
+all seven metrics on the breast, lung, ovary, and pancreas slides
+(Table 2 and Table 11). On the kidney slide, it ties H20 at 0.554 and
+achieves the highest PCC for the other six metrics. On the Xenium-
+shared panel, VOICE-23M achieves the highest PCC for all seven
+metrics on breast, lung, ovary, and pancreas and for six metrics
+on kidney (Table 2 and Table 12). The exception is kidney H20,
+where fine-tuned DeepSpot-M obtains 0.527, compared with 0.525
+for VOICE-23M. On the Visium-shared panel, VOICE-23M achieves
+the highest PCC for all seven metrics on every slide (Table 2 and
+Table 13).
+Scaling from VOICE-7M to VOICE-23M raises the all-gene score
+on every cross-slide slide, but on ovary it lowers all six ranked
+subsets; Appendix C.3 relates that exception to the assay generation
+of the ovary slides the larger corpus adds.
+Figure 4 shows the same advantage at cellular resolution. On
+the held-out lung slide, VOICE predicts ACTA2 with 𝑟= 0.39,
+compared with 0.21 for DeepSpot-M, 0.20 for GHIST, 0.09 for
+sCellST, and −0.01 for DeepSpot2Cell. The enlarged region shows
+closer recovery of the measured localized structure. VOICE also
+gives the highest median per-gene PCC in every displayed SVG
+and HVG subset across breast and lung.
+Prediction of Genes Measured Only in Other Tissues The preceding
+comparisons do not address whether VOICE can predict a gene in
+a target tissue when that gene has never been measured in any
+training slide from the same tissue. To evaluate this setting, we
+6
+
+
+VOICE: A Vision-Omics Foundation Model
+, ,
+Figure 3: In-slide comparison. (a–c) Spatial heatmap of specific gene expressions between ground truth and predicted values
+from VOICE-23M and baselines; (d) per-gene PCC. Expression is shown as within-panel 𝑧-scores.
+analyze the direct branch of VOICE-23M. The retrieval branch is
+excluded because no same-tissue reference expression is available
+for these genes. For each target tissue, we divide genes into two
+groups. A same-tissue gene is measured in at least one training slide
+from that tissue. An other-tissue-only gene is not measured in any
+training slide from the target tissue but is measured in at least one
+training slide from another tissue. Within each group, SVGs and
+HVGs are ranked separately using expression measured on the
+target slide.
+Table 3 (notation in Appendix C.1) shows that genes measured
+only in other tissues remain predictable in the target tissue. Av-
+eraged equally across the five target slides, the all-gene PCC is
+0.2433 for other-tissue-only genes and 0.2135 for same-tissue genes,
+with the former performing better on four of the five slides. Across
+the six SVG and HVG summaries, other-tissue-only genes perform
+within 0.0003–0.0436 of same-tissue genes. Because the two groups
+contain different genes, their absolute PCC values should not be
+interpreted as a direct measure of which group is intrinsically eas-
+ier to predict. Instead, these results show that VOICE can transfer
+cross-tissue morphological knowledge to genes that were never
+measured in the target tissue during training.
+5
+Conclusion and Discussion
+We presented VOICE, a multimodal spatial foundation model for
+predicting single-cell gene expression from H&E images. VOICE
+aligns cellular morphology with transcriptomic representations
+and combines two complementary prediction strategies: a direct
+branch that infers expression from morphology and a retrieval
+branch that transfers expression from similar reference cells. A
+per-gene fusion mechanism balances the two branches, reflecting
+that genes differ in how strongly their expression is associated
+with visible tissue morphology. VOICE consistently outperformed
+existing single-cell prediction methods in both within-slide and
+cross-slide evaluation. Increasing the training scale from 7 million
+to 23 million cells further improved performance, supporting the
+value of large-scale and heterogeneous cell-level supervision. A
+key advantage of VOICE is that it learns from heterogeneous gene
+panels through a shared gene vocabulary and panel-specific loss
+masking, enabling prediction of genes absent from same-tissue
+training data but observed in other tissues or panels.
+6
+Limitations & Ethical Considerations
+This study has several limitations. The current model is trained
+and evaluated on Xenium data only, as publicly available datasets
+7
+
+
+, ,
+Xin Luo et al.
+Figure 4: Cross-slide comparison. (a–c) Spatial heatmap of specific gene expressions between ground truth and predicted values
+from VOICE-23M and baselines; (d) per-gene PCC. Expression is shown as within-panel 𝑧-scores.
+Table 3: VOICE-23M cross-tissue gene transfer for genes measured in same-tissue training slides versus genes absent from those slides.
+Breast
+Lung
+Kidney
+Training evidence
+𝑛
+all
+S20
+S50
+S100
+H20
+H50
+H100
+𝑛
+all
+S20
+S50
+S100
+H20
+H50
+H100
+𝑛
+all
+S20
+S50
+S100
+H20
+H50
+H100
+Same tissue
+331
+0.1834
+0.3778
+0.3691
+0.3278
+0.4042
+0.3730
+0.3217
+419
+0.2816
+0.6368
+0.5647
+0.4949
+0.6023
+0.5594
+0.5058
+377
+0.2311
+0.5078
+0.4705
+0.4278
+0.5014
+0.4668
+0.4325
+Other tissues only
+4,755
+0.1317
+0.5330
+0.4872
+0.4498
+0.5314
+0.4930
+0.4542
+61
+0.3068
+0.4935
+0.3557
+0.3068
+0.5117
+0.3538
+0.3068
+26
+0.3526
+0.4340
+0.3526
+0.3526
+0.4151
+0.3526
+0.3526
+Δ (other −same)
+–
+−0.0517
++0.1552
++0.1181
++0.1220
++0.1272
++0.1200
++0.1325
+–
++0.0252
+−0.1433
+−0.2090
+−0.1881
+−0.0906
+−0.2056
+−0.1990
+–
++0.1215
+−0.0738
+−0.1179
+−0.0752
+−0.0863
+−0.1142
+−0.0799
+Ovary
+Pancreas
+Macro
+Training evidence
+𝑛
+all
+S20
+S50
+S100
+H20
+H50
+H100
+𝑛
+all
+S20
+S50
+S100
+H20
+H50
+H100
+𝑛
+all
+S20
+S50
+S100
+H20
+H50
+H100
+Same tissue
+404
+0.1371
+0.4521
+0.3630
+0.2814
+0.4071
+0.3260
+0.2857
+102
+0.2344
+0.4962
+0.3430
+0.2371
+0.4662
+0.3475
+0.2385
+–
+0.2135
+0.4941
+0.4221
+0.3538
+0.4762
+0.4146
+0.3568
+Other tissues only
+76
+0.1690
+0.3157
+0.2221
+0.1690
+0.3360
+0.2215
+0.1690
+278
+0.2564
+0.5454
+0.4747
+0.4218
+0.5856
+0.4951
+0.4285
+–
+0.2433
+0.4643
+0.3785
+0.3400
+0.4759
+0.3832
+0.3422
+Δ (other −same)
+–
++0.0319
+−0.1364
+−0.1409
+−0.1124
+−0.0711
+−0.1045
+−0.1167
+–
++0.0220
++0.0492
++0.1317
++0.1847
++0.1194
++0.1476
++0.1900
+–
++0.0298
+−0.0298
+−0.0436
+−0.0138
+−0.0003
+−0.0313
+−0.0146
+pairing H&E images with CosMx data remain scarce. Moreover, our
+evaluation focuses on expression correlation and does not assess
+count calibration or performance in downstream biological analyses.
+Future work will extend VOICE to CosMx and other cell-resolved
+spatial transcriptomics and evaluate its utility in downstream tasks.
+This study uses publicly available human H&E and Xenium
+datasets obtained from published studies and databases. VOICE is
+intended for research purposes only and should not be used for
+clinical diagnosis or treatment decisions without further validation.
+7
+Generative AI Usage
+The authors used generative AI tools for language editing and
+manuscript polishing. The authors take full responsibility for the
+study design, experiments, analyses of all reported results.
+8
+Acknowledgment
+This work was supported in part by the National Institutes of Health
+(NIH) under awards U24DK138515 and OT2OD038003.
+References
+[1] Loïc Chadoutaud, Marvin Lerousseau, Daniel Herrero-Saboya, Julian Ostermaier,
+Jacqueline Fontugne, Emmanuel Barillot, and Thomas Walter. 2026. sCellST
+predicts single-cell gene expression from H&E images. Nature Communications
+17 (2026), 1194. doi:10.1038/s41467-025-67965-1
+[2] Richard J Chen, Tong Ding, Ming Y Lu, Drew FK Williamson, Guillaume Jaume,
+Andrew H Song, Bowen Chen, Andrew Zhang, Daniel Shao, Muhammad Shaban,
+et al. 2024. Towards a general-purpose foundation model for computational
+pathology. Nature medicine 30, 3 (2024), 850–862.
+[3] Weiqing Chen, Pengzhi Zhang, Tu N. Tran, Yiwei Xiao, Shengyu Li, Vrutant V.
+Shah, Hao Cheng, Kristopher W. Brannan, Keith Youker, Li Lai, Longhou Fang,
+Yu Yang, Nhat-Tu Le, Jun-ichi Abe, Shu-Hsia Chen, Qin Ma, Ken Chen, Qianqian
+Song, John P. Cooke, and Guangyu Wang. 2025. A visual–omics foundation
+model to bridge histopathology with spatial transcriptomics. Nature Methods 22
+(2025), 1568–1582. doi:10.1038/s41592-025-02707-1
+8
+
+
+VOICE: A Vision-Omics Foundation Model
+, ,
+[4] Xinlei Chen, Saining Xie, and Kaiming He. 2021. An Empirical Study of Training
+Self-Supervised Vision Transformers. In Proceedings of the IEEE/CVF International
+Conference on Computer Vision (ICCV). 9620–9629. doi:10.1109/ICCV48922.2021.0
+0950
+[5] Nicolas Chiaruttini, Olivier Burri, Peter Haub, Romain Guiet, Jessica Sordet-
+Dessimoz, and Arne Seitz. 2022. An Open-Source Whole Slide Image Registration
+Workflow at Cellular Precision Using Fiji, QuPath and Elastix. Frontiers in Com-
+puter Science 3 (2022), 780026. doi:10.3389/fcomp.2021.780026
+[6] Wei Chow, Linfeng Li, Xian Sun, Lingdong Kong, Zefeng Li, Qi Xu, Hang Song,
+Tian Ye, Xian Wang, Jinbin Bai, Shilin Xu, Xiangtai Li, Junting Pan, Shaoteng Liu,
+Ran Zhou, Tianshu Yang, and Songhua Liu. 2026. Masked Generative Transformer
+Is What You Need for Image Editing. arXiv:2605.10859 [cs.CV] https://arxiv.org/
+abs/2605.10859 CVPR Workshop on HiGen.
+[7] Haotian Cui, Chloe Wang, Hassaan Maan, Kuan Pang, Fengning Luo, Nan Duan,
+and Bo Wang. 2024. scGPT: toward building a foundation model for single-cell
+multi-omics using generative AI. Nature methods 21, 8 (2024), 1470–1480.
+[8] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. 2009. Imagenet:
+A large-scale hierarchical image database. In 2009 IEEE conference on computer
+vision and pattern recognition. Ieee, 248–255.
+[9] Guangyuan Dong, Ziwei Hong, Shenghao Liu, Chenyu Wu, Yuanyuan Fang,
+Zihao Li, Xudong Zhang, Bingchen Liu, Yuchen Zhang, Haitao Ding, et al. 2026.
+Dynamic interaction-aware and causality-disentangled framework for multi-
+modal sentiment analysis. arXiv preprint arXiv:2605.30994 (2026).
+[10] Xiaohang Fu, Yue Cao, Beilei Bian, Chuhan Wang, Dinny Graham, Nirmala
+Pathmanathan, Ellis Patrick, Jinman Kim, and Jean Yee Hwa Yang. 2025. Spatial
+gene expression at single-cell resolution from histology using deep learning with
+GHIST. Nature Methods 22 (2025), 1900–1910. doi:10.1038/s41592-025-02795-z
+[11] Minsheng Hao, Jing Gong, Xin Zeng, Chiming Liu, Yucheng Guo, Xingyi Cheng,
+Taifeng Wang, Jianzhu Ma, Xuegong Zhang, and Le Song. 2024. Large-scale
+foundation model on single-cell transcriptomics. Nature methods 21, 8 (2024),
+1481–1491.
+[12] Shanshan He, Ruchir Bhatt, Carl Brown, Emily A Brown, Derek L Buhr, Kan
+Chantranuvatana, Patrick Danaher, Dwayne Dunaway, Ryan G Garrison, Gary
+Geiss, et al. 2022. High-plex imaging of RNA and proteins at subcellular resolution
+in fixed tissue by spatial molecular imaging. Nature biotechnology 40, 12 (2022),
+1794–1806.
+[13] Amanda Janesick, Robert Shelansky, Andrew D Gottscho, Florian Wagner,
+Stephen R Williams, Morgane Rouault, Ghezal Beliakoff, Carolyn A Morrison,
+Michelli F Oliveira, Jordan T Sicherman, et al. 2023. High resolution mapping
+of the tumor microenvironment using integrated single-cell, spatial and in situ
+analysis. Nature communications 14, 1 (2023), 8353.
+[14] Hongyu Ke, Jack Morris, Yongkang Liu, Satoshi Kitai, Kentaro Oguchi, Yi Ding,
+and Haoxin Wang. 2026. Deformba: Vision State Space Model with Adaptive
+State Fusion. arXiv preprint arXiv:2605.21308 (2026).
+[15] Hongyu Ke, Jack Morris, Kentaro Oguchi, Xiaofei Cao, Yongkang Liu, Haoxin
+Wang, and Yi Ding. 2025. Mambev: Enabling state space models to learn birds-
+eye-view representations. In The Thirteenth International Conference on Learning
+Representations.
+[16] Lingdong Kong, Ao Liang, Tianyi Yan, Hongsi Liu, Wesley Yang, Ziqi Huang,
+Xian Sun, Wei Yin, Jialong Zuo, Yixuan Hu, Dekai Zhu, Dongyue Lu, Youquan
+Liu, Guangfeng Jiang, Linfeng Li, Xiangtai Li, Long Zhuo, Lai Xing Ng, Benoit R.
+Cottereau, Changxin Gao, Liang Pan, Wei Tsang Ooi, and Ziwei Liu. 2026. Is
+Your Driving World Model an All-Around Player? arXiv:2605.10858 [cs.CV]
+https://arxiv.org/abs/2605.10858 CVPR Workshop on VideoWorldModel.
+[17] Junnan Li, Dongxu Li, Caiming Xiong, and Steven Hoi. 2022. BLIP: Bootstrapping
+Language-Image Pre-training for Unified Vision-Language Understanding and
+Generation. In Proceedings of the 39th International Conference on Machine Learn-
+ing (ICML) (Proceedings of Machine Learning Research, Vol. 162). 12888–12900.
+[18] Hanzhi Liu, Ningkang Peng, Qianyu Chen, Canran Xiao, et al. 2026. Affordance-
+first decomposition for continual learning in video-language understanding. In
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition.
+3908–3919.
+[19] Kalin Nonchev, Sebastian Dawo, Karina Silina, Viktor H. Koelzer, and Gunnar
+Rätsch. 2026. DeepSpot-M: A Multimodal Foundation Model for Transcriptome-
+Wide Virtual Spatial Transcriptomics from Histology. medRxiv (2026). doi:10.648
+98/2026.06.19.26356060
+[20] Kalin Nonchev, Glib Manaiev, Viktor H Koelzer, and Gunnar Rätsch. 2025.
+DeepSpot2Cell: Predicting Virtual Single-Cell Spatial Transcriptomics from H&E
+images using Spot-Level Supervision. bioRxiv (2025), 2025–09.
+[21] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh,
+Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark,
+et al. 2021. Learning transferable visual models from natural language supervision.
+In International conference on machine learning. PmLR, 8748–8763.
+[22] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh,
+Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark,
+Gretchen Krueger, and Ilya Sutskever. 2021. Learning Transferable Visual Models
+From Natural Language Supervision. In Proceedings of the 38th International
+Conference on Machine Learning (ICML) (Proceedings of Machine Learning Research,
+Vol. 139). 8748–8763.
+[23] Robin Rombach, Andreas Blattmann, Dominik Lorenz, Patrick Esser, and Björn
+Ommer. 2022. High-resolution image synthesis with latent diffusion models. In
+2022 IEEE/CVF conference on computer vision and pattern recognition (CVPR). ieee,
+10674–10685.
+[24] Christina V Theodoris, Ling Xiao, Anant Chopra, Mark D Chaffin, Zeina R
+Al Sayed, Matthew C Hill, Helene Mantineo, Elizabeth M Brydon, Zexian Zeng,
+X Shirley Liu, et al. 2023. Transfer learning enables predictions in network
+biology. Nature 618, 7965 (2023), 616–624.
+[25] Xiyue Wang, Sen Yang, Jun Zhang, Minghui Wang, Jing Zhang, Wei Yang, Jun-
+zhou Huang, and Xiao Han. 2022. Transformer-based unsupervised contrastive
+learning for histopathological image classification. Medical image analysis 81
+(2022), 102559.
+[26] Jinxi Xiang, Siyu Hou, Yuchen Li, Ryan Quinton, Xiaoming Zhang, Feyisope
+Eweje, Xiangde Luo, Yijiang Chen, Zhe Li, Colin Bergstrom, Ted Kim, Sierra
+Willens, Francesca Maria Olguin, Matthew Abikenari, Andrew Heider, Sanjeeth
+Rajaram, Joel Neal, Maximilian Diehn, Xiang Zhou, and Ruijiang Li. 2026. A
+Multimodal Foundation Model of Spatial Transcriptomics and Histology for
+Biological Discovery and Clinical Prediction. arXiv preprint arXiv:2604.03630
+(2026). doi:10.48550/arXiv.2604.03630
+[27] Canran Xiao, Tianxiang Xu, Siyuan Ma, Yiyang Jiang, Haoyu Gao, and Yuhan Wu.
+2026. Reversible primitive–composition alignment for continual vision–language
+learning. In International Conference on Learning Representations, Vol. 2026. 88700–
+88722.
+[28] Ronald Xie, Kuan Pang, Sai W. Chung, Catia T. Perciani, Sonya A. MacParland, Bo
+Wang, and Gary D. Bader. 2023. Spatially Resolved Gene Expression Prediction
+from Histology Images via Bi-modal Contrastive Learning. In Advances in Neural
+Information Processing Systems 36 (NeurIPS).
+[29] Daiwei Zhang, Amelia Schroeder, Hanying Yan, Haochen Yang, Jian Hu, Michelle
+Y. Y. Lee, Kyung S. Cho, Katalin Susztak, George X. Xu, Michael D. Feldman,
+Edward B. Lee, Emma E. Furth, Linghua Wang, and Mingyao Li. 2024. Inferring
+super-resolution tissue architecture by integrating spatial transcriptomics with
+histology. Nature Biotechnology 42 (2024), 1372–1377. doi:10.1038/s41587-023-
+02019-9
+[30] Yabin Zhang, Wenjie Zhu, Hui Tang, Zhiyuan Ma, Kaiyang Zhou, and Lei Zhang.
+2024.
+Dual memory networks: A versatile adaptation approach for vision-
+language models. In 2024 IEEE/CVF Conference on Computer Vision and Pattern
+Recognition (CVPR). IEEE, 28718–28728.
+[31] Gengmo Zhou, Zhifeng Gao, Qiankun Ding, Hang Zheng, Hongteng Xu, Zhewei
+Wei, Linfeng Zhang, and Guolin Ke. 2023. Uni-mol: A universal 3d molecular
+representation learning framework. In The eleventh international conference on
+learning representations.
+[32] Heng Zhou, Jing Tang, Yanshu Li, Canran Xiao, Liwei Hou, Zong Ke, Jiawei Yao,
+et al. 2026. Comem: Compositional concept-graph memory for vision–language
+adaptation. In International Conference on Learning Representations, Vol. 2026.
+20009–20032.
+[33] Wenjie Zhu, Yabin Zhang, Xin Jin, Wenjun Zeng, and Lei Zhang. 2026. Ants:
+Adaptive negative textual space shaping for ood detection via test-time mllm
+understanding and reasoning. In Proceedings of the IEEE/CVF Conference on Com-
+puter Vision and Pattern Recognition. 20–30.
+A
+Implementation details
+A.1
+Datasets
+All spatial transcriptomics data are publicly available. We obtained
+Xenium slides from HEST-1k version 1.3.0 (https://github.com/m
+ahmoodlab/HEST) and the 10x Genomics public datasets portal
+(https://www.10xgenomics.com/datasets). The retained collection
+contains 83 human tissue slides and 25,431,687 cells with matched
+expression measurements and H&E locations. It includes Xenium
+V1 and Xenium Prime 5K assays and 15 tissue groups. These groups
+are bone marrow, bowel or colorectal tissue, brain, breast, cervix,
+heart, kidney, liver, lung, lymph node, ovary, pancreas, prostate,
+skin, and tonsil.
+Table 4 gives the sizes and roles of the training and evaluation
+sets. The full-scale training set contains 75 slides and is used to
+train VOICE-23M. A 24-slide subset is used to train VOICE-7M,
+which is used to perform ablation studies, to determine the best
+model architecture and training strategies, and to assess the impact
+9
+
+
+, ,
+Xin Luo et al.
+of data scaling compared to the 23-million-cell data set. The in-
+slide evaluation uses breast (142,272 cells), lung (161,453), and skin
+(87,499). The five cross-slide targets are breast profiled with Xenium
+Prime (699,078 cells), lung (160,444), pancreas (234,856), kidney
+(465,534), and ovary (247,636).
+Table 4: Data scale and experimental role.
+Data role
+Slides
+Cells
+Full-scale training set
+75
+23,232,915
+24-slide training subset
+24
+6,979,810
+In-slide evaluation
+3
+391,224
+Cross-slide evaluation
+5
+1,807,548
+A.2
+Data processing
+Each source dataset provides a coordinate transformation that
+aligns the Xenium assay with its H&E image. We used this trans-
+formation to locate every cell centroid and boundary on the H&E
+image. For each cell, we extracted the 55 𝜇m field of view defined
+in Section 3 and resized it to 224 × 224 pixels. A crop that extended
+beyond the image was padded with white pixels. We linked each
+crop to its raw gene counts by cell identifier and removed cells
+without a matching expression record.
+A.3
+Baseline implementation
+We ran each baseline from its public implementation and retained
+its published architecture and preprocessing. All methods use the
+train, validation, and test assignments described in Section 4.1. The
+details below describe how each method was trained and adapted
+to these shared assignments.
+Simulated Visium spots. sCellST and DeepSpot2Cell learn from
+expression measured over Visium spots, whereas Xenium measures
+individual cells. We therefore converted each Xenium slide into sim-
+ulated Visium spots for the in-slide experiments. The spot centers
+form a hexagonal grid with 100 𝜇m horizontal spacing and 86.6 𝜇m
+vertical spacing. Alternating rows are shifted horizontally by 50 𝜇m.
+A cell contributes to a spot when its centroid falls within the spot’s
+55 𝜇m-diameter capture area. We summed the raw counts of all
+contributing cells to obtain the expression measured at that spot.
+Both methods use the same simulated spots.
+GHIST We evaluate the image-only version of GHIST so that its
+input matches the information available to VOICE. The full method
+can use ground-truth cell-type labels, the average expression profile
+of each cell type, and the composition of nearby cell types. These
+molecular annotations are not available to VOICE at prediction time,
+so we omit them. The evaluated GHIST model receives only the
+H&E image and cell masks. We generate the masks with BIDCell, the
+cell-segmentation method used by GHIST, under its recommended
+Xenium settings.
+GHIST is trained from scratch on 256 × 256 H&E crops with its
+published U-Net3+ image network. Image features within each seg-
+mented nucleus are pooled into a 256-dimensional cell representa-
+tion. A feedforward network then predicts the scaled log-expression
+target used by the original method, 5 log(1 + count). Training min-
+imizes mean squared error with AdamW for 51 epochs. The initial
+learning rate is 10−3, the weight decay is 10−4, and the batch size
+is 8. We select the model weights with the highest mean Pearson
+correlation across genes on the validation region. For cross-slide
+evaluation, the central 10% of the training slide is reserved for val-
+idation and the remaining 90% is used for training. Only genes
+present in both the training and target panels are scored.
+sCellST sCellST learns a cell-level predictor from expression
+measured over Visium spots. For real Visium training slides, we use
+nucleus masks produced by CellViT and distributed with HEST-1k.
+For Xenium slides, we use the vendor-provided cell masks that are
+also used throughout our benchmark.
+Before expression training, a ResNet-50 image encoder is pre-
+trained for 150 epochs on cell images from the tissue-matched
+training slides. We use MoCo v3 contrastive learning [4] and a
+batch size of 4096. Each cell is represented by a 72 × 72 pixel crop at
+0.25 𝜇m per pixel, and the encoder produces a 2048-dimensional im-
+age feature. During expression training, a three-layer feedforward
+network converts each cell feature into an expression prediction.
+The predictions for cells within the same spot are averaged and
+trained to match the measured expression of that spot.
+Spot counts are normalized to 10,000 total counts and trans-
+formed with log(1 + 𝑥). We train with AdamW at a learning rate
+of 10−4 and a batch size of 128 spots for at most 400 epochs. A
+random 20% of the spots are reserved for validation, and training
+stops after 20 epochs without improvement. The targets are the
+1000 genes with the highest expression variance in the training
+data. The in-slide models are trained on the simulated spots defined
+above. The cross-slide models are trained on tissue-matched real
+Visium slides. The HEST-1k identifiers of the individual training
+slides are TENX39 for breast, TENX62 for lung, and TENX65 for
+ovary. Kidney uses eight training slides, and pancreas uses four.
+After training, sCellST is applied to individual cells on the Xenium
+evaluation slide.
+DeepSpot2Cell. DeepSpot2Cell also learns from spot-level expres-
+sion, but it combines the appearance of the target cell with tissue
+context at two larger scales. Each prediction uses a crop of the tar-
+get cell, an image tile covering the simulated spot that contains the
+cell, and tiles from as many as six adjacent spots. A frozen Phikon
+v2 pathology image encoder converts each 224 × 224 image into a
+feature vector. Separate feedforward networks process the target-
+cell feature, the feature of its containing spot, and the features of
+the adjacent spots. The method then combines these features to
+produce one expression prediction for the target cell.
+We use the simulated spots defined above to construct the train-
+ing targets. Raw cell counts are summed within each spot, nor-
+malized to 10,000 total counts, and transformed with log(1 + 𝑥).
+The model learns to match this spot-level target while retaining
+the target-cell crop as a separate input. Training minimizes mean
+squared error with AdamW. The learning rate is 10−4, the weight
+decay is 10−6, the dropout rate is 0.3, and the batch size is 32 spots.
+We train for at most 100 epochs with early stopping. At evaluation
+time, the model receives only H&E images and cell locations and
+returns one prediction per cell.
+DeepSpot-M. We initialize DeepSpot-M from its released version
+1 model weights. The published model uses a Midnight pathology
+encoder for the H&E image and a fixed numerical representation
+of each gene produced by scGPT. Its decoder combines the image
+features with these gene representations and produces a separate
+prediction for each gene. Each cell is represented by a 224 × 224
+image at approximately 0.5 𝜇m per pixel, giving an approximately
+10
+
+
+VOICE: A Vision-Omics Foundation Model
+, ,
+112 𝜇m field of view. We extract this field from the registered Xe-
+nium H&E image and resize it to 224 × 224 pixels. DeepSpot-M
+can output 19,338 genes. We retain the predictions that belong to
+the evaluation panel. If a panel gene is not among these outputs,
+it receives PCC zero. The evaluated cells, expression targets, and
+data folds are otherwise the same as for the other methods.
+For fine-tuning, DeepSpot-M uses the same training slides as
+GHIST and DeepSpot2Cell. During fine-tuning, we update the rank-
+8 low-rank adaptation (LoRA) layers in the image encoder and the
+layers that combine image and gene information to produce gene-
+specific predictions. The original image-encoder weights and scGPT
+gene representations remain fixed. This gives approximately 5.7
+million trainable parameters. Training minimizes mean squared er-
+ror only over genes measured on the training slide. We use AdamW
+with a learning rate of 10−4, weight decay of 10−6, a cosine learning-
+rate schedule, and mixed-precision arithmetic. Training runs for at
+most 30 epochs. A spatial strip containing 10% of the training cells
+is reserved for early stopping. For zero-shot evaluation, we apply
+the released model weights without additional training.
+A.4
+Evaluation metrics
+Table 5 gives the number of genes in the three cross-slide evaluation
+panels defined in Section 4.3. Control, viral, and mutation probes
+are excluded from these counts.
+Table 5: Cross-slide gene-panel sizes.
+Tissue
+Full target
+Xenium-shared
+Visium-shared
+Breast
+5,086
+172
+390
+Lung
+480
+198
+89
+Kidney
+403
+377
+68
+Ovary
+480
+342
+111
+Pancreas
+380
+98
+82
+Per-gene Pearson correlation. Section 4.1 defines Pearson corre-
+lation coefficient (PCC) as the agreement between predicted and
+measured expression across cells. Here we give its formal definition.
+Let C contain the evaluated cells, let 𝑦𝑖𝑔be the measured raw count
+of gene 𝑔in cell 𝑖, and let 𝑧𝑖𝑔= log(1 + 𝑦𝑖𝑔) be its log-transformed
+value. Let ˆ𝑧𝑖𝑔be the corresponding prediction. Then
+PCC𝑔=
+Í
+𝑖∈C
+ ˆ𝑧𝑖𝑔−¯ˆ𝑧𝑔
+  𝑧𝑖𝑔−¯𝑧𝑔
+
+√︃Í
+𝑖∈C
+ ˆ𝑧𝑖𝑔−¯ˆ𝑧𝑔
+2 √︃Í
+𝑖∈C
+ 𝑧𝑖𝑔−¯𝑧𝑔
+2 ,
+(8)
+where ¯𝑧𝑔and ¯ˆ𝑧𝑔are the corresponding means over C. For in-slide
+evaluation, predictions from all five test bands are pooled before this
+quantity is computed. A gene set G is summarized by its unweighted
+mean PCCG = |G|−1 Í
+𝑔∈G PCC𝑔. A higher value indicates better
+agreement. Genes that a method cannot predict receive PCC zero,
+as specified in the main evaluation protocol.
+Gene subsets. All gene rankings use measured expression from
+the target slide and are fixed before any method is scored. Highly
+variable genes are ranked by the variance of𝑧𝑖𝑔across cells. Spatially
+variable genes are ranked by Moran’s 𝐼, which is higher when
+nearby cells have more similar expression. We report the top 20, 50,
+and 100 genes from each ranking. If an evaluation panel contains
+fewer than 100 genes, the corresponding top-100 average uses every
+gene in that panel. We denote the highly variable sets by H20, H50,
+and H100 and the spatially variable sets by S20, S50, and S100. The
+all column averages all RNA genes in the evaluation panel.
+B
+Ablation studies
+B.1
+Ablated components and controls
+Every study in this section uses VOICE-7M and the same five ver-
+tical bands and five-fold assignment as the in-slide benchmark of
+Section 4.2. Table 6 takes the complete VOICE-7M system as its
+reference point and reports two kinds of rows. Ablations remove
+or replace exactly one part of that system while holding every-
+thing else fixed: using only the direct branch, using only the re-
+trieval branch, removing Stage 1, removing Stage 2, and retrieving
+in the 128-dimensional alignment projection instead of the 1536-
+dimensional encoder output. Controls are not reduced versions of
+VOICE and are included to calibrate the task: the ridge-regression
+retrieval never appears in VOICE, and the direct branch without
+slide-specific fitting changes the evaluation protocol rather than
+the model.
+The direct branch without slide-specific fitting applies the pre-
+trained Stage 2 model directly to the evaluated slide. The frozen-
+encoder direct branch, which ablates both training stages, trains the
+spatial decoder and count head on the training bands while keeping
+the original UNI2-h encoder fixed. The Stage 2 direct branch follows
+the same procedure but uses the image encoder obtained after both
+training stages.
+All retrieval rows average measured expression from neighbor-
+ing reference cells according to Eq. (3), and differ only in the space in
+which neighbors are found. The ridge-regression control first learns
+a linear map from frozen UNI2-h image features to log-transformed
+expression. It then compares cells using the expression profiles pre-
+dicted by this map. The projection variant instead compares cells
+using the 128-dimensional output of the Stage 1 alignment projec-
+tion. The remaining retrieval rows compare the 1536-dimensional
+output of the image encoder before that projection. The reported
+VOICE-7M model uses the final Stage 2 encoder for both branches,
+as specified in Section 3.5. The reference cells and fusion weights
+come only from the four training bands in each fold. The two rows
+marked † use the same 1536-dimensional encoder output and re-
+trieval settings. They differ only in whether the image encoder has
+completed Stage 1. Macro is the unweighted mean over the three
+slides.
+Stage 1 encoder retrieval exceeds the matched frozen-encoder
+retrieval row on all 21 slide and metric combinations. Continuing to
+Stage 2 changes retrieval by at most 0.0038 in this comparison. The
+Stage 2 direct branch also exceeds the frozen-encoder direct branch
+in all 21 combinations. Combining the Stage 2 direct and retrieval
+predictions gives the highest value in every column. Its macro All
+PCC is 0.3904, compared with 0.3810 for the Stage 2 direct branch
+alone.
+B.2
+Contribution of the two training stages
+Table 7 adds no new experiment. It re-expresses two pairs of rows
+from Table 6 as differences, so that the effect of removing each
+training stage can be read directly. The Stage 1 comparison changes
+whether the image encoder has received contrastive training while
+11
+
+
+, ,
+Xin Luo et al.
+Table 6: In-slide component analysis.
+Slide
+Method
+All
+H20
+H50
+H100
+S20
+S50
+S100
+Breast
+Direct branch without slide fitting
+0.3478
+0.6655
+0.6131
+0.5308
+0.7315
+0.5998
+0.5399
+Ridge-based retrieval from frozen encoder
+0.3621
+0.7042
+0.6350
+0.5528
+0.7992
+0.6722
+0.5857
+Retrieval with alignment projection, 128 dimensions
+0.3668
+0.7092
+0.6419
+0.5590
+0.8054
+0.6773
+0.5919
+Retrieval with frozen encoder output, 1536 dimensions†
+0.3521
+0.6782
+0.6101
+0.5311
+0.7860
+0.6554
+0.5682
+Retrieval with Stage 1 encoder output†
+0.3909
+0.7165
+0.6518
+0.5731
+0.8097
+0.6862
+0.6040
+Retrieval with Stage 2 encoder output
+0.3923
+0.7203
+0.6553
+0.5764
+0.8113
+0.6889
+0.6065
+Frozen-encoder direct branch
+0.4102
+0.7393
+0.6738
+0.5959
+0.8227
+0.7032
+0.6212
+Stage 2 direct branch
+0.4160
+0.7445
+0.6796
+0.6012
+0.8267
+0.7069
+0.6253
+VOICE-7M, direct and retrieval
+0.4216
+0.7468
+0.6821
+0.6046
+0.8288
+0.7118
+0.6312
+Lung
+Direct branch without slide fitting
+0.1952
+0.5321
+0.4277
+0.3719
+0.4299
+0.3720
+0.3518
+Ridge-based retrieval from frozen encoder
+0.2334
+0.6296
+0.5332
+0.4558
+0.5529
+0.4958
+0.4517
+Retrieval with alignment projection, 128 dimensions
+0.2359
+0.6330
+0.5379
+0.4601
+0.5586
+0.5022
+0.4578
+Retrieval with frozen encoder output, 1536 dimensions†
+0.2283
+0.5917
+0.5035
+0.4337
+0.5219
+0.4741
+0.4341
+Retrieval with Stage 1 encoder output†
+0.2698
+0.6554
+0.5630
+0.4888
+0.6404
+0.5552
+0.4983
+Retrieval with Stage 2 encoder output
+0.2707
+0.6547
+0.5630
+0.4895
+0.6373
+0.5558
+0.5000
+Frozen-encoder direct branch
+0.2769
+0.6607
+0.5704
+0.4974
+0.5780
+0.5294
+0.4886
+Stage 2 direct branch
+0.2910
+0.6748
+0.5852
+0.5113
+0.6555
+0.5789
+0.5239
+VOICE-7M, direct and retrieval
+0.2996
+0.6791
+0.5897
+0.5171
+0.6713
+0.5913
+0.5338
+Skin
+Direct branch without slide fitting
+0.1838
+0.1568
+0.2186
+0.2450
+0.1649
+0.2131
+0.2292
+Ridge-based retrieval from frozen encoder
+0.4007
+0.8358
+0.7131
+0.6352
+0.8941
+0.8276
+0.7329
+Retrieval with alignment projection, 128 dimensions
+0.4056
+0.8415
+0.7177
+0.6413
+0.8934
+0.8299
+0.7379
+Retrieval with frozen encoder output, 1536 dimensions†
+0.3881
+0.8075
+0.6777
+0.6048
+0.8796
+0.8083
+0.7113
+Retrieval with Stage 1 encoder output†
+0.4306
+0.8484
+0.7310
+0.6578
+0.9018
+0.8397
+0.7501
+Retrieval with Stage 2 encoder output
+0.4299
+0.8485
+0.7310
+0.6575
+0.9010
+0.8396
+0.7494
+Frozen-encoder direct branch
+0.4286
+0.8476
+0.7307
+0.6566
+0.8909
+0.8312
+0.7353
+Stage 2 direct branch
+0.4361
+0.8552
+0.7424
+0.6678
+0.8966
+0.8381
+0.7444
+VOICE-7M, direct and retrieval
+0.4500
+0.8589
+0.7498
+0.6767
+0.9079
+0.8489
+0.7627
+Macro
+Direct branch without slide fitting
+0.2423
+0.4514
+0.4198
+0.3826
+0.4421
+0.3950
+0.3736
+Ridge-based retrieval from frozen encoder
+0.3321
+0.7232
+0.6271
+0.5479
+0.7487
+0.6652
+0.5901
+Retrieval with alignment projection, 128 dimensions
+0.3361
+0.7279
+0.6325
+0.5534
+0.7525
+0.6698
+0.5959
+Retrieval with frozen encoder output, 1536 dimensions†
+0.3228
+0.6925
+0.5971
+0.5232
+0.7292
+0.6459
+0.5712
+Retrieval with Stage 1 encoder output†
+0.3638
+0.7401
+0.6486
+0.5732
+0.7840
+0.6937
+0.6175
+Retrieval with Stage 2 encoder output
+0.3643
+0.7412
+0.6498
+0.5745
+0.7832
+0.6948
+0.6186
+Frozen-encoder direct branch
+0.3719
+0.7492
+0.6583
+0.5833
+0.7639
+0.6879
+0.6151
+Stage 2 direct branch
+0.3810
+0.7582
+0.6691
+0.5934
+0.7929
+0.7080
+0.6312
+VOICE-7M, direct and retrieval
+0.3904
+0.7616
+0.6739
+0.5995
+0.8026
+0.7173
+0.6426
+Table 7: Effects of Stage 1 and Stage 2 training.
+Slide
+ΔAll
+ΔH20
+ΔH50
+ΔH100
+ΔS20
+ΔS50
+ΔS100
+Stage 1 encoder retrieval −frozen encoder retrieval at matched 𝐾and 𝜏
+Breast
++0.0388
++0.0383
++0.0417
++0.0420
++0.0237
++0.0309
++0.0358
+Lung
++0.0415
++0.0637
++0.0595
++0.0551
++0.1185
++0.0812
++0.0641
+Skin
++0.0426
++0.0409
++0.0534
++0.0530
++0.0222
++0.0314
++0.0388
+Macro
++0.0409
++0.0477
++0.0515
++0.0500
++0.0548
++0.0478
++0.0462
+Stage 2 direct branch −frozen-encoder direct branch at matched fitting
+Breast
++0.0058
++0.0051
++0.0058
++0.0052
++0.0040
++0.0037
++0.0041
+Lung
++0.0140
++0.0141
++0.0148
++0.0140
++0.0775
++0.0494
++0.0352
+Skin
++0.0075
++0.0076
++0.0117
++0.0112
++0.0057
++0.0069
++0.0090
+Macro
++0.0091
++0.0089
++0.0108
++0.0101
++0.0290
++0.0200
++0.0161
+keeping the feature dimension, reference cells, and retrieval set-
+tings fixed. The Stage 2 comparison contrasts the complete Stage 2
+direct branch with the ablated version that keeps UNI2-h frozen.
+Both direct models use the same architecture and are trained and
+validated on the same spatial bands in each fold, but their encoder
+and decoder weights are initialized differently. The Stage 2 compari-
+son therefore measures the difference between two complete direct
+systems rather than the effect of the encoder alone. Each entry sub-
+tracts the ablated score from the Stage 1 or Stage 2 score. A positive
+value therefore favors the model that includes the corresponding
+training stage.
+Stage 1 increases macro All PCC for retrieval by 0.0409. The
+increase is similar on breast, lung, and skin, ranging from 0.0388
+to 0.0426. The Stage 2 direct system improves macro All PCC by
+0.0091. Its largest gain occurs on lung, where S20 increases by
+0.0775. In both blocks, the macro S20 increase is larger than the
+H20 increase. Table 6 further shows that continuing from Stage 1
+to Stage 2 changes every macro retrieval score by at most 0.0013.
+Across these ablations, Stage 1 contributes the larger change to
+retrieval, whereas Stage 2 changes the direct branch more than it
+changes retrieval.
+B.3
+The contrastive objective
+Stage 1 uses the CLIP objective [22], a symmetric InfoNCE with a
+hard diagonal target, (Eq. (2)). We test the two established alterna-
+tives to that choice using the 24-slide training subset in Table 4.
+BLEEP [28] replaces the one-hot target with a soft one that
+spreads mass over cells of similar expression. Writing 𝑎𝑖and 𝑏𝑖
+for the ℓ2-normalised projections of Eq. (2), and ˆℎ𝑖and ˆ𝑢𝑖for the
+morphology feature and the scFoundation embedding they are
+projected from, standardised per dimension over the corpus and
+12
+
+
+VOICE: A Vision-Omics Foundation Model
+, ,
+then ℓ2-normalised,
+𝑝𝑖𝑗=
+exp ⟨𝑎𝑖,𝑏𝑗⟩/𝜏𝑐
+
+Í
+𝑘∈B exp ⟨𝑎𝑖,𝑏𝑘⟩/𝜏𝑐
+ ,
+𝑀𝑖𝑗= 1
+2
+ ⟨ˆℎ𝑖, ˆℎ𝑗⟩+ ⟨ˆ𝑢𝑖, ˆ𝑢𝑗⟩,
+𝑄𝑖𝑗=
+exp 𝑀𝑖𝑗/𝜏tgt
+
+Í
+𝑘∈B exp 𝑀𝑖𝑘/𝜏tgt
+ ,
+Lsoft = −
+1
+2|B|
+∑︁
+𝑖,𝑗∈B
+h
+𝑄𝑖𝑗log𝑝𝑖𝑗+ 𝑄𝑗𝑖log𝑝𝑗𝑖
+i
+.
+(9)
+This is the BLEEP soft target row of Tables 8 and 9.
+BLIP [17] instead keeps the one-hot target and adds a head that
+scores whether a pair matches,
+𝑚𝑖𝑗= 𝜎
+
+w⊤𝜓 
+˜𝑎𝑖; ˜𝑏𝑗; ˜𝑎𝑖⊙˜𝑏𝑗; | ˜𝑎𝑖−˜𝑏𝑗|
+
+,
+𝑛(𝑖) = arg max
+𝑗≠𝑖
+⟨𝑎𝑖,𝑏𝑗⟩,
+Lmatch = −1
+|B|
+∑︁
+𝑖∈B
+h
+log𝑚𝑖𝑖+ log  1 −𝑚𝑖𝑛(𝑖)
+i
+,
+(10)
+where ˜𝑎𝑖and ˜𝑏𝑗are the projections before ℓ2 normalisation, ⊙is
+the elementwise product, and 𝜓is an MLP layer. The MLP layer’s
+input is the pooled cell feature, and 𝑛(𝑖) is the hardest mismatched
+cell in the batch under the current alignment. Stage 1 optimises
+LStage-1 + 𝜆Lmatch with 𝜆= 1. The three BLIP matching head rows
+share this encoder and differ only in how the head is used at retrieval.
+Loss only discards it at retrieval, so the head acts only through
+training, reweight multiplies the neighbour weights of Eq. (3) by
+𝑚𝑖𝜋𝑘(𝑖) and renormalises, and rerank takes the top 100 neighbours
+by cosine and keeps the 20 the head scores highest. BLIP’s third
+objective, image-grounded language modelling, is not added. It
+supervises generation of the paired modality from the image, which
+is what Stage 2 already does through the count head of Eq. (6), so
+adding it to Stage 1 would duplicate a component the model already
+has.
+Protocol. Every experiment holds the image encoder fixed and
+train only the projection towers. These numbers are on their own
+scale, using frozen 128-d towers at 𝐾=20.
+We run the experiments under both evaluation protocols of
+Section 4.1. In the in-slide benchmark each slide retrieves against
+its own training bands (Table 8), and in the cross-slide benchmark
+each slide is queried against other slides of the same tissue (Table 9).
+Adding the matching head to the loss doesn’t improve.
+Compared with the BLIP matching head, loss only model, CLIP is
+ahead on all seven metrics under both protocols, always by less
+than 0.005.
+Using the matching head at inference hurts. Re-weighting
+the 𝐾neighbours by the BLIP matching head’s score loses all seven
+metrics under both protocols, and the two-stage rerank loses all
+seven on every individual slide of both tables, giving up about 0.04
+All either way. The head is not uninformative, but retrieval averages
+𝐾neighbours, and sharpening the ranking works against an aggre-
+gation whose benefit comes from the breadth of the neighbourhood
+rather than the precision of its top match.
+The soft target ties. The BLEEP model wins some metrics from
+CLIP. For cross-slide it wins five of seven, losing H20 and S20.
+For in-slide wins only all gene pcc, losing all other metrics. Every
+margin is of order 10−3. We then keep the hard diagonal target for
+simplicity because it needs no target temperature and places no
+constraint on how batches are assembled.
+B.4
+Why per-gene fusion helps
+The two single-branch ablations in Table 6 explain why neither
+branch can be dropped. The Stage 2 direct branch has a higher
+macro All PCC than the Stage 2 retrieval branch, yet retrieval is
+better for the S20, S50, and S100 subsets on skin, so neither branch is
+uniformly better across genes and slides. As described in Section 3.5
+and illustrated in Fig. 5, using the In-slide protocol desctibed in
+Section 4.1, Stage 3 selects one weight 𝛽𝑔per gene on the training
+bands, choosing the value that maximizes the correlation between
+the fused prediction and measured expression, and that weight is
+then fixed when predicting the test band. Because the two branches
+read the same morphology representation through different mecha-
+nisms, their errors are only partly shared, so a gene-specific convex
+combination can be more accurate than either branch on its own.
+This is what allows VOICE-7M to exceed both individual branches
+in every column of Table 6.
+B.5
+Cell-feature construction
+This subsection reports one further ablation and one sensitivity
+check, both on the in-slide evaluation breast slide under the five-fold
+in-slide protocol defined in Section 4.1, holding the decoder, training
+schedule, and evaluation fixed. Every variant follows the frozen-
+encoder direct branch of Table 6, which trains the spatial decoder
+and count head on the training bands while keeping the original
+UNI2-h encoder fixed. These scores are therefore comparable to
+that row and not to the complete VOICE-7M model, so they isolate
+the cell-feature construction from the effect of Stage 1 and Stage 2
+training. UNI2-h represents each crop as a 16× 16 grid of 256 image
+tokens, where each token summarizes a local image region. The
+standard cell-mask pooling in Eq. (1) weights these tokens by how
+much they overlap the target cell. The ablation replaces this cell-
+specific weighting with an unweighted average over all 256 tokens
+at a matched crop size, and therefore isolates the pooling rule. The
+sensitivity check varies the crop size while retaining cell-mask
+pooling, and therefore isolates how much surrounding tissue the
+crop contains. Table 10 reports both comparisons.
+At a matched 300-pixel crop, replacing cell-mask pooling with a
+uniform average over the whole crop lowers All PCC from 0.4093
+to 0.3229, and lowers every reported subset by 0.0490 to 0.0940.
+Because the crop is identical in both rows, the difference is attribut-
+able to the pooling rule rather than to the amount of surrounding
+tissue the crop contains. Increasing the crop from 224 to 300 pixels
+while retaining cell-mask pooling changes every score by at most
+0.0024. Concentrating the pooled representation on the target cell
+is therefore what matters, not the size of the field of view around it.
+13
+
+
+, ,
+Xin Luo et al.
+Table 8: Contrastive objectives under the in-slide protocol. The three in-slide evaluation slides of Table 4, each retrieving against its own four training bands under
+the inslide protocol. All three are held out of tower training.
+Slide
+Objective
+All
+H20
+H50
+H100
+S20
+S50
+S100
+Breast
+BLIP matching head, rerank
+0.3186
+0.6649
+0.5945
+0.5095
+0.7819
+0.6392
+0.5468
+BLIP matching head, reweight
+0.3625
+0.7054
+0.6377
+0.5549
+0.8036
+0.6746
+0.5884
+BLIP matching head, loss only
+0.3677
+0.7091
+0.6420
+0.5596
+0.8047
+0.6774
+0.5921
+BLEEP soft target
+0.3683
+0.7069
+0.6406
+0.5590
+0.8022
+0.6753
+0.5907
+CLIP (ours)
+0.3668
+0.7092
+0.6419
+0.5590
+0.8054
+0.6773
+0.5919
+Lung
+BLIP matching head, rerank
+0.1929
+0.6044
+0.4990
+0.4107
+0.5140
+0.4466
+0.3992
+BLIP matching head, reweight
+0.2292
+0.6291
+0.5328
+0.4537
+0.5442
+0.4911
+0.4485
+BLIP matching head, loss only
+0.2348
+0.6314
+0.5369
+0.4593
+0.5473
+0.4965
+0.4548
+BLEEP soft target
+0.2359
+0.6304
+0.5362
+0.4593
+0.5491
+0.4967
+0.4550
+CLIP (ours)
+0.2359
+0.6330
+0.5379
+0.4601
+0.5586
+0.5022
+0.4578
+Skin
+BLIP matching head, rerank
+0.3708
+0.8324
+0.6934
+0.6149
+0.8844
+0.8180
+0.7130
+BLIP matching head, reweight
+0.4019
+0.8401
+0.7148
+0.6381
+0.8927
+0.8290
+0.7358
+BLIP matching head, loss only
+0.4051
+0.8408
+0.7167
+0.6403
+0.8931
+0.8297
+0.7375
+BLEEP soft target
+0.4056
+0.8397
+0.7158
+0.6397
+0.8917
+0.8282
+0.7361
+CLIP (ours)
+0.4056
+0.8415
+0.7177
+0.6413
+0.8934
+0.8299
+0.7379
+Macro
+BLIP matching head, rerank
+0.2941
+0.7006
+0.5956
+0.5117
+0.7268
+0.6346
+0.5530
+BLIP matching head, reweight
+0.3312
+0.7249
+0.6285
+0.5489
+0.7468
+0.6649
+0.5909
+BLIP matching head, loss only
+0.3359
+0.7271
+0.6318
+0.5531
+0.7484
+0.6679
+0.5948
+BLEEP soft target
+0.3366
+0.7257
+0.6308
+0.5526
+0.7477
+0.6667
+0.5939
+CLIP (ours)
+0.3361
+0.7279
+0.6325
+0.5534
+0.7525
+0.6698
+0.5959
+Figure 5: Fusion-weight workflow.
+C
+Cross-slide analyses
+C.1
+Notation for the cross-tissue gene
+comparison
+Table 3 reports the VOICE-23M direct branch on the same-tissue
+and other-tissue-only gene groups defined in Section 4.3. The two
+groups are disjoint, and for every test slide they together cover its
+full target panel, so no evaluated gene is missing from both groups.
+The column 𝑛gives the number of genes in a group. Macro is the
+unweighted mean over the five test slides, and Δ is the other-tissue-
+only score minus the same-tissue score for the same metric.
+C.2
+Complete cross-slide results
+Tables 11–13 report the complete cross-slide results, including the
+All, S100, and H100 columns omitted from Table 2, on the full target,
+Xenium-shared, and Visium-shared panels defined in Section 4.1.
+Within each panel, all methods are evaluated on the same genes,
+and the gene rankings of Section A.4 are recomputed within that
+panel. Scores are therefore comparable across methods within a
+panel but not across panels.
+C.3
+Panel composition of the added ovary data
+Scaling from VOICE-7M to VOICE-23M raises the all-gene score on
+all five cross-slide slides, and raises every ranked subset on breast,
+lung and kidney. Ovary is the exception: its all-gene score rises by
+14
+
+
+VOICE: A Vision-Omics Foundation Model
+, ,
+Table 9: Contrastive objectives under the cross-slide protocol. The same six objectives and the same frozen-encoder protocol as Table 8, on the five cross-slide
+benchmark slides of Section 4.1; each slide is queried against a bank of other slides of the same tissue over their shared panel. Breast here is the Xenium Prime
+breast section, not the in-slide breast sample of Table 8. The four non-breast sections are absent from the pretraining manifest and so are held out of tower training;
+the breast section is not, so its row measures partly memorised structure. Macro is over all five sections; excluding the breast section leaves every objective’s sign
+and ranking unchanged.
+Slide
+Objective
+All
+H20
+H50
+H100
+S20
+S50
+S100
+Breast
+BLIP matching head, rerank
+0.1456
+0.4000
+0.3001
+0.2116
+0.4346
+0.3146
+0.2180
+BLIP matching head, reweight
+0.1616
+0.4231
+0.3194
+0.2308
+0.4475
+0.3355
+0.2392
+BLIP matching head, loss only
+0.1644
+0.4270
+0.3227
+0.2341
+0.4495
+0.3389
+0.2427
+BLEEP soft target
+0.1675
+0.4262
+0.3234
+0.2363
+0.4449
+0.3394
+0.2459
+CLIP (ours)
+0.1636
+0.4245
+0.3219
+0.2333
+0.4476
+0.3382
+0.2418
+Lung
+BLIP matching head, rerank
+0.1941
+0.3878
+0.3048
+0.1956
+0.3563
+0.3046
+0.1960
+BLIP matching head, reweight
+0.2433
+0.4508
+0.3707
+0.2451
+0.4142
+0.3658
+0.2454
+BLIP matching head, loss only
+0.2512
+0.4593
+0.3800
+0.2530
+0.4221
+0.3746
+0.2533
+BLEEP soft target
+0.2625
+0.4743
+0.3949
+0.2643
+0.4369
+0.3890
+0.2647
+CLIP (ours)
+0.2543
+0.4636
+0.3837
+0.2561
+0.4264
+0.3785
+0.2564
+Kidney
+BLIP matching head, rerank
+0.1503
+0.3603
+0.3559
+0.3300
+0.3383
+0.3299
+0.3125
+BLIP matching head, reweight
+0.1912
+0.4598
+0.4407
+0.4053
+0.4309
+0.4143
+0.3867
+BLIP matching head, loss only
+0.1963
+0.4689
+0.4484
+0.4127
+0.4405
+0.4227
+0.3946
+BLEEP soft target
+0.1973
+0.4783
+0.4509
+0.4147
+0.4425
+0.4214
+0.3950
+CLIP (ours)
+0.1963
+0.4691
+0.4484
+0.4141
+0.4378
+0.4210
+0.3942
+Ovary
+BLIP matching head, rerank
+0.0906
+0.3346
+0.2526
+0.1681
+0.3580
+0.2416
+0.1600
+BLIP matching head, reweight
+0.1015
+0.3424
+0.2708
+0.1848
+0.3818
+0.2638
+0.1777
+BLIP matching head, loss only
+0.1020
+0.3429
+0.2715
+0.1855
+0.3826
+0.2647
+0.1785
+BLEEP soft target
+0.1009
+0.3198
+0.2602
+0.1830
+0.3620
+0.2581
+0.1755
+CLIP (ours)
+0.1015
+0.3357
+0.2675
+0.1845
+0.3775
+0.2615
+0.1775
+Pancreas
+BLIP matching head, rerank
+0.1327
+0.3664
+0.2170
+0.1327
+0.3550
+0.2165
+0.1327
+BLIP matching head, reweight
+0.1624
+0.4057
+0.2542
+0.1624
+0.3907
+0.2521
+0.1624
+BLIP matching head, loss only
+0.1694
+0.4141
+0.2629
+0.1694
+0.4007
+0.2603
+0.1694
+BLEEP soft target
+0.1685
+0.4127
+0.2613
+0.1685
+0.3941
+0.2590
+0.1685
+CLIP (ours)
+0.1724
+0.4198
+0.2653
+0.1724
+0.4065
+0.2648
+0.1724
+Macro
+BLIP matching head, rerank
+0.1427
+0.3698
+0.2861
+0.2076
+0.3684
+0.2815
+0.2039
+BLIP matching head, reweight
+0.1720
+0.4164
+0.3312
+0.2457
+0.4130
+0.3263
+0.2423
+BLIP matching head, loss only
+0.1767
+0.4224
+0.3371
+0.2509
+0.4191
+0.3322
+0.2477
+BLEEP soft target
+0.1793
+0.4223
+0.3381
+0.2534
+0.4161
+0.3334
+0.2499
+CLIP (ours)
+0.1776
+0.4225
+0.3374
+0.2521
+0.4192
+0.3328
+0.2485
+Table 10: Cell-feature ablations on in-slide evaluation breast slide.
+Variant
+All
+H20
+H50
+H100
+S20
+S50
+S100
+Cell-mask pooling, 224-pixel crop
+0.4102
+0.7393
+0.6738
+0.5959
+0.8227
+0.7032
+0.6212
+Cell-mask pooling, 300-pixel crop
+0.4093
+0.7376
+0.6714
+0.5939
+0.8212
+0.7019
+0.6197
+Uniform average over 300-pixel crop
+0.3229
+0.6617
+0.5829
+0.4999
+0.7722
+0.6395
+0.5429
+Δ (300-pixel −224-pixel cell mask)
+−0.0009
+−0.0017
+−0.0024
+−0.0020
+−0.0015
+−0.0013
+−0.0015
+Δ (uniform average −cell mask at 300 pixels)
+−0.0864
+−0.0759
+−0.0885
+−0.0940
+−0.0490
+−0.0623
+−0.0768
+Table 11: Cross-slide generalization: full target panel. The best reported result in each column is highlighted in bold.
+Breast
+Lung
+Kidney
+Model
+All
+S20
+S50
+S100
+H20
+H50
+H100
+All
+S20
+S50
+S100
+H20
+H50
+H100
+All
+S20
+S50
+S100
+H20
+H50
+H100
+DeepSpot-M (zero-shot)
+0.047
+0.193
+0.184
+0.188
+0.214
+0.196
+0.186
+0.060
+0.172
+0.148
+0.123
+0.153
+0.136
+0.125
+0.040
+0.177
+0.127
+0.109
+0.117
+0.108
+0.082
+DeepSpot-M (fine-tuned)
+0.079
+0.348
+0.339
+0.323
+0.355
+0.332
+0.282
+0.219
+0.522
+0.447
+0.396
+0.500
+0.437
+0.385
+0.221
+0.563
+0.479
+0.435
+0.554
+0.473
+0.441
+VOICE-7M
+0.088
+0.424
+0.382
+0.373
+0.469
+0.441
+0.414
+0.248
+0.601
+0.530
+0.463
+0.653
+0.547
+0.498
+0.230
+0.489
+0.448
+0.424
+0.456
+0.432
+0.430
+VOICE-23M
+0.135
+0.515
+0.480
+0.453
+0.559
+0.519
+0.473
+0.293
+0.673
+0.599
+0.526
+0.684
+0.589
+0.540
+0.241
+0.602
+0.507
+0.456
+0.554
+0.477
+0.454
+Ovary
+Pancreas
+Model
+All
+S20
+S50
+S100
+H20
+H50
+H100
+All
+S20
+S50
+S100
+H20
+H50
+H100
+DeepSpot-M (zero-shot)
+0.020
+0.125
+0.081
+0.052
+0.038
+0.057
+0.059
+0.100
+0.308
+0.260
+0.217
+0.312
+0.223
+0.179
+DeepSpot-M (fine-tuned)
+0.107
+0.418
+0.323
+0.255
+0.327
+0.283
+0.241
+0.142
+0.458
+0.378
+0.294
+0.487
+0.360
+0.274
+VOICE-7M
+0.132
+0.464
+0.390
+0.316
+0.439
+0.381
+0.317
+0.234
+0.564
+0.510
+0.442
+0.618
+0.527
+0.440
+VOICE-23M
+0.146
+0.433
+0.379
+0.313
+0.420
+0.360
+0.312
+0.248
+0.566
+0.517
+0.465
+0.592
+0.519
+0.456
+0.014 while all six ranked subsets fall, by 0.003 to 0.031 (Table 11).
+Pancreas loses two subsets, and no other tissue loses any.
+The assay generation of the added slides separates ovary from the
+rest. The ovary test slide and the single ovary slide in the 24-slide
+subset are both Xenium V1, carrying 480 and 477 genes. Both ovary
+slides that the full-scale set adds are Xenium Prime 5K: 200,815
+cells over 5,001 genes and 407,124 cells over 5,090 genes. Scaling
+therefore takes the V1 share of ovary training cells from all of them
+to roughly a quarter, so a V1 target slide now draws most of its
+same-tissue supervision from the other generation.
+15
+
+
+, ,
+Xin Luo et al.
+Table 12: Cross-slide generalization: Xenium-shared panel. The best reported result in each column is highlighted in bold.
+Breast
+Lung
+Kidney
+Model
+All
+S20
+S50
+S100
+H20
+H50
+H100
+All
+S20
+S50
+S100
+H20
+H50
+H100
+All
+S20
+S50
+S100
+H20
+H50
+H100
+GHIST
+0.084
+0.367
+0.223
+0.134
+0.327
+0.220
+0.134
+0.116
+0.280
+0.229
+0.192
+0.281
+0.259
+0.201
+0.123
+0.333
+0.323
+0.271
+0.405
+0.340
+0.287
+DeepSpot2Cell
+0.061
+0.231
+0.149
+0.094
+0.215
+0.144
+0.091
+0.105
+0.312
+0.221
+0.168
+0.280
+0.220
+0.167
+0.050
+0.165
+0.145
+0.118
+0.187
+0.149
+0.118
+DeepSpot-M (zero-shot)
+0.056
+0.187
+0.125
+0.084
+0.155
+0.124
+0.086
+0.055
+0.162
+0.123
+0.101
+0.176
+0.122
+0.100
+0.038
+0.166
+0.139
+0.104
+0.124
+0.108
+0.081
+DeepSpot-M (fine-tuned)
+0.150
+0.423
+0.304
+0.223
+0.392
+0.294
+0.210
+0.232
+0.448
+0.387
+0.350
+0.424
+0.421
+0.349
+0.211
+0.464
+0.457
+0.414
+0.527
+0.458
+0.414
+VOICE-7M
+0.185
+0.487
+0.361
+0.268
+0.460
+0.350
+0.255
+0.265
+0.564
+0.471
+0.406
+0.557
+0.498
+0.406
+0.229
+0.495
+0.465
+0.431
+0.512
+0.463
+0.435
+VOICE-23M
+0.205
+0.511
+0.395
+0.296
+0.494
+0.381
+0.279
+0.281
+0.598
+0.492
+0.423
+0.573
+0.508
+0.421
+0.233
+0.517
+0.482
+0.436
+0.525
+0.465
+0.437
+Ovary
+Pancreas
+Model
+All
+S20
+S50
+S100
+H20
+H50
+H100
+All
+S20
+S50
+S100
+H20
+H50
+H100
+GHIST
+0.053
+0.230
+0.170
+0.137
+0.297
+0.236
+0.156
+0.088
+0.245
+0.148
+0.088
+0.279
+0.155
+0.088
+DeepSpot2Cell
+0.043
+0.267
+0.170
+0.126
+0.247
+0.196
+0.135
+0.068
+0.181
+0.114
+0.068
+0.162
+0.104
+0.068
+DeepSpot-M (zero-shot)
+0.022
+0.108
+0.068
+0.057
+0.067
+0.080
+0.057
+0.107
+0.276
+0.173
+0.107
+0.227
+0.163
+0.107
+DeepSpot-M (fine-tuned)
+0.106
+0.413
+0.299
+0.224
+0.322
+0.270
+0.225
+0.173
+0.424
+0.269
+0.173
+0.414
+0.273
+0.173
+VOICE-7M
+0.128
+0.474
+0.369
+0.270
+0.439
+0.358
+0.285
+0.216
+0.454
+0.315
+0.216
+0.446
+0.319
+0.216
+VOICE-23M
+0.144
+0.449
+0.359
+0.276
+0.413
+0.344
+0.288
+0.227
+0.469
+0.328
+0.227
+0.454
+0.330
+0.227
+Table 13: Cross-slide generalization on the Visium-shared gene panel. DeepSpot-M is evaluated under both zero-shot and fine-tuned settings. The best result for
+each tissue and evaluation subset is highlighted in bold.
+Breast
+Lung
+Kidney
+Model
+All
+S20
+S50
+S100
+H20
+H50
+H100
+All
+S20
+S50
+S100
+H20
+H50
+H100
+All
+S20
+S50
+S100
+H20
+H50
+H100
+sCellST
+0.044
+0.170
+0.161
+0.113
+0.144
+0.153
+0.109
+0.057
+0.083
+0.066
+0.057
+0.094
+0.075
+0.057
+0.045
+0.100
+0.053
+0.045
+0.077
+0.044
+0.045
+DeepSpot-M zero-shot
+0.071
+0.188
+0.196
+0.156
+0.169
+0.195
+0.155
+0.092
+0.145
+0.125
+0.092
+0.140
+0.118
+0.092
+0.086
+0.123
+0.102
+0.086
+0.121
+0.097
+0.086
+DeepSpot-M fine-tuned
+0.133
+0.300
+0.294
+0.235
+0.268
+0.308
+0.247
+0.287
+0.427
+0.369
+0.287
+0.439
+0.369
+0.287
+0.399
+0.514
+0.460
+0.399
+0.535
+0.449
+0.399
+VOICE-7M
+0.145
+0.390
+0.369
+0.287
+0.384
+0.367
+0.294
+0.318
+0.478
+0.409
+0.318
+0.488
+0.418
+0.318
+0.399
+0.442
+0.440
+0.399
+0.460
+0.437
+0.399
+VOICE-23M
+0.201
+0.481
+0.430
+0.345
+0.475
+0.438
+0.361
+0.373
+0.558
+0.479
+0.373
+0.544
+0.480
+0.373
+0.428
+0.534
+0.481
+0.428
+0.566
+0.474
+0.428
+Ovary
+Pancreas
+Model
+All
+S20
+S50
+S100
+H20
+H50
+H100
+All
+S20
+S50
+S100
+H20
+H50
+H100
+sCellST
+0.042
+0.109
+0.070
+0.046
+0.100
+0.077
+0.046
+0.075
+0.113
+0.090
+0.075
+0.117
+0.097
+0.075
+DeepSpot-M zero-shot
+0.031
+0.104
+0.057
+0.035
+0.077
+0.056
+0.035
+0.130
+0.218
+0.179
+0.130
+0.218
+0.172
+0.130
+DeepSpot-M fine-tuned
+0.153
+0.336
+0.249
+0.166
+0.304
+0.252
+0.167
+0.212
+0.332
+0.271
+0.212
+0.375
+0.261
+0.212
+VOICE-7M
+0.179
+0.389
+0.292
+0.192
+0.384
+0.305
+0.195
+0.310
+0.480
+0.391
+0.310
+0.515
+0.394
+0.310
+VOICE-23M
+0.189
+0.361
+0.286
+0.204
+0.354
+0.301
+0.204
+0.350
+0.522
+0.440
+0.350
+0.548
+0.438
+0.350
+A gene shared by the two panels is not measured identically on
+them. Probe set, panel size and per-gene detection sensitivity all
+differ, so the same gene carries a different count distribution on
+Prime than on V1, and the shared count head of Section 3.4 receives
+both as supervision for one output. This offers a mechanism for
+the split we observe: the Prime slides raise the all-gene score by
+covering an order of magnitude more genes, while the ranked
+subsets, the high-signal genes on which a scale mismatch between
+generations bites hardest, move the other way.
+D
+Cross-Platform Generalization to CosMx
+Data
+Every training pair used by VOICE is a single cell whose mor-
+phology, and measured transcriptome are belong to the same cell.
+Xenium distributes its H&E and DAPI images in a common reg-
+istered frame. However, CosMx does not provide an equivalent
+registration for externally acquired H&E. To generalize our model
+to CosMx data, we therefore developed a nucleus-level procedure
+that establishes the missing correspondence directly to make VOICE
+extend to CosMx.
+D.1
+Procedure
+The procedure works at two scales. A whole-slide registration first
+places the two images from H&E and DAPI images in a common
+coordinate frame. Nucleus-level matching then decides which indi-
+vidual cell corresponds to. It treats nuclei as landmarks shared by
+the two modalities and filters candidate nucleus-to-nucleus matches
+until only geometrically self-consistent ones survive.
+(1) Whole-slide registration. We register the H&E image to
+the CosMx DAPI image with Warpy [5], an open-source
+Fiji workflow for whole-slide registration. Registration is
+computed with elastix and can be refined interactively in
+BigWarp. Warpy stores the transform and leaves both images
+at their original resolution, so the same transform maps
+CosMx cell coordinates onto H&E pixels without resampling
+either image.
+(2) Nucleus segmentation and patch extraction. We seg-
+ment nuclei from the H&E image with Cellpose and convert
+the label mask to per-nucleus polygons; CosMx supplies its
+own cell centroids and boundaries on the molecular side.
+We then crop a patch of fixed radius around every nucleus
+centre in both modalities.
+(3) Local patch matching. For each H&E nucleus, we score
+every DAPI nuclei within a search radius based on the image
+similarity of their patches. To tolerate the residual offset that
+step 1 leaves behind, we score four shifted versions from
+top, down, right, and left directions of each patch and keep
+the worst score over the shifts, so a match must hold under
+perturbation. The top-ranked candidates are retained.
+(4) Field-of-view masking. We restrict matches to the true
+imaged field of view and discard a margin at the tile border,
+because a nucleus cut by an edge cannot be scored reliably.
+(5) Nucleus-shape validation. We overlay the two nucleus
+polygons of each surviving pair in the common frame and re-
+quire them to overlap. A true match is the same nucleus seen
+twice and therefore agrees in position and extent, whereas a
+locally ambiguous match usually does not.
+16
+
+
+VOICE: A Vision-Omics Foundation Model
+, ,
+Table 14: Whole-slide pairing of H&E with CosMx. Every tissue block of each
+slide. Agreement is the fraction of retained pairs whose matched CosMx cell
+coincides with the cell that the vendor H&E–DAPI registration places at that
+H&E nucleus; the procedure has no access to that registration. Pairs is the
+number of retained pairs the fraction is computed over.
+Slide
+Pairs
+Agreement (%)
+Ovary
+14,320
+99.2
+Liver
+31,570
+99.8
+Colon
+25,058
+98.7
+The runs below use normalised cross-correlation as the patch
+similarity, a 20 px search radius, a 20 px patch radius, shifts up
+to 10 px, the top 3 candidates per H&E nucleus, a 30 px border
+margin, and a nucleus-polygon intersection filter on the rank-one
+candidate.
+D.2
+Whole-slide check on pair quality
+Three public CosMx 6K slides, from ovary, liver and colon, allow a
+direct check of the nucleus-level steps. Their releases already fix the
+registration. between the H&E and DAPI images exactly, as a scale
+with no offset, so the agreement between the original registration
+and our align results provides a test of our processing pipeline.
+We ran steps 1–5 over each slide in full, tiling it into 6000 × 6000
+H&E-pixel blocks with a 20 px search radius and a 30 px border
+discard, a block boundary only affects nuclei that the procedure
+already drops. Tiling is harmless because these steps are local by
+construction. Every nucleus that Cellpose returns on the slide is fed
+to the processing pipeline, and the agreement below is measured
+over all of them.
+The matching and filtering steps are reliable. Of the pairs the
+procedure retains, 98.7–99.8% pairs get the same registration as the
+original one (Table 14).
+D.3
+CosMx Zero-Shot Prediction
+Running the pairing procedure of Section D.1 on the three CosMx
+slides gives an H&E crop for each paired CosMx cell, and those cells
+can then be predicted directly. This measures how much of VOICE
+survives a change of platform before any CosMx data is used.
+The transfer is strictly zero-shot. No CosMx expression data
+are used for model training. We cut the H&E crops to the same
+55 𝜇m field of view as the Xenium corpus, so the physical scale
+matches by construction. The retrieval bank is drawn from same-
+tissue Xenium slides, and we fit the Stage-3 weights on those same
+Xenium reference slides and transfer them, exactly as in Section 4.3.
+Table 15 reports the result.
+We score the 3,097 genes that the CosMx 6,174-gene panel shares
+with the 6,029-gene vocabulary of Section 3.4, since the count head
+cannot predict the rest. How many of those genes the Xenium bank
+measures varies by tissue. The gene numbers are 2,672 on ovary,
+577 on colon, and 310 on liver. This limits the retrieval branch
+alone since the direct branch needs no bank and predicts all 3,097
+genes. For the retrieval row we therefore depart from the protocol
+of Section 4.1 and average only over the genes it can reach. Table 15
+reports the result.
+Prediction transfers but weakens sharply. The macro All score of
+0.0724 is well below the 0.2126 that the same model reaches across
+the five held-out Xenium slides (Table 11), and that gap is the result
+of the platform shift since nothing from the target platform is used.
+Which branch predicts better follows the bank coverage above. On
+ovary, where the bank reaches 2,672 genes, the retrieval branch is
+the stronger of the two on every ranked subset, reaching 0.2201 on
+H20 against 0.1844 for the direct branch while remaining behind
+on All, so transferring measurements from morphologically similar
+cells survives the platform change better than predicting them does.
+On colon, where the bank reaches only 577, retrieval is behind on
+all seven metrics, and the fusion falls back on the direct branch and
+differs from it by at most 0.0005.
+The transferred gate is conservative. Fitting the per-gene weights
+on the CosMx slide itself raises the macro All score from 0.0724
+to 0.0756 and H50 from 0.1595 to 0.1667. That variant uses target
+labels, so it is an upper bound rather than a deployable number.
+The gap between the two is the cost of never touching the target
+platform, and it is what a small amount of CosMx supervision would
+be expected to recover.
+17
+
+
+, ,
+Xin Luo et al.
+Table 15: Zero-shot transfer from Xenium to CosMx. Bold marks the best value in each column.
+Slide
+Branch
+All
+H20
+H50
+H100
+S20
+S50
+S100
+Ovary
+VOICE-23M Direct
+0.0911
+0.1844
+0.1773
+0.1711
+0.1470
+0.1496
+0.1480
+VOICE-23M Retrieval
+0.0774
+0.2201
+0.2105
+0.1849
+0.1786
+0.1695
+0.1607
+VOICE-23M Fused
+0.0917
+0.1853
+0.1783
+0.1722
+0.1480
+0.1503
+0.1489
+Liver
+VOICE-23M Direct
+0.0494
+0.1884
+0.1602
+0.1420
+0.1899
+0.1564
+0.1376
+VOICE-23M Retrieval
+0.0453
+0.1775
+0.1661
+0.1633
+0.1775
+0.1511
+0.1534
+VOICE-23M Fused
+0.0494
+0.1889
+0.1605
+0.1421
+0.1903
+0.1568
+0.1378
+Colon
+VOICE-23M Direct
+0.0762
+0.1227
+0.1394
+0.1363
+0.0862
+0.1023
+0.1166
+VOICE-23M Retrieval
+0.0569
+0.0949
+0.0919
+0.0924
+0.0477
+0.0667
+0.0772
+VOICE-23M Fused
+0.0762
+0.1232
+0.1397
+0.1366
+0.0862
+0.1024
+0.1168
+Macro
+VOICE-23M Direct
+0.0722
+0.1652
+0.1590
+0.1498
+0.1410
+0.1361
+0.1340
+VOICE-23M Retrieval
+0.0599
+0.1642
+0.1562
+0.1469
+0.1346
+0.1291
+0.1304
+VOICE-23M Fused
+0.0724
+0.1658
+0.1595
+0.1503
+0.1415
+0.1365
+0.1345
+18
