@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-15</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-16</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 8 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>5</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>3</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>4</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>4</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-15 20:25:52 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-16 20:33:41 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读8篇论文，重点聚焦虚拟细胞扰动建模与单细胞基因表达基础模型。</p>
-<p>最值得关注的是9分高分的Control-Anchored残差流匹配与VOICE视觉-组学基础模型，分别从基因几何条件生成和原位表达预测推动细胞建模。</p>
-<p>若想入门，可优先读这两篇高分工作，后续再结合速读中的流匹配GRN推断与组学降维方法扩展视野。</p>
+<p>今日精读4篇、速读4篇，聚焦AI基础模型在生命科学与因果推断中的应用。最值得关注：VOICE模型直接结合图像检索预测单细胞基因表达（9.0分），因果状态空间模型用于纵向个体治疗效果估计（8.0分）。建议普通读者优先了解这两项技术的适用场景，把握多模态组学与因果推断的交叉趋势。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -73,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">5 篇</strong>
+    <strong class="dpr-home-dashboard-count">4 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling">Control-Anchored Residual Flow Matching Conditioned on Gene Geometry for Virtual Cell Perturbation Modeling</span></li><li><span class="dpr-home-dashboard-paper-title" title="VOICE: A Vision-Omics Foundation Model Integrating Direct and Retrieval-Based Prediction of In-situ Single-Cell Gene Expression">VOICE: A Vision-Omics Foundation Model Integrating Direct and Retrieval-Based Prediction of In-situ Single-Cell Gene Expression</span></li><li><span class="dpr-home-dashboard-paper-title" title="DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology">DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="VOICE: A Vision-Omics Foundation Model Integrating Direct and Retrieval-Based Prediction of In-situ Single-Cell Gene Expression">VOICE: A Vision-Omics Foundation Model Integrating Direct and Retrieval-Based Prediction of In-situ Single-Cell Gene Expression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Causal State-Space Model for Causal Inference: Estimating Longitudinal Individual Treatment Effects">Causal State-Space Model for Causal Inference: Estimating Longitudinal Individual Treatment Effects</span></li><li><span class="dpr-home-dashboard-paper-title" title="Human-Guided Causal Knowledge Injection for Virtual Cells">Human-Guided Causal Knowledge Injection for Virtual Cells</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>3</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -86,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">3 篇</strong>
+    <strong class="dpr-home-dashboard-count">4 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Novel Knowledge-Guided Generative Methods for Synthetic Transcriptomic Data">Novel Knowledge-Guided Generative Methods for Synthetic Transcriptomic Data</span></li><li><span class="dpr-home-dashboard-paper-title" title="FlowGRN: Scalable and Dropout-Robust Gene Regulatory Network Inference via Flow Matching-Based Trajectory Reconstruction (Technical Report)">FlowGRN: Scalable and Dropout-Robust Gene Regulatory Network Inference via Flow Matching-Based Trajectory Reconstruction (Technical Report)</span></li><li><span class="dpr-home-dashboard-paper-title" title="CosMAP: Contrastive Manifold Approximation and Projection for Dimensionality Reduction of Omics and Genealogical Data">CosMAP: Contrastive Manifold Approximation and Projection for Dimensionality Reduction of Omics and Genealogical Data</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology">DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology</span></li><li><span class="dpr-home-dashboard-paper-title" title="Flow-based conditional cardiac anatomy generation for virtual cohorts">Flow-based conditional cardiac anatomy generation for virtual cohorts</span></li><li><span class="dpr-home-dashboard-paper-title" title="CosMAP: Contrastive Manifold Approximation and Projection for Dimensionality Reduction of Omics and Genealogical Data">CosMAP: Contrastive Manifold Approximation and Projection for Dimensionality Reduction of Omics and Genealogical Data</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span></div>
 </section>
 </div>
 
