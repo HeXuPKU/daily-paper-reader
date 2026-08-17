@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-16</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-17</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 8 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 9 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>4</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>4</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>8</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-16 20:33:41 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-17 20:41:33 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读4篇、速读4篇，聚焦AI基础模型在生命科学与因果推断中的应用。最值得关注：VOICE模型直接结合图像检索预测单细胞基因表达（9.0分），因果状态空间模型用于纵向个体治疗效果估计（8.0分）。建议普通读者优先了解这两项技术的适用场景，把握多模态组学与因果推断的交叉趋势。</p>
+<p>今日9篇论文聚焦虚拟细胞与单细胞建模，精读1篇、速读3篇。</p>
+<p>最值得关注《Human-Guided Causal Knowledge Injection for Virtual Cells》（8.0分），以及VOICE模型直接预测原位单细胞基因表达（7.0分）。</p>
+<p>后续可结合因果知识注入与多模态基础模型，优先探索形态-转录组联合预测工具。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +73,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">4 篇</strong>
+    <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="VOICE: A Vision-Omics Foundation Model Integrating Direct and Retrieval-Based Prediction of In-situ Single-Cell Gene Expression">VOICE: A Vision-Omics Foundation Model Integrating Direct and Retrieval-Based Prediction of In-situ Single-Cell Gene Expression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Causal State-Space Model for Causal Inference: Estimating Longitudinal Individual Treatment Effects">Causal State-Space Model for Causal Inference: Estimating Longitudinal Individual Treatment Effects</span></li><li><span class="dpr-home-dashboard-paper-title" title="Human-Guided Causal Knowledge Injection for Virtual Cells">Human-Guided Causal Knowledge Injection for Virtual Cells</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Human-Guided Causal Knowledge Injection for Virtual Cells">Human-Guided Causal Knowledge Injection for Virtual Cells</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>3</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -84,12 +86,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">4 篇</strong>
+    <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology">DoGMA: A Central-Dogma-Guided Foundation Model for Multi-Omics Alignment and Multi-Task Learning in Oncology</span></li><li><span class="dpr-home-dashboard-paper-title" title="Flow-based conditional cardiac anatomy generation for virtual cohorts">Flow-based conditional cardiac anatomy generation for virtual cohorts</span></li><li><span class="dpr-home-dashboard-paper-title" title="CosMAP: Contrastive Manifold Approximation and Projection for Dimensionality Reduction of Omics and Genealogical Data">CosMAP: Contrastive Manifold Approximation and Projection for Dimensionality Reduction of Omics and Genealogical Data</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="VOICE: A Vision-Omics Foundation Model Integrating Direct and Retrieval-Based Prediction of In-situ Single-Cell Gene Expression">VOICE: A Vision-Omics Foundation Model Integrating Direct and Retrieval-Based Prediction of In-situ Single-Cell Gene Expression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Program-space Diffusion for Morphology-to-Transcriptomics Prediction">Program-space Diffusion for Morphology-to-Transcriptomics Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Generating Benchmark Health Data Using a Tabular Diffusion Transformer">Generating Benchmark Health Data Using a Tabular Diffusion Transformer</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>3</strong></span></div>
 </section>
 </div>
 
