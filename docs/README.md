@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-17</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-18</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 9 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 8 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>8</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>2</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>6</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-17 20:41:33 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-18 20:19:45 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日9篇论文聚焦虚拟细胞与单细胞建模，精读1篇、速读3篇。</p>
-<p>最值得关注《Human-Guided Causal Knowledge Injection for Virtual Cells》（8.0分），以及VOICE模型直接预测原位单细胞基因表达（7.0分）。</p>
-<p>后续可结合因果知识注入与多模态基础模型，优先探索形态-转录组联合预测工具。</p>
+<p>今日精读聚焦单细胞扰动预测与分布值结果推断，速读覆盖合成医疗数据基准与张量分解方法。最值得关注的是离散扩散模型在单细胞扰动预测中的高分应用（9.0），以及生成式推理对分布值结局的建模价值（8.0）。建议普通读者优先理解这两篇的方法思路，速读部分可稍后浏览。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -73,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">1 篇</strong>
+    <strong class="dpr-home-dashboard-count">2 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Human-Guided Causal Knowledge Injection for Virtual Cells">Human-Guided Causal Knowledge Injection for Virtual Cells</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="$D^{2}R^{2}$: Discrete Diffusion with Regulation Reinforcement for Single-Cell Perturbation Prediction">$D^{2}R^{2}$: Discrete Diffusion with Regulation Reinforcement for Single-Cell Perturbation Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Generation-Powered Inference for Distribution-Valued Outcomes">Generation-Powered Inference for Distribution-Valued Outcomes</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -86,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">8 篇</strong>
+    <strong class="dpr-home-dashboard-count">6 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="VOICE: A Vision-Omics Foundation Model Integrating Direct and Retrieval-Based Prediction of In-situ Single-Cell Gene Expression">VOICE: A Vision-Omics Foundation Model Integrating Direct and Retrieval-Based Prediction of In-situ Single-Cell Gene Expression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Program-space Diffusion for Morphology-to-Transcriptomics Prediction">Program-space Diffusion for Morphology-to-Transcriptomics Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Generating Benchmark Health Data Using a Tabular Diffusion Transformer">Generating Benchmark Health Data Using a Tabular Diffusion Transformer</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Generating Benchmark Health Data Using a Tabular Diffusion Transformer">Generating Benchmark Health Data Using a Tabular Diffusion Transformer</span></li><li><span class="dpr-home-dashboard-paper-title" title="CoMedBench: A Multi-Source Benchmark of Synthetic Medical Data Fidelity and Downstream Utility">CoMedBench: A Multi-Source Benchmark of Synthetic Medical Data Fidelity and Downstream Utility</span></li><li><span class="dpr-home-dashboard-paper-title" title="Knowledge-guided Pattern Discovery via Coupled Tensor Factorizations">Knowledge-guided Pattern Discovery via Coupled Tensor Factorizations</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>3</strong></span><span class="dpr-home-dashboard-tag">med-ai <strong>3</strong></span></div>
 </section>
 </div>
 
