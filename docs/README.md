@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-21</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-22</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 17 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>6</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>11</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-21 19:40:07 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-22 20:45:33 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共推荐17篇论文，精读6篇、速读11篇，重点聚焦单细胞扰动预测与图像表型遗传分析两大方向。最值得关注的是两篇9分精读：离散扩散模型结合强化学习用于单细胞扰动预测，以及AI表型、联合GWAS与联邦学习解析人脸遗传特征。普通读者可优先浏览8分速读中的可解释Transformer临床预测与自监督DNA基础模型，以快速把握应用热点。</p>
+<p>今日共读17篇论文，精读6篇、速读11篇，聚焦个性化医疗与生成式AI前沿。</p>
+<p>最值得关注的是9分高作《自适应多智能体特征选择用于跌倒风险预防》，以及8分《单细胞扰动预测的离散扩散模型》，均指向精准干预与细胞级建模。</p>
+<p>若时间有限，建议优先精读这两篇，并快速浏览7分的半监督学习与扩散模型文章，捕捉个体化治疗与单细胞生成的核心思路。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -74,9 +76,9 @@
     <strong class="dpr-home-dashboard-count">6 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="$D^{2}R^{2}$: Discrete Diffusion with Regulation Reinforcement for Single-Cell Perturbation Prediction">$D^{2}R^{2}$: Discrete Diffusion with Regulation Reinforcement for Single-Cell Perturbation Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Genetic Insights of Image-Based Traits: Analysis Pipeline for AI-based Phenotyping, Combined-GWAS, and Federated Learning with Application to the Human Face">Genetic Insights of Image-Based Traits: Analysis Pipeline for AI-based Phenotyping, Combined-GWAS, and Federated Learning with Application to the Human Face</span></li><li><span class="dpr-home-dashboard-paper-title" title="Representation in genetic studies affects inference about genetic architecture">Representation in genetic studies affects inference about genetic architecture</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Adaptive Multi-Agent Feature Selection for Personalized Fall Risk Prevention">Adaptive Multi-Agent Feature Selection for Personalized Fall Risk Prevention</span></li><li><span class="dpr-home-dashboard-paper-title" title="$D^{2}R^{2}$: Discrete Diffusion with Regulation Reinforcement for Single-Cell Perturbation Prediction">$D^{2}R^{2}$: Discrete Diffusion with Regulation Reinforcement for Single-Cell Perturbation Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records">Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>3</strong></span><span class="dpr-home-dashboard-tag">med-ai <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,7 +89,7 @@
     <strong class="dpr-home-dashboard-count">11 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records">Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records</span></li><li><span class="dpr-home-dashboard-paper-title" title="A self-supervised DNA foundation model with collapse-resistant multimodal fusion">A self-supervised DNA foundation model with collapse-resistant multimodal fusion</span></li><li><span class="dpr-home-dashboard-paper-title" title="Automating scientific annotations for open transcriptomic profiles via multi-stage agents">Automating scientific annotations for open transcriptomic profiles via multi-stage agents</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Semi-supervised Concordance Learning for Optimal Individual Treatment Regimes">Semi-supervised Concordance Learning for Optimal Individual Treatment Regimes</span></li><li><span class="dpr-home-dashboard-paper-title" title="bulk2scDiff: A Pseudobulk-Conditioned Diffusion Model for Bulk-to-Single-Cell RNASeq Generation">bulk2scDiff: A Pseudobulk-Conditioned Diffusion Model for Bulk-to-Single-Cell RNASeq Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Generation-Powered Inference for Distribution-Valued Outcomes">Generation-Powered Inference for Distribution-Valued Outcomes</span></li></ul>
   </div>
   <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>8</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>3</strong></span></div>
 </section>

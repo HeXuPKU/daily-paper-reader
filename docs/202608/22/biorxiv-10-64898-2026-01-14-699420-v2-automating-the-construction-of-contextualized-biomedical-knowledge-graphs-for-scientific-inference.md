@@ -1,0 +1,25 @@
+---
+title: Automating the Construction of Contextualized Biomedical Knowledge Graphs for Scientific Inference
+title_zh: 自动化构建面向科学推论的上下文生物医学知识图谱
+authors: "Zheng, Y., Liu, W., Zeng, B., Feng, Y., Du, X., Zhou, L., Li, Y."
+date: 2026-08-19
+pdf: "https://www.biorxiv.org/content/10.64898/2026.01.14.699420v2.full.pdf"
+tags: ["query:med-ai"]
+score: 6.0
+evidence: 利用信息抽取与自训练构建情境化生物医学知识图谱，支持医学AI与科学推断
+tldr: 生物医学交互常随生理状态动态变化，但现有抽取方法将其简化为与上下文无关的二元关联，导致语义损失和矛盾证据。为此提出AutoBioKG，一种端到端框架，通过复合三元组编码环境条件和实体属性来构建上下文感知知识图谱。该框架基于BioOpenIE训练开放信息抽取模型，并利用未标注文献伪标签自训练，实现良好泛化。在DDI、ChemProt和BioRED上零样本F1超过最强基线3.6-17.8个百分点，在BioASQ问答中尤其擅长细粒度上下文问题，为将非结构化文献转化为结构化上下文感知知识提供了可扩展方案。
+source: biorxiv
+selection_source: fresh_fetch
+figures_json: "[{\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-14-699420-v2/fig-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1323, \"height\": 881, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-14-699420-v2/fig-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1217, \"height\": 341, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-14-699420-v2/fig-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 1292, \"height\": 365, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-14-699420-v2/fig-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 1295, \"height\": 497, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-14-699420-v2/fig-005.webp\", \"caption\": \"\", \"page\": 0, \"index\": 5, \"width\": 1251, \"height\": 515, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-14-699420-v2/fig-006.webp\", \"caption\": \"\", \"page\": 0, \"index\": 6, \"width\": 951, \"height\": 747, \"label\": \"Figure\"}, {\"url\": \"assets/figures/biorxiv/biorxiv-10-64898-2026-01-14-699420-v2/fig-007.webp\", \"caption\": \"\", \"page\": 0, \"index\": 7, \"width\": 1270, \"height\": 653, \"label\": \"Figure\"}]"
+tables_json: "[{\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-01-14-699420-v2/table-001.webp\", \"caption\": \"\", \"page\": 0, \"index\": 1, \"width\": 1360, \"height\": 366, \"label\": \"Table\"}, {\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-01-14-699420-v2/table-002.webp\", \"caption\": \"\", \"page\": 0, \"index\": 2, \"width\": 1352, \"height\": 221, \"label\": \"Table\"}, {\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-01-14-699420-v2/table-003.webp\", \"caption\": \"\", \"page\": 0, \"index\": 3, \"width\": 1340, \"height\": 1722, \"label\": \"Table\"}, {\"url\": \"assets/tables/biorxiv/biorxiv-10-64898-2026-01-14-699420-v2/table-004.webp\", \"caption\": \"\", \"page\": 0, \"index\": 4, \"width\": 1330, \"height\": 1643, \"label\": \"Table\"}]"
+motivation: 现有生物医学知识抽取忽略生理上下文，将动态交互简化为静态二元关系，造成语义损失和矛盾证据。
+method: 提出AutoBioKG，用复合三元组编码条件与属性，基于BioOpenIE训练抽取模型，并利用伪标签自训练增强泛化。
+result: 在DDI、ChemProt、BioRED零样本F1超过最佳基线3.6-17.8个百分点，并在BioASQ问答中优于现有方法。
+conclusion: AutoBioKG为从非结构化文献构建上下文感知生物医学知识图谱提供了可扩展高效框架，支持科学推理。
+---
+
+## 摘要
+生物医学相互作用本质上是动态的，常常在特定生理状态下发生转变甚至逆转。然而，现有的提取方法将这些复杂机制简化为与上下文无关的二元关联，导致语义损失和矛盾证据。在此，我们提出AutoBioKG，一个端到端框架，通过利用复合三元组在核心关系之外编码环境条件和实体属性，从而构建上下文感知的知识图谱。该框架由在BioOpenIE上训练并利用来自未标注文献的伪标签进行自训练进一步优化的开放信息提取模型驱动，展现出广泛的泛化能力。值得注意的是，AutoBioKG在DDI、ChemProt和BioRED上取得了最高的零样本F1分数，比每个基准上表现最佳的基线高出3.6至17.8个百分点。此外，在BioASQ生物医学问答评估中，AutoBioKG派生的图谱在是非题、事实型和列表型问题上均优于现有方法，尤其是在需要细粒度上下文信息的查询中表现突出。这些结果共同支持AutoBioKG作为一个可扩展的框架，能够将非结构化文献转化为结构化的、上下文感知的生物医学知识。
+
+## Abstract
+Biomedical interactions are inherently dynamic, often shifting or even reversing under specific physiological states. However, existing extraction methods simplify these complex mechanisms into context-agnostic binary associations, resulting in semantic loss and contradictory evidence. Here, we present AutoBioKG, an end-to-end framework that constructs context-aware knowledge graphs by leveraging composite triples to encode environmental conditions and entity attributes alongside core relationships. Powered by an open information extraction model trained on BioOpenIE and further refined through self-training with pseudo-labels from unlabeled literature, the framework exhibits broad generalization. Notably, AutoBioKG achieved the highest zero-shot F1 across DDI, ChemProt, and BioRED, outperforming the best-performing baseline on each benchmark by 3.6-17.8 percentage points. Furthermore, AutoBioKG-derived graphs outperformed existing approaches on yes/no, factoid, and list questions in the BioASQ biomedical question-answering evaluation, particularly for queries requiring fine-grained contextual information. Together, these results support AutoBioKG as a scalable framework for transforming unstructured literature into structured, context-aware biomedical knowledge.
