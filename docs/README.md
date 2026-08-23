@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-22</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-23</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 17 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 10 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>6</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>11</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>5</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>5</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-22 20:45:33 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-23 19:26:00 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共读17篇论文，精读6篇、速读11篇，聚焦个性化医疗与生成式AI前沿。</p>
-<p>最值得关注的是9分高作《自适应多智能体特征选择用于跌倒风险预防》，以及8分《单细胞扰动预测的离散扩散模型》，均指向精准干预与细胞级建模。</p>
-<p>若时间有限，建议优先精读这两篇，并快速浏览7分的半监督学习与扩散模型文章，捕捉个体化治疗与单细胞生成的核心思路。</p>
+<p>今日精读5篇、速读5篇，重点聚焦癌症生存预测与单细胞扰动预测两大方向。最值得关注的是CACSurv（9.0分）利用大模型对齐生存预测，以及D²R²（8.0分）以离散扩散强化单细胞扰动建模。建议优先精读这两篇高分工作，再按兴趣浏览蛋白质变异排序与患者相似度分析。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -73,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">6 篇</strong>
+    <strong class="dpr-home-dashboard-count">5 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Adaptive Multi-Agent Feature Selection for Personalized Fall Risk Prevention">Adaptive Multi-Agent Feature Selection for Personalized Fall Risk Prevention</span></li><li><span class="dpr-home-dashboard-paper-title" title="$D^{2}R^{2}$: Discrete Diffusion with Regulation Reinforcement for Single-Cell Perturbation Prediction">$D^{2}R^{2}$: Discrete Diffusion with Regulation Reinforcement for Single-Cell Perturbation Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records">Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CACSurv: Concordance-Aligned Comparative Learning with Large Language Models for Cancer Survival Prediction">CACSurv: Concordance-Aligned Comparative Learning with Large Language Models for Cancer Survival Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="$D^{2}R^{2}$: Discrete Diffusion with Regulation Reinforcement for Single-Cell Perturbation Prediction">$D^{2}R^{2}$: Discrete Diffusion with Regulation Reinforcement for Single-Cell Perturbation Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Adaptive Multi-Agent Feature Selection for Personalized Fall Risk Prevention">Adaptive Multi-Agent Feature Selection for Personalized Fall Risk Prevention</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -86,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">11 篇</strong>
+    <strong class="dpr-home-dashboard-count">5 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Semi-supervised Concordance Learning for Optimal Individual Treatment Regimes">Semi-supervised Concordance Learning for Optimal Individual Treatment Regimes</span></li><li><span class="dpr-home-dashboard-paper-title" title="bulk2scDiff: A Pseudobulk-Conditioned Diffusion Model for Bulk-to-Single-Cell RNASeq Generation">bulk2scDiff: A Pseudobulk-Conditioned Diffusion Model for Bulk-to-Single-Cell RNASeq Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Generation-Powered Inference for Distribution-Valued Outcomes">Generation-Powered Inference for Distribution-Valued Outcomes</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="A New Trained Supervised Method for Calculating Patient Similarity">A New Trained Supervised Method for Calculating Patient Similarity</span></li><li><span class="dpr-home-dashboard-paper-title" title="PG-LLM: Benchmarking General-Purpose Language Models for Protein Variant Ranking">PG-LLM: Benchmarking General-Purpose Language Models for Protein Variant Ranking</span></li><li><span class="dpr-home-dashboard-paper-title" title="Large language model-assisted discovery of cohorts from scientific literature">Large language model-assisted discovery of cohorts from scientific literature</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>8</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 </div>
 
