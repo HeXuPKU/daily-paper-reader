@@ -1,0 +1,554 @@
+Title: CACSurv: Concordance-Aligned Comparative Learning with Large Language Models for Cancer Survival Prediction
+
+URL Source: https://arxiv.org/pdf/2608.16594v1
+
+Published Time: Tue, 18 Aug 2026 02:08:57 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# CACSurv: Concordance-Aligned Comparative Learning with Large Language Models for Cancer Survival Prediction 
+
+Tianqi Xiang, Qixiang Zhang, Xinpeng Ding, Yi Li, Xiaomeng Li ∗
+
+The Hong Kong University of Science and Technology eexmli@ust.hk 
+
+Abstract 
+
+Cancer survival prediction supports treatment planning, risk stratification, and follow-up management. Existing methods primarily use structured clinical variables, whole-slide im-ages, genomic profiles, or multimodal combinations, while patient reports remain underexplored as primary inputs. We study report-centric survival prediction using reports that or-ganize pathological, clinical, and molecular evidence into co-herent text. Large language models (LLMs) can reason over such reports, but case-wise time regression introduces two fundamental mismatches. First, a formulation mismatch arises because survival evaluation depends on correctly ordering comparable patients, whereas independent time predictions do not enforce inter-patient ranking consistency. Second, a supervision mismatch arises because a censored patient’s ob-served time only indicates survival beyond that point and can-not serve as an exact regression target, although it still implies orderings relative to patients who died earlier. To address these mismatches, we propose CACSurv , a Concordance-Aligned Comparative framework for report-centric survival predic-tion. CACSurv reformulates survival modeling as mini-cohort comparative reasoning, where an LLM predicts relative prog-nostic orderings. We further introduce concordance-aligned rewards derived from comparable relations under right cen-soring, enabling censored outcomes to provide ranking su-pervision without exact event-time targets. During inference, Monte Carlo Reference Aggregation compares each evalua-tion patient with sampled references and aggregates the re-sulting positions into a cohort-level ranking. We establish 
+
+TCGA-SurvReport , a benchmark covering six TCGA can-cer cohorts. CACSurv achieves the highest C-index on all six cohorts and an average C-index of 0.722, outperforming the strongest published survival model by 6.5 percentage points and the strongest LLM time-regression baseline by 4.2 per-centage points. Our code, models, and dataset will be made publicly available at https://github.com/xmed-lab/CACSurv. 
+
+Introduction 
+
+Cancer survival prediction aims to characterize a patient’s prognosis from clinical evidence, providing important sup-port for treatment planning, risk stratification, and follow-up management. Existing computational approaches primar-ily learn from structured clinical variables, whole-slide im-ages (WSIs), genomic profiles, or their multimodal combina-tions (Shao et al. 2021; Chen et al. 2021), typically producing 
+
+> ∗
+
+Corresponding author. 
+
+patient-wise risk scores or survival estimates (Fig. 1(a)). Be-yond these commonly studied modalities, patient reports pro-vide a distinct textual interface that organizes clinically inter-preted evidence, including diagnosis, staging, pathological findings, and molecular characteristics (Kefeli and Tatonetti 2024). Despite their information-rich nature, patient reports remain comparatively underexplored as the primary input for cancer survival prediction. In this work, we investigate report-centric cancer survival analysis, where unified patient reports are directly used to derive prognostic predictions. Recent advances in large language models (LLMs) have enabled effective processing of long-form text and integra-tion of heterogeneous information (Qwen et al. 2025), mak-ing them a natural candidate for report-centric cancer sur-vival analysis. Recent regression-aware LLM studies have further established pointwise scalar prediction as a viable paradigm for language models (Lukasik et al. 2025; Zhang et al. 2026a). Following this direction and the patient-wise formulation of conventional survival models (Fig. 1(a)), a straightforward LLM adaptation is to process each re-port independently and generate an absolute survival time (Fig. 1(b)). However, the ability to perform numerical re-gression does not by itself provide a principled formulation for survival prediction. Although natural for generative mod-els, this case-wise time-regression formulation is not well aligned with either the evaluation or supervision of survival prediction, giving rise to two fundamental mismatches. First, there is a formulation mismatch between case-wise time regression and concordance-based survival evaluation. As shown in Fig. 1(b), a time-regression LLM makes separate scalar predictions for Patients A and B. However, survival models are commonly evaluated by the concordance index (C-index), which measures whether comparable patients are ordered correctly rather than the numerical accuracy of in-dividual predictions. Independent time regression lacks ex-plicit constraints on such inter-patient ordering. Moreover, absolute time regression must accommodate substantially different survival time scales across cancer types, as shown in Fig. 3. Thus, the time-regression formulation focuses on absolute numerical prediction, without directly aligning its objective with the relative prognostic ordering required by survival evaluation. Second, there is a supervision mismatch between exact-time regression and incomplete survival outcomes. As shown arXiv:2608.16594v1 [cs.AI] 17 Aug 2026 B lives 2.5 months. Result : A has a longer survival than B.    
+
+> CACSurv: Patient A lives [ Longer/Shorter ] than B LLM: Patient [X] lives [ length ] months
+> A lives ?months.
+> Patient A
+> Alive at last follow-up 12 months (censored)
+> Patient B
+> Died during follow-up 2.5 months (exact)
+> Patient B
+> Died during follow-up 2.5 months (exact)
+> Patient A
+> Alive at last follow-up 12 months (censored)
+> WSI OMICS
+> Patient A’s risk is 15.3 .
+> WSI/MM: Patient [X] has [ risk ]
+> Case-wise Time Regression
+
+(a) (b) (c)         
+
+> Report Report Report
+> Reasoning: B has higher stage, larger tumor and PNI+.
+> Case-wise Risk Prediction Cohort-wise Survival Ranking Compare
+> Patient A
+> Alive at last follow-up 12 months (censored) Report
+
+Figure 1: Comparison of survival prediction formulations. (a) Conventional WSI/multimodal models predict a case-wise risk score. (b) A straightforward report-based LLM performs case-wise time regression, but patients who remain alive at the last follow-up lack exact-time targets. (c) CACSurv directly ranks patients within a mini-cohort with reliable relative comparisons. by Patient A in the left example of Fig. 1(b), being alive at the last follow-up of 12 months indicates only that the pa-tient survived for at least 12 months, while the true survival time remains unknown. Such right-censored cases are com-mon in survival analysis and account for over 60% of our benchmark (Fig. 3). Treating the follow-up time as an ex-act regression target introduces incorrect supervision, while excluding censored patients discards substantial prognostic information. Importantly, these patients still provide valid ordering relations with patients who died before their last follow-up. Thus, censored outcomes are better represented as partial-order supervision than as exact-time labels. These two mismatches share a common underlying issue: absolute-time regression treats survival as an independent numerical prediction problem, whereas both concordance-based evaluation and the supervision available under right censoring are fundamentally relational. To this end, we propose CACSurv , a Concordance-Aligned Comparative framework for report-centric survival analysis. To handle the formulation mismatch, CACSurv introduces a mini-cohort comparative framework that replaces absolute-time pre-diction with relative prognostic ordering. The model re-ceives a small group of patient reports and predicts their or-dering through comparative reasoning (Fig. 1(c)). This for-mulation makes inter-patient ranking the native prediction target and directly aligns model outputs with concordance-based evaluation. During inference, Monte Carlo Reference Aggregation repeatedly compares each evaluation patient with subsets sampled from a shared cancer-specific refer-ence bank and aggregates the resulting relative positions into a reference-relative survival score. These scores place all evaluation patients on a common scale for cohort-level rank-ing. To resolve the supervision mismatch, CACSurv designs concordance-aligned rewards derived from valid compa-rable relations under right censoring. Rather than treating the last follow-up time of a censored patient as an exact survival target, these rewards evaluate whether the model correctly predicts the reliable partial-order relations implied by the observed outcomes, allowing censored patients to contribute informative supervision without mislabeling their follow-up times as observed event times or excluding them from training. Together, CACSurv aligns its prediction for-mulation, supervision signal, and inference procedure with survival concordance. Our main contributions are as follows: 
+
+• Comparative survival framework. We reformulate report-centric LLM survival analysis from indepen-dent absolute-time generation into mini-cohort prog-nostic ordering, directly aligning model prediction with concordance-based evaluation. 
+
+• Concordance-aligned learning and inference. We in-troduce rewards that exploit valid partial-order super-vision under right censoring and Monte Carlo Refer-ence Aggregation that converts comparative predictions to cohort-level rankings. 
+
+• Comprehensive benchmark and validation. We estab-lish TCGA-SurvReport, a six-cohort benchmark that inte-grates pathological, clinical, and molecular evidence into unified patient reports. CACSurv achieves the highest C-index on all six cohorts, with an average of 0.722, out-performing the strongest published survival model by 6.5 percentage points and the strongest LLM time-regression baseline by 4.2 percentage points. 
+
+Related Work 
+
+Unimodal Cancer Survival Analysis 
+
+Single-modality cancer survival analysis has been ex-tensively studied using structured clinical variables and histopathology images. Traditional approaches apply sta-tistical or deep survival models to structured clinical fea-tures (Cox 1972; Katzman et al. 2018; Lee et al. 2018). In computational pathology, WSI-based methods commonly aggregate patch-level representations through multiple in-stance learning (Lu et al. 2021; Shao et al. 2021), with re-cent studies further improving slide representation, hetero-geneous tissue modeling, and uncertainty estimation (Ding et al. 2025; Wu et al. 2025; Xing et al. 2026). Despite their architectural differences, these methods generally process each patient independently and produce a patient-specific risk score, hazard estimate, or survival distribution. Multimodal Cancer Survival Analysis 
+
+Multimodal cancer survival analysis integrates histopathol-ogy with genomic, transcriptomic, clinical, and textual infor-mation to capture complementary prognostic evidence. Early studies model cross-modal interactions through co-attention or optimal-transport-based alignment (Chen et al. 2021; Xu and Chen 2023), while pathway-aware approaches connect histological representations with biological pathways (Jaume et al. 2024). More recent methods explore structured cross-modal alignment and latent prognostic representations (Bu et al. 2026; Zhang et al. 2026b). Pathology reports and report-derived embeddings have also been incorporated alongside WSIs, molecular profiles, and clinical variables for multi-modal survival prediction (Raza et al. 2025; Song et al. 2026). These multimodal approaches primarily focus on repre-sentation learning and information fusion across heteroge-neous modalities. When pathology reports are incorporated, they are used as an additional modality alongside WSIs, molecular profiles, and clinical variables. Recent studies have also explored LLM-based prognostic assessment from clini-cal notes or pathology reports through LLM-assisted extrac-tion of prognostic variables (Kiermeyer et al. 2026), survival classification at a fixed time point (Phaterpekar et al. 2026), and categorical risk or prognosis prediction (Loeffler et al. 2026; Saluja et al. 2025). These studies address related prog-nostic tasks but differ from censoring-aware survival ranking in their prediction targets and evaluation protocols. CACSurv uses unified patient reports as direct inputs and formulates survival prediction as comparative ranking, replacing inde-pendent patient-wise prediction and aligning its supervision and inference with survival concordance under right censor-ing. 
+
+Methodology 
+
+In this section, we present CACSurv, a concordance-aligned comparative learning framework for report-centric survival prediction, as illustrated in Fig. 2. We first formulate the survival prediction problem and briefly review Group Rela-tive Policy Optimization (GRPO) (Guo et al. 2025). We then introduce comparative mini-cohort ranking during training and Monte Carlo Reference Aggregation during inference, followed by the pair and triplet concordance-aligned rewards used to optimize CACSurv. 
+
+Preliminary 
+
+Problem setup. We consider a cohort of n patients and split it into a training set Ψ = {p1, . . . , p n0 } and an evalua-tion set Ψ∗ = {p∗
+
+> 1
+
+, . . . , p ∗ 
+
+> n1
+
+}, where n0 + n1 = n. Each training patient pi ∈ Ψ is associated with a patient record 
+
+xi and a survival label (ti, δ i), where ti denotes the ob-served time and δi ∈ { 0, 1} indicates whether the event is observed ( δi = 1 , patient dead) or the case is right-censored (δi = 0 , patient alive). For an evaluation patient p∗ 
+
+> j
+
+∈ Ψ∗, the corresponding record and label are denoted by (x∗ 
+
+> j
+
+, t ∗ 
+
+> j
+
+, δ ∗ 
+
+> j
+
+).Only patient reports are provided to CACSurv as model in-puts. The survival outcomes (ti, δ i) of training patients are used solely to construct comparable relations and compute concordance-aligned rewards, and are not included in the model prompt. For evaluation patients, (t∗ 
+
+> j
+
+, δ ∗ 
+
+> j
+
+) are used only for performance evaluation after prediction. Right censoring provides only partial survival information, so we define a patient pair as comparable if and only if the patient with the shorter observed time is not censored. We evaluate prognostic performance using the concordance index (C-index), which measures the agreement between predicted preferences and comparable survival outcomes. 
+
+Group Relative Policy Optimization (GRPO). We employ GRPO (Guo et al. 2025) to optimize the model with reward-based signals. Given an input, the current policy θ samples a set of G candidate outputs {oi}Gi=1 , each associated with a scalar reward Ri. GRPO forms a relative advantage by standardizing each reward within the sampled group: 
+
+Ai = Ri − mean  {Rj }Gj=1 
+
+
+
+std  {Rj }Gj=1 
+
+ . (1) This group-normalized advantage is shared across all tokens in oi, leading to a clipped surrogate objective: 
+
+JGRPO (θ) = 1
+
+G
+
+> G
+
+X
+
+> i=1
+
+1
+
+|oi|
+
+> |oi|
+
+X
+
+> t=1
+
+min 
+
+
+
+ri,t (θ)Ai, ¯ri,t (θ) Ai
+
+
+
+,
+
+(2) where ri,t (θ) is the token-wise likelihood ratio, ¯ri,t (θ) = clip  ri,t (θ), 1 − ϵ, 1 + ϵ, and |oi| is the length of the i-th output. We omit the KL term here for brevity. 
+
+CACSurv for Comparative Survival Ranking 
+
+CACSurv reformulates report-centric survival prediction as a comparison-based ranking problem. Instead of treating each patient as an atomic unit and predicting an absolute survival time or continuous risk score, CACSurv uses mini-cohorts as the basic prediction units and directly learns relative survival orderings among patients. 
+
+Mini-cohort construction. A mini-cohort is a small set of patients sampled from the full cohort, used as the basic pre-diction unit in CACSurv. For training, we sample an index set Ik ⊆ { 1, . . . , n 0} for the k-th mini-cohort Ck from the training set Ψ:
+
+Ck = {pi : i ∈ Ik}, mk = |Ik|. (3) Each mini-cohort consists of patients from the same cancer type, with no duplicate patients within the cohort. For evaluation, we fix a cancer-type-specific reference bank ψ ⊆ Ψ containing training patients of the same cancer type as the evaluation patient. For each evaluation patient 
+
+p∗ 
+
+> j
+
+∈ Ψ∗, we construct K evaluation mini-cohorts by com-bining p∗ 
+
+> j
+
+with a subset of reference patients from ψ:
+
+C∗ 
+
+> j,l
+
+= {p∗ 
+
+> j
+
+} ∪ Rj,l , Rj,l ⊆ ψ, l = 1 , . . . , K. (4) Given any ordering y over a mini-cohort C, we write u ≻y v
+
+if u is preferred to v under y, meaning u is predicted to have a longer survival than v.
+
+Training phase. Given a training mini-cohort Ck, let Xk =
+
+{xi : pi ∈ Ck} denote its corresponding patient reports. CACSurv predicts a survival ordering 
+
+ˆyk = fθ (Xk), (5) Tokenizer Large Language Model        
+
+> ………
+> Patient Profiles:
+> •Patient A: Extensive muscle invasive urothelial carcinoma, high grade, extensive extracapsular extension…
+> •Patient B: Muscle invasive urothelial carcinoma, high grade high mutation count, high tumor break load…
+> •……
+> Comparable Factors :1. Tumor Type: Muscle Invasive Urothelial Carcinoma (PT2 or Above) - All three patients have this. 2. Extracapsular Extension: Yes (A) vs No (B, C) 3. ……
+> Final Decisions:
+> •The most important factors for prognosis are extracapsular extension and … Therefore, Patient A has the worst prognosis, followed by Patient C, and then Patient B.
+
+Monte Carlo Reference Aggregation 
+
+Train Phase Inference Phase 
+
+𝑐 = 2 𝑐 = 3 𝐴 < 𝐵 𝐴 < 𝐶 < 𝐵 𝐵 < 𝐴 (𝑡 !, 𝛿 !), (𝑡 ", 𝛿 "), (𝑡 #, 𝛿 #)
+
+> Prediction Ground Truth
+
+Model Reasoning Model Answer 
+
+GRPO Optimization 
+
+Compare the following patients’ prognosis and survival length: Patient A: < Report A> Patient B: < Report B > (additional for triplets) Patient C: < Report C > 
+
+CACSurv Prompt Mini-Cohort C   
+
+> pair/triplet; 𝐶 = 2 𝑜𝑟 3
+
+Raw Reports Structured Report 
+
+Patient X 
+
+> Survival Length until Last Contact : 12 months Last Contact Vital Status: Alive
+
+…… … 
+
+> Train Cohort Eval Cohort
+
+TCGA-SurvReport Dataset        
+
+> 𝑡 != 12 𝛿 != 0
+> Tr Tr Tr Tr Ev Ev Ev Tr
+
+Patient A   
+
+> Tr
+> 𝑡 "= 6.5 𝛿 "= 1
+
+Patient B   
+
+> Tr
+> 𝑡 #= 18.6 𝛿 $= 0
+
+Patient C   
+
+> Tr
+> 𝑡 %= 22.3 𝛿 %= 1
+> The final survival ranking of the mini-cohort is:
+
+A<C<B 
+
+Concordance Aligned Rewards 
+
+… Eval Cohort Ev Ev Ev Ev Ev 
+
+> For each Eval Patient
+
+… 
+
+> Reference bank
+
+⊆ Train Cohort              
+
+> Tr Tr Tr Ev
+> Eval Mini-Cohorts x K
+> Ev Tr Tr Ev Tr Tr Ev Tr Tr
+> MCRA Score 0.1
+> Ev Tr Tr Mini-Cohort 0 Rank Pos. 2/3
+> Ev Tr Mini-Cohort 1 Rank Pos. 1/2
+> Ev
+> …
+> Ev Tr Tr
+> Mini-Cohort K Rank Pos. 3/3
+> Sort with MCRA Score.
+
+… Ev Ev Ev Ev Ev         
+
+> 0.35 0.6 0.83 0.9 0.6
+> …
+> Predicted Survival Ordering 12312123
+> CACSurv Prediction
+
+Pair Correctness Reward R 2
+
+Triplet Concordance Reward R 3Figure 2: Overview of CACSurv. During training, CACSurv learns survival orderings over pair and triplet mini-cohorts using concordance-aligned rewards and GRPO. During inference, Monte Carlo Reference Aggregation constructs multiple mini-cohorts for each evaluation patient using randomly sampled reference patients, then averages its normalized rank positions to obtain the final cohort-level survival ordering. where ˆyk orders the patients in Ck from shorter to longer predicted survival. We optimize fθ with GRPO using the concordance-aligned rewards defined below. Repeated training over different mini-cohorts exposes the model to inter-patient survival relations and directly encourages concordance-consistent ranking behavior. 
+
+Inference phase (Monte Carlo Reference Aggregation). 
+
+For each evaluation mini-cohort C∗
+
+j,l , CACSurv takes the corresponding patient reports X∗
+
+j,l as input and predicts an ordering ˆy∗
+
+j,l = fθ (X∗
+
+j,l ). We compute the normalized rank position of the evaluation patient p∗
+
+j as: 
+
+s(p∗
+
+j ; C∗
+
+j,l , ˆy∗
+
+j,l ) = 
+
+n
+
+u ∈ C∗
+
+j,l \ { p∗
+
+j } : p∗
+
+j ≻ˆy∗ 
+
+> j,l
+
+u
+
+o
+
+|C∗
+
+j,l | − 1 . (6) We aggregate its relative positions across K mini-cohorts: 
+
+S(p∗
+
+j ) = 1
+
+K
+
+KX
+
+l=1 
+
+s(p∗
+
+j ; C∗
+
+j,l , ˆy∗
+
+j,l ). (7) A larger S(p∗
+
+j ) indicates longer predicted survival. The final full cohort-level ordering is obtained by sorting the evalua-tion patients in ascending order of S(p∗
+
+j ).Under uniform random sampling from the reference bank, each normalized rank position is a bounded Monte Carlo ob-servation of the patient’s reference-relative position. There-fore, 
+
+E[S(p∗
+
+j )] = μj = ER∼ψ [s(p∗
+
+j ; CR, ˆyR)] , (8) and S(p∗
+
+j ) converges to μj as K increases. When the pre-dicted preferences are consistent across mini-cohorts, μj cor-responds to the proportion of reference patients predicted to have shorter survival than p∗
+
+j , providing a reference-relative approximation of its global position. MCRA avoids direct comparisons among evaluation pa-tients and assigns each patient a fixed number of comparisons independent of the evaluation cohort size, allowing it to sup-port both small evaluation cohorts and sequential patient arrival. 
+
+Concordance-aligned Rewards 
+
+Our concordance-aligned rewards convert censored survival outcomes into reliable preference supervision. If a patient is right-censored at time ti, the patient is known to have survival longer than any patient who died before ti, even though the exact survival time remains unknown. Based on such comparable relations, we define a pair correctness reward for pair mini-cohorts and a triplet concordance reward for mini-cohorts of size three or beyond. 
+
+Pair correctness reward ( |C| = 2 ). For a pair mini-cohort 
+
+C = {pi, p j }, we ensure during construction that the two patients are comparable. Given a predicted ordering ˆy, we define the correctness reward as 
+
+R2(C, ˆy) = 1ti < t j
+
+ · 1pj ≻ˆy pi
+
+ + 1tj < t i
+
+ · 1pi ≻ˆy pj
+
+.
+
+(9) 
+
+Since pair comparability is enforced during construction, the event indicator is omitted from Eq. 9. Triplet concordance reward ( |C| ≥ 3). For a triplet mini-cohort C, right censoring may make only a subset of patient pairs comparable. We define the set of comparable directed relations within C as 
+
+V(C) = {(pu, p v ) ∈ C × C : u̸ = v, t v < t u, δ v = 1 } .
+
+(10) The triplet concordance reward encourages ordering consis-tency over all comparable relations in V(C):
+
+R3(C, ˆy) = 
+
+
+
+> 1
+> |V (C)|
+
+P 
+
+> (pu,p v)∈V (C)
+
+1[ pu ≻ˆy pv ], |V (C)| > 0,
+
+0, |V (C)| = 0 .
+
+(11) 
+
+Note that this formulation also naturally accepts mini-cohorts with more than three patients by defining V(C) over all within-cohort comparable relations. Therefore, we define the unified concordance-aligned reward as 
+
+R(C, ˆy) = 1[|C| = 2] · R2(C, ˆy) + 1[|C| ≥ 3] · R3(C, ˆy),
+
+(12) which is used as the reward signal for GRPO optimization during training. 
+
+Experiments 
+
+Dataset Construction and Cohort Statistics 
+
+We construct TCGA-SurvReport, a report-centric survival dataset covering six TCGA cancer cohorts: BLCA, BRCA, COADREAD, HNSC, LUAD, and STAD. For each pa-tient, we collect OCR-derived pathology text from TCGA-Reports (Kefeli and Tatonetti 2024), clinical records, and molecular profiles, which provide complementary patholog-ical, demographic, clinical, and molecular information. The three sources are aligned using TCGA patient identifiers. The released OCR text follows heterogeneous report for-mats and contains duplicated content, administrative state-ments, and detailed specimen-processing descriptions. To address these issues, we use Qwen2.5-72B-Instruct with a fixed extractive prompt to remove irrelevant content and or-ganize the retained information into a standardized patient report. The model is prohibited from adding diagnoses, med-ical facts, prognostic interpretations, or clinical implications absent from the source records. We manually reviewed a sampled subset of processed reports to assess their factual consistency with the corresponding source records. Observed time and vital status are extracted separately as survival labels and are not included in the unified patient reports. We retain patients with both a valid unified report and an available survival record. Fig. 3 summarizes the cohort statistics across the six cancer types. 
+
+Baselines 
+
+We compare CACSurv with representative WSI-based and multimodal survival models, including TransMIL (Shao et al. 2021), TITAN (Ding et al. 2025), MCAT (Chen et al. 2021), MOTCat (Xu and Chen 2023), SurvPath (Jaume et al. 2024), PS3 (Raza et al. 2025), PAMoE (Wu et al. 2025), CIMA (Bu et al. 2026), SlotSPE (Zhang et al. 2026b), and DPSurv (Xing et al. 2026). These baselines cover WSI-only, TCGA-BLCA       
+
+> Cancer Cohort Survival Status Observed-time Distribution
+> 205 172 TCGA-BRCA TCGA-COADREAD TCGA-HNSC TCGA-LUAD TCGA-STAD N = 377
+> N = 1032 N = 579 N = 520 N = 485 N = 358 887 145 474 105 298 222 306 179 211 147
+> 48 96 144 0Month
+> Alive / Censored Dead / Event
+> 20% 40% 20% 40% 20% 40% 20% 40% 20% 40% 20% 40%
+
+Figure 3: Cohort statistics of TCGA-SurvReport. For each cancer cohort, we report the number of patients, the pro-portions of alive/censored and dead/event cases, and their observed-time distributions. Observed time denotes the last follow-up time for censored patients and the event time for deceased patients. Each curve shows the percentage of pa-tients within the corresponding status group in each time interval. histology–molecular, and histology–report–molecular sur-vival prediction settings. For report-centric comparison, we include Tabular-CoxPH (Cox 1972), Tabular-DeepHit (Lee et al. 2018), PubMedBERT-DeepSurv (Katzman et al. 2018), and BioMistral-CoxPH (Song et al. 2026). We further con-struct LLM-based time-regression baselines using zero-shot inference with Qwen2.5-7B/72B-Instruct (Qwen et al. 2025) and supervised fine-tuning with Qwen2.5-7B-Instruct. 
+
+Implementation and Evaluation Protocol 
+
+All methods are evaluated using the same patient cohorts and identical patient-level five-fold cross-validation splits. Mod-els are trained only on the training patients of each fold, and performance is reported as the mean and standard deviation of the C-index across the five folds. All baseline results are obtained by rerunning the corresponding methods under this unified evaluation protocol. For WSI-based methods, we use CONCHv1.5 (Lu et al. 2024) to extract patch features. PS3 uses PLIP (Huang et al. 2023) as it requires aligned image and text en-coders. Molecular inputs are processed following the orig-inal implementation of each method. Tabular-CoxPH and Tabular-DeepHit use structured prognostic variables ex-tracted from the reports, while PubMedBERT-DeepSurv and BioMistral-CoxPH use report embeddings produced by Pub-MedBERT (Gu et al. 2021) and BioMistral (Labrak et al. 2024), respectively. CACSurv uses Qwen2.5-7B-Instruct as the backbone. For Method BLCA BRCA COADREAD HNSC LUAD STAD AVG@6 
+
+WSI/Multimodal Survival Models 
+
+TransMIL 0.571 ±0.083 0.640 ±0.056 0.642 ±0.084 0.568 ±0.068 0.548 ±0.027 0.599 ±0.052 0.595 ±0.039 
+
+TITAN 0.625 ±0.065 0.666 ±0.033 0.649 ±0.060 0.586 ±0.033 0.607 ±0.048 0.548 ±0.074 0.613 ±0.043 
+
+PAMoE 0.646 ±0.054 0.704 ±0.038 0.702 ±0.050 0.620 ±0.032 0.646 ±0.035 0.612 ±0.070 0.655 ±0.036 
+
+DPSurv 0.611 ±0.064 0.600 ±0.055 0.585 ±0.089 0.531 ±0.074 0.570 ±0.020 0.536 ±0.041 0.572 ±0.033 
+
+MCAT 0.620 ±0.012 0.564 ±0.026 0.612 ±0.052 0.518 ±0.024 0.571 ±0.031 0.528 ±0.075 0.569 ±0.042 
+
+MOTCat 0.623 ±0.012 0.570 ±0.041 0.617 ±0.030 0.548 ±0.018 0.561 ±0.022 0.531 ±0.075 0.575 ±0.050 
+
+SurvPath 0.581 ±0.038 0.623 ±0.086 0.657 ±0.095 0.539 ±0.032 0.571 ±0.035 0.562 ±0.075 0.589 ±0.043 
+
+PS3 0.638 ±0.075 0.632 ±0.056 0.613 ±0.083 0.622 ±0.023 0.658 ±0.033 0.556 ±0.049 0.620 ±0.061 
+
+CIMA 0.605 ±0.082 0.607 ±0.010 0.643 ±0.054 0.576 ±0.027 0.609 ±0.034 0.542 ±0.092 0.597 ±0.034 
+
+SlotSPE 0.658 ±0.007 0.709 ±0.009 0.710 ±0.006 0.607 ±0.016 0.656 ±0.016 0.601 ±0.009 0.657 ±0.045 
+
+Report-centric Survival Models 
+
+Tabular-CoxPH 0.623 ±0.046 0.619 ±0.071 0.683 ±0.045 0.591 ±0.035 0.654 ±0.048 0.598 ±0.085 0.628 ±0.032 
+
+Tabular-DeepHit 0.618 ±0.034 0.651 ±0.046 0.696 ±0.041 0.589 ±0.034 0.671 ±0.034 0.621 ±0.078 0.641 ±0.036 
+
+PubMedBERT-DeepSurv 0.493 ±0.092 0.609 ±0.062 0.596 ±0.051 0.564 ±0.072 0.595 ±0.025 0.507 ±0.029 0.561 ±0.045 
+
+BioMistral-CoxPH 0.489 ±0.046 0.582 ±0.052 0.615 ±0.037 0.515 ±0.047 0.528 ±0.061 0.539 ±0.066 0.545 ±0.046 
+
+Qwen2.5-7B Time-ZS 0.504 ±0.009 0.693 ±0.036 0.669 ±0.024 0.518 ±0.010 0.573 ±0.035 0.553 ±0.029 0.585 ±0.072 
+
+Qwen2.5-72B Time-ZS 0.646 ±0.053 0.711 ±0.051 0.745 ±0.043 0.646 ±0.025 0.663 ±0.060 0.670 ±0.050 0.680 ±0.047 
+
+Qwen2.5-7B Time-SFT 0.629 ±0.049 0.607 ±0.093 0.649 ±0.064 0.620 ±0.048 0.615 ±0.020 0.634 ±0.038 0.626 ±0.013 
+
+CACSurv-7B (Pair-only) 0.661 ±0.060 0.745 ±0.074 0.766 ±0.057 0.667 ±0.040 0.687 ±0.046 0.683 ±0.054 0.702 ±0.040 
+
+CACSurv-7B 0.685 ±0.061 0.763 ±0.063 0.806 ±0.058 0.689 ±0.046 0.693 ±0.064 0.698 ±0.047 0.722 ±0.046 
+
+Table 1: Main results from 5-fold cross-validation on TCGA-SurvReport (C-index, mean ±std). Time-ZS and Time-SFT denote direct survival-time prediction using zero-shot inference and supervised fine-tuning, respectively. Pair-only uses only pair mini-cohorts during both training and inference. Best results are shown in bold , and second-best results are underlined. each fold, we sample 1,000 pair and 1,000 triplet mini-cohorts from each cancer type and optimize the model for one epoch. Each pair is constructed to be comparable, and each triplet contains at least one comparable patient pair. During training, observed time and vital status are used only to enforce these sampling constraints and compute the concordance-aligned rewards; only patient reports are pro-vided to the model. During inference, the training patients form the reference bank, and each test patient is compared against K = 40 randomly sampled reference mini-cohorts. Test survival outcomes, including observed time and vital status, are used only after prediction to calculate the final C-index. 
+
+Comparisons with State-of-the-Art Methods 
+
+Table 1 presents the survival prediction results across the six cancer cohorts. CACSurv achieves the highest C-index on every cohort and the best average C-index of 0.722. Its simplified pair-only variant consistently ranks second, with an average C-index of 0.702. Among existing published survival models, SlotSPE achieves the strongest average performance of 0.657. CAC-Surv exceeds SlotSPE by 6.5 percentage points and con-sistently outperforms the evaluated WSI-based, multimodal, and conventional report-centric survival models. These re-sults highlight the strong prognostic value of unified patient reports and the effectiveness of comparative survival model-ing. We further construct LLM-based time-regression base-lines that directly predict absolute survival time from each re-port. CACSurv with a 7B backbone outperforms the strongest of these baselines, Qwen2.5-72B Time-ZS, by 4.2 percent-age points, indicating that comparative prediction is more effective for this task than direct absolute-time regression. 
+
+Setting Eval.Pair Eval.Mix 
+
+Train.Pair 0.702 0.703 
+
+Train.Mix 0.715 0.722 
+
+Table 2: Ablation on pair and triplet mini-cohort instantia-tions during training and inference. Mix means Pair+Triplet. 
+
+Optimization BLCA COADREAD HNSC AVG@6 
+
+Rank-SFT 0.656 0.740 0.653 0.682 
+
+Ours 0.685 0.806 0.689 0.722 
+
+Table 3: Ablation of ranking-based SFT and our concordance -aligned reward optimization under the same comparative formulation. 
+
+Ablation on Pair and Mixed Mini-Cohorts 
+
+We evaluate pair and triplet mini-cohort compositions during both training and inference in Table 2. Train.Pair trains with 2,000 pair mini-cohorts, whereas Train.Mix trains with 1,000 pairs and 1,000 triplets, keeping the total number of training mini-cohorts, backbone, data splits, and training epochs un-changed. Pair-and-triplet training consistently outperforms pair-only training, improving the average C-index from 0.702 to 0.715 under pair inference and from 0.703 to 0.722 under pair-and-triplet inference. The best performance is achieved when mixed mini-cohorts are used in both stages, indicating that triplet relations provide complementary comparative su-pervision and can be further exploited during inference. 
+
+Ablation on Reward-based Optimization 
+
+We compare Rank-SFT and concordance-aligned reward op-timization under identical settings, varying only the opti-mization method. Rank-SFT directly fine-tunes the model to generate the target ranking, whereas CACSurv optimizes the concordance-aligned rewards with GRPO. Table 3 re-ports three representative cohorts and the six-cohort average for compactness, while CACSurv consistently outperforms Rank-SFT across all six cohorts. Overall, concordance-aligned reward optimization improves the average C-index from 0.682 to 0.722, demonstrating its effectiveness beyond directly supervising the target ranking. 
+
+Setting K = 10 K = 20 K = 40 K = 80 
+
+Train.Pair, Eval.Pair 0.692 0.700 0.702 0.704 Train.Mix, Eval.Pair 0.701 0.707 0.715 0.718 
+
+Train.Mix, Eval.Mix 0.706 0.715 0.722 0.723 
+
+Table 4: Sensitivity to the number of reference comparisons 
+
+K during inference. Mix means Pair+Triplet. 
+
+Sensitivity to Number of Reference Comparisons 
+
+Table 4 reports the sensitivity to the number of reference comparisons K. We keep the trained models and all other inference settings unchanged for fairness. Performance im-proves consistently as K increases and largely converges at 
+
+K = 40 . Under CACSurv’s default setting (Train.Mix and Eval.Mix), further increasing K from 40 to 80 only improves the C-index from 0.722 to 0.723. We therefore adopt K = 40 
+
+as an acceptable accuracy-complexity tradeoff. 
+
+CACSurv Rollout Example 
+
+Fig. 4 presents a CACSurv rollout example for a pair mini-cohort. The model first identifies patient-specific prognostic factors, then compares the two patients based on the extracted evidence, and finally produces the survival ranking. This example shows how CACSurv converts report evidence into an explicit comparative prediction. 
+
+Conclusion 
+
+We present CACSurv, a concordance-aligned comparative framework for report-centric cancer survival prediction. CACSurv addresses the formulation and supervision mis-matches of conventional LLM-based time regression by di-rectly predicting prognostic orderings within mini-cohorts and optimizing concordance-aligned rewards derived from valid comparable relations under right censoring. Monte [Key prognostic factors] 
+
+> Patient A: Stage III; T4; high grade; perineural invasion present. Patient A: Extraperitoneal extension present; hypoxia score = 60. Patient B: Stage II; T2b; high grade; lymphovascular invasion present. Patient B: Deep muscularis propria invasion; Karnofsky score = 80.
+> [Decision Making]:
+> Patient A has worse prognosis due to higher stage, larger tumor, perineural invasion, and extraperitoneal extension. Final ranking: A, B
+> [Key comparisons]
+> 1. AJCC Pathologic Stage: A (III) vs B (II) - A worse 2. AJCC Pathologic T-Stage: A (T4) vs B (T2b) - A worse 3. Neoplasm Histologic Grade: A (high) vs B (high) - Equal 4. Perineural Invasion: A (present) vs B (not identified) - A worse
+
+Model Reasoning 
+
+<think> </think> 
+
+Model Answer 
+
+The final survival ranking of this mini-cohort is A, B. <answer> </answer> 
+
+Figure 4: Example CACSurv rollout on a pair mini-cohort. In the <think> section, the model identifies patient-specific prognostic factors, compares discriminative evidence across patients, and derives a ranking decision. The predicted survival ordering is then returned in the 
+
+<answer> section. Carlo Reference Aggregation further converts these local comparative predictions into stable cohort-level survival rankings. We also establish TCGA-SurvReport, a unified report-centric benchmark spanning six TCGA cancer co-horts. Under identical patient-level five-fold cross-validation splits, CACSurv achieves the best performance among all evaluated methods on every cohort, with an average C-index of 0.722, exceeding the strongest published survival model by 6.5 percentage points and the strongest LLM time-regression baseline by 4.2 percentage points. Further analyses show that pair and triplet mini-cohorts provide complementary bene-fits during training and inference, and concordance-aligned reward optimization consistently outperforms ranking-based SFT. These findings demonstrate that aligning the prediction target, learning signal, and inference procedure with survival concordance provides an effective approach to LLM-based survival analysis under right censoring. 
+
+References 
+
+Bu, Y.; Niu, Q.; Li, Z.; Xu, Y.; Wang, J.; and Yu, G. 2026. Cancer survival prediction by cyclic generation and multi-grained alignment. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, 19781–19789. Chen, R. J.; Lu, M. Y.; Weng, W.-H.; Chen, T. Y.; Williamson, D. F.; Manz, T.; Shady, M.; and Mahmood, F. 2021. Multi-modal co-attention transformer for survival prediction in gi-gapixel whole slide images. In Proceedings of the IEEE/CVF international conference on computer vision , 4015–4025. Cox, D. R. 1972. Regression models and life-tables. Journal of the royal statistical society: Series B (methodological) ,34(2): 187–202. Ding, T.; Wagner, S. J.; Song, A. H.; Chen, R. J.; Lu, M. Y.; Zhang, A.; Vaidya, A. J.; Jaume, G.; Shaban, M.; Kim, A.; et al. 2025. A multimodal whole-slide foundation model for pathology. Nature medicine , 1–13. Gu, Y.; Tinn, R.; Cheng, H.; Lucas, M.; Usuyama, N.; Liu, X.; Naumann, T.; Gao, J.; and Poon, H. 2021. Domain-specific language model pretraining for biomedical natural language processing. ACM Transactions on Computing for Healthcare (HEALTH) , 3(1): 1–23. Guo, D.; Yang, D.; Zhang, H.; Song, J.; Wang, P.; Zhu, Q.; Xu, R.; Zhang, R.; Ma, S.; Bi, X.; et al. 2025. DeepSeek-R1 incentivizes reasoning in LLMs through reinforcement learning. Nature , 645(8081): 633–638. Huang, Z.; Bianchi, F.; Yuksekgonul, M.; Montine, T. J.; and Zou, J. 2023. A visual–language foundation model for pathol-ogy image analysis using medical twitter. Nature medicine ,29(9): 2307–2316. Jaume, G.; Vaidya, A.; Chen, R. J.; Williamson, D. F.; Liang, P. P.; and Mahmood, F. 2024. Modeling dense multimodal interactions between biological pathways and histology for survival prediction. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition , 11579– 11590. Katzman, J. L.; Shaham, U.; Cloninger, A.; Bates, J.; Jiang, T.; and Kluger, Y. 2018. DeepSurv: personalized treatment recommender system using a Cox proportional hazards deep neural network. BMC medical research methodology , 18(1): 24. Kefeli, J.; and Tatonetti, N. 2024. TCGA-Reports: A machine-readable pathology report resource for benchmark-ing text-based AI models. Patterns , 5(3). Kiermeyer, N.; Lenfers, T.; Dada, A.; Friedrich, J.; Khattab, S.; Knop, E.; Egger, J.; Pauly, M.; Jung, A.; Montavon, G.; et al. 2026. Large language models enable prognostic strat-ification of cancer patients using real-world clinical notes. 
+
+PLOS digital health , 5(7): e0001546. Labrak, Y.; Bazoge, A.; Morin, E.; Gourraud, P.-A.; Rou-vier, M.; and Dufour, R. 2024. Biomistral: A collection of open-source pretrained large language models for medical domains. In Findings of the association for computational linguistics: acl 2024 , 5848–5864. Lee, C.; Zame, W.; Yoon, J.; and Van Der Schaar, M. 2018. Deephit: A deep learning approach to survival analysis with competing risks. In Proceedings of the AAAI conference on artificial intelligence , volume 32. Loeffler, C. M.; Reitsam, N. G.; Wolf, F.; Stueker, E. H.; Muti, H. S.; Wiest, I. C.; and Kather, J. N. 2026. SCRIPT: Stratified clinical risk prediction from pathology reports us-ing large language models. Journal of Pathology Informatics ,22: 100673–100673. Lu, M. Y.; Chen, B.; Williamson, D. F.; Chen, R. J.; Liang, I.; Ding, T.; Jaume, G.; Odintsov, I.; Le, L. P.; Gerber, G.; et al. 2024. A visual-language foundation model for computational pathology. Nature medicine , 30(3): 863–874. Lu, M. Y.; Williamson, D. F.; Chen, T. Y.; Chen, R. J.; Barbieri, M.; and Mahmood, F. 2021. Data-efficient and weakly supervised computational pathology on whole-slide images. Nature biomedical engineering , 5(6): 555–570. Lukasik, M.; Meng, Z.; Narasimhan, H.; Chang, Y.-W.; Menon, A. K.; Yu, F.; and Kumar, S. 2025. Better autoregres-sive regression with LLMs via regression-aware fine-tuning. In The Thirteenth International Conference on Learning Rep-resentations .Phaterpekar, T.; Zeng, Z.; Mali, Y.; Leung, B.; Ho, C.; Ng, R.; Bates, A.; and Nunez, J. 2026. Investigating fine-tuning versus zero-shot learning for general large language models when predicting cancer survival from initial oncology con-sultation documents. ESMO Real World Data and Digital Oncology , 12: 100703–100703. Qwen; Yang, A.; Yang, B.; Zhang, B.; et al. 2025. Qwen2.5 Technical Report. arXiv:2412.15115. Raza, M.; Azam, A.; Qaiser, T.; and Rajpoot, N. 2025. Ps3: A multimodal transformer integrating pathology reports with histology images and biological pathways for cancer survival prediction. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 22175–22186. Saluja, R.; Rosenthal, J.; Windon, A.; Artzi, Y.; Pisapia, D. J.; Liechty, B. L.; and Sabuncu, M. R. 2025. Cancer type, stage and prognosis assessment from pathology reports using LLMs. Scientific Reports , 15(1): 27300. Shao, Z.; Bian, H.; Chen, Y.; Wang, Y.; Zhang, J.; Ji, X.; et al. 2021. Transmil: Transformer based correlated multiple instance learning for whole slide image classification. Ad-vances in neural information processing systems , 34: 2136– 2147. Song, S.; Borjigin-Wang, M.; Madejski, I. R.; and Gross-man, R. L. 2026. Multimodal Cancer Modeling in the Age of Foundation Model Embeddings. In Argaw, P.; Zhang, H.; Jabbour, S.; Chandak, P.; Ji, J.; Mukherjee, S.; Salaudeen, O.; Chang, T.; Healey, E.; Gröger, F.; Adibi, A.; Hegsel-mann, S.; Wild, B.; and Noori, A., eds., Proceedings of the Fifth Machine Learning for Health Symposium , volume 297 of Proceedings of Machine Learning Research , 202–227. PMLR. Wu, J.; Chen, M.; Ke, X.; Xun, T.; Jiang, X.; Zhou, H.; Shao, L.; and Kong, Y. 2025. Learning heterogeneous tissues with mixture of experts for gigapixel whole slide images. In 
+
+Proceedings of the Computer Vision and Pattern Recognition Conference , 5144–5153. Xing, Y.; Huang, L.; Ma, J.; Hong, R.; Qiu, J.; Liu, P.; He, K.; Fu, H.; and Feng, M. 2026. DPsurv: Dual-Prototype Eviden-tial Fusion for Uncertainty-Aware and Interpretable Whole Slide Image Survival Prediction. In Forty-third International Conference on Machine Learning .Xu, Y.; and Chen, H. 2023. Multimodal optimal transport-based co-attention transformer with global structure con-sistency for survival prediction. In Proceedings of the IEEE/CVF international conference on computer vision ,21241–21251. Zhang, Y.; Chen, T.; Zhou, M.; Leong, O.; Wu, Y. N.; and Lukasik, M. 2026a. REAL: Regression-Aware Reinforce-ment Learning for LLM-as-a-Judge. In Forty-third Interna-tional Conference on Machine Learning .Zhang, Y.; Nanbo, L.; Yang, C.; Schmidhuber, J.; and Gao, X. 2026b. Structural Prognostic Event Modeling for Multimodal Cancer Survival Analysis. In The Fourteenth International Conference on Learning Representations .
