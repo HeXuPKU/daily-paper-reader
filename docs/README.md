@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-24</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-25</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 17 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 8 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>6</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>11</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>4</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>4</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-24 20:40:32 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-25 20:43:48 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共筛选17篇论文，精读6篇、速读11篇，重点集中在临床预测与大语言模型应用。</p>
-<p>最值得关注的是精读榜首《Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records》，其可解释性临床预测方向值得深入；同时《Large language model-assisted discovery of cohorts from scientific literature》展示了LLM辅助文献分析潜力。</p>
-<p>建议优先精读这两篇高分解释性论文，并结合速读中的单细胞生成与患者相似度方法，横向探索临床NLP与生物信息学交叉热点。</p>
+<p>今日聚焦8篇论文，涵盖医疗AI、统计学习和蛋白质建模。</p>
+<p>最值得精读：自适应多智能体特征选择用于跌倒风险预防（9.0分），及可解释Transformer用于临床预测（8.0分）。</p>
+<p>建议优先深读这两篇高分精读，再浏览稀疏套索与蛋白质变异推断等速读文章。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -73,12 +73,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">6 篇</strong>
+    <strong class="dpr-home-dashboard-count">4 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records">Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records</span></li><li><span class="dpr-home-dashboard-paper-title" title="Large language model-assisted discovery of cohorts from scientific literature">Large language model-assisted discovery of cohorts from scientific literature</span></li><li><span class="dpr-home-dashboard-paper-title" title="CACSurv: Concordance-Aligned Comparative Learning with Large Language Models for Cancer Survival Prediction">CACSurv: Concordance-Aligned Comparative Learning with Large Language Models for Cancer Survival Prediction</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Adaptive Multi-Agent Feature Selection for Personalized Fall Risk Prevention">Adaptive Multi-Agent Feature Selection for Personalized Fall Risk Prevention</span></li><li><span class="dpr-home-dashboard-paper-title" title="Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records">Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records</span></li><li><span class="dpr-home-dashboard-paper-title" title="DeMixPert: Decomposed Response Modeling with Gaussian Mixtures for OOD Single-Cell Perturbation Prediction">DeMixPert: Decomposed Response Modeling with Gaussian Mixtures for OOD Single-Cell Perturbation Prediction</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -86,12 +86,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">11 篇</strong>
+    <strong class="dpr-home-dashboard-count">4 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="bulk2scDiff: A Pseudobulk-Conditioned Diffusion Model for Bulk-to-Single-Cell RNASeq Generation">bulk2scDiff: A Pseudobulk-Conditioned Diffusion Model for Bulk-to-Single-Cell RNASeq Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="A New Trained Supervised Method for Calculating Patient Similarity">A New Trained Supervised Method for Calculating Patient Similarity</span></li><li><span class="dpr-home-dashboard-paper-title" title="mLS-GKM: Efficient Multi-class Regulatory Sequence Classification with Gapped k-mer SVMs">mLS-GKM: Efficient Multi-class Regulatory Sequence Classification with Gapped k-mer SVMs</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="A Sparse-Group Pliable Lasso">A Sparse-Group Pliable Lasso</span></li><li><span class="dpr-home-dashboard-paper-title" title="Inferring Protein Variant Impacts Across Contexts">Inferring Protein Variant Impacts Across Contexts</span></li><li><span class="dpr-home-dashboard-paper-title" title="bulk2scDiff: A Pseudobulk-Conditioned Diffusion Model for Bulk-to-Single-Cell RNASeq Generation">bulk2scDiff: A Pseudobulk-Conditioned Diffusion Model for Bulk-to-Single-Cell RNASeq Generation</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>7</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>3</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 </div>
 
