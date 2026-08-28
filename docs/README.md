@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-26</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-28</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 12 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 15 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>2</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>10</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>6</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>9</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-26 22:19:22 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-28 02:57:50 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读聚焦DNA基础模型与临床可解释预测，共扫描12篇论文。</p>
-<p>最值得看：抗塌缩多模态融合的自监督DNA模型（9.0分），以及基于结构化电子病历的可解释Transformer（8.0分）。</p>
-<p>建议普通读者优先关注AI辅助基因组解读和临床决策支持这两个落地方向。</p>
+<p>今日共读15篇论文，精读聚焦可解释临床预测与母婴健康模型。最值得关注：结构化电子病历上的可解释Transformer，以及面向孕产妇/新生儿结局的GRU-D-Static框架。下一步建议优先理解临床预测模型的可解释性，再扩展关注单细胞与DNA基础模型的统一化趋势。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -73,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">2 篇</strong>
+    <strong class="dpr-home-dashboard-count">6 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="A self-supervised DNA foundation model with collapse-resistant multimodal fusion">A self-supervised DNA foundation model with collapse-resistant multimodal fusion</span></li><li><span class="dpr-home-dashboard-paper-title" title="Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records">Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records">Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records</span></li><li><span class="dpr-home-dashboard-paper-title" title="Knowledge-guided Transfer Prediction In Underrepresented Populations: A GRU-D-Static Framework For Maternal And Neonatal Outcomes">Knowledge-guided Transfer Prediction In Underrepresented Populations: A GRU-D-Static Framework For Maternal And Neonatal Outcomes</span></li><li><span class="dpr-home-dashboard-paper-title" title="Random Hazard Forests">Random Hazard Forests</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>2</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -86,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">10 篇</strong>
+    <strong class="dpr-home-dashboard-count">9 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Knowledge-guided Transfer Prediction In Underrepresented Populations: A GRU-D-Static Framework For Maternal And Neonatal Outcomes">Knowledge-guided Transfer Prediction In Underrepresented Populations: A GRU-D-Static Framework For Maternal And Neonatal Outcomes</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Semantic + Neuronal Approach to Predict Pathogenic Variants in DNA Sequences">A Semantic + Neuronal Approach to Predict Pathogenic Variants in DNA Sequences</span></li><li><span class="dpr-home-dashboard-paper-title" title="A permutation-free family-wise error rate for the moderated top-gene scan under gene correlation">A permutation-free family-wise error rate for the moderated top-gene scan under gene correlation</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="scUnify: a unified framework for training and inference across multiple single-cell foundation models">scUnify: a unified framework for training and inference across multiple single-cell foundation models</span></li><li><span class="dpr-home-dashboard-paper-title" title="A self-supervised DNA foundation model with collapse-resistant multimodal fusion">A self-supervised DNA foundation model with collapse-resistant multimodal fusion</span></li><li><span class="dpr-home-dashboard-paper-title" title="OmicSync: Reliability-Aware Spatial Multi-Omics Clustering with Evidence-Constrained LLM Reasoning">OmicSync: Reliability-Aware Spatial Multi-Omics Clustering with Evidence-Constrained LLM Reasoning</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>7</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>6</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>3</strong></span></div>
 </section>
 </div>
 

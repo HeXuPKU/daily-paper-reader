@@ -1,0 +1,1442 @@
+Title: Random Hazard Forests
+
+URL Source: https://arxiv.org/pdf/2608.21597v1
+
+Published Time: Tue, 25 Aug 2026 00:11:12 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+> Submitted to the Annals of Applied Statistics
+
+RANDOM HAZARD FORESTS 
+
+BY HEMANT ISHWARAN 1,a , E ILEEN M. H SICH 2,b ,UDAYA B. K OGALUR 3,c AND DONALD K. K. L EE 4,d    
+
+> 1Division of Biostatistics, Department of Public Health Sciences, Miller School of Medicine, University of Miami,
+> ahishwaran@miami.edu
+> 2Heart and Vascular Institute, Cleveland Clinic, beileen.hsich@imail.org
+> 3Kogalur & Company, Inc., cubkogalur@gmail.com
+> 4Goizueta Business School and Department of Biostatistics & Bioinformatics, Emory University, ddonald.lee@emory.edu
+
+Clinical data sources such as electronic health records and wearable sen-sors record patient status repeatedly over follow-up, often at irregular times and on different schedules for different measurements. These data create op-portunities for continuously updated, individualized risk prediction. Exist-ing approaches, however, often simplify the temporal structure before mod-eling it. We introduce Random Hazard Forests (RHF), a survival tree ensem-ble that learns how a patient’s hazard changes in continuous time as new measurements become available. RHF formulates the estimation problem di-rectly through a nonparametric hazard likelihood for predictable covariate processes. An efficient working model guides tree construction, after which flexible time-varying hazards are estimated for each terminal node. Given any predictable covariate path, each tree follows the path through its terminal nodes over time and assembles the corresponding node-level hazards into a trajectory. Averaging these trajectories across trees yields the RHF pathwise hazard estimate. Because routing at each time uses only the covariate state available immediately beforehand, RHF accommodates internal longitudinal covariates without lookahead. Simulations and an intensive care application show that RHF accurately estimates changing risk under irregular and asyn-chronous covariate updates. 
+
+1. Introduction. Clinical risk is rarely static. Yet many established survival methods predict risk from covariates measured once at study entry, reducing each subject’s history to a single baseline snapshot. That simplification was natural when follow-up data were sparse, but it fits poorly with modern clinical data systems. In the ICU, a patient’s physiology, labo-ratory values, and organ support therapies can shift from hour to hour, and these shifts often signal impending deterioration. More broadly, clinical trials collect repeated assessments, wearable devices stream physiological measurements, and electronic health records accumu-late information over days, months, or years. In all of these settings, the question is not only who is high risk at study entry, but how risk changes as new information arrives. Analyses that condition only on an initial snapshot can therefore miss some of the most important changes in patient status. Using evolving records in event-time analysis, however, poses several challenges. Mea-surements arrive irregularly, different variables update on different schedules, and treatments or exposures may start, stop, and restart over follow-up. For prospective prediction, the most important constraint is temporal order. A risk estimate at time t should depend only on infor-mation available up to t. If later measurements enter the calculation, the model may appear 
+
+Keywords and phrases: Empirical risk minimization, Random survival forests, Time dependent covariates, Hazard. 
+
+1arXiv:2608.21597v1 [stat.ML] 21 Aug 2026 2
+
+accurate in retrospective evaluation but fail when deployed in real time (Ramadan et al., 2025). These issues motivate methods that can follow evolving covariate histories while preserv-ing the no-lookahead structure of prospective estimation. Tree ensembles are a natural start-ing point, since they handle high-dimensional covariates, nonlinearities, and interactions with little tuning. Standard tree methods, however, are built around a single fixed covariate vector for each subject. Once predictors vary over time, tree-based learning faces two challenges: how to choose splits from longitudinal records, and how to assign a time-varying covariate to a terminal node at each time. Both must be resolved using only the information available at that time. This paper introduces Random Hazard Forests (RHF), a survival tree ensemble for this setting. RHF works in continuous time and learns how the hazard varies with time and the current predictable covariate state, rather than reducing each subject’s history to a baseline snapshot. RHF represents this relationship through a forest hazard map on time–covariate space, 
+
+(t, x) 7 −→ bλRHF (t, x).
+
+Given a time t and a covariate state x, the map returns an estimated hazard by routing x
+
+to a terminal node in each tree and averaging the node hazards. A case-specific trajectory follows from evaluating this map along a supplied predictable covariate process X(·). Each tree follows the path through its terminal nodes over time, and averaging the tree-specific trajectories gives the RHF hazard trajectory 
+
+t 7 −→ bλRHF (t, X(t)) .
+
+At each time, this is the estimated instantaneous event rate associated with the current covari-ate state. In prospective monitoring, the supplied path may consist of vital signs, laboratory values, and treatments observed up to the present, with the hazard trajectory updating as new information arrives. In retrospective or scenario-based analyses, it may instead be an observed history or a prespecified hypothetical path, and the trajectory then shows how the hazard evolves across covariate patterns. RHF estimates this map by minimizing an empirical risk derived from a nonparamet-ric hazard likelihood. This risk guides both tree splitting and terminal-node hazard estima-tion and produces a new forest construction for evolving covariate histories. In this way, RHF broadens the survival-forest paradigm pioneered by Random Survival Forests (Ish-waran et al., 2008) beyond the baseline-covariate setting. The next two subsections place RHF among survival machine learning methods and tree-based approaches to dynamic pre-diction. Section 1.3 then summarizes the main contributions of the paper. 1.1. Background literature. Classical survival analysis is dominated by parametric and semiparametric regression models, of which the Cox proportional hazards model (Cox, 1972) is the most widely used. In their standard forms, these models use baseline covariates and time-constant coefficients. The Cox model can be extended to time-updated covariates through the counting-process formulation of Andersen and Gill (1982), but the usual exten-sion still relies on a log-linear predictor with time-constant coefficients. Joint modeling of longitudinal measurements and event times (Wulfsohn and Tsiatis, 1997; Henderson, Dig-gle and Dobson, 2000) provides an alternative by estimating both processes simultaneously through shared random effects. These methods, however, require specification of both the longitudinal trajectory model and the association mechanism, which becomes more difficult as the number of markers and their interactions grows. A separate line of work uses likelihood-based machine learning for nonparametric haz-ard estimation with time-dependent covariates. Closest to the work here is Lee, Chen and RANDOM HAZARD FORESTS 3
+
+Ishwaran (2021), who developed a fully nonparametric hazard likelihood for predictable co-variate processes and used its functional gradient to construct boosted hazard estimators. That work provides a general likelihood foundation for nonparametric hazard learning with time-dependent covariates under the Aalen multiplicative intensity framework that includes right-censoring as a special case. More recently, Hu and Nan (2023) used neural networks with a full likelihood and an expanded time-varying covariate data structure to estimate a non-parametric conditional hazard and survival function. For the conditional survival target, that method is developed under an external-covariate, right-censoring formulation. RHF shares the nonparametric hazard-likelihood perspective with these lines of work, but brings it into the survival tree and random forest setting. Deep learning has also generated a large literature on survival prediction. A number of neu-ral survival methods recast survival analysis as a surrogate classification task (Ebell, 1993; Tu and Guerriere, 1993; Liestbl, Andersen and Andersen, 1994; Zhao and Feng, 2020) or build directly on the Cox model (Faraggi and Simon, 1995; Luck et al., 2017; Yousefi et al., 2017; Ching, Zhu and Garmire, 2018; Katzman et al., 2018; Wang and Li, 2019). Others adopt a discrete-time parameterization (Gensheimer and Narasimhan, 2019; Lee et al., 2018; Jar-rett, Yoon and van der Schaar, 2018; Ren et al., 2019), which is computationally convenient and accommodates updated inputs but replaces the continuous-time problem with predic-tion on a grid that must be prespecified. As the grid is refined and the number of predictors grows, computation becomes more demanding and performance may degrade in real-time settings (Nowroozilarki et al., 2021). 1.2. Random survival forests and dynamic prediction. Among machine learning ap-proaches, tree ensembles offer much of the flexibility of deep models with less architec-tural complexity and easier interpretability. Random Survival Forests (RSF) (Ishwaran et al., 2008) are a widely used example, providing a nonparametric approach to survival prediction by growing ensembles of trees that capture nonlinear patterns and interactions with little tun-ing. RSF was designed for baseline covariates, however. With time-varying predictors, each subject contributes a trajectory rather than a single value, and the key question is how a tree should route an individual at a particular time using only information observed up to that time. Survival-tree methods with time-dependent covariates predate modern forest implemen-tations. Bacchetti and Segal (1995) introduced a pseudo-subject construction that allows a subject’s risk-set contribution to move across tree nodes as covariates change over time. This construction is a precursor to RHF, which uses a related counting-process representation to evaluate the hazard-likelihood. A growing literature has adapted RSF and related forest methods for dynamic predic-tion. One line of work uses landmarking (Van Houwelingen, 2007), fitting a separate RSF at each landmark time to subjects still at risk (Pickett et al., 2021). This yields updated predic-tions, but it produces a sequence of landmark-specific models rather than a single forest over the full follow-up. Another line of work handles time-updated covariates by first partition-ing follow-up into prespecified person-period intervals and then fitting interval-level event models. One such method is RF-SLAM, which rewrites each subject’s history into count-ing process information units (CPIUs), that is, person-period records for prespecified time bins, and grows trees using a Poisson log-likelihood split rule for a piecewise-constant haz-ard model (Wongvibulsin, Wu and Zeger, 2020). Although event times may occur within an interval and interval length enters as exposure, the forest is still built around interval-specific hazards rather than exact-event-time risk sets. Other approaches summarize longitudinal his-tories through derived features, for example via functional principal components, and then apply a tree ensemble to those summaries (Lin, Li and Luo, 2021; Jiang, Xie and Colditz, 4
+
+2021). Dedicated software such as DynForest similarly transforms time-dependent pre-dictors into node-specific time-fixed features using mixed models before splitting (Devaux et al., 2023). Yao et al. (2022) extend conditional inference forests to time-varying covariates in a framework targeting the conditional survival function. 1.3. Contributions. The methods above show that forests can use evolving covariate in-formation, but they do so by altering the problem. Landmarking replaces one dynamic pre-diction problem with a sequence of landmark-specific baseline problems; person-period ap-proaches introduce a prespecified time grid; and feature-based methods first compress each longitudinal history into time-fixed summaries. RHF avoids this by formulating the problem around the hazard. Rather than retrofitting an existing method to time-varying inputs, RHF starts from a hazard likelihood for predictable covariate processes and maximizes it directly. This likelihood formulation places RHF in the familiar framework of empirical risk min-imization. The loss functional is the negative log likelihood, and RHF estimates the hazard by minimizing its empirical average over a function class. For survival data with predictable time-dependent covariates, Lee, Chen and Ishwaran (2021) used a fully nonparametric haz-ard likelihood and its functional gradient to construct boosted hazard estimators. RHF uses the same likelihood framework but recasts the problem within a random forests architecture. The resulting methodology has four distinguishing components. First, RHF targets the hazard directly, rather than a relative-risk score, a discrete-time event probability, or a sur-vival probability on a prespecified grid. Second, tree induction uses a node-constant work-ing hazard under which the empirical risk decomposes into node-level exposure and event summaries. This decomposition yields a split statistic that selects splits by reduction in the likelihood risk rather than by a heuristic survival impurity. Third, RHF accommodates time-dependent covariates, including internal covariates, through the predictable intensity formu-lation. The covariate state entering the hazard at time t must be determined by information available immediately before t, enforcing a no-lookahead rule. This allows longitudinal labo-ratory values, vital signs, and treatments to predict instantaneous event risk without requiring an external-covariate conditional-survival target. Fourth, RHF yields pathwise hazard esti-mates. Once the tree structures are fixed, RHF removes the node-constant working restriction and estimates terminal-node hazards nonparametrically over time. These estimates define a hazard map for each tree. Following any supplied predictable covariate process through a tree assembles the corresponding node-level hazards into a trajectory, and averaging these trajectories across trees gives the RHF pathwise hazard estimate. 1.4. Outline. The remainder of the paper is organized as follows. Section 2 reviews sur-vival analysis with time-varying covariates and develops the hazard likelihood. Section 3 de-rives the splitting rule and describes terminal node estimation. Section 4 presents algorithmic and implementation details. Section 5 evaluates RHF on a time-static benchmark and three time-varying simulations using time-varying AUC measures. Section 6 applies the method to a large ICU case study drawn from the MIMIC-IV database (Johnson et al., 2023a,b). Section 7 concludes with a discussion and directions for future work. 
+
+2. Notation and likelihood. Survival analysis can be formulated in terms of either the survivor function or the hazard function. The survivor function gives the probability of re-maining event-free beyond time t, whereas the hazard gives the instantaneous event rate at time t among those still at risk. When covariates are fixed at study entry, these two descrip-tions are equivalent and either can serve as the basic target of inference. Once covariates are allowed to change over time, the hazard is the more direct statistical target, because it is lo-cal in time and can be defined from the information available just before risk is evaluated. RHF uses this local hazard as its primary target. This section makes that target precise and develops the likelihood formulation used for tree construction. RANDOM HAZARD FORESTS 5
+
+2.1. Time-static covariates. We begin with the familiar setting in which covariates are fixed over follow-up. Each subject is represented by a p-dimensional vector X =(X(1) , . . . , X (p))T . Let T ∗ denote the event time. For a covariate value x, the conditional survivor function is S(t | x) = P{T ∗ > t | X = x}, and the corresponding continuous-time hazard is 
+
+λ(t, x) = lim 
+
+> ∆↓0
+
+"
+
+1∆ P{T ∗ ∈ [t, t + ∆) | T ∗ ≥ t, X = x}
+
+#
+
+.
+
+Thus, λ(t, x) describes the local rate of occurrence of the event at time t among subjects with baseline covariates x who have remained event-free up to t.The connection between hazard and survival is seen most directly through the cumulative hazard, 
+
+Λ( t, x) = 
+
+Z t
+
+> 0
+
+λ(s, x) ds. 
+
+Over a very short interval [s, s + ds ), a subject who is still event-free at time s fails with probability approximately λ(s, x) ds . Accumulating these infinitesimal risks from time 0 up to time t gives the cumulative hazard, while surviving to time t means avoiding an event on every such interval. This leads to the product-integral identity (Andersen et al., 1993), 
+
+S(t | x) = Y
+
+> 0≤s<t
+
+{1 − dΛ( s, x)}
+
+which in the continuous case reduces to S(t | x) = exp {− Λ( t, x)}. In the time-static setting, therefore, the survivor function and the hazard contain the same information, expressed in two equivalent ways. 2.2. Time-dependent covariates. The situation changes once covariates vary with time. Each subject now contributes a trajectory X(·) = ( X(1) (·), . . . , X (p)(·)) T . Throughout Sec-tions 2 and 3, X(t) denotes the covariate vector entering the hazard at time t, while X(·)
+
+denotes the whole process. We assume this process is predictable with respect to the ob-served history. This means that the value used at time t is determined only by information available before t. A measurement first recorded at t therefore cannot affect the hazard at t,although it may affect later hazards. Section 4.1 constructs the predictable routing process RHF uses to implement this convention. The statistical target in this setting is the hazard map 
+
+(t, x) 7 −→ λ(t, x),
+
+which gives the local event rate at time t for an at-risk subject at covariate state x. Let Ft−
+
+denote the observed history just prior to t, let Y (t) ∈ { 0, 1} indicate whether the subject is at risk just before t, and let N (t) count observed events. RHF models the dependence of the local event rate on the history through the current predictable state X(t). On the at-risk set, 
+
+P{T ∗ ∈ [t, t + dt ) | F t−, Y (t) = 1 } = λ(t, X(t)) dt + o(dt ),
+
+or equivalently, 
+
+P{dN (t) = 1 | F t−} = Y (t) λ(t, X(t)) dt + o(dt ).
+
+The product Y (t)λ(t, X(t)) is the predictable intensity of the event process. Predictability ensures that this intensity uses no future internal covariate information. 6
+
+Evaluating the hazard map along X(·) produces a hazard trajectory with accumulated hazard R t 
+
+> 0
+
+λ(s, X(s)) ds . The corresponding exponential, 
+
+exp 
+
+(
+
+−
+
+Z t
+
+> 0
+
+λ(s, X(s)) ds 
+
+)
+
+,
+
+is a pathwise survivor functional. When the covariate trajectory is external and specified independently of the event process, this functional retains the usual conditional-survival in-terpretation. For internal covariates, such as longitudinal biomarkers or treatments tied to a subject’s evolving health state, that interpretation does not generally apply. The realized his-tory through t is observed only for subjects who remain under observation to t, which is the familiar difficulty of internal time-dependent covariates (Kalbfleisch and Prentice, 2002, Sec-tion 6.3.2). RHF therefore targets the hazard map rather than a pathwise survivor functional. The same local intensity argument yields the likelihood in the usual single-event setting. We reserve T ∗ for the event time and write T for the observed end of follow-up, whether or not it is an event time, with δ ∈ { 0, 1} indicating whether an event is observed at T . Consider a fine partition 0 = t0 < t 1 < · · · < t K = T and, for k = 0 , . . . , K − 1, set ∆tk = tk+1 − tk
+
+and ∆N (tk) = N (tk+1 ) − N (tk). On each interval, ∆N (tk) is conditionally Bernoulli with 
+
+P{∆N (tk) = 1 | F tk −} = Y (tk) λ(tk, X(tk)) ∆ tk + o(∆ tk).
+
+Multiplying these contributions and letting the increments tend to zero gives the likelihood contribution for a single subject (Gill and Johansen, 1990) (1) exp 
+
+(
+
+−
+
+Z T
+
+> 0
+
+Y (s) λ(s, X(s)) ds 
+
+)
+
+λ(T, X(T )) δ.
+
+2.3. Time normalization. RHF is trained on a time scale normalized to [0 , 1] . We first define this scale and its implications for fitting, and then extend the single-subject likelihood to the full sample on the normalized domain. Let s denote follow-up time on the original scale and set t = g(s), where g is a fixed increasing transformation into [0 , 1] . For bounded follow-up, one may take g(s) = s/τ ; otherwise, a fixed bounded monotone transformation may be used. If λs and λt denote the hazards on the original and normalized scales, respectively, then 
+
+λt(g(s), x) = λs(s, x)
+
+g′(s) .
+
+Hazards estimated on the normalized scale can therefore be returned to the original scale by the usual change of variables. This straightforward conversion does not, however, make the choice of g inconsequential. RHF accumulates at-risk exposure and evaluates candidate splits on the normalized scale, so a nonlinear transformation reweights different portions of follow-up and may alter the node exposure summaries and selected splits. Thus, g should be considered part of the scale on which the model is fit. Hereafter, t denotes normalized time, and all likelihood integrals, split statistics, and terminal-node hazards are defined on [0 , 1] .2.4. Likelihood construction. On this normalized time scale, the observed data for n in-dependent subjects are {(Xi(·), Y i(·), N i(·)) }ni=1 , and we write Ti ∈ [0 , 1] for the observed end of follow-up for subject i. Here Yi(t) ∈ { 0, 1} is the at-risk indicator, equal to one when subject i is under observation and event-free just prior to time t, and Ni(t) is the count-ing process of observed events, with increment dN i(t) ∈ { 0, 1} at jump times. In the famil-iar right-censored single-event setting, this becomes Ni(t) = δi 1{Ti≤t} and Yi(t) = 1 {Ti≥t},where δi ∈ { 0, 1} indicates whether an event is observed at Ti. The likelihood contribution in (1) then applies to each subject upon substituting Yi, Ni, and Xi.RANDOM HAZARD FORESTS 7
+
+We parameterize the hazard on the log scale, writing F (t, x) = log {λ(t, x)} for the log hazard, so that λ(t, x) = eF (t, x) is positive for any real-valued F . Taking the logarithm of (1) gives the per-subject log-likelihood 
+
+ℓi(F ) = 
+
+Z 10
+
+F  t, Xi(t) dN i(t) −
+
+Z 10
+
+Yi(t) eF (t, Xi(t)) dt, 
+
+where the event term R 10 F (t, Xi(t)) dN i(t) reduces to δi F (Ti, Xi(Ti)) in the single-event setting. When building a tree, we work with the average negative log-likelihood over the n
+
+subjects, (2) Rn(F ) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+Yi(t) eF (t, Xi(t)) dt − 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+F  t, Xi(t) dN i(t).
+
+By construction, Rn(F ) = −ℓ(F )/n , where ℓ(F ) = Pni=1 ℓi(F ) is the conditional log like-lihood. Thus Rn(F ) can be viewed as a scaled negative conditional log likelihood. It can also be viewed as an empirical risk to be minimized over a function class for F , which is the perspective we adopt when deriving the RHF split rule in the next section. 
+
+3. RHF tree construction. In a conventional RSF tree, each subject follows a single path from the root to a terminal node, determined by covariates measured at baseline. In RHF, this path evolves with the covariate process. At each time t, the current predictable covariate state Xi(t) is routed through the tree, so the same subject may contribute at-risk exposure to different nodes as the path changes. If an event occurs, it is assigned to the node occupied at that time. This dynamic routing mirrors the likelihood in Section 2, which separates at-risk exposure from event increments along the path. Aggregating these quantities within candidate tree regions produces the node-level summaries used to evaluate splits by empirical-risk reduction. RHF separates the hazard model used to grow a tree from the model used for the haz-ard map. During tree induction, a best-first search constructs the partition from admissible covariate splits; time itself is not used as a splitting variable. Candidate splits are evaluated under a working model that assigns a time-constant log hazard to each current node. Under this restriction, a node’s contribution to the empirical risk depends only on its total at-risk exposure and event total. Theorem 3.1 gives the corresponding nodewise risk decomposition and the resulting closed-form split criterion. Starting from the root, RHF repeatedly selects the admissible split with the largest risk reduction among all current leaves and stops when no admissible split remains. Once the partition is fixed, the working restriction is removed, and RHF estimates a time-varying hazard in each terminal node by minimizing empirical risk on a grid of evaluation times. This construction yields a single RHF tree. For any predictable covariate process, each tree routes the current state at time t to a terminal node and returns that node’s estimated hazard at t. Averaging these values across trees yields the RHF pathwise hazard estimate along the supplied covariate path. The next two subsections develop the two tree-level ingredients of this estimator: the likelihood-based split criterion and the terminal-node hazard estimator. Section 4 then assembles them into a complete algorithm for training and test time estimation and describes the associated implementation details. 3.1. Empirical risk minimization for tree splits. Given a current tree, let R = {A1, A 2, . . . }
+
+denote its leaves, which form a partition of Rp. RHF evaluates candidate splits over log haz-ards of the form (3) F (t, x) = X 
+
+> Aj∈R
+
+cj 1{x∈Aj },8
+
+which assigns a single working log hazard cj to each current leaf. For this class, the at-risk, event, and covariate processes in (2) enter the empirical risk through two node-level summaries. For a given node Aj , define the two summary quantities 
+
+Uj = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+Yi(t) 1 {Xi(t)∈Aj } dt, Vj = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+1{Xi(t)∈Aj } dN i(t).
+
+Here Uj is the average amount of time the sample spends at risk with covariates falling in 
+
+Aj , and Vj is the average number of events that occur while Xi(t) ∈ Aj . In the single-event setting, Vj is the proportion of observed events whose covariates at the event time lie in Aj .These two quantities, total exposure and total events within a node, are the only summaries needed to evaluate a candidate split. The next result is the tree version of the nonparametric hazard likelihood risk used in Lee, Chen and Ishwaran (2021). THEOREM 3.1. Let F be of the form (3) . Then the empirical risk (2) can be written as 
+
+(4) Rn(F ) = X  
+
+> j:Uj>0
+
+
+
+ecj Uj − cj Vj
+
+
+
+.
+
+Within a fixed partition {Aj }, the contribution of each region Aj depends only on cj , Uj , and 
+
+Vj .
+
+3.1.1. Initialization step. Theorem 3.1 is the basis for split selection. At the root there is a single node A1 = Rp, so the working log hazard is constant over the entire covariate space, 
+
+F0(t, x) = c0. In the notation of Theorem 3.1, the risk depends on one pair (U0, V 0), where 
+
+U0 = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+Yi(t) dt, V0 = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+dN i(t).
+
+The quantity U0 is the average time subjects are at risk and V0 is the average number of observed events, which reduces to the event proportion in the single-event setting. For F0,(4) becomes Rn(F0) = ec0 U0 − c0V0. When V0 > 0, the minimizer is c0 = log( V0/U 0). The root working hazard is therefore the overall empirical hazard V0/U 0, total events divided by total exposure time. 3.1.2. Induction step. After s splits, the tree induces a partition {A1, . . . , A s+1 } of Rp
+
+and a working log hazard Fs(t, x) = Ps+1  
+
+> j=1
+
+cj 1{x∈Aj }. To obtain the next split, consider splitting a region Aj into two children Aj, 1 and Aj, 2 and updating 
+
+Fs+1 (t, x) = Fs(t, x) − cj 1{x∈Aj } + cj, 1 1{x∈Aj, 1} + cj, 2 1{x∈Aj, 2}.
+
+For a candidate child region Aj,ℓ , ℓ = 1 , 2, define 
+
+Uj,ℓ = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+Yi(t) 1 {Xi(t)∈Aj,ℓ } dt, Vj,ℓ = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+1{Xi(t)∈Aj,ℓ } dN i(t).
+
+The ratio Vj,ℓ /U j,ℓ is the empirical hazard in Aj,ℓ , computed as events divided by exposure time within that child. By Theorem 3.1, the contribution of Aj,ℓ to Rn(F ) is ecj,ℓ Uj,ℓ − cj,ℓ Vj,ℓ . When Uj,ℓ > 0
+
+and Vj,ℓ > 0, this expression is minimized at cj,ℓ = log( Vj,ℓ /U j,ℓ ). The parent region Aj
+
+satisfies Uj = Uj, 1 + Uj, 2, Vj = Vj, 1 + Vj, 2, and its working log hazard is 
+
+cj = log 
+
+ Vj
+
+Uj
+
+
+
+= log 
+
+ Vj, 1 + Vj, 2
+
+Uj, 1 + Uj, 2
+
+
+
+,
+
+which is the empirical hazard obtained by pooling the two children. RANDOM HAZARD FORESTS 9
+
+3.1.3. RHF split statistic. Substitute the optimal values cj and cj,ℓ into (4) and use Uj =
+
+Uj, 1 + Uj, 2 and Vj = Vj, 1 + Vj, 2. The drop in empirical risk from splitting Aj into Aj, 1 and 
+
+Aj, 2 is then 
+
+Rn(Fs) − Rn(Fs+1 ) = Vj, 1 log 
+
+ Vj, 1
+
+Uj, 1
+
+
+
++ Vj, 2 log 
+
+ Vj, 2
+
+Uj, 2
+
+
+
+− Vj log 
+
+ Vj
+
+Uj
+
+
+
+.
+
+For a fixed parent node Aj , the last term does not depend on the choice of cut, so the best cut within Aj maximizes the sum of the two child terms. The best-first growth rule then compares the best achievable risk reduction across the current leaves and applies the split with the largest reduction. DEFINITION 3.2. The RHF split statistic for splitting a node Aj into regions Aj, 1 and 
+
+Aj, 2 is 
+
+(5) S(Aj, 1, A j, 2) = Vj, 1 log 
+
+ Vj, 1
+
+Uj, 1
+
+
+
++ Vj, 2 log 
+
+ Vj, 2
+
+Uj, 2
+
+
+
+,
+
+and the associated empirical risk reduction is 
+
+(6) ∆n(Aj, 1, A j, 2) = Vj, 1 log 
+
+ Vj, 1
+
+Uj, 1
+
+
+
++ Vj, 2 log 
+
+ Vj, 2
+
+Uj, 2
+
+
+
+− (Vj, 1 + Vj, 2) log 
+
+ Vj, 1 + Vj, 2
+
+Uj, 1 + Uj, 2
+
+
+
+.
+
+If Rn(Fs) is the empirical risk for the current working log hazard and Rn(Fs+1 ) is the risk after the split, then Rn(Fs+1 ) = Rn(Fs) − ∆n(Aj, 1, A j, 2).
+
+Each ratio Vj,ℓ /U j,ℓ is the empirical hazard in child Aj,ℓ , while (Vj, 1 + Vj, 2)/(Uj, 1 + Uj, 2)
+
+is the pooled hazard in the parent. The quantity ∆n(Aj, 1, A j, 2) therefore measures the im-provement in fit from allowing the children different hazard levels rather than forcing them to share the parent value. This plays the same role as impurity reduction in classification trees, but here the objective is empirical risk reduction of the hazard likelihood (2). 3.2. Terminal node estimator. To obtain the terminal node hazard estimator, let R denote the partition generated from the tree induction, and fix a time grid T = {t0 = 0 < t 1 < · · · <tK = 1 }, with intervals Ik = ( tk−1, t k]. The interior grid points for the evaluation grid T are selected from the observed event times. The terminal node estimator is chosen to minimize the empirical risk over the class of log hazards 
+
+FT (t, x) = X 
+
+> Aj∈R
+> K
+
+X
+
+> k=1
+
+cj,k 1{x∈Aj } 1{t∈Ik }.
+
+This refines each terminal node Aj into the node-time cells Aj × Ik. Applied to these cells, Theorem 3.1 gives 
+
+Rn(FT ) = X 
+
+> Aj∈R
+> K
+
+X
+
+> k=1
+
+(ecj,k Uj,k − cj,k Vj,k ) ,
+
+where 
+
+Uj,k = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z tk
+
+> tk−1
+
+Yi(t) 1 {Xi(t)∈Aj } dt, Vj,k = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z tk
+
+> tk−1
+
+1{Xi(t)∈Aj } dN i(t).
+
+Here Uj,k is the average at-risk exposure contributed to node Aj during Ik, and Vj,k is the corresponding average number of events. 10 
+
+For Uj,k > 0, the cell contribution is minimized at cj,k = log( Vj,k /U j,k ) when Vj,k > 0,and the minimizing hazard is zero when Vj,k = 0 . The terminal-node hazard estimator is therefore (7) bλAj (t) = Vj,k 
+
+Uj,k 
+
+1{Uj,k >0}, t ∈ (tk−1, t k], k = 1 , . . . , K. 
+
+The estimate is the number of events observed in the node–time cell divided by its total at-risk exposure. It is the time-resolved counterpart of the node value Vj /U j used during tree induction, with Uj = PKk=1 Uj,k and Vj = PKk=1 Vj,k .For each tree, the collection {bλAj (t)} defines a hazard function over node region and time. Ensembling the resulting tree-level functions yields the estimated hazard map, the primary statistical target of RHF. Evaluating this map along a predictable covariate process produces a case-specific hazard trajectory. The next section develops this construction. REMARK 3.3. The evaluation grid {t0 = 0 < t 1 < · · · < t K = 1 } affects only the tempo-ral resolution of the terminal-node hazard estimator. It is introduced after the tree partition has been determined, so the choice of K does not play a role in tree growth. The interior grid points are selected from the observed event times. Retaining all event times gives the finest available event-time resolution, while retaining a subset pools neighboring intervals along with their exposure and event summaries. Thus K trades temporal detail for stability and computation, and may be selected adaptively, for example using out-of-bag risk (Sec-tion 4.4). The interpretation becomes especially clear as the grid is refined. The intensity of N (t) is 
+
+Y (t)λ(t, X(t)) , so Vj,k /U j,k estimates the exposure-weighted average of λ(t, X(t)) over the node-time region Aj × Ik. On a coarser grid this average is taken over a longer time interval. As the intervals become shorter, the average localizes in time and approaches the risk-set weighted node hazard 
+
+λAj (t) = E Y (t) 1 {X(t)∈Aj } λ(t, X(t)) 
+
+E Y (t) 1 {X(t)∈Aj }
+
+ .
+
+This is the average instantaneous event rate among subjects who are still at risk at time t and whose predictable covariates place them in Aj .REMARK 3.4. A further consequence of (7) is a generalized conservation of events prop-erty. Because the terminal nodes partition the covariate-time space and bλAj (t) is constant on each Ik,
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+Yi(t)
+
+X 
+
+> Aj∈R
+
+bλAj (t)1 {Xi(t)∈Aj }
+
+ dt = X 
+
+> Aj∈R
+> K
+
+X
+
+> k=1
+
+Uj,k bλAj (tk)= X 
+
+> Aj∈R
+> K
+
+X
+
+> k=1
+
+Vj,k = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+dN i(t) = V0.
+
+Thus the total exposure-weighted hazard, multiplied by n, equals the total number of ob-served events. In the time-static, right-censored setting, the property reduces to a known identity. Here Xi(t) := Xi and subject i remains in a single terminal node, denoted by A(i).Let bΛAj (t) = R t 
+
+> 0
+
+bλAj (s) ds , then the generalized identity becomes 
+
+> n
+
+X
+
+> i=1
+
+bΛA(i)(Ti) = 
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+Yi(t)bλA(i)(t) dt =
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+dN i(t) = 
+
+> n
+
+X
+
+> i=1
+
+δi.RANDOM HAZARD FORESTS 11 
+
+Thus the sum of the cumulative hazards evaluated at the observed follow-up times equals the total number of events. This is the conservation of events principle introduced for RSF in Ishwaran et al. (2008). 
+
+4. RHF algorithm and implementation details. The previous section developed the likelihood-based split criterion and terminal-node hazard estimator, the two ingredients needed to construct a RHF tree. We now operationalize these theoretical pieces by intro-ducing a start–stop representation of each subject’s predictable covariate trajectory. Under this representation, the exposure and event contributions appearing in the split criterion re-duce exactly to finite sums over observed data rows, allowing the theoretical splitting rule to be evaluated directly and efficiently during tree growth. Once the forest is trained, a pathwise assembly rule uses the same intervalwise structure to evaluate the forest along any supplied predictable covariate process and produce a case-specific hazard estimate. Algorithm 1 summarizes the resulting RHF procedure. Using the start–stop preprocessing described in Section 4.1, RHF grows each tree from a subject-level subsample (line 2) using a best-first search over admissible covariate splits (lines 5–8). At each iteration, it evaluates candidate splits across the current leaves using the finite-sum calculations in Section 4.2 and applies the split with the largest empirical risk reduction. Candidate splits act on covariates, not on time, and tree growth ends after S splits or when no admissible split remains. Once the partition is fixed, RHF removes the node-constant working restriction used during induction and estimates a time-varying hazard in each terminal node on the evaluation grid T with estimator (7) (line 10). At test time (line 13), RHF routes a supplied predictable covariate process through each tree and averages the resulting hazard trajectories, as developed in Section 4.3. Sections 4.4 and 4.5 describe out-of-bag estimation and a post-hoc RHF variable priority procedure, respectively. 4.1. Start–stop representation of evolving covariate paths. For subject i, RHF represents the predictable covariate process Xi(·) and the at-risk and event processes Yi(·) and Ni(·) in start–stop form. Each row corresponds to an interval over which the routing covariate state is fixed and records the event increment over that interval. Let Di denote the set of follow-up times covered by these intervals, (8) Di =
+
+> ni
+
+[
+
+> r=1
+
+(Si,r , T i,r ] ⊆ (0 , 1] .
+
+The intervals in (8) are disjoint and ordered as 
+
+0 ≤ Si, 1 < T i, 1 ≤ Si, 2 < T i, 2 ≤ · · · ≤ Si,n i < T i,n i ≤ 1.
+
+Here Si,r and Ti,r are the start and stop times of the rth row. A new row begins whenever the routing covariate state changes. RHF may split rows further at event times or at-risk transitions, so that each interval receives the appropriate exposure and event contributions. A stop time Ti,r therefore marks a row boundary, not necessarily an event. The ordering permits gaps in the supplied path when Si,r +1 > T i,r . If follow-up is observed continuously from the origin through a final endpoint Ti, then Di = (0 , T i], with Si, 1 = 0 , Si,r +1 = Ti,r 
+
+and Ti,n i = Ti.The resulting start–stop record has one row for each interval: subject (start , stop ] ∆N routing covariate 
+
+i (Si, 1, T i, 1] ∆Ni, 1 Zi, 1
+
+... ... ... ...
+
+i (Si,n i , T i,n i ] ∆Ni,n i Zi,n i .12 
+
+Algorithm 1 Random Hazard Forests (RHF) 
+
+Input 
+
+Training data {(Xi(·), Y i(·), N i(·)) }ni=1 ; number of trees B; number of candidate covariates considered at each leaf mtry ; maximum number of splits per tree S ; evaluation grid T .
+
+Preprocessing 
+
+Rescale all observed times and the evaluation grid T to a common [0 , 1] scale (Section 2.3). Encode each subject’s observed history in start–stop form as described in Section 4.1, yielding intervals (Si,r , T i,r ] with event increments ∆Ni,r and predictable routing states Zi,r , r = 1 , . . . , n i, i = 1 , . . . , n .
+
+Training 
+
+1: for b = 1 to B do 
+
+2: Draw a subject-level subsample of size ⌊0.632 n⌋ without replacement, retaining the full trajectory of each selected subject. Let Ob denote the subjects not selected and store it for out-of-bag estimation. 3: Initialize the root node with the selected subjects and set the current partition to Rb = {Rp}.4: for s = 1 to S do 
+
+5: For each current leaf A ∈ Rb, sample mtry covariates without replacement. For each admissible cutpoint on a sampled covariate, form child nodes A1 and A2 and compute the child aggregates 
+
+(UA,ℓ , V A,ℓ ), ℓ = 1 , 2.6: Evaluate the empirical-risk reduction ∆n(A1, A 2) in (6) for each candidate split across all current leaves. 7: If no admissible candidate remains, stop tree growth. Otherwise, select the split with the largest empirical-risk reduction. 8: Apply the selected split by replacing its parent leaf with A1 and A2, and update Rb.9: end for 
+
+10: Estimate the time-varying hazard bλA,b (t) for each terminal node A ∈ Rb on the grid T using (7). 11: end for 
+
+12: The trained RHF is the collection {(Rb, {bλA,b (t) : A ∈ Rb})}Bb=1 , which define the forest hazard map 
+
+bλRHF (t, x) = 1
+
+B
+
+> B
+
+X
+
+> b=1
+
+X
+
+> A∈Rb
+
+bλA,b (t)1 {x∈A}.
+
+Pathwise evaluation 
+
+13: For a supplied predictable covariate process X(·) on the same time scale, evaluate the forest map along the path. Operationally, route the current covariate state through each tree and average the corresponding terminal-node hazards to obtain the RHF pathwise hazard estimate, bλRHF (t, X(t)) .RANDOM HAZARD FORESTS 13 
+
+For row r, we define 
+
+∆Ni,r = Ni(Ti,r ) − Ni(Si,r ), Zi,r = Xi(Ti,r −).
+
+Here ∆Ni,r is the event increment over the interval, and Zi,r is the predictable covariate state used for tree routing. The left limit defining Zi,r ensures that an event at Ti,r is eval-uated using only information available immediately before that time. Because Zi,r is fixed over (Si,r , T i,r ], it determines which node receives the interval’s at-risk exposure and, when 
+
+∆Ni,r = 1 , its event increment. Equivalently, the rows define the piecewise-constant routing process 
+
+Zi(t) = 
+
+> ni
+
+X
+
+> r=1
+
+Zi,r 1{t∈(Si,r ,T i,r ]}, t ∈ D i.
+
+For test time estimation, the start–stop formulation is slightly different. A path supplied at test time consists of predictable covariate states alone, with no event or at-risk process. Its intervals are therefore determined only by changes in the routing state. If X(·) is the supplied predictable covariate process with fixed states X(t) = xr on (Sr, T r] for r = 1 , . . . , m , then the routing process is Z(t) = Pmr=1 xr 1{t∈(Sr ,T r ]} with time domain t ∈ D X = Smr=1 (Sr, T r].4.2. Evaluating a candidate split. Each candidate split is scored by the empirical risk reduction (6), computed from the split statistic (5). The only inputs needed for each child are its exposure and event aggregates (U, V ), which under the start–stop representation reduce to finite sums over intervals. Consider splitting node Aj on coordinate X(k) at cutpoint c. The children are Aj, 1 =
+
+Aj ∩ { X(k) ≤ c} and Aj, 2 = Aj ∩ { X(k) > c }. Their interval memberships are 
+
+Ii,r (Aj, 1) = Ii,r (Aj )1 {Z(k) 
+
+> i,r ≤c}
+
+, Ii,r (Aj, 2) = Ii,r (Aj )1 {Z(k) 
+
+> i,r >c }
+
+,
+
+where membership of interval (Si,r , T i,r ] for node Aj is denoted by Ii,r (Aj ) = 1 {Zi,r ∈Aj }.For ℓ = 1 , 2, the corresponding exposure and event aggregates are 
+
+UAj,ℓ = 1
+
+n
+
+> n
+
+X
+
+> i=1
+> ni
+
+X
+
+> r=1
+
+(Z Ti,r 
+
+> Si,r
+
+Yi(t) dt 
+
+)
+
+Ii,r (Aj,ℓ ), VAj,ℓ = 1
+
+n
+
+> n
+
+X
+
+> i=1
+> ni
+
+X
+
+> r=1
+
+∆Ni,r Ii,r (Aj,ℓ ),
+
+which can be calculated without the need for numerical integration. Because Zi(t) is constant on each interval (Si,r , T i,r ], the indicator 1{Zi(t)∈A} is also constant there and equals Ii,r (A).Consequently, the finite sums above agree with the integrals in Section 3: 
+
+Z 10
+
+Yi(t)1 {Zi(t)∈A} dt =
+
+> ni
+
+X
+
+> r=1
+
+(Z Ti,r 
+
+> Si,r
+
+Yi(t) dt 
+
+)
+
+Ii,r (A),
+
+Z 10
+
+1{Zi(t)∈A} dN i(t) = 
+
+> ni
+
+X
+
+> r=1
+
+∆Ni,r Ii,r (A).
+
+Once (UAj,ℓ , V Aj,ℓ ) have been computed, they enter directly into the split statistic (5) and the risk reduction (6), which quantify the improvement in fit obtained by replacing Aj with Aj, 1
+
+and Aj, 2.14 
+
+4.3. Case-specific hazard from a trained forest. Once tree b is grown, each terminal node 
+
+A ∈ Rb contains a time-varying hazard estimate bλA,b (t) from (7). Because the terminal nodes partition the covariate space, these estimates define the tree-level hazard map 
+
+bλb(t, x) = X
+
+> A∈Rb
+
+bλA,b (t)1 {x∈A}.
+
+At a fixed pair (t, x), this map returns the hazard at time t from the terminal node containing 
+
+x. The central object of RHF is the forest hazard map obtained by averaging these tree-level maps, 
+
+bλRHF (t, x) = 1
+
+B
+
+> B
+
+X
+
+> b=1
+
+bλb(t, x).
+
+This is the RHF estimator of the target hazard map (t, x) 7 → λ(t, x) introduced in Section 2.2. To obtain a case-specific hazard trajectory, let X(·) be a supplied predictable covariate pro-cess with time domain DX = Smr=1 (Sr, T r] using the start–stop representation of Section 4.1 with X(t) = xr on (Sr, T r]. Evaluating tree b along this path gives 
+
+bλb(t, X(t)) = 
+
+> m
+
+X
+
+> r=1
+
+bλb(t, xr)1 {t∈(Sr ,T r ]} =
+
+> m
+
+X
+
+> r=1
+
+X
+
+> A∈Rb
+
+bλA,b (t)1 {xr ∈A} 1{t∈(Sr ,T r ]}, t ∈ D X .
+
+On each interval, the current covariate state selects a terminal node, whose estimated hazard is followed until the state changes. Averaging the tree-specific trajectories pointwise yields the case-specific RHF hazard tra-jectory, 
+
+bλRHF (t, X(t)) = 1
+
+B
+
+> B
+
+X
+
+> b=1
+
+bλb(t, X(t)) =
+
+> m
+
+X
+
+> r=1
+
+bλRHF (t, xr)1 {t∈(Sr ,T r ]}, t ∈ D X .
+
+The first expression averages the trajectories assembled within each tree; the second shows that the result is exactly the forest hazard map evaluated along the supplied predictable co-variate path. REMARK 4.1. The training-data case is a special case of the preceding construction. For subject i, the hazard maps are evaluated along the predictable routing process Zi(t) from Section 4.1, defined on the time domain Di in (8). Substituting (Si,r , T i,r ] and Zi,r into the preceding display gives the tree-specific hazard trajectory (9) bλi,b (t) = bλb(t, Zi(t)) = 
+
+> ni
+
+X
+
+> r=1
+
+X
+
+> A∈Rb
+
+bλA,b (t)1 {Zi,r ∈A} 1{t∈(Si,r ,T i,r ]}, t ∈ D i.
+
+Averaging these trajectories gives the in-sample forest estimate 
+
+bλ RHF  
+
+> i
+
+(t) = 1
+
+B
+
+> B
+
+X
+
+> b=1
+
+bλi,b (t) = bλRHF (t, Zi(t)) = 
+
+> ni
+
+X
+
+> r=1
+
+bλRHF (t, Zi,r )1 {t∈(Si,r ,T i,r ]}, t ∈ D i.
+
+Thus, the training-data hazard trajectory is the forest hazard map evaluated along the subject’s observed predictable covariate path. RANDOM HAZARD FORESTS 15 
+
+REMARK 4.2. RHF also provides a case-specific cumulative-hazard estimator along a supplied covariate path, defined by 
+
+bΛb(t, X(·)) = 
+
+Z
+
+> (0 ,t ]∩D X
+
+bλb(u, X(u)) du. 
+
+Thus the cumulative hazard is formed by accumulating the node-level hazard increments encountered along the covariate path. If DX = (0 , 1] , this is the usual full-horizon cumulative hazard; otherwise it is accumulated only over the portions of time on which the path has been specified. Averaging over trees gives the forest-level cumulative-hazard estimator 
+
+bΛRHF (t, X(·)) = 1
+
+B
+
+> B
+
+X
+
+> b=1
+
+bΛb(t, X(·)) .
+
+4.4. Out-of-bag estimation and empirical risk. For each tree b = 1 , . . . , B , let Ob denote the set of subjects not included in the training subsample for that tree. Out-of-bag estimation uses only these trees, so each subject is evaluated by a forest that was fit without using that subject’s data. 
+
+OOB case-specific hazard. For tree b, let bλi,b (t) denote the case-specific hazard for sub-ject i defined in (9). The OOB ensemble hazard for subject i averages only over trees for which i was not in the training subsample, 
+
+bλoob  
+
+> i
+
+(t) = 
+
+PBb=1 bλi,b (t)1 {i∈Ob}
+
+PBb=1 1{i∈Ob}
+
+, t ∈ D i.
+
+Each term comes from a tree fit without subject i, so the OOB ensemble provides an internally cross-validated case-specific estimate. 
+
+OOB empirical risk. The OOB empirical risk uses the same likelihood loss as the empir-ical risk, but evaluates each subject using only trees for which that subject was out of bag. Writing λi(t) = eF (t, Xi(t)) , the empirical risk can be written as (10) Rn(λ) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+Yi(t)λi(t) dt − 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+log {λi(t)} dN i(t).
+
+For RHF, the corresponding OOB contribution for subject i is evaluated by substituting the case-specific OOB hazard bλoob  
+
+> i
+
+(t) into this loss on the time set where the subject’s covariate path is defined 
+
+bRoob  
+
+> i
+
+=
+
+Z
+
+> Di
+
+Yi(t)bλoob  
+
+> i
+
+(t) dt −
+
+Z
+
+> Di
+
+log {bλoob  
+
+> i
+
+(t)} dN i(t).
+
+To compute this quantity on the evaluation grid, let Ik = ( tk−1, t k] and define the row–grid overlap set 
+
+Gi = {(r, k ) : ( Si,r , T i,r ] ∩ Ik̸ = ∅} .
+
+For (r, k ) ∈ G i, define 
+
+Li,r,k =
+
+Z tk
+
+> tk−1
+
+1{u∈(Si,r ,T i,r ]}Yi(u) du, Di,r,k =
+
+Z tk
+
+> tk−1
+
+1{u∈(Si,r ,T i,r ]} dN i(u).16 
+
+Also write bλoob  
+
+> i,r,k
+
+for the OOB grid value used on this row–grid overlap, namely 
+
+bλoob  
+
+> i,r,k
+
+=
+
+PBb=1 
+
+P
+
+> A∈Rb
+
+bλA,b (tk)1 {Zi,r ∈A}1{i∈Ob}
+
+PBb=1 1{i∈Ob}
+
+.
+
+The finite-sum OOB risk contribution is then 
+
+bRoob  
+
+> i
+
+= X
+
+> (r,k )∈G i
+
+bλoob 
+
+> i,r,k
+
+Li,r,k − X
+
+> (r,k )∈G i
+
+Di,r,k log {bλoob 
+
+> i,r,k
+
+}.
+
+Aggregating over subjects gives the ensemble OOB risk, 
+
+bRoob = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+bRoob  
+
+> i
+
+.
+
+This is a cross-validated analogue of the empirical risk Rn(λ) in (10) and can be used to monitor convergence or compare forests fit with different tuning parameters. 4.5. Time-localized RHF variable priority. RHF also supports a post hoc, time-local variable selection procedure. This method adapts the rule-release variable priority framework of Lu and Ishwaran (2024); Ishwaran (2025) from subject-level baseline records to start–stop intervals used by RHF. In this approach, each interval represents a local covariate state, and the diagnostic assesses whether removing the effect of a variable by releasing it from a forest rule changes the hazard. Each terminal node corresponds to a root-to-node decision rule. Let ζ denote such a rule and let r(ζ) ⊂ Rp be its rule region. For coordinate ν ∈ { 1, . . . , p }, let r(−ν)(ζ) be the re-gion obtained by removing all split constraints involving X(ν) while leaving the remaining constraints unchanged. The corresponding near-miss region from this release operation is 
+
+rmiss  
+
+> ν
+
+(ζ) = r(−ν)(ζ) \ r(ζ).
+
+This region contains covariate states that satisfy all rule constraints not involving X(ν), but are excluded from the original terminal node by the constraints on X(ν). An interval with 
+
+Zi,r ∈ rmiss  
+
+> ν
+
+(ζ) is therefore a local near miss for the rule. Comparing these intervals with those inside r(ζ) assesses the contribution of X(ν) to hazard exposure, since if ν is a signal coordinate, the hazard exposure within r(ζ) should be different from rmiss  
+
+> ν
+
+(ζ).To localize the comparison in time, let Wk = ( tk−1, t k] be a window formed by adjacent points on the evaluation grid T , and define the intervals active in that window by 
+
+Ak = {(i, r ) : ( Si,r , T i,r ] ∩ W k̸ = ∅} .
+
+For each active interval, the working response is the log integrated out-of-bag hazard over its overlap with the window, (11) Wi,r,k = log 
+
+(Z  
+
+> (Si,r ,T i,r ]∩W k
+
+bλoob  
+
+> i
+
+(u) du 
+
+)
+
+.
+
+For a rule ζ and coordinate ν, define indicators for intervals inside the rule region and its near-miss region: 
+
+Iin 
+
+> i,r
+
+(ζ) = 1 {Zi,r ∈r(ζ)}, Imiss  
+
+> i,r
+
+(ζ; ν) = 1 {Zi,r ∈rmiss  
+
+> ν(ζ)}
+
+.
+
+Within time window Wk, the in-rule mean and near-miss mean are 
+
+bθin  
+
+> k
+
+(ζ) = 
+
+P 
+
+> (i,r )∈A k
+
+Iin 
+
+> i,r
+
+(ζ)Wi,r,k 
+
+P 
+
+> (i,r )∈A k
+
+Iin 
+
+> i,r
+
+(ζ) , bθmiss  
+
+> k
+
+(ζ; ν) = 
+
+P 
+
+> (i,r )∈A k
+
+Imiss  
+
+> i,r
+
+(ζ; ν)Wi,r,k 
+
+P 
+
+> (i,r )∈A k
+
+Imiss  
+
+> i,r
+
+(ζ; ν) ,RANDOM HAZARD FORESTS 17 
+
+whenever the denominators are positive. The rule-level contribution when these values are defined is 
+
+∆νk (ζ) = bθin  
+
+> k
+
+(ζ) − bθmiss  
+
+> k
+
+(ζ; ν) .
+
+Let R denote the sampled collection of terminal-node rules used in the forest-level calcu-lation. For coordinate ν and time window Wk, let Rνk contain the rules in R that use X(ν)
+
+and for which both the in-rule and near-miss means are defined. The time-localized RHF priority score is the average rule-level contribution, 
+
+cVP ν (tk) = 1
+
+|R νk |
+
+X
+
+> ζ∈R νk
+
+∆νk (ζ), Rνk ̸ = ∅.
+
+The curve tk 7 → cVP ν (tk) is the RHF variable-priority curve for coordinate ν. Large values identify time windows in which X(ν) has a significant local effect on the log integrated hazard. 
+
+5. Empirical evaluation. We evaluate RHF on synthetic data with time-varying covari-ates. Event times are generated from latent continuous-time covariate trajectories and the ob-served data consist of longitudinal measurements sampled from those trajectories. We vary the number of records per subject over R = 10 , 20 , 40 . Larger R produces observed histories with finer temporal resolution. We compare RHF against several competing methods (Sec-tion 5.3). Methods that accept time-updated covariates use the observed predictable process in start–stop form, as in Section 4.1. Methods designed for fixed covariate vectors use the corresponding baseline or landmark representations. Each prediction uses only the covariate information available up to the time of prediction. Features that summarize how a covariate changes over time, such as slopes or rates of change, enter the predictor set only when the observed covariate vector already contains them. Complete details of the latent and observed covariate processes, event-time and censoring mechanisms, simulation mechanisms, software implementations, and tuning parameters for methods are given in the Supplement, along with figures of representative hazard curves. All RHF analyses use the R package randomForestRHF (Ishwaran and Kogalur, 2026). 5.1. Time-varying covariate simulations. The benchmark analysis uses three simulations that differ in how time-dependent covariates shape the hazard. 1. Smooth time variation. The first simulation has a smoothly varying hazard. Baseline co-variates determine the overall risk level, while the time-dependent component is a smooth scalar signal whose subject-specific slope is determined by baseline covariates. This set-ting favors Cox regression with time-dependent covariates, since the longitudinal signal is low dimensional, smooth, and well represented by the observed time-updated record. 2. Covariate-dependent zero-rate windows and latent longitudinal activation. In the second simulation, baseline covariates define an extended interval of exactly zero hazard. Outside this window, the hazard in one covariate region is modified by a subject-specific longi-tudinal activation process whose latent coefficients are not supplied to the learner. The design tests whether a method can recover when risk is absent, when it returns, and how it depends on the time varying longitudinal state. 3. Localized longitudinal risk region. In the third simulation, risk is elevated only when the current values of two longitudinal covariates jointly fall within a specific region. Neither covariate alone identifies this high-risk state. Thus the design tests whether a method can track when a time varying covariate path occupies a localized nonlinear risk region. 18 
+
+5.2. Evaluation metric for time-varying discrimination. The benchmark methods used in our experiments (Section 5.3) utilize longitudinal information in different ways and pro-vide different types of outputs. Some estimate hazards or survival curves, whereas others return relative-risk scores or landmark-specific risks. Because these prediction outputs differ in both scale and interpretation, no single metric provides a complete comparison. We there-fore evaluate performance from two complementary perspectives. The first is rank-based and measures time-varying discrimination: whether a method assigns higher risk to subjects who experience the event by, or at, a given time. We quantify discrimination using cumulative and incident time-dependent AUCs. The second assesses how accurately a method recovers the underlying hazard, which we quantify using mean squared error. For the discrimination summaries, we evaluate each method using two real-valued mark-ers for subject i at time t. The cumulative marker, denoted Mi(t), summarizes risk accumu-lated up to t. The instantaneous marker, denoted mi(t), summarizes risk at or near t, usually through a hazard estimate or a quantity proportional to one. Larger marker values always in-dicate higher risk. The cumulative AUC is computed from Mi(t) and evaluates ranking over the interval up to t. The incident AUC is computed from mi(t) and evaluates ranking locally at t. For both quantities, we summarize performance by an integrated AUC, denoted iAUC .All benchmark calculations are carried out on the original simulation time scale, using the evaluation grid T = {0 = t0 < t 1 < · · · < t K }. In each Monte Carlo replicate, this grid is constructed from the observed event times in the training sample and then thinned so that consecutive retained times have stable empirical event support; the exact grid-construction rule is given in the Supplement. The integrated summaries reported below are therefore event-supported grid averages, evaluated at common training-sample defined times for all methods. This convention concentrates the benchmark on regions of follow-up where risk rankings and hazard estimates are empirically well supported, while avoiding unstable tail contributions from intervals with few observed events. 5.2.1. Cumulative AUC using cumulative markers. The cumulative AUC evaluates how well a cumulative marker Mi(t) ranks subjects whose event time is no later than t above subjects who remain event-free beyond t. For a fixed t we define the population quantity using the uncensored event time T ∗,
+
+AUC cum (t) = PMi(t) > M j (t) T ∗ 
+
+> i
+
+≤ t, T ∗ 
+
+> j
+
+> t ,
+
+following the time-dependent ROC framework of Heagerty, Lumley and Pepe (2000); Hea-gerty and Zheng (2005). Here (i, j ) denotes a randomly selected pair with subject i failing by t and subject j remaining event-free beyond t.For the benchmark summaries, we evaluate this curve on T and report the grid-weighted average 
+
+iAUC cum =
+
+PKk=1 wcum  
+
+> k
+
+AUC cum (tk)
+
+PKk=1 wcum 
+
+> k
+
+.
+
+The nonnegative weights wcum  
+
+> k
+
+are event-supported grid weights that account for the num-ber of usable comparisons and right censoring. The finite-sample construction, including the Kaplan–Meier estimator of the censoring distribution used in the weights, is given in the Supplement. 5.2.2. Incident AUC using instantaneous markers. The incident AUC is the local-in-time analogue of the cumulative AUC. At time t, it compares subjects who fail at that time with RANDOM HAZARD FORESTS 19 
+
+subjects who are still at risk, using the instantaneous marker mi(t). The continuous-time target is 
+
+AUC inc (t) = Pmi(t) > m j (t) T ∗ 
+
+> i
+
+∈ [t, t + dt ), T ∗ 
+
+> j
+
+> t ,
+
+again following Heagerty, Lumley and Pepe (2000); Heagerty and Zheng (2005). Over the evaluation grid this becomes 
+
+AUC inc (tk) = Pmi(tk) > m j (tk) T ∗ 
+
+> i
+
+= tk, T ∗ 
+
+> j
+
+> t k .
+
+The case group consists of subjects failing at the evaluation time, and the control group consists of subjects who remain at risk at that time. In the benchmark, the reported incident summary is the grid-weighted average 
+
+iAUC inc =
+
+PKk=1 winc  
+
+> k
+
+AUC inc (tk)
+
+PKk=1 winc 
+
+> k
+
+.
+
+The weights winc  
+
+> k
+
+play the same role as in the cumulative AUC summary, giving more influ-ence to grid times with stable incident case–control comparisons while accounting for right censoring. The finite-sample approximation is described in the Supplement. 5.2.3. Relative hazard mean squared error. Because the AUC summaries are rank-based, they do not assess whether a method estimates the hazard on the correct numerical scale. To ealuate this directly, we define the relative mean squared error (rMSE) for an estimator bλ by 
+
+E
+
+hPKk=1 {bλ(tk, X(tk)) − λ(tk, X(tk)) }2
+
+i
+
+E
+
+hPKk=1 λ2(tk, X(tk)) 
+
+i .
+
+The expectation is over an independent test subject generated from the same simulation mechanism. The denominator normalizes by the squared true hazard, yielding a dimension-less measure for comparison across simulation settings, with smaller rMSE indicating more accurate hazard estimation. The finite-sample approximation is given in the Supplement. 5.3. Competing methods. We compare RHF to six competing methods. Definitions, soft-ware implementations, and marker constructions for all procedures are provided in the Sup-plement. Two of the methods use the same start–stop representation as RHF and therefore have direct access to the time-updated covariate process. The Cox model with time-dependent covariates (Cox-TDC) (Andersen and Gill, 1982) models the hazard as λ0(t) exp {βT Zi(t)}.Its instantaneous marker is mi(t) = exp { bβT Zi(t)}, and its cumulative marker is the cu-mulative hazard along the start–stop path, Mi(t) = R t 
+
+> 0
+
+exp { bβT Zi(s)} dbΛ0(s). The boosted nonparametric hazard estimator (BoXHED) of Lee, Chen and Ishwaran (2021) also uses the start–stop covariate process, but estimates the hazard nonparametrically by gradient boost-ing under a hazard-likelihood loss. For BoXHED (Wang et al., 2020; Pakbin et al., 2025), the instantaneous marker is the estimated case-specific hazard, and the cumulative marker is obtained by integrating the hazard along the supplied covariate path. The remaining four methods are baseline and landmark-based survival competitors. Base-line RSF fits a standard random survival forest (Ishwaran et al., 2008). We use its estimated cumulative hazard bΛRSF (t | Xi) as the cumulative marker and finite-differenced increments of this estimate as the instantaneous marker. The discrete-time neural hazard model (log-HazNN) targets a piecewise-constant hazard using a logistic link and a fully connected neural network (Biganzoli et al., 1998; Gensheimer and Narasimhan, 2019). DeepSurv replaces the linear predictor in the Cox model with a neural network (Faraggi and Simon, 1995; Katzman 20 
+
+et al., 2018). We fit both neural baselines with the pycox library (Kvamme, Borgan and Scheel, 2019; Kvamme and Borgan, 2021). The final method, landmark random survival for-est (RSF-LM), is implemented as a dynamic multi-landmark procedure (Pickett et al., 2021; Moradian et al., 2022). At each landmark time ℓ, RSF is fit to subjects still at risk at ℓ us-ing the landmark covariates Zi(ℓ); predictions are obtained by stitching increments from the most recent available landmark-specific cumulative hazard. 5.4. Benchmark design. For each experiment we ran 100 independent Monte Carlo repli-cates. In each replicate, we drew independent training and test samples of equal size n = 2500 
+
+from the same data-generating mechanism. Each method was fit using only the training sam-ple, and all time-dependent AUC curves and performance summaries were computed from predictions on the independent test sample. Results from all experiments are displayed in Figure 1, with critical-difference summaries given in Figure 2. 5.5. Benchmark results. Simulation 1 was constructed as a favorable case for regression-style methods. The hazard is smooth, low dimensional, and well matched to a Cox model with time-dependent covariates. Not surpsingly, Cox-TDC achieves the highest cumulative discrimination and DeepSurv the lowest hazard rMSE. Simulation 2 presents a different challenge. Risk can switch off over a covariate-dependent time window and then reactivate through a longitudinal signal whose latent coefficients are not supplied to the learner. This local on-off time structure is difficult to capture with fixed-baseline summaries or simple log-linear effects. In this setting, RHF has the best overall performance, combining the lowest hazard rMSE with the highest incident discrimination and near-highest cumulative discrimination. BoXHED is second in terms of hazard estima-tion, while landmark RSF has the highest discrimination but larger hazard rMSE. The fixed-baseline forest and the neural methods are the least accurate here. Simulation 3 shows the clearest separation between methods that use time-varying co-variates and those that do not. Here risk is localized in the joint space of two longitudinal coordinates, so the signal is neither a baseline effect nor a monotone effect of a single co-variate. RHF and BoXHED, which use time-varying covariates effectively, rank at the top for cumulative and incident discrimination, and RHF has the lowest hazard rMSE. Discrimina-tion of the fixed-baseline methods is not much better than random. Landmark RSF is better but does not reach the same levels as RHF or BoXHED. 5.6. Overall summary of benchmark results. RHF ranks first in terms of rMSE and first or second in terms of discrimation in the challenging simulations 2 and 3. In simulation 1, RHF ranks between first and third on the different metrics as expected in a setting favoring regression methods. 
+
+6. Time-varying ICU risk in MIMIC-IV. We next apply RHF to longitudinal ICU records from the Medical Information Mart for Intensive Care IV (MIMIC-IV), a large, pub-lic database of hospital and ICU encounters (Johnson et al., 2023a,b). The analysis uses the first ICU stay for each adult patient, age ≥ 18 years, and assembles approximately 11 mil-lion hourly records from routine clinical care. Predictors include physiologic measurements, laboratory values, indicators of organ-support therapies, and descriptors recorded at ICU ad-mission. This setting is a natural test case for pathwise risk prediction because the information available for prediction changes throughout the stay. Measurements arrive irregularly, differ-ent variables update on different schedules, treatments begin and end, and patient condition can change rapidly. A baseline-only risk score compresses this into a single initial summary, whereas RHF updates the estimated hazard as new covariate values become available. The RANDOM HAZARD FORESTS 21 Simulation 1 Simulation 2 Simulation 3 Cumulative iAUC Incident iAUC Hazard rMSE log10 
+
+> RHF BoXHED Cox-TDC RSF RSF-LM DeepSurv LogHazNN RHF BoXHED Cox-TDC RSF RSF-LM DeepSurv LogHazNN RHF BoXHED Cox-TDC RSF RSF-LM DeepSurv LogHazNN
+
+0.5 0.6 0.7 0.8 0.50 0.55 0.60 0.65 0.70 -1.0 -0.5 0.0 0.5 
+
+Record count R = 10 R = 20 R = 40 
+
+FIG 1. Benchmark performance from time-varying covariate simulations. Higher values indicate better discrim-ination for cumulative and incident iAUC . Lower values indicate more accurate hazard estimation for relative hazard MSE (displayed on log 10 scale). Dashed reference lines denote iAUC = 0 .5 and log 10 (rMSE) = 0 .Simulation 1 Cumulative iAUC       
+
+> 1234567
+
+RHF Cox−TDC RSF−LM BoXHED DeepSurv RSF LogHazNN 
+
+Simulation 1 Incident iAUC       
+
+> 1234567
+
+BoXHED RHF DeepSurv RSF−LM Cox−TDC RSF LogHazNN 
+
+Simulation 1 Hazard rMSE       
+
+> 1234567
+
+DeepSurv BoXHED RHF Cox−TDC RSF−LM RSF LogHazNN 
+
+Simulation 2 Cumulative iAUC       
+
+> 1234567
+
+RSF−LM RHF BoXHED Cox−TDC RSF DeepSurv LogHazNN 
+
+Simulation 2 Incident iAUC       
+
+> 1234567
+
+RHF RSF−LM BoXHED Cox−TDC DeepSurv RSF LogHazNN 
+
+Simulation 2 Hazard rMSE       
+
+> 1234567
+
+RHF BoXHED Cox−TDC DeepSurv RSF−LM RSF LogHazNN 
+
+Simulation 3 Cumulative iAUC       
+
+> 1234567
+
+RHF BoXHED RSF−LM Cox−TDC DeepSurv LogHazNN RSF 
+
+Simulation 3 Incident iAUC       
+
+> 1234567
+
+BoXHED RHF RSF−LM Cox−TDC DeepSurv RSF LogHazNN 
+
+Simulation 3 Hazard rMSE       
+
+> 1234567
+
+RHF BoXHED RSF−LM Cox−TDC DeepSurv RSF LogHazNN 
+
+FIG 2. Critical-difference plots for the benchmark results in Figure 1. Points display average rank. Horizontal bars connect methods whose average ranks are within the Nemenyi critical difference α = .01 .22 
+
+case study has two goals. We first evaluate how well RHF discriminates the cause-specific in-hospital death. We then use the time-localized variable priority scores from Section 4.5 to examine how variables drive risk over time. 6.1. Cohort construction. The analysis targets the cause-specific hazard of in-hospital death among patients who remain alive and hospitalized. Discharge alive is therefore treated as exit from the hospital-at-risk process, not as independent censoring for an absolute death-before-discharge target. Estimating absolute death-before-discharge probabilities would re-quire a competing-risk or multistate extension. For subject i, let Ti denote the time from ICU admission to the end of hospital-at-risk follow-up, and let δi ∈ { 0, 1} denote the terminal status, with δi = 1 for in-hospital death and δi = 0 for discharge alive. We restricted the analysis to the first ICU stay for each patient to avoid dependence across multiple stays for the same person. Follow-up begins at ICU admission and ends at the earlier of in-hospital death or discharge alive, so there is at most one event per stay. After excluding stays with zero recorded duration, the cohort contained 52 ,219 patients, of whom 5,455 died before hospital discharge. The start–stop dataset contained 11 ,106 ,272 hourly records. Covariates were organized on a patient-specific grid of hourly risk intervals anchored at ICU admission. The grid aligned irregularly recorded measurements and treatments with these intervals. It did not assume covariates were observed on a fixed hourly schedule. Each row held the information available at the start of its interval. To preserve temporal order, a measurement charted during an hour was summarized within that hour but became available only at the following interval. Fixed lookback windows initialized only the admission-time covariate history. We included laboratory values charted within 48 hours before admission, and ICU-charted measurements and urine-output records charted within 2 hours. We filled short gaps after admission by carrying the last observation forward, never backward, using a 6-hour window for vital signs and respiratory settings and a 24-hour window for laboratory values. We used no within-stay median imputation. When no prior value fell within a win-dow, we added a missingness indicator and imputed a fixed value derived from the cohort. We coded organ-support indicators from the therapy status available at the start of each in-terval. Death and discharge times defined only the start–stop intervals, the event indicator, and the hospital-at-risk process. We excluded discharge disposition, length of stay, and other administrative outcome and follow-up fields from the predictor matrix. Together, these rules yielded a predictable hourly covariate process in which patient-specific measurements and treatment states entered only after they were available before the corresponding risk interval. 6.2. Training and tuning parameters. We split the cohort at the patient level, using 70% 
+
+of patients for training and 30% for testing, and kept each patient’s full ICU trajectory within a single split. RHF was fit on the training set using the same fixed tuning conventions as in the simulation benchmarks, with B = 500 trees, mtry = ⌈√p⌉, and an event-supported evaluation grid constructed from the training sample as described in the Supplement. The remaining tuning parameter was tree size, equivalently the maximum number of splits, which we selected using the OOB empirical risk described in Section 4.4. The top panel of Figure 3 shows the OOB empirical risk over a range of candidate tree sizes. Based on this curve, we selected tree size as 80 for the final MIMIC-IV fit. Unless otherwise stated, all subsequent MIMIC-IV analyses use this tuned RHF model. 6.3. Performance evaluation. We evaluated performance of the trained forest using the cumulative and incident AUC curves defined in Section 5. For the training curves, we used OOB estimates, so that each patient is evaluated using only trees that were not grown on that patient’s data. For the test curves, we used estimates from the held-out patients. The bottom RANDOM HAZARD FORESTS 23 
+
+panels of Figure 3 show strong discrimination of the cause-specific in-hospital death hazard in both samples. The cumulative AUC is in the mid 0.9 range across most of follow-up, and the incident AUC, a more local and demanding measure, is in the low 0.9 range. -0.34 -0.32 -0.30 -0.28 -0.26 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100 Tree size OOB empirical risk Selected tree size = 80 100 200 300 400 0.5 0.6 0.7 0.8 0.9 1.0    
+
+> Cumulative AUC
+> Hours since ICU admission AUC(t) Train (iAUC=0.959) Test (iAUC=0.961) 100 200 300 400 0.5 0.6 0.7 0.8 0.9 1.0
+> Incident AUC
+> Hours since ICU admission AUC(t) Train (iAUC=0.901) Test (iAUC=0.909)
+
+FIG 3. Top panel shows OOB empirical risk versus RHF tree size, used to select tree size 65 for the final MIMIC-IV analysis. Bottom panels show cumulative (left) and incident (right) AUC curves for RHF, using OOB predictions in the training set (solid lines) and held-out test predictions (dashed lines). Time is in hours since ICU admission. 
+
+6.4. Time-localized variable priority. To better understand which measurements drive the hazard at different stages of an ICU stay, we applied the time-localized variable priority method of Section 4.5. The calculation uses the same start–stop representation used for fitting RHF. Each interval was assigned the log OOB integrated hazard exposure in (11), and, for each evaluation-grid window, the rule and near-miss summaries were computed using only intervals that overlapped that window. Thus, the score for a given window reflects local rule contrasts among the interval records contributing to the hospital-at-risk process during that period. Figure 4 displays the resulting variable priority scores as a barplot matrix. Time win-dows are shown on the horizontal axis, variables on the vertical axis, and bar size and color encode the magnitude of the priority score. Neurologic status dominates the variable priority profile. The Glasgow Coma Scale has large scores throughout follow-up, with its 6-hour mean especially large early on. Lactate is also a top variable, becomming more important with time. Age, blood urea nitrogen, and bi-carbonate have significant values throughout, whereas platelet count, white blood cell count, glucose, hemoglobin, phosphate, potassium, and other laboratory markers become more im-portant later. Vasopressin use also appears at several time points. Oxygenation measures, in-cluding oxygen saturation, fraction of inspired oxygen, and the PaO 2/FiO 2 ratio, have more 24 Mean arterial pressure (mmHg) Diastolic blood pressure (mmHg) Norepinephrine in past 6h Arterial pH Arterial oxygen partial pressure (PaO2) (mmHg) Calcium (mg/dL) Creatinine (mg/dL) PaCO2 (mmHg) Systolic blood pressure (mmHg) Oxygen saturation (SpO2) (%) Hematocrit (%) PaO2/FiO2 ratio (mmHg) Mechanical ventilation in past 6h Fraction of inspired oxygen (FiO2) Vasopressin in past 6h Magnesium (mg/dL) Potassium (mEq/L) Hemoglobin (g/dL) Albumin (g/dL) Phosphate (mg/dL) White blood cell count (10^3/uL) First ICU care unit Glucose (mg/dL) Platelet count (10^3/uL) Blood urea nitrogen (BUN) (mg/dL) Bicarbonate (mEq/L) GCS mean, past 6h (score) Age (years) Lactate (mmol/L) Glasgow Coma Scale (GCS) t=2.35 t=3.75 t=4.95 t=6.6 t=7.95 t=9.67 t=11.26 t=12.72 t=14.33 t=15.96 t=17.52 t=18.96 t=21.27 t=23.28 t=25.24 t=27.4 t=29.58 t=31.69 t=34.75 t=37.71 t=40.35 t=43.07 t=46.17 t=48.93 t=51.64 t=55.31 t=58.47 t=61.74 t=65.08 t=68.23 t=73.1 t=77.58 t=82.08 t=85.94 t=89.21 t=93.26 t=98.62 t=103.72 t=109.03 t=114.63 t=118.95 t=124.72 t=132.03 t=139.85 t=147.16 t=153.13 t=159.82 t=166.87 t=173.63 t=180.73 t=189.37 t=199.38 t=207.39 t=215.6 t=226.93 t=237.55 t=250.04 t=262.15 t=272.4 t=285.11 t=303.02 t=316.48 t=329.43 t=346.62 t=368.45 t=388.85 t=408.47 t=438.73 t=484.47 t=526.73 t=577.18 t=659.18 t=749.65 t=879.22 
+
+Score 
+
+30 20 10 10 20 30 
+
+FIG 4. Time-localized RHF variable priority analysis for MIMIC-IV. For each evaluation-grid window, the calcu-lation is restricted to start–stop intervals that overlap the window and compares the log OOB integrated hazard exposure inside each forest rule with that of the corresponding near-miss set obtained by releasing a variable. Each bar shows the priority score for a variable at a given time. Bar size and color increase with the priority score, with legends shown at right. 
+
+localized and generally smaller scores. Overall, the priority analysis points to a temporal shift in the hazard, in which neurologic status and acute metabolic stress are early indicators, while renal, hematologic, metabolic, and treatment-related markers play a role in longer stays. 
+
+7. Discussion. This paper introduced Random Hazard Forests (RHF), a survival tree en-semble that estimates a hazard map on time–covariate space for time-dependent covariates. Applying this map to a predictable covariate process yields a path-specific hazard trajectory that evolves as the covariate state changes. Because each state is determined by information available immediately beforehand, the construction preserves temporal ordering and accom-modates internal longitudinal covariates without lookahead. RHF thereby models evolving risk directly, without reducing the problem to baseline covariates, landmark snapshots, or fixed discrete-time classification problems. RANDOM HAZARD FORESTS 25 
+
+The experiments clarify when this type of flexibility is most helpful and when it is not. In Simulation 1, where the hazard was smooth, low-dimensional, and well represented by a Cox model with time-dependent covariates, simpler regression-based methods matched or outperformed RHF. On the other hand, in Simulations 2 and 3, where risk depended on more complex features of the current longitudinal state, RHF was among the best in terms of discrimination and ranked first for hazard rMSE. Therefore, the flexibility of RHF becomes more valuable as the complexity of risk increases. The MIMIC-IV case study illustrated an additional advantage of the pathwise formulation. Alongside strong predictive performance, RHF revealed how variables contributing to the hazard changed over follow-up. The time-localized variable priority analysis distinguished variables that remained prominent throughout follow-up from those that were concentrated early or late. These are the kinds of temporal patterns that a single global ranking would miss. In clinical settings, where physiology and treatment evolve over time, this type of insight is especially important for patient management. The present work also leaves several important directions open. RHF currently targets a single cause-specific event process, but the same likelihood-based ideas could be developed for competing risks, recurrent events, and multistate outcomes. Because discrimination and hazard accuracy do not by themselves ensure well-calibrated estimates, calibration diagnos-tics and post-hoc calibration methods for hazard trajectories are also needed. For routine-care data, the observation process is itself part of the problem: missingness, irregular measure-ment, and informative observation times should be modeled more explicitly. Streaming im-plementations and richer local explanation tools, including individual-level variable priority (Lu and Ishwaran, 2025), would further support real-time clinical use. 
+
+Funding. Hemant Ishwaran and Udaya B. Kogalur were supported by the National Insti-tutes of Health through the National Institute of General Medical Sciences (R35 GM139659) and the National Heart, Lung, and Blood Institute (R01 HL164405). Eileen M. Hsich and Donald K. K. Lee were supported by the National Institutes of Health through the National Heart, Lung, and Blood Institute (R01 HL164405). 
+
+Data and Code Availability. The randomForestRHF R-package implementing Ran-dom Hazard Forests is publicly available on CRAN (Ishwaran and Kogalur, 2026). Functions for implementing simulations are included in the package, and detailed descriptions of the benchmark experiment are provided in the Supplement for reproducibility. The MIMIC-IV data used in the ICU case study are publicly available through PhysioNet (Johnson et al., 2023a,b) after completing the required credentialing process. REFERENCES             
+
+> ANDERSEN , P. K. and G ILL , R. D. (1982). Cox’s regression model for counting processes: a large sample study.
+> The Annals of Statistics 1100–1120. ANDERSEN , P. K., B ORGAN , O., G ILL , R. D. and K EIDING , N. (1993). Statistical Models Based on Counting Processes . Springer Science & Business Media. BACCHETTI , P. and S EGAL , M. R. (1995). Survival trees with time-dependent covariates: application to esti-mating changes in the incubation period of AIDS. Lifetime Data Analysis 135–47. https://doi.org/10.1007/ BF00985256 BIGANZOLI , E., B ORACCHI , P., M ARIANI , L. and M ARUBINI , E. (1998). Feed forward neural networks for the analysis of censored survival data: a partial logistic regression approach. Statistics in Medicine 17 1169–1186. CHING , T., Z HU , X. and G ARMIRE , L. X. (2018). Cox-nnet: an artificial neural network method for prognosis prediction of high-throughput omics data. PLoS Computational Biology 14 e1006076.
+
+26 
+
+COX , D. R. (1972). Regression models and life-tables. Journal of the Royal Statistical Society: Series B (Method-ological) 34 187–202. DEVAUX , A., H ELMER , C., G ENUER , R. and P ROUST -L IMA , C. (2023). Random survival forests with multi-variate longitudinal endogenous covariates. Statistical Methods in Medical Research 32 2331–2346. EBELL , M. H. (1993). Artificial neural networks for predicting failure to survive following in-hospital cardiopul-monary resuscitation. Journal of Family Practice 36 297–297. FARAGGI , D. and S IMON , R. (1995). A neural network model for survival data. Statistics in Medicine 14 73–82. GENSHEIMER , M. F. and N ARASIMHAN , B. (2019). A scalable discrete-time survival model for neural networks. 
+
+PeerJ 7 e6257. GILL , R. D. and J OHANSEN , S. (1990). A survey of product-integration with a view toward application in survival analysis. Annals of Statistics 18 1501–1555. HEAGERTY , P. J., L UMLEY , T. and P EPE , M. S. (2000). Time-dependent ROC curves for censored survival data and a diagnostic marker. Biometrics 56 337–344. HEAGERTY , P. J. and Z HENG , Y. (2005). Survival model predictive accuracy and ROC curves. Biometrics 61 
+
+92–105. HENDERSON , R., D IGGLE , P. and D OBSON , A. (2000). Joint modelling of longitudinal measurements and event time data. Biostatistics 1 465–480. HU, B. and N AN , B. (2023). Conditional distribution function estimation using neural networks for censored and uncensored data. Journal of Machine Learning Research 24 1–26. ISHWARAN , H. (2025). Multivariate Statistics: Classical Foundations and Modern Machine Learning , 1st ed. Chapman and Hall/CRC, Boca Raton, FL. ISHWARAN , H. and K OGALUR , U. B. (2026). Random Hazard Forests R package version 1.0.1. ISHWARAN , H., K OGALUR , U. B., B LACKSTONE , E. H. and L AUER , M. S. (2008). Random survival forests. 
+
+Annals of Applied Statistics 2 841–860. JARRETT , D., Y OON , J. and VAN DER SCHAAR , M. (2018). MATCH-Net: Dynamic prediction in survival anal-ysis using convolutional neural networks. arXiv preprint arXiv:1811.10746 .JIANG , S., X IE , Y. and C OLDITZ , G. A. (2021). Functional ensemble survival tree: Dynamic prediction of Alzheimer’s disease progression accommodating multiple time-varying covariates. Journal of the Royal Sta-tistical Society Series C: Applied Statistics 70 66–79. JOHNSON , A. E. W., B ULGARELLI , L., S HEN , L., G AYLES , A., S HAMMOUT , A., H ORNG , S., C ELI , L. A. and P OLLARD , T. J. (2023a). MIMIC-IV, a freely accessible electronic health record dataset. Scientific Data 
+
+10 1–11. https://doi.org/10.1038/s41597-022-01899-x JOHNSON , A. E. W., B ULGARELLI , L., P OLLARD , T. J., H ORNG , S., C ELI , L. A. and M ARK , R. G. (2023b). MIMIC-IV-ICU: a freely accessible electronic health record dataset of intensive care unit patients. Scientific Data 10 26. https://doi.org/10.1038/s41597-022-01898-y KALBFLEISCH , J. D. and P RENTICE , R. L. (2002). The Statistical Analysis of Failure Time Data , 2nd ed. Wiley, Hoboken, NJ. KATZMAN , J. L., S HAHAM , U., C LONINGER , A., B ATES , J., J IANG , T. and K LUGER , Y. (2018). DeepSurv: personalized treatment recommender system using a Cox proportional hazards deep neural network. BMC Medical Research Methodology 18 24. KVAMME , H., B ORGAN , Ø. and S CHEEL , I. (2019). Time-to-event prediction with neural networks and Cox regression. Journal of Machine Learning Research 20 1–30. KVAMME , H. and B ORGAN , Ø. (2021). Continuous and discrete-time survival prediction with neural networks. 
+
+Lifetime Data Analysis 27 710–736. LEE , D. K., C HEN , N. and I SHWARAN , H. (2021). Boosted nonparametric hazards with time-dependent covari-ates. Annals of Statistics 49 2101–2128. LEE , C., Z AME , W. R., Y OON , J. and VAN DER SCHAAR , M. (2018). DeepHit: A Deep Learning Approach to Survival Analysis With Competing Risks. In AAAI 2314–2321. LIESTBL , K., A NDERSEN , P. K. and A NDERSEN , U. (1994). Survival analysis and neural nets. Statistics in Medicine 13 1189–1200. LIN , J., L I, K. and L UO , S. (2021). Functional survival forests for multivariate longitudinal outcomes: Dynamic prediction of Alzheimer’s disease progression. Statistical methods in medical research 30 99–111. LU, M. and I SHWARAN , H. (2024). Model-independent variable selection via the rule-based variable priority. 
+
+arXiv preprint arXiv:2409.09003 . arXiv:2409.09003 [stat.ML]. LU, M. and I SHWARAN , H. (2025). Individual variable priority: a model-independent local gradient method for variable importance. Artificial Intelligence Review 58 407. LUCK , M., S YLVAIN , T., C ARDINAL , H., L ODI , A. and B ENGIO , Y. (2017). Deep learning for patient-specific kidney graft survival analysis. arXiv preprint arXiv:1705.10245 .MORADIAN , H., Y AO , W., L AROCQUE , D., S IMONOFF , J. S. and F RYDMAN , H. (2022). Dynamic estimation with random forests for discrete-time survival data. Canadian Journal of Statistics 50 533–548. RANDOM HAZARD FORESTS 27 
+
+NOWROOZILARKI , Z., P AKBIN , A., R OYALTY , J., L EE , D. K. and M ORTAZAVI , B. J. (2021). Real-time mor-tality prediction using MIMIC-IV ICU data via boosted nonparametric hazards. In 2021 IEEE EMBS Interna-tional Conference on Biomedical and Health Informatics (BHI) 1–4. IEEE. PAKBIN , A., W ANG , X., M ORTAZAVI , B. J. and L EE , D. K. K. (2025). BoXHED2.0: Scalable Boosting of Dynamic Survival Analysis. Journal of Statistical Software 113 1–26. https://doi.org/10.18637/jss.v113.i03 PICKETT , K. L., S URESH , K., C AMPBELL , K. R., D AVIS , S. and J UAREZ -C OLUNGA , E. (2021). Random survival forests for dynamic predictions of a time-to-event outcome using a longitudinal biomarker. BMC Medical Research Methodology 21 1–14. RAMADAN , B., L IU , M.-C., B URKHART , M. C., P ARKER , W. F. and B EAULIEU -J ONES , B. K. (2025). Diag-nostic codes in AI prediction models and label leakage of same-admission clinical outcomes. JAMA Network Open 8 e2550454. REN , K., Q IN , J., Z HENG , L., Y ANG , Z., Z HANG , W., Q IU , L. and Y U, Y. (2019). Deep recurrent survival analysis. In Proceedings of the AAAI Conference on Artificial Intelligence 33 4798–4805. TU, J. V. and G UERRIERE , M. R. (1993). Use of a neural network as a predictive instrument for length of stay in the intensive care unit following cardiac surgery. Computers and Biomedical Research 26 220–229. VAN HOUWELINGEN , H. C. (2007). Dynamic prediction by landmarking in event history analysis. Scandinavian Journal of Statistics 34 70–85. WANG , H. and L I, G. (2019). Extreme learning machine Cox model for high-dimensional survival analysis. 
+
+Statistics in Medicine 38 2139–2156. WANG , X., P AKBIN , A., M ORTAZAVI , B., Z HAO , H. and L EE , D. (2020). BoXHED: Boosted eXact Hazard Estimator with Dynamic covariates. In Proceedings of the 37th International Conference on Machine Learning 
+
+(H. D. III and A. S INGH , eds.). Proceedings of Machine Learning Research 119 9973–9982. PMLR. WONGVIBULSIN , S., W U, K. C. and Z EGER , S. L. (2020). Clinical risk prediction with random forests for survival, longitudinal, and multivariate (RF-SLAM) data analysis. BMC Medical Research Methodology 20 1. WULFSOHN , M. S. and T SIATIS , A. A. (1997). A joint model for survival and longitudinal data measured with error. Biometrics 330–339. YAO , W., F RYDMAN , H., L AROCQUE , D. and S IMONOFF , J. S. (2022). Ensemble methods for survival function estimation with time-varying covariates. Statistical Methods in Medical Research 31 2217–2236. YOUSEFI , S., A MROLLAHI , F., A MGAD , M., D ONG , C., L EWIS , J. E., S ONG , C., G UTMAN , D. A., H A-
+
+> LANI
+
+, S. H., V EGA , J. E. V., B RAT , D. J. et al. (2017). Predicting clinical outcomes from large scale cancer genomic profiles with deep survival models. Scientific Reports 7 1–11. ZHAO , L. and F ENG , D. (2020). Deep neural networks for survival analysis using pseudo values. IEEE Journal of Biomedical and Health Informatics 24 3308–3314.

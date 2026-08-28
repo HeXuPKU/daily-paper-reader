@@ -1,0 +1,2070 @@
+Title: scUnify: a unified framework for training and inference across multiple single-cell foundation models
+
+URL Source: https://www.biorxiv.org/content/10.64898/2026.03.01.708392v2.full.pdf
+
+Number of Pages: 42
+
+Markdown Content:
+# scUnify: a unified framework for training and inference across multiple single-cell foundation models 
+
+## Donghee Kim 1, Ari Hong 2, Kyeonghun Jeong 3* ,Kwangsoo Kim 4,5,6* 
+
+> 1
+
+Biomedical Research Institute, Seoul National University Hospital Seoul, Republic of Korea. 
+
+> 2
+
+Interdisciplinary Program in Bioinformatics, Seoul National University, Seoul,Republic of Korea. 
+
+> 3
+
+Interdisciplinary Program in Bioengineering, Seoul National University, Seoul, Republic of Korea. 
+
+> 4
+
+Department of Transdisciplinary Medicine, Seoul National University Hospital, Seoul, Republic of Korea. 
+
+> 5
+
+Department of Medicine, College of Medicine, Seoul National University, Seoul, Republic of Korea. 
+
+> 6
+
+Center for Data Science, Healthcare AI Research Institute, Seoul National University Hospital, Seoul, Republic of Korea. *Corresponding author(s). E-mail(s): scientist0205@snu.ac.kr; kwangsookim@snu.ac.kr; Contributing authors: dhkim960327@gmail.com; elly924@snu.ac.kr; 
+
+Abstract 
+
+Single-cell foundation models (scFMs) differ in software requirements and per-formance across downstream tasks and adaptation strategies, complicating comparison and reuse. We present scUnify, a framework that preserves each back-bone’s required processing while separating model-specific trainers, downstream tasks, and adaptation strategies as reusable components. Across five scFMs, scU-nify reproduced original inference and training workflows, extended model-native 
+
+1
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+tasks with multiple parameter-efficient fine-tuning methods, and demonstrated extensibility by connecting a newly implemented custom trainable task to mul-tiple backbones and adaptation strategies. Together, these capabilities enable researchers to systematically compare these combinations and extend custom tasks across heterogeneous scFMs within a common workflow.  
+
+> Keywords: Single-cell RNA sequencing, Single-cell foundation models, Computational framework, Model adaptation
+
+# 1 Background 1
+
+The accumulation of large single-cell RNA sequencing (scRNA-seq) atlases has enabled 2
+
+the pretraining of transcriptional patterns observed across tissues and studies and 3
+
+their transfer to new data. Since 2023, various single-cell foundation models (scFMs) 4
+
+that learn transferable cell representations from large atlases have continued to 5
+
+emerge[1]. Early scFMs, including scGPT, Geneformer, and scFoundation, were pre-6
+
+trained primarily on large scRNA-seq datasets. Those model proofed the applicability 7
+
+to downstream tasks such as celltype classification, batch correction, perturbation 8
+
+prediction, and drug-response prediction[2–4]. Recently, UCE and Nicheformer cover 9
+
+broader biological context into cell representation by exploiting the additional infor-10 
+
+mation such as protein-sequence priors embedded by a protein language or spatial 11 
+
+transcriptomic expression[5, 6]. 12 
+
+However, as the number and scope of scFMs have expanded rapidly, selecting a 13 
+
+appropriate model for researcher’s data and research objective has become complex. 14 
+
+Moreover, evaluation study of various scFMs across multiple datasets and downstream 15 
+
+tasks showed that different scFMs had superior performance depending on the task, 16 
+
+and that no single scFM demonstrated consistently dominated performance across all 17 
+
+comparisons[7, 8]. It suggests that rating the model suitability is inappropriate from 18 
+
+previously reported ranks and that comparing candidate scFMs under the research 19 
+
+context is important. However, scFMs differ in model-specific preprocessing and input 20 
+
+2
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+construction, software environments, and training procedures, and each model is dis-21 
+
+tributed primarily through an independent repository. Consequently, comparing the 22 
+
+growing range of scFM options requires a recurring model-specific engineering burden 23 
+
+including repeated data preparation and environment setup. 24 
+
+Recent evaluation studies have reported that pretrained cell representations do not 25 
+
+consistently outperform simpler methods or task-specific baselines across downstream 26 
+
+settings. In particular, performance advantages were inconsistent when frozen cell rep-27 
+
+resentations were used directly or with probing[8, 9]. Although Full-FT can improve 28 
+
+performance over probing in some settings, supervised fine-tuning evaluations of cell-29 
+
+type annotation and perturbation prediction showed that its gains were not consistent 30 
+
+and that simpler baselines could remain competitive, while updating all model param-31 
+
+eters also incurs substantial computational cost[10, 11]. Meanwhile, scPEFT applied 32 
+
+adapter-based parameter-efficient fine-tuning (PEFT) to multiple scFMs and showed 33 
+
+that it could achieve performance comparable to or better than probing or Full-FT in 34 
+
+some of the evaluated downstream and out-of-distribution settings[12]. These findings 35 
+
+establish PEFT as an important adaptation option for scFM applications. However, 36 
+
+applying the same PEFT method across scFMs with heterogeneous backbone architec-37 
+
+tures and training procedures still requires model-specific integration and validation, 38 
+
+leaving an implementation burden for systematic adaptation comparisons. 39 
+
+These studies show that researchers need to consider adaptation strategies, includ-40 
+
+ing probing, Full-FT, and PEFT, alongside multiple candidate scFMs when evaluating 41 
+
+models and training conditions for their downstream tasks. However, because each 42 
+
+scFM has its own software environment and downstream task learning procedure and 43 
+
+applying PEFT also requires model-specific implementation, the recurring engineering 44 
+
+burden grows with the number of combinations among models, downstream tasks, and 45 
+
+adaptation strategies considered, creating a need for an integrated framework that can 46 
+
+consistently execute and compare multiple models and adaptation conditions across 47 
+
+3
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+diverse downstream tasks within a common analytical workflow. In response to this 48 
+
+need, several scFM integration frameworks have recently been developed to address dif-49 
+
+ferent aspects of scFM execution, benchmarking, and downstream use (Supplementary 50 
+
+Table S1). First, scDrugMap integrates multiple scFMs into a drug-response prediction 51 
+
+workflow and a web-based service, allowing users to explore model-specific predictions 52 
+
+and benchmark results for drug response[13], whereas scFM-eval provides a container-53 
+
+ized workflow for standardized execution and benchmarking of multiple scFMs across 54 
+
+diverse datasets under zero-shot, few-shot, and fine-tuning settings and manages mul-55 
+
+tiple runs within the same workflow[14]. Although these tools integrate multiple scFMs 56 
+
+within a drug-response application or a general execution and evaluation infrastruc-57 
+
+ture, neither demonstrates support for extending user-defined trainable downstream 58 
+
+tasks across multiple backbones or applying and comparing multiple PEFT methods. 59 
+
+Moving beyond execution and evaluation, BioLLM connects model loading, cell embed-60 
+
+ding generation, and selected downstream fine-tuning workflows across multiple scFMs 61 
+
+through a common model loader and a downstream task interface termed BioTask, 62 
+
+allowing new analytical tasks to be added[15]. Similarly, GB.ModelGenerator con-63 
+
+nects foundation models spanning the DNA, RNA, protein, and cell domains through 64 
+
+a common backbone–task interface and enables custom tasks to be constructed with 65 
+
+the GB.Cell family, scFoundation, and Geneformer in the single-cell domain[16]. These 66 
+
+two frameworks therefore provide interfaces for extending trainable downstream tasks. 67 
+
+However, neither framework demonstrates the common application and comparison 68 
+
+of diverse PEFT methods across multiple scFMs. Collectively, existing tools have 69 
+
+expanded their scope from scFM execution and benchmarking to extensible trainable 70 
+
+downstream tasks, but a single-cell workflow that reuses the same trainable task across 71 
+
+heterogeneous scFM backbones while independently applying diverse PEFT methods 72 
+
+to compare model–task–adaptation combinations has not yet been fully addressed. 73 
+
+4
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+To address this gap, we developed scUnify, a framework that enables researchers 74 
+
+to compare multiple scFMs and adaptation strategies for their downstream tasks 75 
+
+and extend new trainable tasks across diverse scFMs. Its core design preserves the 76 
+
+software environment required by each scFM and encapsulates model-specific prepro-77 
+
+cessing, input construction, and forward procedures within a model-specific trainer, 78 
+
+while treating downstream task learning and adaptation strategies as reusable com-79 
+
+ponents separated from the backbone. This separation allows researchers to retain the 80 
+
+same task-learning logic while changing the scFM backbone and independently apply-81 
+
+ing and comparing probing, Full-FT, and multiple PEFT methods. Moreover, when 82 
+
+adding a new trainable task, researchers need only implement its task-specific learn-83 
+
+ing logic through the common task interface, after which the task can be connected 84 
+
+to multiple scFM backbones and adaptation strategies. Beyond supporting these 85 
+
+model–task–adaptation combinations, scUnify provides a core system for scheduling 86 
+
+and managing the growing number of experiments. When multiple experiments are 87 
+
+submitted together, the core system manages run allocation, queuing, execution, and 88 
+
+result collection according to the available computational resources, while researchers 89 
+
+can monitor overall progress through the runtime dashboard. Each run is executed 90 
+
+using an AnnData object and a single configuration file specifying the combination 91 
+
+and execution conditions, with cell embeddings and task-specific predictions returned 92 
+
+in AnnData format for direct compatibility with the scverse ecosystem widely used in 93 
+
+scRNA-seq analysis[17]. 94 
+
+In addition, scUnify provides several supporting features that reflect practical 95 
+
+workflows for using scFMs in scRNA-seq studies. First, researchers who wish to 96 
+
+explore pretrained cell representations before downstream training or use them with-97 
+
+out additional learning can employ a lightweight inference mode that generates frozen 98 
+
+cell embeddings without parameter updates. Second, because cell representations are 99 
+
+5
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+major outputs of scFMs and their quantitative evaluation is important for subse-100 
+
+quent applications, the scUnify Evaluator integrates cell-embedding evaluation metrics 101 
+
+from scIB[18] and scGraph[19], allowing representations to be assessed within the 102 
+
+framework. Finally, recognizing that preparing the configuration file defining each 103 
+
+experiment can itself create a barrier to framework use, scUnify provides assistant 104 
+
+skills that direct external LLM-based coding assistants to its public documentation 105 
+
+when preparing configurations. In this way, scUnify supports an scRNA-seq research 106 
+
+workflow that extends beyond model execution, from configuration preparation to 107 
+
+cell-representation generation and evaluation. 108 
+
+scUnify currently supports five scFMs—Geneformer, scGPT, scFoundation, UCE, 109 
+
+and Nicheformer—and we evaluated its functionality across six datasets through 110 
+
+resource profiling, four built-in downstream tasks comprising celltype classification, 111 
+
+regression, batch correction, and perturbation prediction, and a custom MIL task. 112 
+
+Resource profiling showed that the scUnify core system maintained consistency with 113 
+
+the original workflows in the evaluated numerical outputs and training behavior, while 114 
+
+the end-to-end runtime did not increase under the tested conditions. Using built-in 115 
+
+tasks that retained the original downstream designs of the supported models, we fur-116 
+
+ther demonstrated that multiple PEFT methods could be applied and compared within 117 
+
+a common workflow. The custom MIL experiment extended this evaluation to a com-118 
+
+plex new task, showing that its task-specific learning logic could be implemented once 119 
+
+and subsequently connected to five scFM backbones and multiple adaptation strate-120 
+
+gies. Consistent with previous benchmarking and PEFT evaluation studies[7, 8, 12], 121 
+
+no single model–adaptation combination consistently dominated across all evaluated 122 
+
+downstream tasks. Together, these findings underscore the need to compare candidate 123 
+
+combinations within the researcher’s target context and demonstrate that scUnify 124 
+
+provides an effective framework for conducting and extending such comparisons. 125 
+
+6
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+# 2 Results 126 
+
+## 2.1 Overview of the scUnify framework 127 
+
+Fig. 1 Graphical overview of the scUnify framework. (a) Overall workflow of scUnify. An AnnData object and a configuration file define an scUnify run, which performs inference or training through model-specific processing and returns cell embeddings and task-specific outputs in AnnData. (b) The scUnify core system. Multiple runs are scheduled across available computational resources, with mixed-precision computation and Distributed Data Parallel supported within each run. (c) Adap-tation strategies. Backbone adaptation is configured independently of the downstream task module to support Full-FT and multiple Hugging Face PEFT methods. (d) Extension of trainable down-stream tasks across scFM backbones. Built-in and custom downstream task modules are implemented through a common base task interface, allowing the same task-learning logic to be connected to and reused across compatible model-specific trainers. (e) Integration of cell-embedding evaluation metrics in scUnify. 
+
+7
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint scUnify is a framework that connects model preparation and data processing for 128 
+
+heterogeneous single-cell foundation models (scFMs) with inference or downstream 129 
+
+training, output storage, and subsequent analysis in a united workflow (Figure 1a). 130 
+
+During installation, a separate software environment is automatically prepared for each 131 
+
+supported model. Once installed, researchers can run a selected scFM by providing a 132 
+
+common AnnData input and a configuration file that specifies the model, execution 133 
+
+mode, and analysis conditions. During execution, scUnify selects the corresponding 134 
+
+model environment, applies model-specific preprocessing and input construction, and 135 
+
+then performs inference or training with optimized computational resources manage-136 
+
+ment. The resulting cell embeddings and task-specific outputs are stored in consistent 137 
+
+AnnData fields for subsequent analysis in existing Scanpy and scverse workflows. This 138 
+
+workflow reduces the need to install and switch model-specific environments manu-139 
+
+ally or repeatedly convert input and output formats when analyzing one dataset with 140 
+
+multiple scFMs. 141 
+
+Comparing multiple models and execution conditions for the same dataset and 142 
+
+analytical objective requires repeated management of individual analyses and compu-143 
+
+tational resources. scUnify defines one analysis execution as an scUnify run comprising 144 
+
+an AnnData object and a configuration file, which specifies the model, execution 145 
+
+mode, downstream task, adaptation strategy, and hyperparameters. When multiple 146 
+
+runs are submitted, the Ray-based core system[20] assigns each run to the appro-147 
+
+priate model environment and available CPUs and GPUs, and manages queueing or 148 
+
+concurrent execution according to user-specified resource requirements and resource 149 
+
+availability (Figure 1b). Within an individual run, Hugging Face Accelerate[21] can 150 
+
+apply mixed-precision computation and multi-GPU execution using Distributed Data 151 
+
+Parallel (DDP). Researchers can therefore manage runs within the same execution 152 
+
+system while reducing the repeated work of separately coordinating environments 153 
+
+and resource allocations even when the number of candidate scFMs and conditions 154 
+
+increases. 155 
+
+8
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+The training mode of scUnify is organized around three independently configurable 156 
+
+components: the model-specific trainer, the adaptation strategy, and the downstream 157 
+
+task module (Figure 1a, c, d). The model-specific trainer handles model-specific pre-158 
+
+processing, input construction, pretrained-backbone loading, and the training forward 159 
+
+pass for the five models currently included in scUnify: scGPT, Geneformer, UCE, 160 
+
+scFoundation, and Nicheformer[2–6]. Within each trainer, the transformer backbone 161 
+
+is connected to the official Hugging Face PEFT library[22] through model-specific tar-162 
+
+get mappings. It allows researchers to change the backbone training scope through 163 
+
+probing, partial fine-tuning, Full-FT, or supported PEFT methods without modi-164 
+
+fying model specific trainer or the task-learning logic (Figure 1c). Meanwhile, the 165 
+
+downstream task module uses a common base task interface(Figure 1d). This inter-166 
+
+face implements the prediction architecture, objective, evaluation, and output logic 167 
+
+required for a trainable task, and can connect that task to an existing model-168 
+
+specific trainer. Based on this structure, scUnify provides classification, regression, 169 
+
+batch correction, and perturbation prediction as built-in downstream tasks derived 170 
+
+from the trainable workflows reported for the five scFMs (Supplementary Table S2). 171 
+
+Researchers can therefore reuse a supported built-in task across compatible backbones 172 
+
+or even extend a new trainable task through the same interface, while indepen-173 
+
+dently applying and comparing adaptation strategies without reimplementing every 174 
+
+model–task–adaptation combination. 175 
+
+scUnify provides a separate inference mode for generating cell representations 176 
+
+from a frozen backbone without task-specific training. The model-specific inferencer 177 
+
+applies model-specific preprocessing and input construction to the input AnnData 178 
+
+and performs a forward pass through the frozen pretrained backbone. The result-179 
+
+ing cell embeddings are stored in the appropriate AnnData field. Those embeddings 180 
+
+can be evaluated through the public scUnify API, scunify.evaluation.Evaluator 181 
+
+(Figure 1e). The Evaluator includes scIB for assessing biological conservation and 182 
+
+9
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+batch correction[18] and scGraph for assessing celltype structure preservation[19]. The 183 
+
+evaluation results and AnnData can then be used in subsequent Scanpy and scverse 184 
+
+analyses. Researchers can thus compare cell representations and carry them into down-185 
+
+stream analyses without separately converting embedding outputs or reimplementing 186 
+
+evaluation procedures for each model. 187 
+
+## 2.2 scUnify reproduces evaluated model outputs and 188 
+
+## characterizes model-specific computational behavior 189 
+
+To assess the reliability and practical applicability of the common execution workflow, 190 
+
+we examined several quantitative index: numerical consistency of cell embeddings with 191 
+
+the original implementations, training behavior during continual learning, whether 192 
+
+end-to-end inference runtime increased relative to the original workflows under the 193 
+
+evaluated conditions, and whether model-specific resource trade-offs could be com-194 
+
+pared within the same workflow. We also varied numerical precision, batch size, and 195 
+
+the number of GPUs allocated to a run and analyzed the outputs and resource use 196 
+
+of inference and training. In inference mode, we compared cell embeddings generated 197 
+
+by scUnify and the original implementations. In training mode, we performed contin-198 
+
+ual learning using each model’s pretraining objective and tracked the loss trajectories; 199 
+
+Geneformer and Nicheformer, whose original repositories provided comparable contin-200 
+
+ual learning workflows, were also compared directly with their original workflows. The 201 
+
+mean cell-wise cosine similarity was 0.9926–1.0000 across all model–precision condi-202 
+
+tions (Figure 2a). Across precisions, scUnify losses generally followed similar decreasing 203 
+
+trajectories within each model, and the directly compared training-loss trajectories 204 
+
+closely matched those of the original workflows (Figure 2d). However, the FP16 loss for 205 
+
+scFoundation became unstable late in training, whereas its BF16 loss decreased stably. 206 
+
+UCE also exhibited precision-dependent optimization behavior, with nearly overlap-207 
+
+ping FP16 and BF16 loss trajectories but a distinct FP32 trajectory. These results 208 
+
+10 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+Fig. 2 Resource profiling of scUnify inference and training workflows. (a) Precision sweep for cell-embedding inference. Each point shows the mean cosine similarity between scUnify and the original models’ cell embeddings, together with the speedup over the original workflow. Colors indicate models and marker shapes indicate numerical precision. (b) Multi-GPU scaling of cell-embedding inference. Original workflows were run on a single GPU, whereas scUnify was evaluated with one to four GPUs. Wall time includes data loading and model execution. (c) Inference batch size sweep showing inference time, throughput, and peak GPU memory. Stars indicate settings with mean GPU utilization above 80%. (d) Training loss trajectories for the default pretraining-style objective across precision settings. Original-code loss curves are shown as gray dashed lines where available. Precision markers were horizontally offset for visibility. (e) Training batch size sweep showing second-epoch wall time, throughput, and peak GPU memory. X indicate the first failed or out-of-memory batch size. 
+
+indicate that scUnify generated cell embeddings that were numerically consistent with 209 
+
+the original implementations across all five models and maintained training fidelity 210 
+
+in the directly comparable continual learning workflows, while numerical precision 211 
+
+needed to be selected with stability in mind. 212 
+
+11 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint Next, we compared end-to-end cell-embedding inference runtime between scUnify 213 
+
+and the original workflows at the numerical precision used by each original implemen-214 
+
+tation. Under these evaluated conditions, all five models had shorter wall times with 215 
+
+scUnify than with their original workflows, with speedups of 1.04–1.60 × (Figure 2a). 216 
+
+Mixed precision further reduced runtime for some models. Under FP16 and BF16, 217 
+
+UCE showed speedups of 9.61–9.76 × relative to its original FP32 workflow. scFoun-218 
+
+dation achieved a 1.41 × speedup in the matching FP32 comparison, whereas runtime 219 
+
+increased under mixed precision with the same batch size of 1 as the original implemen-220 
+
+tation. With multi-GPU execution using Distributed Data Parallel (DDP), increasing 221 
+
+the allocation from 1 GPU to 4 GPUs reduced wall time for every model, with model-222 
+
+specific speedups of 2.22–3.75 × (Figure 2b). For subsequent experiments, we jointly 223 
+
+considered numerical consistency, training stability, and runtime and used FP16 for 224 
+
+scGPT and BF16 for the other four models. 225 
+
+Finally, we fixed the selected numerical precision and compared model-specific 226 
+
+resource trade-offs on a single GPU across inference batch sizes of 32–512 and train-227 
+
+ing batch sizes of 8–512. Because inference does not update parameters, its runtime 228 
+
+for each model was shorter than the training epoch time, and throughput generally 229 
+
+improved as batch size increased (Figure 2c). However, inference throughput across 230 
+
+successful conditions varied by model and batch size over a range of 0.51–3.86 cells/ms, 231 
+
+and models also differed in where throughput plateaued or began to decline and in how 232 
+
+peak GPU memory increased. For training profiling, each backbone was coupled to and 233 
+
+trained with the prediction or reconstruction module required by its model-specific 234 
+
+pretraining objective. Across successful conditions that included gradient computa-235 
+
+tion and parameter updates, training throughput was 0.011–0.802 cells/ms, and the 236 
+
+batch size that maximized throughput and the point of execution failure or out-of-237 
+
+memory differed among models (Figure 2e). For example, scFoundation jointly trained 238 
+
+a decoder that reconstructed expression for 19,264 genes and exhibited longer epoch 239 
+
+12 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+times and higher memory requirements than the other models. scUnify records wall 240 
+
+time, throughput, mean GPU utilization, and peak GPU memory consistently for 241 
+
+each run, allowing users to compare the computational costs and resource trade-offs 242 
+
+associated with different backbones and model-specific learning structures within the 243 
+
+same workflow. Together, scUnify maintained numerical consistency with the original 244 
+
+implementations across all five models and training fidelity in the directly comparable 245 
+
+continual learning workflows, did not increase end-to-end inference runtime relative to 246 
+
+the original workflows under the evaluated conditions, and revealed resource trade-offs 247 
+
+among scFMs on a common basis. 248 
+
+## 2.3 scUnify enables systematic comparison of scFM backbones 249 
+
+## and adaptation strategies across downstream tasks 250 
+
+scUnify separates the model-specific trainer, the downstream task module and 251 
+
+the adaptation strategy, allowing different combinations of the scFM backbone-252 
+
+downstream task-adaptation strategy to be executed and compared within an 253 
+
+integrated workflow. To evaluate whether this separation could extend model-native 254 
+
+downstream workflows with additional adaptation strategies without reimplementing 255 
+
+task-specific learning logic, we configured trainable workflows reported across the five 256 
+
+scFMs as built-in downstream tasks(Supplementary Table S2, Figure 3). Although 257 
+
+their prediction targets differed, the original studies of the four scFMs other than UCE 258 
+
+each reported a trainable cell-level classification workflow. We retained their model-259 
+
+native workflows(architectures and objectives) and extended celltype classification to 260 
+
+UCE, allowing all five models to be evaluated in a common downstream context. 261 
+
+Additionally, we included niche-density regression for Nicheformer, batch correction 262 
+
+and perturbation prediction for scGPT, and perturbation prediction for scFoundation. 263 
+
+For each downstream task, the model-specific task architecture was kept fixed while 264 
+
+adaptation strategies were independently applied to the corresponding backbone. 265 
+
+13 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+Fig. 3 Performance of trainable downstream tasks across scFM backbones. (a) Balanced accuracy of celltype classification task with model-native workflow. (b) Adaptation strategies ranked within each backbone (left) and by average rank across backbones (right). (c) MAE of Nicheformer regression task. (d-e) Perturbation tasks for scGPT and scFoundation. (f) scIB bio-conservation, scIB batch correction, and scGraph Weighted Correlation of scGPT Batch correction task. The best value is red and the second is underlined. 
+
+We first evaluated this design by applying all five scFMS to NSCLC(non-small cell 266 
+
+lung cancer) celltype classification (Figure 3a-b). With each model-specific classifica-267 
+
+tion architecture held fixed, we compared probing and full fine-tuning (Full-FT) with 268 
+
+five parameter-efficient fine-tuning (PEFT) methods: low-rank adaptation (LoRA), 269 
+
+Householder reflection adaptation (HRA), orthogonal fine-tuning (OFT), vector-based 270 
+
+random matrix adaptation (VeRA), and block affine adaptation (Bone). Full-FT 271 
+
+14 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint achieved higher balanced accuracy than probing for every backbone, indicating that 272 
+
+training the backbone was generally more effective than using a frozen pretrained rep-273 
+
+resentation for this classification task. For four backbones other than scFoundation, at 274 
+
+least one PEFT method outperformed Full-FT, showing that adapters independently 275 
+
+connected to the backbone while retaining the model-native classification architecture 276 
+
+could also improve downstream performance. When the seven adaptation strategies 277 
+
+were ranked within each backbone, OFT and Bone achieved the lowest average ranks 278 
+
+of 2.20 and 2.40, respectively, whereas probing ranked last for every backbone (Figure 279 
+
+3b). However, OFT, which achieved the best average rank, was not the top-performing 280 
+
+condition for any individual backbone. Instead, the top-performing condition was Bone 281 
+
+for scGPT and UCE, LoRA for Geneformer and Nicheformer, and Full-FT for scFoun-282 
+
+dation. Thus, although Full-FT and PEFT were generally more effective than probing, 283 
+
+an adaptation strategy with a strong average rank was not necessarily optimal for an 284 
+
+individual backbone. 285 
+
+When the evaluation was extended beyond classification to other built-in down-286 
+
+stream tasks, no single adaptation strategy performed consistently best. Full-FT 287 
+
+achieved the lowest MAE in Nicheformer niche-density regression (Figure 3c) and both 288 
+
+the lowest M SE DE and the highest P CC DE in scGPT perturbation prediction (Figure 289 
+
+3d), whereas OFT performed best among the evaluated conditions for scFoundation 290 
+
+perturbation prediction (Figure 3e). For scGPT batch correction, we used scIB and 291 
+
+scGraph integrated into scUnify to evaluate the zero-shot cell representation alongside 292 
+
+Full-FT and PEFT conditions. Although the trained conditions generally improved 293 
+
+upon zero-shot inference, the strongest adaptation strategy differed across evaluation 294 
+
+aspects. OFT and Full-FT produced similar average biological-conservation scores of 295 
+
+0.481; OFT achieved the highest scGraph weighted correlation of 0.675, whereas Full-296 
+
+FT achieved the highest average batch-correction score of 0.851 (Figure 3f). Taken 297 
+
+15 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+together, adapters independently applied to each model-native downstream architec-298 
+
+ture were competitive with or outperformed Full-FT under several conditions, but 299 
+
+their relative benefits and the top-performing adaptation strategy varied across back-300 
+
+bones and downstream tasks. Determining a suitable condition for a target dataset 301 
+
+and downstream task therefore requires direct execution and comparison of Full-FT 302 
+
+and PEFT conditions across candidate backbones, which scUnify enables within a 303 
+
+consistent training and evaluation workflow. 304 
+
+## 2.4 scUnify integrates a custom task with multiple scFM 305 
+
+## backbones 306 
+
+To evaluate whether scUnify could implement a new trainable task once and extend it 307 
+
+across multiple scFM backbones and adaptation strategies, we implemented scMILD-308 
+
+based multiple instance learning (MIL)[23] for sample-level COVID-19 infection 309 
+
+prediction as a custom downstream task module. This task required a MIL-specific 310 
+
+Dataset and DataLoader that organized cells into sample-level bags, an alternating 311 
+
+procedure for training the sample and cell branches, and separate optimization of the 312 
+
+backbone and the two branches (Figure 4a, b). To accommodate the GPU memory 313 
+
+requirements of scFM backbones, we introduced a cell-sampling step into the scMILD 314 
+
+workflow that limited the number of cells processed per sample while approximately 315 
+
+preserving its celltype composition. The same sampling procedure was applied to 316 
+
+the autoencoder-based scMILD baseline and the scUnify variants, in which the orig-317 
+
+inal MLP encoder was replaced with a Geneformer, scGPT, scFoundation, UCE, or 318 
+
+Nicheformer backbone. The resulting MIL workflow was trained and compared across 319 
+
+multiple combinations of scFM backbones and adaptation strategies using the same 320 
+
+task architecture and common training settings. 321 
+
+We compared sample-level AUROC across the five backbones under probing, full 322 
+
+fine-tuning (Full-FT), and five PEFT methods: LoRA, HRA, OFT, VeRA, and Bone 323 
+
+16 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+Fig. 4 scUnify custom MIL task. (a) scUnify custom downstream task, and its custom modules and training strategies. (b) scMILD architecture overview. (c) AUROC of the MIL task (left) and average rank of adaptation strategies (right). (d) Cell-score distribution in overall samples and colors indicate cell groups. (e) Differentially expressed genes between case-specific cells and case-normal-like/normal cells. Dot size indicates the fraction of cells expressing each gene, and color indicates the gene-wise min–max-scaled mean expression. 
+
+(Figure 4c). scGPT and Nicheformer performed strongly under multiple adaptation 324 
+
+conditions, whereas Geneformer improved substantially with Bone compared with 325 
+
+Full-FT. When the ranks of the seven adaptation strategies were averaged across 326 
+
+backbones, OFT achieved the best average rank, although the top-performing PEFT 327 
+
+method for individual backbones differed between OFT and Bone. The autoencoder-328 
+
+based scMILD baseline achieved a mean AUROC of 0.9167 when evaluated using the 329 
+
+17 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint same cell-sampling procedure as the scUnify experiments; this baseline was exceeded 330 
+
+by scGPT with Full-FT or OFT, Geneformer with Bone, and UCE with Full-FT, show-331 
+
+ing that different backbones could reach performance above the baseline through either 332 
+
+Full-FT or PEFT. To compare the relative performance of the backbones observed 333 
+
+in MIL with that in another downstream context, we also repeated NSCLC celltype 334 
+
+classification using the one-layer classifier and a standardized training setting across 335 
+
+all five backbones instead of their model-native classification architectures (Supple-336 
+
+mentary Fig. S1). Under this setting, the absolute performance and rankings of some 337 
+
+adaptation strategies changed relatively to the model native workflows in Figure 3a. 338 
+
+Nevertheless, when the best-performing condition for each backbone was compared, 339 
+
+UCE remained below the other four models, consistent with its relative position in the 340 
+
+model-native results. In the MIL task, by contrast, UCE ranked among the stronger 341 
+
+backbones whereas scFoundation shifted to a lower relative position, showing that 342 
+
+their relative performance differed across downstream contexts. 343 
+
+Because scMILD produces attention-derived cell scores alongside sample-level 344 
+
+predictions, the cell populations contributing to predictions from a selected model 345 
+
+can be analyzed further. We used cell scores from a representative high-performing 346 
+
+scGPT–OFT condition to divide cells into case-specific, case-normal-like, and nor-347 
+
+mal groups (Figure 4d). Comparing the case-specific group with the other two groups 348 
+
+in Ciliated cells showed higher mean expression and fractions of expressing cells for 349 
+
+interferon-response genes, including IFI6 , IFI27 , ISG15 , and IFIT1 (Figure 4e). This 350 
+
+observation indicates that, in the representative scGPT–OFT condition, the cell-level 351 
+
+expression pattern was consistent with the interferon-response pattern reported in 352 
+
+the original scMILD study[23]. These results show that changing the scFM back-353 
+
+bone within the same custom downstream task structure can improve sample-level 354 
+
+predictive performance while retaining the task’s cell-level biological interpretability. 355 
+
+More broadly, in an scFM ecosystem where relative model performance varies across 356 
+
+18 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+downstream contexts, these findings support the role of scUnify as a framework for 357 
+
+implementing a new trainable task once, reusing it across multiple scFM backbones 358 
+
+with independently application, and comparing adaptation strategies within a common 359 
+
+workflow. 360 
+
+## 2.5 scUnify provides supporting utilities for researchers 361 
+
+Fig. 5 Supporting utilities of scUnify. (a) Schematic of usage with an LLM assistant, in which external coding assistants read scUnify’s documentation through their entry points (Claude Code via 
+
+.claude/skills/ , Codex via .agents/skills/ ). (b) The scUnify dashboard, showing submitted task status and per task training progress during execution. 
+
+To support configuration preparation, scUnify provides assistant skills that enable 362 
+
+external coding assistants such as Claude Code and Codex to consult its public 363 
+
+documentation (Figure 5a). Claude Code uses .claude/skills/scunify/SKILL.md ,364 
+
+whereas Codex uses .agents/skills/scunify/SKILL.md ; both skills direct the 365 
+
+19 
+
+.CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint assistants to the public documentation under docs/ , which describes installation, con-366 
+
+figuration, supported models, execution modes, and downstream tasks. Based on these 367 
+
+resources and a user’s request, a coding assistant can help prepare a configuration file, 368 
+
+execution script, or notebook and answer questions about using scUnify. The prompt 369 
+
+in Figure 5a is an illustrative example of this workflow. 370 
+
+scUnify also provides a web dashboard that can be used with ScUnifyRunner to 371 
+
+inspect run status and training progress during long-running executions that include 372 
+
+multiple conditions (Figure 5b). The dashboard summarizes the pending, training, 373 
+
+done, and failed states of multiple runs in a single view and displays records such as 374 
+
+epoch, loss, validation results, and throughput for runs in progress. This view allows 375 
+
+users to inspect the status of multiple runs and the training progress of each run 376 
+
+during execution. 377 
+
+# 3 Discussion 378 
+
+In this study, we developed scUnify to connect scFM execution, downstream task 379 
+
+learning, and adaptation across distinct software environments and implementation 380 
+
+procedures within a common workflow. Whereas existing scFM integration frameworks 381 
+
+have primarily focused on providing common execution and benchmarking infras-382 
+
+tructure or extending trainable downstream task interfaces[13–16], scUnify differs by 383 
+
+separating the model-specific trainer, downstream task module, and adaptation strat-384 
+
+egy into independent components and supporting their combinations within a unified 385 
+
+execution system. In this design, the model-specific trainer preserves the preprocess-386 
+
+ing, tokenization, and forward procedure of each scFM, the downstream task module 387 
+
+defines the task-specific architecture and objective function, and the adaptation strat-388 
+
+egy independently controls the training scope of the backbone without changing the 389 
+
+task-learning logic. Existing downstream tasks can therefore be executed across multi-390 
+
+ple model and adaptation conditions, while a new trainable task can be implemented 391 
+
+20 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+once and reused across supported backbones and adaptation strategies. Based on this 392 
+
+structure, we implemented five built-in downstream workflows spanning classification, 393 
+
+regression, batch correction, and model-specific perturbation prediction, following the 394 
+
+workflows reported in the original scFM studies. We further implemented the complex 395 
+
+MIL-specific data preparation and dual-branch learning procedure as a single custom 396 
+
+downstream task module and demonstrated its extension across five scFM backbones 397 
+
+and multiple adaptation strategies. 398 
+
+Our results illustrate the practical need for this combinatorial design, as the relative 399 
+
+performance of both backbones and adaptation strategies varied across downstream 400 
+
+contexts. In celltype classification using the same one-layer classifier and standardized 401 
+
+training setting, UCE performed below the other backbones, whereas scFoundation 402 
+
+ranked relatively high. In the custom MIL task, however, UCE showed relatively strong 403 
+
+performance, while scFoundation moved to a lower position. These contrasting results 404 
+
+indicate that the relative performance of a backbone observed for one downstream 405 
+
+task and dataset cannot be directly generalized to another analytical context. Broad 406 
+
+tendencies within individual models also did not always identify the best adaptation 407 
+
+strategy for a specific condition. Although Full-FT and PEFT generally outperformed 408 
+
+probing, and OFT and Bone achieved comparatively strong average ranks across 409 
+
+multiple comparisons, Full-FT remained the best strategy for some tasks, while the 410 
+
+top-performing PEFT method varied among LoRA, OFT, and Bone depending on 411 
+
+the backbone and downstream task. These observations are consistent with previous 412 
+
+benchmarking studies showing that the relative performance of scFMs and adapta-413 
+
+tion strategies can vary with the dataset and downstream context[7, 8, 12], further 414 
+
+indicating that the superiority of a particular model or adaptation strategy cannot 415 
+
+be generalized from a single benchmark. Researchers therefore need an integrated 416 
+
+framework that allows candidate model–task–adaptation combinations to be exam-417 
+
+ined directly through a consistent execution and evaluation process for their target 418 
+
+21 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+dataset and downstream task, and scUnify enables such comparisons within a common 419 
+
+workflow. 420 
+
+Building on this implementation design, scUnify also provides usability features 421 
+
+that support researchers throughout practical analysis workflows. First, its core system 422 
+
+schedules multiple runs across available CPUs and GPUs and supports mixed-precision 423 
+
+computation and Distributed Data Parallel within each run. Second, cell represen-424 
+
+tations generated through training or inference can be evaluated within the same 425 
+
+workflow using the scUnify Evaluator, which integrates scIB and scGraph. Third, assis-426 
+
+tant skills guide external LLM-based coding assistants to public documentation during 427 
+
+configuration preparation, while the runtime dashboard allows researchers to monitor 428 
+
+the status and training progress of multiple runs during execution. These usability 429 
+
+features were integrated without compromising fidelity to the original workflows in 430 
+
+inference and training, and scUnify achieved faster execution under some evaluated 431 
+
+conditions. 432 
+
+Meanwhile, adding a new scFM to scUnify still requires implementing a model-433 
+
+specific trainer that reflects its preprocessing and input construction, backbone 434 
+
+loading, forward procedure, and software dependencies, followed by validation against 435 
+
+the original implementation. Once added, however, the model-specific trainer can be 436 
+
+reused with existing downstream task modules and adaptation strategies, reducing 437 
+
+the repetitive model-specific implementation required for subsequent task and adapta-438 
+
+tion experiments. Future work will expand the supported backbones and downstream 439 
+
+tasks, consolidate recurring trainer elements into common functionality, and system-440 
+
+atize validation procedures for new model-specific implementations. Although coding 441 
+
+assistants can use the assistant skills to consult the tutorial documentation when 442 
+
+preparing individual configuration files, each scUnify run is currently defined by a sep-443 
+
+arate configuration file. Consequently, as the number of model–task–adaptation and 444 
+
+hyperparameter conditions grows, so does the number of configuration files that must 445 
+
+22 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+be managed separately. Because the scUnify core system is built on Ray, future work 446 
+
+will integrate Ray Tune so that multiple experimental conditions can be defined and 447 
+
+explored from a single configuration. 448 
+
+# 4 Conclusions 449 
+
+We developed scUnify, a framework that connects scFMs separated by different imple-450 
+
+mentations and execution environments so that they can be executed, compared, and 451 
+
+extended within a common analytical workflow. Our evaluation showed that scU-452 
+
+nify retained the reliability of integrated execution while enabling direct comparison 453 
+
+of model–adaptation combinations in the target context and extension of a com-454 
+
+plex downstream task, once implemented, across multiple supported scFMs. scUnify 455 
+
+connects the execution of heterogeneous scFMs and provides a common basis for 456 
+
+researchers to compare models and adaptation strategies on their own datasets and 457 
+
+for their analytical objectives, and to extend new trainable downstream tasks across 458 
+
+multiple backbones. 459 
+
+# 5 Methods 460 
+
+## 5.1 Implementation details 461 
+
+scUnify establishes a common workflow spanning data input, model execution, 462 
+
+downstream task training, and output storage for five single-cell RNA-sequencing foun-463 
+
+dation models (scFMs): Geneformer[3], scGPT[2], scFoundation[4], Nicheformer[6], 464 
+
+and UCE[5]. The implementation comprises task definition and configuration, a Ray-465 
+
+based core system, model-specific trainers, downstream task modules, and adaptation 466 
+
+strategies. The relationships among these components and classes are shown in Sup-467 
+
+plementary Fig. S2, and the runtime organization of the scUnify core system is shown 468 
+
+in Supplementary Fig. S3. 469 
+
+23 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+Task definition and configuration. scUnify defines an analysis execution as an 470 
+
+scUnify run comprising an AnnData file ( .h5ad ) and a YAML configuration file 471 
+
+(.yaml ). AnnData contains the expression matrix and metadata, whereas the configu-472 
+
+ration file specifies the model, execution mode, downstream task, adaptation strategy, 473 
+
+and execution conditions. ScUnifyConfig interprets these inputs as a run configura-474 
+
+tion, and ScUnifyRunner executes one or more runs according to their configurations. 475 
+
+The resulting cell embeddings and task-specific outputs are stored in the obs , obsm ,476 
+
+or uns fields of AnnData, allowing inputs, predictions, and embeddings to be passed 477 
+
+within the same data object to subsequent Scanpy[24] and scverse[17] analyses. 478 
+
+Inference and training modes. Inference and training use separate execution 479 
+
+paths. In inference mode, a model-specific inferencer applies model-specific preprocess-480 
+
+ing and input construction and generates cell embeddings through forward passes of a 481 
+
+frozen pretrained encoder. In training mode, a model-specific trainer is combined with 482 
+
+a downstream task module, trainable parameters are selected according to the chosen 483 
+
+adaptation strategy, and the model is trained using the task objective. After training, 484 
+
+predictions and cell embeddings are extracted from the selected checkpoint and stored 485 
+
+together with fold-specific AnnData objects, training histories, and summary artifacts. 486 
+
+scUnify core system. When multiple runs are submitted to ScUnifyRunner , the 487 
+
+Ray-based core system[20] selects the model-specific Conda environment specified in 488 
+
+each configuration through runtime env and manages resource allocation, queueing, 489 
+
+and concurrent execution according to the CPU and GPU requests of each run and 490 
+
+the available resources. Runs using the same model environment and dataset share a 491 
+
+Ray Object Store reference to the AnnData loaded by DataLoaderActor . Each run 492 
+
+is executed using Ray TorchTrainer, within which Hugging Face Accelerate[21] han-493 
+
+dles device placement, mixed-precision computation, and multi-GPU execution using 494 
+
+Distributed Data Parallel (DDP). ProgressActor records inference-batch progress 495 
+
+24 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+and the fold, epoch, loss, validation result, and throughput of training, and a web 496 
+
+dashboard implemented with FastAPI [25] displays run states and training progress. 497 
+
+Separation of model-specific trainers and downstream task modules. In 498 
+
+training mode, model-specific trainers and downstream task modules are implemented 499 
+
+as independent components. A model-specific trainer constructs backbone inputs 500 
+
+from AnnData, loads pretrained weights, and handles the training forward procedure 501 
+
+and extraction of cell representations. Built-in and user-defined custom downstream 502 
+
+tasks are implemented as task interfaces that subclass TaskMixin and follow a com-503 
+
+mon interface for the prediction architecture receiving backbone outputs, objective, 504 
+
+evaluation procedure, and AnnData output logic. A custom task subclass defines a 505 
+
+task-specific prediction module, loss and output logic. At runtime, scUnify dynamically 506 
+
+composes the task interface and model-specific trainer selected in the configuration 507 
+
+into a single composed trainer class through multiple inheritance, allowing the same 508 
+
+task to be attached to supported scFM backbones. 509 
+
+Backbone adaptation strategies. The adaptation configuration is separated from 510 
+
+downstream task learning and specifies the trainable backbone layers and, when PEFT 511 
+
+is used, the adapter configuration. Probing freezes the backbone and trains only down-512 
+
+stream task parameters; partial fine-tuning trains only selected Transformer layers; 513 
+
+and full fine-tuning (Full-FT) trains the entire backbone and task-specific parameters. 514 
+
+PEFT uses the official Hugging Face PEFT integration[22], with compatible Trans-515 
+
+former encoder modules in each scFM mapped to Hugging Face target modules. Users 516 
+
+can select PEFT configurations that are available in the installed Hugging Face PEFT 517 
+
+package and compatible with the chosen backbone. Model-specific attention transfor-518 
+
+mations and target-module mappings are provided in Model-specific implementation 519 
+
+details in the Supplementary Methods S1. 520 
+
+25 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+Assistant skills and public documentation. The scUnify repository pro-521 
+
+vides assistant skills that direct external coding assistants to the user documen-522 
+
+tation and tutorials in the public docs/ directory (Fig. 5a). The entry point 523 
+
+for Claude Code is .claude/skills/scunify/SKILL.md , and that for Codex is 524 
+
+.agents/skills/scunify/SKILL.md ; both files route requests concerning installa-525 
+
+tion, configuration, inference and training, built-in and custom downstream tasks, 526 
+
+adaptation, evaluation, outputs, and monitoring to the corresponding docs/ pages. 527 
+
+Based on these materials and a user’s request, a coding assistant can support the 528 
+
+preparation of configuration files, execution scripts, or notebooks. 529 
+
+## 5.2 Dataset and preprocessing 530 
+
+Six single-cell datasets were used for resource profiling and downstream task evalu-531 
+
+ation. The CellTypist Kidney reference was used for inference and training resource 532 
+
+profiling of the five scFMs[26]. A NSCLC(non-small-cell lung cancer) tumor-infiltrating 533 
+
+T-cell dataset[27] was used for celltype classification with the five backbones, the 534 
+
+COVID-batch subset[2] for scGPT batch correction, and the Norman CRISPRa 535 
+
+Perturb-seq dataset[28] for perturbation prediction with scGPT and scFoundation; 536 
+
+the preprocessed datasets provided by scPEFT[12] were used for these three analyses. 537 
+
+A 10x Xenium human lung dataset was used for Nicheformer neighborhood-density 538 
+
+regression[6], and a COVID-19 nasal-swab dataset[29] was used for the custom 539 
+
+multiple-instance learning (MIL) task. Each dataset was provided in AnnData format 540 
+
+with an expression matrix, task labels, conditions, sample identifiers, and split assign-541 
+
+ments. Dataset sources, sizes, preprocessing, and splits are provided in Supplementary 542 
+
+Table S3. 543 
+
+## 5.3 Experimental design 544 
+
+The evaluation comprised resource profiling of inference and training using model-545 
+
+specific pretraining objectives across the five scFMs, built-in downstream task 546 
+
+26 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+experiments, and a custom MIL experiment. The built-in experiments included cell-547 
+
+type classification across all five backbones, Nicheformer regression, scGPT batch 548 
+
+correction and perturbation prediction, and scFoundation perturbation prediction 549 
+
+(Fig. 3). For each model–task pair, the downstream architecture, objective, and 550 
+
+task-specific training settings followed the corresponding original workflow where 551 
+
+available[2–6]. The custom MIL experiment applied the same scMILD-based down-552 
+
+stream task module[23] to all five backbones (Fig. 4). To minimize differences arising 553 
+
+from downstream task design, the task architecture and training parameters were held 554 
+
+constant across backbones, while the learning rate differed only between adaptation 555 
+
+conditions. For the same reason, we additionally performed standardized celltype clas-556 
+
+sification by connecting all five backbones to the same one-layer classifier and using 557 
+
+common training settings other than learning rate (Supplementary Fig. S1). Across 558 
+
+the downstream experiments, we compared probing, full fine tuning (Full-FT), and five 559 
+
+PEFT methods: low-rank adaptation (LoRA)[30], Householder reflection adaptation 560 
+
+(HRA)[31], orthogonal fine-tuning (OFT)[32], vector-based random matrix adaptation 561 
+
+(VeRA)[33], and block affine adaptation (Bone)[34]. Detailed model- and task-specific 562 
+
+hyperparameters are provided in Supplementary Table S10. 563 
+
+## 5.4 Resource profiling 564 
+
+Inference and training resource profiling used the CellTypist Kidney dataset as a 565 
+
+common reference and measured wall time, throughput, mean GPU utilization, and 566 
+
+peak GPU memory. Inference profiling evaluated numerical consistency, end-to-end 567 
+
+wall time, batch size response, and multi-GPU scaling (Fig. 2). Numerical consis-568 
+
+tency was calculated as the mean cell-wise cosine similarity between cell embeddings 569 
+
+generated for the same cells by scUnify and the original implementation, Cmean =570 
+
+> 1
+> N
+
+P 
+
+> i
+
+cos( escUnify  
+
+> i
+
+, e original  
+
+> i
+
+), and was compared across supported numerical-precision 571 
+
+conditions, including the original condition. End-to-end wall time was defined as the 572 
+
+27 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+interval from data loading through cell-embedding generation, and speedup over the 573 
+
+original implementation was calculated as Sinference = Toriginal /T scUnify . Throughput 574 
+
+in the batch size sweep was calculated from model-forward inference time and reported 575 
+
+in cells/ms . Multi-GPU scaling was evaluated by comparing DDP inference wall time 576 
+
+while varying the number of GPUs assigned to one run. Meanwhile, training resource 577 
+
+profiling used the model-specific pretraining objective of each backbone for continual 578 
+
+learning on the Kidney dataset. Direct comparisons of training-loss trajectories with 579 
+
+the original workflows were performed for Geneformer and Nicheformer because their 580 
+
+original repositories provided comparable continual learning workflows[3, 6]. Loss tra-581 
+
+jectories were compared across numerical precisions, and per-epoch wall time, training 582 
+
+throughput ( cells/ms ), mean GPU utilization, peak GPU memory, and execution fail-583 
+
+ure or out-of-memory status were recorded while varying batch size. The architecture 584 
+
+and loss for each objective are described in the Supplementary Methods S2. 585 
+
+## 5.5 Downstream Tasks 586 
+
+The built-in downstream tasks in scUnify comprised celltype classification applied to 587 
+
+all five scFM backbones and the tasks used for individual models in their original 588 
+
+studies: Nicheformer regression, scGPT batch correction, and perturbation prediction 589 
+
+with scGPT and scFoundation (Fig. 1d). For all tasks, the input expression matrix in 590 
+
+AnnData was denoted by X = ( xij ) ∈ RN ×G, where N and G denote the numbers 591 
+
+of cells and genes, respectively. Each backbone applied model-specific preprocessing 592 
+
+and input construction to generate hidden representations and cell representations, 593 
+
+which the downstream task module passed to a task-specific prediction architecture 594 
+
+and objective. Graphical overviews of the downstream architectures and notation are 595 
+
+shown in Supplementary Figs. S4-S6. 596 
+
+Evaluation metrics. celltype classification was evaluated using balanced accuracy, 597 
+
+Nicheformer regression using mean absolute error (MAE), perturbation prediction 598 
+
+28 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+using the mean squared error and Pearson correlation coefficient for the top differen-599 
+
+tially expressed genes between perturbed and control cells (MSE DE and PCC DE )[2, 4, 600 
+
+35], and the custom MIL task using sample-level Area Under the Receiver Operating 601 
+
+Characteristic curve (AUROC). Batch-corrected cell representations were evaluated 602 
+
+using the biological-conservation and batch-correction scores from scIB[18] and the 603 
+
+celltype structure-preservation metrics from scGraph[19]. Balanced accuracy, MAE, 604 
+
+MSE, and AUROC were calculated using scikit-learn [36], and Pearson correlation 605 
+
+coefficients were calculated using SciPy [37]. Detailed metric definitions are provided 606 
+
+in Supplementary Table S4. 607 
+
+Celltype classification and Nicheformer regression. T cells in the NSCLC 608 
+
+dataset were classified into K = 14 subtypes. Geneformer, scGPT, scFoundation, and 609 
+
+Nicheformer each used the downstream classification architecture from the correspond-610 
+
+ing original implementation. Because the original UCE study focused on zero-shot 611 
+
+evaluation using frozen representations and did not provide a trainable classification 612 
+
+head, a one-layer MLP classifier was used for UCE. The observed label of cell i was 613 
+
+denoted by yi ∈ { 1, . . . , K }, and the probability assigned by the classifier to class c614 
+
+by pic ; multiclass cross-entropy was minimized. 615 
+
+LCE = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+> K
+
+X
+
+> c=1
+
+1[yi = c] log pic . (1) Nicheformer regression predicted the number of neighboring cells located within 25 μm616 
+
+of each cell in the Xenium Lung dataset. The regression head used the same architec-617 
+
+ture as the Nicheformer classification head and produced a scalar output with K = 1. 618 
+
+The target and prediction for cell i were denoted by yi and ˆ yi, respectively, and mean 619 
+
+squared error was used as the training objective. 620 
+
+LMSE = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(ˆ yi − yi)2. (2) 29 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+Batch correction. For scGPT batch correction, domain-specific batch normaliza-621 
+
+tion (DSBN) conditioned on the batch label in the COVID-batch dataset was applied 622 
+
+to input representations, and encoder outputs and batch embeddings were passed to 623 
+
+gene-expression prediction (GEP), masked value prediction from the cell representa-624 
+
+tion (MVC), domain-adversarial batch classification (DAB), and elastic cell similarity 625 
+
+(ECS) objectives (Supplementary Fig. S5a)[2]. The overall objective was 626 
+
+LBC = LGEP + LMVC + λECS LECS + λDAB LDAB . (3) GEP used the hidden representations from the final encoder layer and a batch embed-627 
+
+ding to predict expression and the probability of zero expression for masked gene 628 
+
+tokens. Denoting the GEP expression prediction and zero-expression probability at 629 
+
+masked positions by ˆXGEP and P 0GEP , respectively, its objective was 630 
+
+LGEP = MSE( ˆXGEP , X ) + BCE  P 0GEP , 1[X = 0]  . (4) MVC combined the cell representation and batch embedding with the gene-token 631 
+
+embeddings formed before input to predict expression and the probability of zero 632 
+
+expression for masked gene tokens. Denoting the MVC outputs by ˆXMVC and P 0MVC ,633 
+
+its objective was 634 
+
+LMVC = MSE( ˆXMVC , X ) + BCE  P 0MVC , 1[X = 0]  . (5) DAB passed the cell representation through a gradient-reversal layer to an MLP batch 635 
+
+discriminator that predicted batch probabilities Π batch . For the batch-label vector b,636 
+
+30 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+the DAB objective was 637 
+
+LDAB = CrossEntropy(Π batch , b). (6) ECS used L2-normalized cell representations E to regularize the pairwise cell similarity 638 
+
+S = EE ⊤ relative to a threshold τ .639 
+
+LECS = mean 1 − (S − τ )2 . (7) After training, the L2-normalized cell representation was used as the batch-corrected 640 
+
+embedding. 641 
+
+Perturbation prediction. For perturbation prediction on the Norman CRISPRa 642 
+
+Perturb-seq dataset, control expression Xctrl and a perturbation condition were 643 
+
+used to predict perturbed expression Xpert . For scGPT, gene, expression-value, and 644 
+
+perturbation-condition embeddings were summed and passed to the scGPT backbone, 645 
+
+and the output hidden representations were passed to coefficient and bias decoders 646 
+
+to predict gene-wise A and β, respectively (Supplementary Fig. S5b). Predicted 647 
+
+perturbed expression was calculated as 648 
+
+ˆXpert = A ⊙ Xctrl + β (8) and mean squared error with respect to the observed perturbed expression was 649 
+
+minimized. 650 
+
+LscGPT-pert = MSE( ˆXpert , X pert ). (9) For scFoundation, control expression was passed through the encoder and decoder to 651 
+
+generate gene-level representations, which were adjusted using a gene co-expression 652 
+
+graph. Learnable embeddings of perturbed genes were adjusted using a gene-ontology 653 
+
+31 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+graph and summed within each condition to construct a cell-specific perturbation 654 
+
+representation. A GEARS[35] decoder combining the two representations predicted 655 
+
+gene-wise expression changes ∆ X (Supplementary Fig. S6). 656 
+
+ˆXpert = Xctrl + ∆ X. (10) The GEARS objective combined a fourth-power reconstruction error between observed 657 
+
+and predicted expression with a penalty for disagreement in perturbation direction 658 
+
+relative to the control mean. 659 
+
+LGEARS = mean 
+
+h
+
+( ˆXpert − Xpert )4 + λdir δ
+
+i
+
+, (11) where, denoting mean control expression for each gene by μctrl , δ was defined as 660 
+
+δ =
+
+h
+
+sign( Xpert − μctrl ) − sign( ˆXpert − μctrl )
+
+i2
+
+. (12) 
+
+## 5.6 Custom downstream task experiment 661 
+
+To predict sample-level infection status in the COVID-19 infection dataset, scMILD-662 
+
+based dual-branch MIL was implemented as a custom downstream task module[23]. 663 
+
+Each donor sample was defined as a bag s, each cell i within the bag as an instance, 664 
+
+and the sample-level label as case or normal. Training, validation, and test assignments 665 
+
+were defined at the sample level so that cells from the same sample did not occur in 666 
+
+different splits. The autoencoder-based encoder in the original scMILD was replaced 667 
+
+with one of the five scFM backbones, and the same downstream task module containing 668 
+
+a shared projection, sample branch, and cell branch was applied across backbones and 669 
+
+adaptation strategies (Fig. 4a, b). 670 
+
+32 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+Sample branch. The sample branch transformed the backbone generated cell repre-671 
+
+sentation hsi through a shared projection ϕ and normalized the score from an attention 672 
+
+module g within each bag to construct a sample representation us. A sample classifier 673 
+
+f used us to predict the case probability ˆ ys.674 
+
+zsi = ϕ(hsi ), asi = exp g(zsi )
+
+P 
+
+> j
+
+exp g(zsj ) ,us = X
+
+> i
+
+asi zsi , ˆys = f (us).
+
+(13) The number of training samples was denoted by M and the observed sample label by 675 
+
+ys ∈ { 0, 1}, and binary cross-entropy was used as the sample-branch objective. 676 
+
+LBCE = − 1
+
+M
+
+> M
+
+X
+
+> s=1
+
+[ys log ˆ ys + (1 − ys) log(1 − ˆys)] . (14) 
+
+Cell branch. The cell branch detached raw attention scores from the sample branch 677 
+
+from the gradient, normalized them, and used them as soft pseudo-labels for cells from 678 
+
+case samples, whereas cells from normal samples were assigned negative labels. A cell 679 
+
+classifier predicted these pseudo-labels using weighted cross-entropy. In addition, a 680 
+
+two-component Gaussian mixture model was fitted to cell scores from case samples to 681 
+
+distinguish case-specific and case-normal-like groups, and normal cells were included 682 
+
+in the negative group together with the case-normal-like group. Orthogonal projection 683 
+
+loss (OPL)[38] pulled projected cell representations from the same group together and 684 
+
+separated those from different groups. The cell-branch objective was 685 
+
+LCell = LWCE + λOPL LOPL . (15) 
+
+Training strategy. The sample and cell branches were trained in alternating epochs 686 
+
+at a 1:1 ratio. During a sample-branch epoch, LBCE was used to update the trainable 687 
+
+33 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+parameters of the shared backbone and projection, whereas LCell was used during 688 
+
+the subsequent cell-branch epoch. To accommodate the GPU memory requirements of 689 
+
+scFM backbones, we introduced a cell-sampling procedure for both branches and sam-690 
+
+pled a fixed number of cells from each sample. At least one cell was randomly selected 691 
+
+from each represented celltype, and the remaining cells were allocated according to 692 
+
+the within-sample celltype proportions using a multinomial distribution and sampled 693 
+
+without replacement. 694 
+
+Evaluation and Cell score analysis. Sample-level performance was evaluated 695 
+
+using 8-fold cross-validation. AUROC was calculated from the predicted probabili-696 
+
+ties for the test samples in each fold and reported as the mean across all eight folds. 697 
+
+For subsequent cell-level analysis, we selected a median performing fold based on test 698 
+
+AUROC among the 8 scGPT with OFT folds. The model obtained from this fold 699 
+
+was then applied to all samples in the complete dataset, and the resulting raw cell 700 
+
+scores were used for cell-level analysis. Raw cell scores were winsorized at the 1st 701 
+
+and 99th percentiles and then min-max normalized. A two-component Gaussian mix-702 
+
+ture model was fitted to normalized scores from case-sample cells; the higher-scoring 703 
+
+component was defined as case-specific and the lower-scoring component as case-704 
+
+normal-like, whereas cells from normal samples were retained as the normal group. 705 
+
+Within Ciliated cells, the case-specific group was compared with a reference com-706 
+
+bining the case-normal-like and normal groups. After total-count normalization to 707 
+
+10,000 counts per cell followed by log1p transformation, the Wilcoxon test imple-708 
+
+mented in Scanpy sc.tl.rank genes groups was performed[24]. Upregulated genes 709 
+
+with adjusted P < 0.01 and log fold change > 0.25 were ranked by the Wilcoxon score, 710 
+
+and the top 15 were displayed in Fig. 4e. Dot size denotes the fraction of cells express-711 
+
+ing a gene in each group, and color denotes the group mean expression min–max scaled 712 
+
+for each gene across the three groups. 713 
+
+34 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+## 5.7 Computational environment and reproducibility 714 
+
+The model-specific Conda environment for each scFM was constructed from the depen-715 
+
+dencies of its official repository, while Python 3.11.15, Ray 2.54.0, Hugging Face 716 
+
+Accelerate 1.13.0, and Hugging Face PEFT 0.14.0 were used across all environments 717 
+
+for the common scUnify runtime. Experiments were performed on a server running 718 
+
+Ubuntu 22.04.5 LTS and equipped with two Intel Xeon Platinum 8462Y+ processors 719 
+
+(64 cores and 128 threads in total), approximately 2.0 TiB of system memory, and four 720 
+
+NVIDIA H200 GPUs with approximately 141 GB of memory each. NVIDIA driver ver-721 
+
+sion 580.126.16 provided CUDA 13.0 compatibility. Repository revisions, pretrained 722 
+
+checkpoints, and model-specific integration details are described in Supplementary 723 
+
+Method S1. 724 
+
+OpenAI GPT-5.6 was used to assist with manuscript preparation and English-725 
+
+language editing, while Anthropic Claude Code with Opus 4.8 was used as a software 726 
+
+development assistant. All AI-assisted outputs were reviewed and revised by the 727 
+
+authors, who take full responsibility for the final software and manuscript. 728 
+
+# Declarations 729 
+
+## Ethics approval and consent to participate 730 
+
+This study involved the secondary analysis of publicly available, de-identified datasets 731 
+
+and no direct recruitment of human participants. Ethics approval and informed con-732 
+
+sent were obtained in the original studies, as reported by the respective authors. No 733 
+
+additional ethics approval was required for the present secondary analysis. 734 
+
+## Consent for publication 735 
+
+Not applicable. 736 
+
+35 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+## Availability of data and materials 737 
+
+All datasets analyzed in this study were obtained from publicly available sources. 738 
+
+The Kidney dataset used for resource profiling was obtained from the CellTypist 739 
+
+human kidney reference. The preprocessed NSCLC celltype classification, COVID-740 
+
+19 batch-correction, and Norman perturbation datasets were obtained from the 741 
+
+scPEFT Figshare archive (https://doi.org/10.6084/m9.figshare.30763886). The corre-742 
+
+sponding raw NSCLC and Norman datasets are available from the Gene Expression 743 
+
+Omnibus under accession numbers GSE179994 and GSE133344, respectively, whereas 744 
+
+the COVID-19 composite comprising 18 batches was originally distributed through the 745 
+
+scGPT repository (https://github.com/bowang-lab/scgpt). The Xenium Lung dataset 746 
+
+was obtained from SpatialCorpus-110M, and the COVID-19 infection dataset used for 747 
+
+the MIL experiment is available from the Broad Institute Single Cell Portal under 748 
+
+accession SCP1289. Dataset dimensions, preprocessing procedures, and split defini-749 
+
+tions are summarized in Supplementary Table S3. The scUnify source code is available 750 
+
+at https://github.com/DHKim327/scUnify, with code for reproducing the analyses 751 
+
+provided in the Reproduction directory. Documentation for the installation and use 752 
+
+of scUnify is available at https://scunify.readthedocs.io/. Code developed as part of 753 
+
+scUnify is released under the MIT License, while incorporated third-party model 754 
+
+components retain their respective upstream licenses as documented in the repository. 755 
+
+## Competing interests 756 
+
+The authors declare that they have no competing interests. 757 
+
+## Funding 758 
+
+This research received no external funding. 759 
+
+36 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+## Authors’ contributions 760 
+
+D.K. conceived and developed the scUnify framework, performed the experiments, 761 
+
+and wrote the manuscript. A.H. helped write and edit the English manuscript. K.J. 762 
+
+guided the overall direction of the study and edited the manuscript. K.K. supervised 763 
+
+the study. All authors reviewed and approved the final manuscript. 764 
+
+## Acknowledgements 765 
+
+Not applicable. 766 
+
+# References 767 
+
+[1] Baek S, Song K, Lee I. Single-cell foundation models: bringing artificial intelli-768 
+
+gence into cell biology. Experimental & Molecular Medicine. 2025;57(10):2169– 769 
+
+2181. https://doi.org/10.1038/s12276-025-01547-5. 770 
+
+[2] Cui H, Wang C, Maan H, Pang K, Luo F, Duan N, et al. scGPT: toward building a 771 
+
+foundation model for single-cell multi-omics using generative AI. Nature Methods. 772 
+
+2024;21(8):1470–1480. https://doi.org/10.1038/s41592-024-02201-0. 773 
+
+[3] Theodoris CV, Xiao L, Chopra A, Chaffin MD, Al Sayed ZR, Hill MC, 774 
+
+et al. Transfer learning enables predictions in network biology. Nature. 775 
+
+2023;618(7965):616–624. https://doi.org/10.1038/s41586-023-06139-9. 776 
+
+[4] Hao M, Gong J, Zeng X, Liu C, Guo Y, Cheng X, et al. Large-scale founda-777 
+
+tion model on single-cell transcriptomics. Nature Methods. 2024;21(8):1481–1491. 778 
+
+https://doi.org/10.1038/s41592-024-02305-7. 779 
+
+[5] Rosen Y, Roohani Y, Agrawal A, Samotorˇ can L, Tabula Sapiens Consor-780 
+
+tium, Quake SR, et al. Universal cell embedding provides a foundation model 781 
+
+37 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+for cell biology. Nature. 2026;656(8126):183–191. https://doi.org/10.1038/ 782 
+
+s41586-026-10689-z. 783 
+
+[6] Tejada-Lapuerta A, Schaar AC, Gutgesell R, Palla G, Halle L, Minaeva M, 784 
+
+et al. Nicheformer: a foundation model for single-cell and spatial omics. Nature 785 
+
+Methods. 2025;22(12):2525–2538. https://doi.org/10.1038/s41592-025-02814-z. 786 
+
+[7] Liu T, Li K, Wang Y, Li H, Zhao H. Evaluating the utilities of foundation 787 
+
+models in single-cell data analysis. Advanced Science. 2026;13(27):e14490. https: 788 
+
+//doi.org/10.1002/advs.202514490. 789 
+
+[8] Wu J, Ye Q, Wang Y, Hu R, Zhu Y, Yin M, et al. Biology-driven insights 790 
+
+into the power of single-cell foundation models. Genome Biology. 2025;26(1):334. 791 
+
+https://doi.org/10.1186/s13059-025-03781-6. 792 
+
+[9] Kedzierska KZ, Crawford L, Amini AP, Lu AX. Zero-shot evaluation reveals 793 
+
+limitations of single-cell foundation models. Genome Biology. 2025;26(1):101. 794 
+
+https://doi.org/10.1186/s13059-025-03574-x. 795 
+
+[10] Boiarsky R, Singh NM, Buendia A, Amini AP, Getz G, Sontag D. Deeper 796 
+
+evaluation of a single-cell foundation model. Nature Machine Intelligence. 797 
+
+2024;6(12):1443–1446. https://doi.org/10.1038/s42256-024-00949-w. 798 
+
+[11] Ahlmann-Eltze C, Huber W, Anders S. Deep-learning-based gene perturbation 799 
+
+effect prediction does not yet outperform simple linear baselines. Nature Methods. 800 
+
+2025;22(8):1657–1661. https://doi.org/10.1038/s41592-025-02772-6. 801 
+
+[12] He F, Fei R, Krull JE, Yu Y, Zhang X, Wang X, et al. Harnessing the power 802 
+
+of single-cell large language models with parameter-efficient fine-tuning using 803 
+
+scPEFT. Nature Machine Intelligence. 2026;8(1):118–133. https://doi.org/10. 804 
+
+1038/s42256-025-01170-z. 805 
+
+38 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+[13] Wang Q, Pan Y, Zhou M, Tang Z, Wang Y, Wang G, et al. scDrugMap: 806 
+
+benchmarking large foundation models for drug response prediction. Nature 807 
+
+Communications. 2026;17(1):730. https://doi.org/10.1038/s41467-025-67481-2. 808 
+
+[14] Hou S, Yang P, Ma W, Wang JX, Zhou X. A unified framework enables accessible 809 
+
+deployment and comprehensive benchmarking of single-cell foundation models. 810 
+
+bioRxiv. 2026;Preprint. https://doi.org/10.64898/2026.01.06.698060. 811 
+
+[15] Qiu P, Chen Q, Qin H, Fang S, Zhang Y, Zhang Y, et al. BioLLM: a standard-812 
+
+ized framework for integrating and benchmarking single-cell foundation models. 813 
+
+Patterns. 2025;6(8):101326. https://doi.org/10.1016/j.patter.2025.101326. 814 
+
+[16] Ellington CN, Li D, Zou S, Cole E, Sun N, Addagudi S, et al. Rapid 815 
+
+and reproducible multimodal biological foundation model development with 816 
+
+AIDO.ModelGenerator. bioRxiv. 2025;Preprint. https://doi.org/10.1101/2025. 817 
+
+06.30.662437. 818 
+
+[17] Virshup I, Bredikhin D, Heumos L, Palla G, Sturm G, Gayoso A, et al. The 819 
+
+scverse project provides a computational ecosystem for single-cell omics data 820 
+
+analysis. Nature Biotechnology. 2023;41(5):604–606. https://doi.org/10.1038/ 821 
+
+s41587-023-01733-8. 822 
+
+[18] Luecken MD, B¨ uttner M, Chaichoompu K, Danese A, Interlandi M, Mueller MF, 823 
+
+et al. Benchmarking atlas-level data integration in single-cell genomics. Nature 824 
+
+Methods. 2022;19(1):41–50. https://doi.org/10.1038/s41592-021-01336-8. 825 
+
+[19] Wang H, Leskovec J, Regev A. Limitations of cell embedding metrics assessed 826 
+
+using drifting islands. Nature Biotechnology. 2026;44(4):574–577. https://doi. 827 
+
+org/10.1038/s41587-025-02702-z. 828 
+
+39 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+[20] Moritz P, Nishihara R, Wang S, Tumanov A, Liaw R, Liang E, et al. Ray: a dis-829 
+
+tributed framework for emerging AI applications. In: 13th USENIX Symposium 830 
+
+on Operating Systems Design and Implementation (OSDI 18). USENIX Asso-831 
+
+ciation; 2018. p. 561–577. Available from: https://www.usenix.org/conference/ 832 
+
+osdi18/presentation/moritz. 833 
+
+[21] Gugger S, Debut L, Wolf T, Schmid P, Mueller Z, Mangrulkar S, et al.: Accelerate: 834 
+
+training and inference at scale made simple, efficient and adaptable. Computer 835 
+
+software. https://github.com/huggingface/accelerate. 836 
+
+[22] Mangrulkar S, Gugger S, Debut L, Belkada Y, Paul S, Bossan B, et al.: PEFT: 837 
+
+state-of-the-art parameter-efficient fine-tuning methods. Computer software. 838 
+
+https://github.com/huggingface/peft. 839 
+
+[23] Jeong K, Choi J, Kim K. scMILD: single-cell multiple instance learning 840 
+
+for sample classification and associated subpopulation discovery. iScience. 841 
+
+2026;29(4):115284. https://doi.org/10.1016/j.isci.2026.115284. 842 
+
+[24] Wolf FA, Angerer P, Theis FJ. SCANPY: large-scale single-cell gene expres-843 
+
+sion data analysis. Genome Biology. 2018;19(1):15. https://doi.org/10.1186/ 844 
+
+s13059-017-1382-0. 845 
+
+[25] Ram´ ırez S.: FastAPI. Computer software. https://github.com/fastapi/fastapi. 846 
+
+[26] Dom´ ınguez Conde C, Xu C, Jarvis LB, Rainbow DB, Wells SB, Gomes T, 847 
+
+et al. Cross-tissue immune cell analysis reveals tissue-specific features in humans. 848 
+
+Science. 2022;376(6594):eabl5197. https://doi.org/10.1126/science.abl5197. 849 
+
+[27] Liu B, Hu X, Feng K, Gao R, Xue Z, Zhang S, et al. Temporal single-cell tracing 850 
+
+reveals clonal revival and expansion of precursor exhausted T cells during anti-851 
+
+PD-1 therapy in lung cancer. Nature Cancer. 2022;3(1):108–121. https://doi. 852 
+
+40 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+org/10.1038/s43018-021-00292-8. 853 
+
+[28] Norman TM, Horlbeck MA, Replogle JM, Ge AY, Xu A, Jost M, et al. Explor-854 
+
+ing genetic interaction manifolds constructed from rich single-cell phenotypes. 855 
+
+Science. 2019;365(6455):786–793. https://doi.org/10.1126/science.aax4438. 856 
+
+[29] Ziegler CGK, Miao VN, Owings AH, Navia AW, Tang Y, Bromley JD, et al. 857 
+
+Impaired local intrinsic immunity to SARS-CoV-2 infection in severe COVID-19. 858 
+
+Cell. 2021;184(18):4713–4733.e22. https://doi.org/10.1016/j.cell.2021.07.023. 859 
+
+[30] Hu EJ, Shen Y, Wallis P, Allen-Zhu Z, Li Y, Wang S, et al. LoRA: low-rank 860 
+
+adaptation of large language models. In: International Conference on Learn-861 
+
+ing Representations; 2022. Available from: https://openreview.net/forum?id= 862 
+
+nZeVKeeFYf9. 863 
+
+[31] Yuan S, Liu H, Xu H. Bridging the gap between low-rank and orthogonal adap-864 
+
+tation via Householder reflection adaptation. In: Advances in Neural Information 865 
+
+Processing Systems. vol. 37; 2024. p. 113484–113518. 866 
+
+[32] Qiu Z, Liu W, Feng H, Xue Y, Feng Y, Liu Z, et al. Controlling text-to-image 867 
+
+diffusion by orthogonal finetuning. In: Advances in Neural Information Processing 868 
+
+Systems. vol. 36; 2023. p. 79320–79362. 869 
+
+[33] Kopiczko DJ, Blankevoort T, Asano YM. VeRA: vector-based random matrix 870 
+
+adaptation. In: International Conference on Learning Representations; 2024. 871 
+
+Available from: https://openreview.net/forum?id=NjNfLdxr3A. 872 
+
+[34] Kang J.: Bone: block affine transformation as parameter-efficient fine-tuning 873 
+
+methods for large language models. Available from: https://arxiv.org/abs/2409. 874 
+
+15371v1. 875 
+
+41 
+
+> .CC-BY 4.0 International license perpetuity. It is made available under a preprint (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in The copyright holder for this this version posted August 20, 2026. ;https://doi.org/10.64898/2026.03.01.708392 doi: bioRxiv preprint
+
+[35] Roohani Y, Huang K, Leskovec J. Predicting transcriptional outcomes of novel 876 
+
+multigene perturbations with GEARS. Nature Biotechnology. 2024;42(6):927– 877 
+
+935. https://doi.org/10.1038/s41587-023-01905-6. 878 
+
+[36] Pedregosa F, Varoquaux G, Gramfort A, Michel V, Thirion B, Grisel O, et al. 879 
+
+Scikit-learn: machine learning in Python. Journal of Machine Learning Research. 880 
+
+2011;12:2825–2830. 881 
+
+[37] Virtanen P, Gommers R, Oliphant TE, Haberland M, Reddy T, Courna-882 
+
+peau D, et al. SciPy 1.0: fundamental algorithms for scientific computing 883 
+
+in Python. Nature Methods. 2020;17(3):261–272. https://doi.org/10.1038/ 884 
+
+s41592-019-0686-2. 885 
+
+[38] Ranasinghe K, Naseer M, Hayat M, Khan S, Khan FS. Orthogonal Projection 886 
+
+Loss. In: Proceedings of the IEEE/CVF International Conference on Computer 887 
+
+Vision; 2021. p. 12333–12343. 888 
+
+42
