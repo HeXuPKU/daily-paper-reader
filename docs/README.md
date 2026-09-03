@@ -4,6 +4,13 @@
     <a class="dpr-home-notice-tutorial" href="#/tutorial/README">使用教程 <span aria-hidden="true">›</span></a>
   </div>
   <div class="dpr-home-notice-entry">
+    <time class="dpr-home-notice-date" datetime="2026-08-28">08.28</time>
+    <div>
+      <strong class="dpr-home-notice-entry-title">区间日报可正常点开</strong>
+      <span class="dpr-home-notice-entry-summary">长时间窗日报会挂在结束日那天的日历格上，此前点击没有反应，现在可以正常展开查看。</span>
+    </div>
+  </div>
+  <div class="dpr-home-notice-entry">
     <time class="dpr-home-notice-date" datetime="2026-07-20">07.20</time>
     <div>
       <strong class="dpr-home-notice-entry-title">反馈功能上线</strong>
@@ -41,7 +48,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-02</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-03</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 0 篇</strong>
@@ -51,7 +58,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-02 22:39:48 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-03 22:53:18 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
