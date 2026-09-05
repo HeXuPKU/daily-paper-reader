@@ -1,0 +1,1103 @@
+ADVANCING INTERACTION-SENSITIVE FEATURE SELECTION:
+NOVEL RELIEF-BASED ALGORITHMS, EXPANDED
+COMPARISONS, AND RECOMMENDATIONS FOR BIOMEDICAL
+DATA MINING
+Kia Kazemi-Nia, Harsh Bandhey, Philip J. Freda, Ryan J. Urbanowicz∗
+Cedars-Sinai Health Sciences University, Los Angeles, 90048, CA, USA
+ABSTRACT
+Objective: As a precursor to high-dimensional biomedical data modeling, reliable feature selec-
+tion can reduce computational expense, improve modeling performance, and yield simpler, more
+interpretable models. However, most filter-based feature selection methods struggle to detect feature
+interactions (e.g. epistasis), while wrapper or embedded feature selection methods are computation-
+ally expensive or overly algorithm-specific. Relief-based algorithms (RBAs) are filter methods that
+are sensitive to feature interactions while mitigating these other limitations. This study (1) refactors,
+optimizes, and expands the scikit-rebate Python package with existing and newly proposed RBA
+variants and (2) conducts rigorous RBA benchmark comparisons across diverse genomic simulations.
+Methods: We expand scikit-rebate to include SWRF*, µ-Relief, and 5 novel RBA variants imple-
+menting alternative strategies for neighbor selection and feature scoring. All RBAs were evaluated
+to compare predictive feature ranking and runtime across simulated genomic datasets varying in
+sample size, number of features, heritability, and underlying association type (e.g. main effects and
+interactions).
+Results: All RBAs, except µ-Relief, were proficient in detecting 2-way interactions in noisy data.
+RBAs utilizing ‘far’ scoring were best at detecting 2-way interactions – with MultiSWRFDB* top-
+performing – but were far less sensitive to main effects. SWRF, MultiSWRF, MultiSURF, and
+MultiSWRFDB yielded top performance across main effect and 2-way interaction datasets with
+MultiSWRFDB performing best when also considering 3-way interactions. Furthermore, refactoring
+of scikit-rebate resulted in 10 to 35-fold reductions in RBA runtimes.
+Conclusion: The improved scikit-rebate package provides a highly effective and efficient framework
+for interaction-sensitive feature selection. The newly introduced algorithms are among the strongest
+performing, and by robustly retaining both univariate (main) effects and 2-way epistatic interactions,
+these algorithms preserve predictive signals for downstream modeling.
+Keywords Feature selection · Epistasis · Relief · Main effect · Genetic heterogeneity
+1
+Introduction
+Feature selection is an essential part of many data mining and machine learning pipelines. Its goal is to identify and
+select the most relevant and informative features from a dataset to construct simpler, better performing, and less overfit
+models [1, 2, 3]. It serves as a form of dimensionality reduction that preserves original feature meaning rather than
+transforming or projecting data into a new mathematical space (e.g. principle component analysis or autoencoders) [4].
+A variety of feature selection algorithms have been proposed that fall into either the filter, wrapper, or embedded method
+categories. Given that wrapper and embedded methods are both algorithm-dependent, meaning that selected features
+∗Corresponding author
+Email address: ryan.urbanowicz@csmc.edu
+arXiv:2608.28552v1  [cs.LG]  28 Aug 2026
+
+
+Advancing Interaction-Sensitive Feature Selection
+may not ideally transfer from one algorithm/model to another, and that wrapper methods are extremely computationally
+expensive, ‘filter’ methods are particularly appealing [5]. Filter methods more rapidly evaluate the relevance of features
+independently of any machine learning algorithm, instead relying on intrinsic statistical properties of the data to score
+and rank features for selection. While different feature selection methods have demonstrated domain-specific strengths,
+very few have been able to consistently and efficiently detect features whose main source of predictive value comes from
+interactions [6, 5]. Feature selection algorithms that can do this are either computationally expensive, such as FOCUS
+which exhaustively searches over all subsets of the given feature set [7], are wrapper methods with the aforementioned
+limitations [4, 8, 9], or are filter methods with a limited ability to detect interactions without main effects to guide them,
+e.g. joint mutual information [10, 11] and correlation-based feature selection [12].
+Relief-based algorithms (RBAs) are filter-based feature selection methods developed to address these limitations.
+Derived from the original Relief algorithm [13, 14], RBAs leverage local neighborhood information by evaluating
+target instances against their neighbor instances, defined by feature space proximity, to identify features that distinguish
+between different outcome values. RBAs can detect pure epistasis (i.e., associations with no ‘marginal’/ ‘main’ effects)
+in a computationally efficient manner (since they do not exhaustively explore feature combinations) and they are not
+dependent on any one induction algorithm as a wrapper. Specifically, RBAs scale linearly with feature count. While
+they scale quadratically with number of instances, many biomedical datasets have limited sample sizes, and those
+with large instance counts can be subsampled for RBA scoring efficiency [5]. This scalability and sensitivity have
+driven their widespread use in genetics [15, 16, 17], medical imaging [18, 19, 20], and other fields where high feature
+dimensionality is a concern and features involved in interactions are of interest. A comprehensive introduction and
+review of fundamental RBA mechanics and algorithm variants was published in 2018 [5].
+Urbanowicz et al. [21] provided one of the first comprehensive benchmark comparisons of ‘core’ RBAs, and introduced
+scikit-rebate as an open-source Python package implementing these methods for use in data with categorical or
+quantitative features/outcomes as well as missing values. Core RBAs are defined here as RBA variants that perform a
+single pass over the training data [21]. These are distinct from RBA-wrapper strategies such as TuRF [22] or VLSRelief
+[23] which apply core RBAs multiple times towards improving performance on large feature sets. While all core RBAs
+share fundamental neighborhood-based scoring mechanisms, specific variants diverge in their criteria for neighborhood
+inclusion and weighting of instances in the neighborhood. Variants compared in the aforementioned study [21] included
+ReliefF [24], SURF [25], SURF* [26], MultiSURF* [27], and MultiSURF [21]. Performance of these RBAs was
+contrasted with univariate and wrapper approaches including χ2, ANOVA F-value, Mutual Information [28], and
+ExtraTrees [29]. The primary findings of that study (1) demonstrated that RBAs using ‘far’ scoring (denoted by a ‘*’ in
+RBA naming) under-perform in detecting main effects and 3-way interactions, (2) identified MultiSURF as the best
+general-use RBA, and (3) identified MultiSURF* [27] as best for detecting pure 2-way interactions.
+The present study addresses key limitations of the previous benchmarking study [21]. First, many of the simulated
+datasets included only 20 features, leading to some misleading speculations regarding potential performance on higher-
+order epistasis. Similar benchmarking later conducted for ReliefF, MultiSURF, and MultiSURF* in 100 feature datasets
+more definitively revealed the inability of RBAs to detect pure 4 or 5-way epistasis [30]. Additionally, benchmarking
+had not included gradient-based algorithms like SWRF* [31] or other recently-proposed variants like µ-Relief [32].
+While the studies that introduced µ-Relief [32] and SWRF* [31] included comparative analyses against other RBAs,
+their benchmarking methodologies had notable limitations. Specifically, evaluation of SWRF* lacked a comprehensive
+set of RBA comparisons and failed to assess performance on main effects [31]. Conversely, the µ-Relief study utilized
+datasets with insufficient interaction effects and indirectly relied on a restrictive set of downstream predictive models
+for RBA evaluation rather than feature ranking in controlled simulations [32].
+This study expands and refactors the scikit-rebate package to (1) improve algorithm runtime efficiency, (2) add
+SWRF* [31] and µ-Relief [32], and (3) introduce 5 novel core RBA variants that recombine neighborhood and scoring
+strategies from SWRF* [31] and MultiSURF [21], namely SWRF, MultiSWRF, MultiSWRF*, MultiSWRFDB, and
+MultiSWRFDB*. We evaluate the strengths and weaknesses of each algorithm across a diversity of simulated genomic
+datasets and provide updated recommendations for RBA application in future biomedical data mining tasks.
+2
+Methods
+This section covers (1) existing RBAs, (2) newly proposed RBAs, (3) updates to the scikit-rebate Python package, (4)
+benchmarking datasets, (5) experimental analyses, and (6) post-hoc analyses.
+2
+
+
+Advancing Interaction-Sensitive Feature Selection
+2.1
+Existing Relief-based Algorithms
+All RBAs are descendants of the original Relief algorithm [13, 14] and return weights (W) for all features after training,
+where higher weights denote greater feature importance. As detailed in Algorithm 1, the original Relief algorithm
+was designed for classification data and operates by iterating over m training instances, each taking a turn as the
+‘target’ instance (Ri). Each iteration, Ri is compared to its nearest hit (H) and nearest miss (M), i.e., neighboring
+instances with the same or different class, respectively. Weights are then updated for each feature (W[A]). Feature value
+differences between Ri and H contribute to weight reductions, and feature value differences between Ri and M increase
+weights. A key to Relief feature interaction sensitivity is that weight updates take place only among neighboring
+instances.
+Algorithm 1 Relief algorithm pseudo-code
+Require: For each training instance: a vector of feature values and the class value
+n ←number of training instances
+a ←number of features
+Hyperparameter: m ←number of random training instances out of n used to update W
+Initialize all feature weights W[A] := 0.0
+for i := 1 to m do
+Randomly select a target instance Ri
+Find nearest hit H and nearest miss M
+for A := 1 to a do
+W[A] := W[A] −diff(A,Ri,H)
+m
++ diff(A,Ri,M)
+m
+end for
+end for
+return the vector W of feature scores that estimate the quality of features
+Since Relief, a multitude of RBA variants have been proposed which introduced novel algorithmic elements aimed at
+improving sensitivity to relevant features [5]. These include (1) using more neighbors in scoring (ReliefF [24]), (2)
+automatically defining the neighborhood based on inherent dataset properties (SURF [25]), (3) adding ‘far’ scoring
+(SURF* [26]), (4) recalculating neighborhood-defining metrics for each Ri (MultiSURF* [27]), (5) adding a ‘deadband
+(DB) zone’ of middle distance instances excluded from W updates (MultiSURF* [27]), and (6) updates to feature weights
+W being modulated by neighbors’ scoring weights (wij) that depend on distance from Ri (SWRF* [31]). Subsections
+below detail the existing RBAs compared in this study. Of these, µ-Relief and SWRF* are newly implemented in
+scikit-rebate. Figure 1 is used throughout to illustrate conceptual differences in RBA instance neighborhoods and
+scoring weights. RBAs are introduced chronologically in sections below, but grouped by scoring weight similarity in
+Figure 1. For a more detailed overview and review of RBAs, see [5] and [21].
+2.1.1
+ReliefF
+ReliefF [24] is arguably the best known descendant of Relief [13, 14]. ReliefF adds the hyperparameter k, which defines
+the number of nearest hits and nearest misses to utilize when updating W. Original Relief would have k=1. Using
+a larger k can improve algorithm sensitivity to relevant features in noisy data [24], however setting k too high can
+dramatically reduce sensitivity to interactions in datasets with small training sets [21]. Figures 1-A and 1-B illustrate
+the scoring neighborhood and scoring weights (wij) used by ReliefF for k=10 and k=100, respectively. All instances
+included in the neighborhood receive ‘standard’ scoring weights, (wij = 1), meaning that feature value differences with
+‘hits’ reduce W[A] by 1/m and increase by 1/m for ‘misses’. Instances outside the neighborhood have wij = 0, i.e.,
+they don’t participate in updating W.
+2.1.2
+SURF
+SURF [25] eliminated the need for users to specify ReliefF’s k hyperparameter; instead automatically identifying
+nearest neighbors based on a one-time calculation of global mean distance (µ) between all pairs of instances in the
+training data. Here, neighbors for a specific Ri include other instances whose distance from Ri is less than µ. Figure
+1-F illustrates this larger instance neighborhood, again using ‘standard’ scoring weights.
+3
+
+
+Advancing Interaction-Sensitive Feature Selection
+Figure 1: Illustration of instance neighborhoods and scoring weights (wij) based on distance from target instance (Ri)
+for all RBAs examined. Conceptual visualizations generated with 500 simulated instances. While not indicated in
+subplots I and J, MultiSWRF* and MultiSWRF recalculate µi and σi for each Ri, like other ‘Multi’ RBAs.
+2.1.3
+SURF*
+SURF* [26] was the first RBA to introduce a ‘far’ neighborhood. For each Ri, all instances in the training data are
+separated into respective near and far neighborhoods using SURF’s global mean distance (µ) [25]. Figure 1-E illustrates
+how instances in the far neighborhood have an inverted scoring weight (i.e., −1), meaning that feature value differences
+with ‘hits’ now increase W[A] by 1/m and decrease by 1/m for ‘misses’. While far scoring provides an advantage
+in the detection of 2-way interactions [26, 21] it also reduces sensitivity to main effects [21]. RBAs that utilize far
+neighborhoods in feature weighting are denoted with ‘*’ in their names.
+2.1.4
+SWRF*
+Rather than assigning scoring weights (wij) of 1 or -1 to near/far neighbors like SURF*, SWRF* [31] proposed a
+sigmoidal gradient to smoothly decrease neighbors’ wij as distance from Ri approaches µ (Figure 1-I). Equation 1
+gives the calculation of wij based on the distance (distij) between Ri and another instance Rj. The global mean
+distance, µ, and global standard deviation, σ, are calculated from all pairwise distances, similar to SURF and SURF*.
+wij =
+2
+1 + exp
+ (distij −µ) · 4
+σ
+ −1
+(1)
+2.1.5
+MultiSURF*
+MultiSURF* [27] separately expanded upon SURF* with two key elements: recalculation of neighborhood metrics for
+each Ri (i.e., the prefix ‘Multi’) and a ‘DB zone’. Unlike SURF*, the metrics that determine neighborhood membership
+in MultiSURF*, including µ, are recalculated for each Ri (i.e., µi) based on distances between Ri and all other
+instances. The DB zone is defined by calculating the standard deviation (σi) of these distances from Ri. Here the near
+neighborhood is defined by instances with a distance from Ri that is < (µi −σi
+2 ) and the far neighborhood includes
+instances > (µi + σi
+2 ). As seen in Figure 1-G, instances within the DB zone receive wij = 0.
+4
+
+
+Advancing Interaction-Sensitive Feature Selection
+2.1.6
+MultiSURF
+MultiSURF [21] is identical to MultiSURF*, but importantly excludes ‘far’ neighbors in feature scoring (Figure
+1-H). Comprehensive benchmarking suggested that MultiSURF was the best general-use RBA for detecting main
+effects, 2-way and 3-way interactions, and genetic heterogeneity [21, 30]. However, SWRF* was not included in those
+comparisons, as it was expected that SWRF*’s ‘far’ scoring would lead to a similar loss in main effect sensitivity as
+observed in [21]. This is examined in the current study.
+2.1.7
+µ-Relief
+µ-Relief (Mean-based Relief), [32] was most recently proposed as a variant of ReliefF [24] that redefined ‘neighbor-
+hoods’ to be the k ‘hit’ and k ‘miss’ instances with the largest dist∗
+ij (Equation 2). This aims to maximize the absolute
+difference between distij and the average distance between Ri and the subset of instances with the same class as Rj
+(i.e., µCji).
+dist∗
+ij =
+distij −µCji
+
+(2)
+µ-Relief’s neighborhood selection inevitably leads to the inclusion of ‘far neighbors’, similar to other ‘star’ RBAs, e.g.
+SURF* [26]. However, unlike ‘star’ RBAs that assign negative scoring weights to the ‘far neighborhood’, µ-Relief
+maintains ‘standard’ scoring weights for all instances in the neighborhood as illustrated in Figure 1-C and 1-D, for k=10
+and k=100, respectively. No µ-Relief implementation was publicly available, so the present study implements it as
+described in [32] and conducts the first rigorous simulation study benchmarking in comparison with other RBAs. Lastly,
+while original µ-Relief was only designed for binary and multi-class outcomes, our implementation in scikit-rebate was
+extended for quantitative outcomes as described in [21].
+2.2
+Novel RBA Variants
+This section describes the novel RBA variants that were implemented and compared in this study.
+2.2.1
+MultiSWRF*
+MultiSWRF* combines (1) SWRF*’s sigmoidal gradient for wij with (2) MultiSURF*’s recalculation of µi and σi for
+each Ri, rather than a single global metric calculation (Equation 3 and Figure 1-I). SWRF* and MultiSWRF* are both
+represented by Figure 1-I since their only difference is µ and σ calculation. Like SWRF*, MultiSWRF* speculates that
+it is better for all instances to participate in updating W. In contrast with SWRF*, it examines whether recalculated
+neighborhood metrics improve performance.
+wij =
+2
+1 + exp
+
+(distij −µi) ·
+4
+σi
+ −1
+(3)
+2.2.2
+SWRF
+SWRF utilizes the same sigmoidal gradient and global µ and σ as SWRF* [31] but it excludes ‘far’ neighbors in feature
+scoring (Equation 4 and Figure 1-J). This is expected to recover performance on main effects similar to MultiSURF vs.
+MultiSURF* [21].
+wij =
+
+
+
+
+
+2
+1 + exp
+ (distij −µ) · 4
+σ
+ −1
+if distij < µ
+0
+otherwise
+(4)
+2.2.3
+MultiSWRF
+MultiSWRF is identical to SWRF but adopts recalculation of µi and σi for each Ri, like MultiSWRF* (Equation 5 and
+Figure 1-J). As a non-‘*’ algorithm, we expect better performance on main effects.
+wij =
+
+
+
+
+
+2
+1 + exp
+
+(distij −µi) ·
+4
+σi
+ −1
+if distij < µi
+0
+otherwise
+(5)
+5
+
+
+Advancing Interaction-Sensitive Feature Selection
+2.2.4
+MultiSWRFDB*
+MultiSWRFDB* is similar to MultiSWRF* but also includes the DB zone introduced by MultiSURF* [27] (Figure 1-K
+and Equation 6). In contrast with MultiSWRF*, MultiSWRFDB* speculates that ‘middle’ distance instances, falling
+within the DB, should be excluded from W updates (i.e., wij = 0).
+wij =
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+2
+1 + exp
+
+(distij −(µi −σi
+2 )) ·
+4
+σi
+ −1,
+if distij < µi −σi
+2
+−2
+1 + exp
+
+(distij −(µi + σi
+2 )) · −4
+σi
+ + 1,
+if distij > µi + σi
+2
+0
+otherwise
+(6)
+2.2.5
+MultiSWRFDB
+MultiSWRFDB is identical to MultiSWRFDB*, but it excludes ‘far’ neighbors in feature scoring (Figure 1-L and
+Equation 7). We hypothesize that MultiSWRFDB will perform best overall given that it combines elements from
+existing RBAs that have proven to be advantageous in various contexts, i.e., (1) excluding ‘far’ neighbors in feature
+scoring, (2) sigmoidal gradient for wij, (3) recalculation of µi and σi for each Ri, and (4) instances within the DB zone
+having wij = 0.
+wij =
+
+
+
+
+
+2
+1 + exp
+
+(distij −(µi −σi
+2 )) ·
+4
+σi
+ −1,
+if distij < µi −σi
+2
+0
+otherwise
+(7)
+2.3
+Updates to scikit-rebate Python package
+All core RBAs described in Section 2.1 have been implemented in the scikit-learn compatible scikit-rebate Python
+package which is publicly available at https://github.com/UrbsLab/scikit-rebate. We also introduce efficiency and utility
+updates to scikit-rebate including: (1) refactoring of the codebase to achieve significant speedups in feature scoring via
+NumPy vector-wide operations, and (2) explicit user control of how individual features and endpoints are treated, i.e., as
+categorical or quantitative values. These expansions are reflected in v0.8.3 of scikit-rebate which was employed for all
+subsequent evaluations in this study. Furthermore, we have corrected the equations describing feature weight updates
+for multi-class endpoints (Eqs. 4-5 in [21]) to accurately reflect these updates within scikit-rebate (Supplementary
+Section 1.1).
+2.4
+Simulated Benchmark Datasets
+In-line with other rigorous RBA feature ranking evaluations [21, 30], this study benchmarks all aforementioned RBAs
+across a diverse spectrum of simulated genetic and ‘XOR’ datasets, generated using the GAMETES v2.2 software
+package [33] and custom scripts. Simulation studies are critical for algorithm benchmarking as they allow systematic
+control over experimental dataset conditions, and the ground-truth of the dataset is known to investigators including
+which features were modeled as relevant or irrelevant, the signal-to-noise ratio, and the nature of associations in the
+data.
+As summarized in Table 1, we examine 77 dataset configurations that vary by (1) the type of association between
+predictive feature(s) and outcome (e.g. main, additive, epistatic, and/or heterogeneous effects), (2) number of predictive
+features, (3) total number of features, (4) number of instances, (5) heritability (i.e., the signal-to-noise ratio, where 1
+is full penetrance and 0 is complete noise), (6) model ‘architecture’ difficulty; ‘E’ (easy) vs. ‘H’ (hard) [34], and (7)
+various configuration-specific variables detailed in [21], e.g. XOR 2-way, 3-way, 4-way, or 5-way interactions. This
+study primarily focuses on the first 63 dataset configurations, but secondarily confirms RBA functionality on smaller
+(20-feature) datasets with continuous-valued features, continuous-valued endpoints, missing values, class imbalance,
+and multi-class endpoints. Each ‘configuration’ includes 30 replicate datasets used to evaluate the success rate of RBA
+feature ranking across multiple trials, for a total of 2310 unique simulated datasets. Like more recent benchmarking in
+[30], primary analyses were conducted on datasets with 100 or more features. We largely focus on pure epistasis since
+it is more challenging to detect than ‘impure’ epistasis, where small marginal effects can facilitate detection.
+6
+
+
+Advancing Interaction-Sensitive Feature Selection
+Table 1: Summary of simulation study benchmark datasets. The simulation method is designated as ‘G’ (GAMETES),
+‘C’ (custom script), or ‘G + C’ (GAMETES modified by custom script). Primary data configurations are given in the
+top portion of the table, and secondary ones on the bottom.
+Simulated Data Group
+Description or Pattern of
+Association (‘*’ indicates
+datasets were also simulated
+with 2-way pure epistasis)
+Configurations
+Config. Variations
+Predictive Features
+Total Features
+Model Difficulty
+Heritability
+Instances
+Simulation Method
+2-way Pure Epistasis
+32
+–
+2
+100
+E, H
+0.05, 0.1, 0.2, 0.4
+200, 400, 800, 1600
+G
+XOR Model (Pure Epistasis)
+4
+2-way, 3-way, 4-way, 5-way
+2, 3, 4, 5
+100
+N/A
+1
+1600
+C
+4-Feat. Heterogeneous 2-way
+Epistasis
+2
+50:50, 75:25
+4
+100
+E
+0.4
+1600
+G
+3-way Pure Epistasis
+1
+–
+3
+100
+E
+0.2
+1600
+G
+1-Feature Main Effect
+8
+–
+1
+100
+E, H
+0.05, 0.1, 0.2, 0.4
+1600
+G
+2-Feature Additive Effect
+2
+50:50, 75:25
+2
+100
+E
+0.4
+1600
+G
+4-Feature Additive Effect
+1
+–
+4
+100
+E
+0.4
+1600
+G
+Number of Features*
+9
+2-way Pure Epistasis
+2
+100, 1000, 2000, 5000, 8000,
+10000, 20000, 50000, 100000
+E
+0.4
+1600
+G
+Number of Features
+4
+Main Effect
+1
+100, 1000, 10000, 100000
+E
+0.4
+1600
+G
+Continuous Features*
+1
+–
+2
+20
+E
+0.4
+1600
+G+C
+Mix of Discrete and Continuous
+Features*
+1
+–
+2
+20
+E
+0.4
+1600
+G+C
+Continuous Endpoint*
+3
+0.2, 0.5, 0.8
+2
+20
+E
+0.4
+1600
+G
+Continuous Endpoint*
+(1-Threshold Model)
+1
+–
+2
+20
+E
+0.4
+1600
+G+C
+Missing Data*
+4
+0.001, 0.01, 0.1, 0.5
+2
+20
+E
+0.4
+1600
+G+C
+Imbalanced Data*
+2
+0.6, 0.9
+2
+20
+E
+0.4
+1600
+G
+Multi-Class Endpoint
+2
+3-class, 9-class
+2
+20
+N/A
+1
+1600
+C
+(Impure 2-way Epistasis)
+2.5
+Experimental Evaluation
+This study compares the performance of 7 existing RBAs, 5 novel RBAs, Mutual Information, and a random ordering of
+features (Random Shuffle), as a negative control. Mutual Information is an established feature selection algorithm best
+suited for detecting main/additive effects [35, 36]. For ReliefF and µ-Relief, settings of k=10 and k=100 were examined
+for each, yielding a total of 14 RBA algorithms being run.
+This simulation study design allows us to directly compare feature selection algorithm performance based on how
+highly they score/rank predictive features in contrast with non-predictive features. Ideal algorithm performance would
+score all predictive features higher than all non-predictive features in a given dataset. This design avoids the need for
+training/testing data splits or indirect evaluation via downstream modeling since we evaluate the accuracy of ground
+truth feature ranking directly.
+From the perspective of feature selection in real-world applications, practitioners would want to ensure that all predictive
+features are preserved within the top ‘selected’ subset of z features for downstream machine learning modeling. Thus,
+this study compares algorithm performance by examining how often (i.e., out of 30 replicates) all predictive features
+were ranked in the top x% of features. This is examined for all percentiles (x%); from x=( number of predictive features
+number of total features
+×100)%
+(i.e., ‘optimal’ – all predictive features ranked ahead of non-predictive ones) to x=100% (i.e., predictive features could
+have any ranking).
+These rankings were used to generate heatmap visualizations for each dataset configuration, e.g. Figure 2. Heatmap
+x-axes represents feature percentiles (x%) and the y-axes indicates the algorithm. The legend denotes ‘power’, i.e., the
+frequency of success across 30 replicates wherein all predictive features were ranked at or above a given percentile.
+Purple denotes ideal power (i.e., 30/30 replicates), while shades of blue denote power > 80%, and shades from orange to
+white highlight diminishing power. As such, heatmaps represent ideal algorithm performance as a solid purple horizontal
+bar (i.e., all predictive features ranked > non-predictive features in every replicate). In addition to these individual
+heatmaps, ‘heatmap grid’ visualizations were also generated which arrange individual dataset-configuration-level
+heatmaps within a data group into one plot.
+2.5.1
+Algorithm Training
+Each RBA was trained on all instances of each dataset to yield respective feature importance scores. Scikit-rebate
+was directed to treat all features as categorical, except for secondary simulated datasets including continuous-valued
+7
+
+
+Advancing Interaction-Sensitive Feature Selection
+Figure 2: Example heatmap illustrating algorithms’ ability to rank predictive features in the top x% of features across
+replicates. This heatmap is for the configuration in the ‘4-Feature Heterogeneous 2-way Epistasis’ data group with a
+75:25 ratio (i.e., one 2-way interaction is modeled in 75% of the instances and a different 2-way interaction is modeled
+in the other 25% of instances).
+features. After training, feature scores were sorted in descending order for rank analysis. While RBA scoring was
+deterministic, a fixed random seed was used for Random Shuffle and Mutual Information to ensure reproducibility. For
+datasets with feature counts of 100, 1,000, 10,000, and 100,000, the runtimes of the RBAs were recorded to quantify
+the computational speedup achieved by scikit-rebate refactoring.
+2.5.2
+Post-hoc Analysis
+In addition to predictive feature percentile rankings used in previous benchmarking [21, 30], this study also examined
+the mean and median rankings given to predictive features which were calculated for each algorithm at the dataset
+configuration and group levels. These metrics were computed as concise aggregate summary statistics that complement
+presented heatmap visualizations.
+Furthermore, Mann-Whitney U tests were performed to compare algorithm rankings at both the configuration and
+data group level (e.g. 2-way pure epistasis). The tests were performed for all pairwise combinations of algorithms
+(excluding Random Shuffle). Thus, there were
+ 15
+2
+
+= 105 tests performed per configuration or data group. Since this
+ranking data has the potential for many ties/overlapping values between the two compared algorithms which can lead to
+diminished power in the Mann-Whitney U test, permutation tests were also performed (n = 10, 000 permutations; see
+Supplementary Section 1.2 for details). To account for multiple hypothesis testing, p-values from all Mann-Whitney U
+tests and permutation tests were adjusted using the Benjamini-Hochberg FDR procedure (α = 0.05). Since both tests
+produced similar p-values, the p-value threshold that held true for both is reported by default.
+Lastly, to provide recommendations on which RBA(s) to employ in distinct scenarios, we computed ‘global’ mean and
+median ranking metrics. First, all primary data configurations (i.e., those with ≥100 features) were separated into one
+of three groups: (1) 2-way epistasis data (44 configurations), (2) additive/main effect data (15 configurations), or (3)
+3-way epistasis data (2 configurations). The specific configurations in these groups can be found in Supplementary
+Section 1.2. 4-way and 5-way XOR datasets were excluded due to poor performance across all algorithms. Next, the
+group-level mean and median ranking was calculated for each algorithm across all datasets within that group. Ultimately,
+8
+
+
+Advancing Interaction-Sensitive Feature Selection
+we reported ‘global’ mean and median metrics for 3 scenarios of expected RBA use: (1) ranking on 2-way epistasis data
+- for users solely interested in detecting 2-way interactions, (2) ranking on 2-way epistasis and additive/main effect data
+- for users seeking to detect interactions without sacrificing additive/main effect performance, and (3) ranking for 2-way
+epistasis, additive/main effect, and 3-way epistasis data - for users seeking the most generalizable RBA capabilities.
+Rankings on datasets with > 100 features were scaled to a 1-100 range to prevent excessive influence on the mean and
+median values. For global metrics on the second and third scenarios, group-level mean/median values were averaged.
+Scripts for conducting all analyses in this paper are available within the scikit-rebate GitHub repository.
+3
+Results
+This section compares RBAs’ rankings of predictive features, organized by (1) 2-way (or greater) epistasis, (2)
+univariate effects (i.e., main or additive), (3) scaling to larger feature sets, (4) global mean/median metrics for different
+use scenarios, and (5) secondary datasets.
+3.1
+Detecting Feature Interactions
+This section examines RBA performance on pure 2-way, 3-way, 4-way, or 5-way epistasis.
+3.1.1
+2-way Epistasis
+The heatmap grid in Figure 3 summarizes RBA performance across the 32 dataset configurations of the ‘2-way Pure
+Epistasis’ data group. This grid is arranged such that the most difficult configuration (low heritability, low instance
+count, and hard architecture) is bottom-left, and the easiest configuration is top-right. Overall, most RBAs performed
+well on these benchmarks, with expected performance losses towards lower extremes of heritability, instance count, and
+hard architectures. Mean/median rankings given by RBAs (Table S1) reinforce this, with mean values more affected by
+these more challenging configurations. In contrast, µ-Relief (both k=10 and k=100) completely failed to detect 2-way
+interactions, with performance comparable to Random Shuffle (negative control) and Mutual Information (expected to
+perform poorly on pure epistasis).
+Consistent with previous benchmarking [21], ‘star’ RBAs (e.g. MultiSURF* and MultiSWRFDB*) demonstrated
+small but overall significant ranking improvements over all ‘non-star’ RBAs (p < 0.01 to p < 0.0001; Supple-
+mentary File S1). Within either ‘star’ or ‘non-star’ RBAs, those with a ‘DB zone’ (MultiSURF/MultiSURF*, Mul-
+tiSWRFDB/MultiSWRFDB*) and those utilizing a scoring gradient (SWRF/SWRF*, MultiSWRF/MultiSWRF*)
+achieved best performance among RBAs, while SURF/SURF* performed slightly less well, and ReliefF (k=10 and
+k=100) performed least well among successful RBAs. The differences between ‘non-star’ DB/gradient algorithms and
+SURF/ReliefF were significant (p < 0.05 to p < 0.0001, except MultiSWRF vs. SURF which was non-significant).
+The best performance (based on group mean/median) was achieved by MultiSWRFDB*; however, this advantage was
+small and non-significant compared to all other ‘star’ RBAs, including SURF*.
+For the easier 2-way XOR configuration (heritability = 1), most RBAs exhibited ideal ranking performance, except
+µ-Relief which exhibited near-ideal performance (Figure 4, Table S2).
+On the ‘4-Feature Heterogeneous 2-way Epistasis’ data group, with two separate 2-way interactions modeled in
+distinct instance subsets, RBA performance differences were very similar to the ‘2-way Pure Epistasis’ data group (see
+Figure 2 for 75:25, Figure S1 for 50:50, and Table S3 for mean/median rankings across the group). Of note, ReliefF
+(k=10) underperformed in contrast with other RBAs. The only significant differences between algorithms involved
+under-performing µ-Relief (k=10 and k=100) or Mutual Information (p < 0.0001; Supplementary File S2). However,
+here there are far fewer dataset configurations, decreasing overall power of the analysis.
+3.1.2
+3-way Epistasis
+For the ‘3-way XOR’ configuration (also heritability = 1), RBAs that utilized fewer neighbors in scoring (ReliefF with
+k=10/k=100 and µ-Relief with k=10/k=100) performed the best, achieving ideal or near-ideal performance (Figure 4,
+Table S4). Conversely, SURF and every ‘star’ RBA failed to detect 3-way XOR predictive features. MultiSWRFDB
+stood out as the only RBA to perform well on the 3-way XOR that also performed well on other dataset configurations.
+Following MultiSWRFDB; MultiSURF, SWRF and MultiSWRF yielded moderate but diminishing performance.
+These findings were generally echoed by the ‘3-way Pure Epistasis’ configuration which included much noisier signal
+(heritability = 0.2). While overall RBA performance weakened with significant noise, µ-Relief and ReliefF remained
+the strongest performers, with µ-Relief (k=100) achieving highest performance (Figure S2). On both of the above 3-way
+9
+
+
+Advancing Interaction-Sensitive Feature Selection
+Figure 3: Heatmap grid for the ‘2-way Pure Epistasis’ data group. X-axis indicates number of training instances, y-axis
+(left) indicates heritability, and y-axis (right) indicates model architecture difficulty (easy or hard). Black lines are
+drawn on individual heatmaps to identify RBA algorithms ordered in the figure key.
+configurations, µ-Relief (k=10) and µ-Relief (k=100) had performance improvements that were significant compared to
+all RBAs, as did ReliefF (k=10) and ReliefF (k=100) (p < 0.05 to p < 0.0001; see Supplementary Files S3 and S4).
+Despite failing on 2-way epistasis, µ-Relief was the strongest performer on datasets involving 3-way epistasis, and, in
+contrast, ‘star’ RBAs, which were the strongest in detecting 2-way epistasis, failed to detect 3-way epistasis.
+3.1.3
+4-way and 5-way Epistasis
+Consistent with previous findings [21], no RBAs examined were able to reliably detect features involved in XOR 4-way
+and 5-way interactions given 1600 training instances (Figure 4, Tables S6 and S7).
+10
+
+
+Advancing Interaction-Sensitive Feature Selection
+Figure 4: Predictive feature ranking heatmaps for the ‘XOR Model’ data group.
+3.2
+Detecting Univariate Effects
+The heatmap grid in Figure 5 and Table S8 summarizes RBA performance across the 8 data configurations of the
+‘1-Feature Main Effect’ data group. The majority of ‘non-star’ RBAs exhibited near-ideal performance across all dataset
+configurations (SURF, MultiSURF, SWRF, MultiSWRF, and MultiSWRFDB), with ReliefF (k=100) and µ-Relief
+(k=100) slightly worse. Every ‘star’ RBA performed significantly worse than all ‘non-star’ RBAs (p < 0.0001; see
+Supplementary File S5), reinforcing findings in [21, 30]. Notably, SWRF* performed least well of all RBAs, and all
+Figure 5: Heatmap grid for the ‘1-Feature Main Effect’ data group. X-axis indicates heritability of model values and
+y-axis indicates model difficulty: E (easy) or H (hard). All datasets have 1600 instances.
+11
+
+
+Advancing Interaction-Sensitive Feature Selection
+‘star’ algorithms performed similar to Random Shuffle on ‘Easy’ datasets with the lowest heritability. Additionally,
+µ-Relief (k=10) significantly underperformed all ‘non-star’ RBAs except ReliefF (k=10) (p < 0.0001). Likewise,
+ReliefF (k=10) significantly underperformed all ‘non-star’ RBAs except µ-Relief (k=10) (p < 0.001).
+On the ‘2-Feature’ and ‘4-Feature Additive Effect’ data groups, including multiple predictive features with univariate
+effects, all ‘non-star’ RBAs performed ideally while ‘star’ RBAs were again less reliable (p = 0.054 to p < 0.0001;
+Supplementary Files S6 and S7) – see Figures S3 and S4 & Tables S9 and S10. Overall, RBAs that utilize more ‘near’
+neighbors in scoring, but no ‘far’ neighbors, performed best across these univariate effect simulations.
+3.3
+Scaling to Larger Feature Sets
+Figure 6 summarizes RBA performance across most of the ‘Number of Features (2-way Epistasis)’ data group. In
+contrast with previous benchmarking [21, 30], this study examines 5 additional feature count levels (i.e., 2K, 5K, 8K,
+20K, and 50K) towards better illustrating feature dimensionalities where ‘core’ RBAs can reliably detect pure 2-way
+interactions.
+Figure 6: Predictive feature ranking heatmaps for the ‘Number of Features (2-way Epistasis)’ data group.
+12
+
+
+Advancing Interaction-Sensitive Feature Selection
+The 100-feature configuration is the same as the top-right configuration in Figure 3, yielding ideal performance for
+all RBAs, except µ-Relief (Table S11). The 1K-feature configuration yielded the same findings, but with SURF and
+ReliefF (k=10) yielding non-significant performance losses (Table S12). The 10K-feature configuration departs from
+achieving any ideal RBA performance, but still yielded strong ranking performance for RBAs other than µ-Relief. Here,
+‘star’ RBAs slightly but significantly outperform ‘non-star’ RBAs (p < 0.0001; Supplementary File S8) consistent with
+pure 2-way interaction trends in Figure 3 and MultiSURF* standing out as best (Table S13). Also, RBAs that utilize the
+DB or gradient scoring showed a small advantage over SURF/SURF* (p < 0.01 to p < 0.0001 for SURF vs. ‘non-star’
+RBAs and p = 0.056 to p < 0.05 for SURF* vs. ‘star’ RBAs). Furthermore, ReliefF (k=10) performance dropped
+considerably compared to other ‘non-star’ RBAs (p < 0.0001).
+With greater than 10K features, RBA reliability in ranking predictive features involved in pure 2-way interactions
+progressively decreased, but ‘star’ RBAs persisted as having better performance than ‘non-star’ RBAs (Tables S14-S16).
+At 20K features, MultiSWRFDB* was best and consistently ranked predictive features in the top 10th percentile. At
+50K features, MultiSURF* was best followed closely by MultiSWRFDB*. At 100K features, predictive feature ranking
+of most RBAs was still significantly better than Random Shuffle or Mutual Information and MultiSWRFDB* stood
+out as best. However, no RBA was able to consistently rank both predictive features higher than the 75th percentile.
+Furthermore, with 100K features, many (but not all) ‘star’ RBAs slightly but significantly outperformed other ‘non-star’
+RBAs (p < 0.05 to p < 0.0001) and RBAs using the DB and/or gradient scoring yielded slightly better performance
+(non-significant; see Supplementary File S9).
+While most RBA performance remained relatively strong at 10K features, we conducted followup analysis of detecting
+pure 2-way interactions at 2K, 5K, and 8K features (Figure S5, Tables S17-S19) and found that most ‘non-star’ RBAs
+could maintain near-ideal ranking at 2K features, and most ‘star’ RBAs could maintain near-ideal ranking at 8K features.
+We also examined RBA scalability in the ‘Number of Features (Main Effect)’ data group (Figure S6, Tables S20-S23).
+Every ‘non-star’ RBA and Mutual Information achieved ideal performance at 100, 1K, 10K, and 100K features.
+However, the performance of every ‘star’ RBA further declined as feature count increased. At and above 10K features,
+‘star’ RBAs performed no better than Random Shuffle. Here, SWRF* performed consistently worse than all other RBAs
+(p < 0.0001 for 10K and 100K features; Supplementary Files S10-S13).
+3.3.1
+Runtime Improvements in scikit-rebate
+RBAs achieved a performance speedup of 10-35x after scikit-rebate code refactoring. Table S24 gives speedups
+achieved for previously benchmarked RBAs [21].
+3.4
+Global Metrics for Different Scenarios
+Table 2 gives global mean/median metrics pooled over all primary datasets that are representative of 3 general scenarios
+influencing a practitioner’s choice of feature selection strategy. These include detection of features involved in (1) 2-way
+epistasis as the only priority, (2) either 2-way epistasis and/or univariate effects, and (3) 2-way epistasis, univariate,
+and/or 3-way epistatic effects, as the most generalizable scenario. In Table 2a (2-way epistasis only), ‘star’ RBAs
+performed best in general, with MultiSWRFDB* performing best overall, and MultiSURF*, SWRF*, and MultiSWRF*
+performing nearly as well as MultiSWRFDB* (all with mean rankings within 0.33).
+In Table 2b (2-way + univariate); SWRF, MultiSWRF, MultiSURF, and MultiSWRFDB closely share best performance
+with mean rankings within 0.05.
+Towards identifying the most generalizable RBA, the algorithms ranked in Table 2c (2-way + univariate + 3-way) are
+restricted to top performing RBAs from Table 2b, i.e., the RBA has to be maximally capable on both 2-way epistasis
+and univariate effects (as the primary focus of this work). In this final scenario, MultiSWRFDB stood out as best due to
+its significantly better performance on 3-way epistasis datasets.
+Of note, the top ranked RBA for each scenario, i.e., MultiSWRFDB*, SWRF, and MultiSWRFDB, were all newly
+proposed in this study. MultiSURF* and SWRF* ranked highly in (a), supporting previous benchmarking [31, 21, 30],
+and MultiSURF ranked highly for (b) and (c) scenarios, consistent with [21, 30].
+3.5
+Secondary Dataset Performance
+In this study, secondary datasets serve as a sanity check for RBA applicability to other dataset types and scenarios.
+For most secondary dataset configurations (missing data, imbalanced class proportions, continuous-valued features,
+continuous-valued endpoint, or 3-class endpoint), most RBAs maintained ideal or near-ideal performance as in [21]
+while µ-Relief consistently displayed poor performance (not shown). However, on the 9-class configuration in the
+13
+
+
+Advancing Interaction-Sensitive Feature Selection
+Table 2: Global RBA mean/median predictive feature ranking metric comparisons pooled by use scenario, i.e., groupings
+of ‘primary’ data configurations. Each sub-table (a, b, and c) gives pooled metrics for the respective scenario. All
+rankings are on a 1-100 scale (1 = highest ranked feature, 100 = lowest ranked feature).
+(a) 2-way epistasis only
+RBA
+Mean
+Median
+MultiSWRFDB*
+9.92
+2.00
+MultiSURF*
+10.11
+2.00
+SWRF*
+10.19
+2.00
+MultiSWRF*
+10.25
+2.00
+SURF*
+11.10
+2.00
+SWRF
+12.07
+2.00
+MultiSWRF
+12.10
+2.00
+MultiSURF
+12.13
+2.00
+MultiSWRFDB
+12.15
+2.00
+SURF
+12.95
+2.73
+ReliefF 10NN
+16.08
+3.00
+ReliefF 100NN
+18.40
+3.00
+Mu-Relief 10N
+45.22
+44.00
+Mu-Relief 100N
+48.98
+48.00
+Mutual Info
+49.63
+49.00
+Random Shuffle
+51.16
+52.00
+(b) 2-way + Univariate
+RBA
+Avg. Mean
+Avg. Median
+SWRF
+6.75
+1.50
+MultiSWRF
+6.77
+1.50
+MultiSURF
+6.78
+1.50
+MultiSWRFDB
+6.80
+1.50
+SURF
+7.19
+1.86
+ReliefF 10NN
+9.16
+2.00
+ReliefF 100NN
+9.93
+2.00
+MultiSWRFDB*
+14.69
+4.00
+MultiSWRF*
+15.16
+4.50
+MultiSURF*
+15.79
+2.00
+SURF*
+16.62
+2.50
+Mu-Relief 10N
+24.02
+22.50
+Mu-Relief 100N
+25.24
+24.50
+Mutual Info
+25.53
+25.00
+SWRF*
+27.04
+7.00
+Random Shuffle
+51.19
+52.00
+(c) 2-way + Univariate + 3-way
+RBA
+Avg. Mean
+Avg. Median
+MultiSWRFDB
+9.20
+2.33
+MultiSURF
+11.96
+5.00
+SWRF
+13.87
+8.00
+MultiSWRF
+14.88
+10.33
+‘Multi-Class Endpoint’ data group, ‘star’ RBAs completely failed, i.e., they regularly ranked predictive features with the
+lowest scores (Figure S7), which contradicted what was previously reported for MultiSURF* and SURF* in [21] for the
+same dataset configuration.
+4
+Discussion
+Selecting interacting features in high-dimensional genomic datasets remains a significant computational challenge.
+RBAs offer a tractable approach to this problem by maintaining sensitivity to complex epistatic interactions without
+prohibitive computational costs. This study benchmarked a comprehensive selection of ‘core’ RBAs across diverse
+simulated genomic datasets to evaluate their feature ranking efficacy and identify the top performing RBAs.
+Results across dataset configurations reinforced previous findings that (1) nearly all RBAs were sensitive to detecting
+2-way epistasis, (2) ‘star’ RBAs, which use ‘far scoring’, generally yielded a modest significant advantage in detecting
+2-way epistasis over ‘non-star’ RBAs, albeit at the expense of significant, often substantial performance losses in
+detecting univariate effects, (3) ‘non-star’ RBAs offered balance between 2-way epistasis and univariate effect sensitivity,
+and (4) no RBA yielded reliable performance in detecting 4 or 5-way epistasis [25, 27, 31, 21, 30]. These findings held
+true for the 5 newly proposed RBAs which implemented novel combinations of key RBA elements (i.e., far scoring,
+recalculating neighborhood-defining metrics, DB zone, and gradient scoring).
+Focusing on the latter two elements which both target the minimization of scoring updates from potentially less/non-
+informative middle-distance neighbors, we examine the utility of only employing a DB (MultiSURF/MultiSURF*),
+only gradient scoring (SWRF/SWRF*, MultiSWRF/MultiSWRF*), both (MultiSWRFDB/MultiSWRFDB*), or neither
+(SURF/SURF*). ‘Star’ RBAs utilizing a DB and/or gradient achieved the highest sensitivity in 2-way epistasis
+datasets and their ‘non-star’ counterparts were the strongest ‘non-star’ RBAs on these datasets. While these elements
+had negligible impact on detecting univariate effects (Table S8), Table 2b globally identified SWRF, MultiSWRF,
+MultiSWRFDB, and MultiSURF as comparably best, and Tables 2a and 2c ranked MultiSWRFDB* and MultiSWRFDB
+best, respectively. All these top-ranked RBAs employ a DB, gradient scoring, or both (for MultiSWRFDB* and
+MultiSWRFDB). Together, this suggests that minimizing the impact of ‘uninformative neighbors’ located at ‘middle’
+distances from the target instance contributes to improving epistasis detection performance without harming main effect
+detection.
+Focusing on whether recalculating neighborhood-defining metrics (i.e., ‘Multi’-RBAs) provided an advantage over
+global neighborhood-defining metrics, we compare performance between MultiSWRF/MultiSWRF* and SWRF/
+SWRF*. Results suggest a very limited, situation-specific impact, with negligible differences for 2-way epistasis
+14
+
+
+Advancing Interaction-Sensitive Feature Selection
+detection (Table 2a), but a slight improvement in MultiSWRF* over SWRF* on univariate effects (Table 2b and Table
+S8), although neither performed strongly.
+One notable observation was the failure of µ-Relief in detecting 2-way epistasis and its slightly lower performance
+on univariate effects. This contradicts previous claims that µ-Relief outperformed SURF*, MultiSURF, MultiSURF*,
+and ReliefF [32]. This highlights the importance of (1) first evaluating/benchmarking new algorithms within broader,
+carefully designed simulation studies where feature selection methods can be evaluated directly based on feature
+rankings rather than indirectly based on downstream modeling performance and (2) utilizing benchmarking datasets
+with sufficient interaction effects. Conversely, µ-Relief performed best of all RBAs in detecting 3-way epistasis,
+suggesting opportunities for future work.
+Other notable observations include: (1) ‘Star’ RBA performance on univariate data (heritability = 0.4) became
+increasingly poor while ‘non-star’ RBA performance remained consistent in larger feature sets (Figure S6), suggesting
+amplification of far-scoring’s impact on univariate feature scores as described in [21]; (2) SWRF* performed particularly
+poorly on univariate datasets, even compared to SURF* and MultiSWRF* which both also utilize every near and far
+‘neighbor’ in scoring (Figure 5 and Table S8); and (3) ‘star’ RBAs may have limited performance in data with many
+classes (Figure S7).
+Regarding RBA feature count scalability, this study identified 2K and 8K features as the maximum observed feature
+count within which ‘non-star’ or ‘star’ RBAs could ideally rank 2-way epistasis features, respectively. In practice, it’s
+rarely necessary for feature selection to ideally rank predictive features, but rather just ensure they make the percentile
+cutoff applied to remove ‘irrelevant’ features. The present results suggest that most ‘star’ and ‘non-star’ algorithms
+scale effectively up to 10K features with a minimum of 80% power to rank both predictive features of a pure 2-way
+interaction above the 5th percentile (i.e., among the top 500/10,000 features), and expected 100% power of all ‘star’
+RBAs above the 20th percentile (i.e., top 2000/10,000 features) (Figure 6). As previously reviewed [5], a number of
+RBA-wrappers (e.g., TuRF [22] and VLS [23]) have been proposed that can be combined with any ‘core’ RBA with the
+intention of improving predictive feature sensitivity within larger feature spaces. Characterization of RBA performance
+at different feature counts in this study is expected to offer useful empirical expectations on when and how to use such
+RBA-wrappers vs. when a ‘core’ RBA alone may be sufficient to detect 2-way epistasis in a given dataset. At minimum,
+this study suggests using RBAs in combination with an RBA-wrapper in datasets with over 10K features. However,
+RBA-wrappers may add value even in datasets with over 5K-8K features. The runtime improvements introduced in this
+study are expected to make application of RBA-wrappers on high-dimensional datasets more computationally tractable.
+Future work should address limitations of the present study; (1) expand evaluations to a number of diverse real-world
+datasets, ideally including some with known feature interactions, (2) examine a greater diversity of simulated 3-way
+interaction datasets, (3) expanded benchmarking on ‘secondary’ dataset types, in particular with quantitative features
+and/or multi-class or quantitative endpoints, and compare benchmarked algorithms to those designed for continuous
+endpoints such as NPDR [37], (4) examine the limits of RBA performance on even larger feature spaces (e.g. 200K - 1
+million features), in particular when combining top performing ‘core’ RBAs with RBA-wrappers, and (5) consider
+strategies to extend and benchmark RBAs in scikit-rebate to datasets with right-censored survival endpoints.
+5
+Conclusion
+This study provides a comprehensive evaluation of the Relief-based algorithm (RBA) variants for interaction-sensitive
+feature selection. It (1) replicates and expands upon previous rigorous genomic simulation-study benchmarking, (2)
+evaluates and compares 12 RBAs (5 novel, 7 existing), (3) updates the scikit-rebate RBA Python package; expanding it
+with 5 novel RBAs (MultiSWRFDB*, MultiSWRFDB, SWRF, MultiSWRF and MultiSWRF*) and 2 newly incorporated
+RBAs (SWRF* and µ-Relief), additionally refactoring it yielding 10-35 fold speedups and adding precise discrimination
+of feature types, (4) examines the utility of RBA elements such as far-scoring, recalculating neighborhood metrics,
+a deadband zone, and gradient scoring, and (5) provides evidence-based RBA user recommendations for different
+scenarios - i.e., use ‘MultiSWRFDB*’ for detecting 2-way epistasis only, use ‘SWRF’ for detecting 2-way epistasis
+and/or univariate effects, use ‘µ-Relief’ for 3-way epistasis only, and most generalizably use ‘MultiSWRFDB’ for
+detecting all three. This work is expected to benefit anyone seeking to conduct feature selection; in particular, those
+working with noisy, high-dimensional datasets that potentially include complex multivariate associations as commonly
+found in biomedicine and various ‘omics’ research.
+CRediT authorship contribution statement
+Kia Kazemi-Nia: Writing – original draft, Writing – review & editing, Software, Methodology, Visualization, Formal
+analysis, Validation, Data curation, Investigation. Harsh Bandhey: Software, Visualization, Data curation, Investigation.
+Philip J. Freda: Writing – review & editing, Supervision, Funding acquisition. Ryan J. Urbanowicz: Writing – review
+15
+
+
+Advancing Interaction-Sensitive Feature Selection
+& editing, Methodology, Visualization, Data curation, Conceptualization, Project administration, Supervision, Funding
+acquisition.
+Declaration of generative AI and AI-assisted technologies in the manuscript preparation process
+During the preparation of this work, the authors used ChatGPT to assist with code development. The authors reviewed
+and edited the output and take full responsibility for the content of the published article.
+Declaration of competing interest
+The authors declare that they have no known competing financial interests or personal relationships that could have
+appeared to influence the work reported in this paper.
+Data availability
+All simulated datasets used in this study are available upon request.
+Acknowledgments
+The study was supported by Cedars Sinai Health Sciences University and NIH grants P30 AG073105, R01 AI173095,
+U01 AG066833, K01 DA063751, R01 HL175579, and P01 HL160471. Additional thanks to Tinghui Wu for contribu-
+tions to scikit-rebate.
+16
+
+
+Advancing Interaction-Sensitive Feature Selection
+References
+[1] G. Chandrashekar and F. Sahin. A survey on feature selection methods. Computers & Electrical Engineering, 40
+(1):16–28, 2014. ISSN 0045-7906.
+[2] J. Li, K. Cheng, S. Wang, F. Morstatter, R.P. Trevino, J. Tang, and H. Liu. Feature selection: A data perspective.
+ACM Computing Surveys, 50(6), 2017.
+[3] J. Cai, J. Luo, S. Wang, and S. Yang. Feature selection in machine learning: A new perspective. Neurocomputing,
+300:70–79, 2018. ISSN 0925-2312.
+[4] I. Guyon and A. Elisseeff. An introduction to variable and feature selection. Journal of Machine Learning
+Research, 3:1157–1182, 2003.
+[5] R.J. Urbanowicz, M. Meeker, R.S. Olson, W. LaCava, and J.H. Moore. Relief-based feature selection: introduction
+and review. Journal of Biomedical Informatics, 85:189–203, 2018.
+[6] Z. Zhao and H. Liu. Searching for interacting features in subset selection. Intelligent Data Analysis, 13(2):
+207–228, 2009.
+[7] H. Almuallim and T.G. Dietterich. Learning with many irrelevant features. In Proceedings of the 9th National
+Conference on Artificial Intelligence (AAAI-91), pages 547–552. AAAI Press, 1991.
+[8] V. Bolón-Canedo, N. Sánchez-Maroño, and A. Alonso-Betanzos. A review of feature selection methods on
+synthetic data. Knowledge and Information Systems, 34(3):483–519, 2013.
+[9] A. Jovi´c, K. Brki´c, and N. Bogunovi´c. A review of feature selection methods with applications. In 2015 38th
+International Convention on Information and Communication Technology, Electronics and Microelectronics
+(MIPRO), pages 1200–1205. IEEE, 2015.
+[10] H. Yang and J. Moody. Data visualization and feature selection: New algorithms for nongaussian data. Advances
+in neural information processing systems, 12, 1999.
+[11] G. Brown, A. Pocock, M.J. Zhao, and M. Luján. Conditional likelihood maximisation: a unifying framework for
+information theoretic feature selection. The journal of machine learning research, 13:27–66, 2012.
+[12] M.A. Hall. Correlation-based feature selection for machine learning. PhD thesis, The University of Waikato,
+1999.
+[13] K. Kira and L.A. Rendell. The feature selection problem: Traditional methods and a new algorithm. In Proceedings
+of the Tenth National Conference on Artificial Intelligence (AAAI-92), pages 129–134. AAAI Press, 1992.
+[14] K. Kira and L.A. Rendell. A practical approach to feature selection. In Proceedings of the Ninth International
+Workshop on Machine Learning, pages 249–256. Morgan Kaufmann, 1992.
+[15] L. Beretta and A. Santaniello. Implementing relieff filters to extract meaningful features from genetic lifetime
+datasets. Journal of Biomedical Informatics, 44(2):361–369, 2011.
+[16] Y. Zhang, C. Ding, and T. Li. Gene selection algorithm by combining relieff and mrmr. BMC Genomics, 9(Suppl
+2):S27, 2008.
+[17] L. Sun, X. Kong, J. Xu, Z. Xue, R. Zhai, and S. Zhang. A hybrid gene selection method based on relieff and ant
+colony optimization algorithm for tumor classification. Scientific Reports, 9:8978, 2019.
+[18] S. Saha and D. Nandi. Svm-rlf-dnn: A dnn with relieff and svm for automatic identification of covid from chest
+x-ray and ct images. Digital Health, 10:1–16, 2024.
+[19] V.D.P. Jasti, A.S. Zamani, K. Arumugam, M. Naved, H. Pallathadka, F. Sammy, A. Raghuvanshi, and K. Kaliyape-
+rumal. Computational technique based on machine learning and image processing for medical image analysis of
+breast cancer diagnosis. Security and Communication Networks, 2022(1):1918379, 2022.
+[20] W. Lu, Z. Li, and J. Chu. A novel computer-aided diagnosis system for breast mri based on feature selection and
+ensemble learning. Computers in Biology and Medicine, 83:157–165, 2017. ISSN 0010-4825.
+[21] R.J. Urbanowicz, R.S. Olson, P. Schmitt, M. Meeker, and J.H. Moore. Benchmarking relief-based feature selection
+methods for bioinformatics data mining. Journal of Biomedical Informatics, 85:168–188, 2018.
+[22] J.H. Moore and B.C. White. Tuning relieff for genome-wide genetic analysis. In European conference on
+evolutionary computation, machine learning and data mining in bioinformatics, pages 166–175. Springer, 2007.
+[23] M.J. Eppstein and P. Haake. Very large scale relieff for genome-wide association analysis. In 2008 IEEE
+symposium on computational intelligence in bioinformatics and computational biology, pages 112–119. IEEE,
+2008.
+17
+
+
+Advancing Interaction-Sensitive Feature Selection
+[24] I. Kononenko. Estimating attributes: Analysis and extensions of relief. In Machine Learning: ECML-94, pages
+171–182. Springer, 1994.
+[25] C.S. Greene, N.M. Penrod, J. Kiralis, and J.H. Moore. Spatially uniform relieff (surf) for computationally-efficient
+filtering of gene-gene interactions. BioData Mining, 2(1):5, 2009.
+[26] C.S. Greene, D.S. Himmelstein, J. Kiralis, and J.H. Moore. The informative extremes: Using both nearest and
+farthest individuals can improve relief algorithms in the domain of human genetics. In European Conference
+on Evolutionary Computation, Machine Learning and Data Mining in Bioinformatics, pages 182–193. Springer,
+2010.
+[27] D. Granizo-Mackenzie and J.H. Moore. Multiple threshold spatially uniform relieff for the genetic analysis of
+complex human diseases. In European Conference on Evolutionary Computation, Machine Learning and Data
+Mining in Bioinformatics, pages 1–10. Springer, 2013.
+[28] N. Hoque, D.K. Bhattacharyya, and J.K. Kalita. Mifs-nd: A mutual information-based feature selection method.
+Expert systems with applications, 41(14):6371–6385, 2014.
+[29] P. Geurts, D. Ernst, and L. Wehenkel. Extremely randomized trees. Machine learning, 63(1):3–42, 2006.
+[30] P.J. Freda, S. Ye, R. Zhang, J.H. Moore, and R.J. Urbanowicz. Assessing the limitations of relief-based algorithms
+in detecting higher-order interactions. BioData Mining, 17(1):37, 2024.
+[31] M.E. Stokes and S. Visweswaran. Application of a spatially-weighted relief algorithm for ranking genetic
+predictors of disease. BioData Mining, 5(1):20, 2012.
+[32] N. Aggarwal, U. Shukla, G.J. Saxena, M. Rawat, A.S. Bafila, S. Singh, and A. Pundir. Mean based relief: An
+improved feature selection method based on relieff. Applied Intelligence, 53:23004–23028, 2023.
+[33] R.J. Urbanowicz, J. Kiralis, N.A. Sinnott-Armstrong, T. Heberling, J.M. Fisher, and J.H. Moore. Gametes: a fast,
+direct algorithm for generating pure, strict, epistatic models with random architectures. BioData mining, 5(1):16,
+2012.
+[34] R.J. Urbanowicz, J. Kiralis, J.M. Fisher, and J.H. Moore. Predicting the difficulty of pure, strict, epistatic models:
+metrics for simulated model selection. BioData mining, 5(1):15, 2012.
+[35] M. Thomas and A.T. Joy. Elements of Information Theory. Wiley-Interscience, 2006.
+[36] F. Pedregosa, G. Varoquaux, A. Gramfort, V. Michel, B. Thirion, O. Grisel, M. Blondel, P. Prettenhofer, R. Weiss,
+V. Dubourg, J. Vanderplas, A. Passos, D. Cournapeau, M. Brucher, M. Perrot, and É. Duchesnay. Scikit-learn:
+Machine learning in python. Journal of Machine Learning Research, 12:2825–2830, 2011.
+[37] T.T. Le, B.A. Dawkins, and B.A. McKinney. Nearest-neighbor projected-distance regression (npdr) for detecting
+network interactions with adjustments for multiple tests and confounding. Bioinformatics, 36(9):2770–2777,
+2020.
+18

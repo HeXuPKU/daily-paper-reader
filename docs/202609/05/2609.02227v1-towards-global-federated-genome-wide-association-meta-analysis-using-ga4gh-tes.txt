@@ -1,0 +1,226 @@
+Towards Global Federated Genome-Wide
+Association Meta-Analysis Using GA4GH TES
+Abhijit Chunduru∗†‡, Matthew Joel∗‡, Zilinghan Li∗‡, Ravi Madduri∗
+∗Argonne National Laboratory †University of Massachusetts Amherst
+‡These authors contributed equally to this work.
+{schunduru, mjoel, zilinghan.li, madduri}@anl.gov
+Abstract—Genome-wide association studies (GWAS) gain sta-
+tistical power from large, ancestrally diverse cohorts, but privacy
+regulations and data-residency constraints often prevent genomic
+data from being centrally pooled across institutional or national
+borders. We present a privacy-preserving federated GWAS meta-
+analysis pipeline built on the APPFL framework, in which each
+site computes local GWAS summary statistics and transmits
+only aggregate results, never individual-level genotypes. Analysis
+is executed through a global network of Global Alliance for
+Genomics and Health (GA4GH) Task Execution Service (TES)
+endpoints, which allows computation to move to the data rather
+than the reverse. The server performs inverse-variance-weighted
+fixed-effect meta-analysis and returns aggregated results to all
+sites, while HiveWatch, our developed geographic observability
+toolkit, provides real-time monitoring of distributed task execu-
+tion. In a five-site simulation over 100,000 synthetic individuals
+and roughly 240,000 variants for Type 2 Diabetes and Body Mass
+Index, the federated meta-analysis reproduces the association
+signal expected from a pooled analysis without centralizing
+any genotype data, showing that standards-based task execution
+and federated learning enables a practical privacy-preserving
+infrastructure for international GWAS meta-analysis.
+Index Terms—Federated Learning, Privacy-Preserving Com-
+putation, GWAS Meta-Analysis, GA4GH Task Execution Service
+I. INTRODUCTION
+The statistical power of a genome-wide association study
+(GWAS) scales with cohort size and ancestral diversity, mak-
+ing large international consortia essential. However, the stan-
+dard approach to centrally pooling individual-level genotype
+data is increasingly impractical due to privacy regulation,
+consent restrictions, and national data-residency rules that
+frequently prohibit export. The established solution is meta-
+analysis: each site computes GWAS summary statistics locally
+and shares only per-variant aggregates, enabling a central
+server to produce joint results that are mathematically equiva-
+lent to a pooled fixed-effect analysis. The remaining challenge
+lies in the infrastructure: building a heterogeneous, multi-
+institutional, cross-border computing fabric around a common
+execution standard, where analysis executes within each data
+custodian’s environment, raw genomic data never leaves their
+origin, and the distributed execution can be securely orches-
+trated and monitored.
+In this paper, we present a pipeline that bridges the
+infrastructure gap by integrating three components: the
+Advanced Privacy-Preserving Federated Learning (APPFL)
+framework [1], [2] for the federation and aggregation; a net-
+Fig. 1: International network of GA4GH TES endpoints. Each site runs a
+Funnel-based TES endpoint in a distinct cloud region; APPFL dispatches
+containerized GWAS tasks to the data, and only summary statistics are
+returned. HiveWatch monitors distributed computing in real-time.
+work of Global Alliance for Genomics and Health (GA4GH)
+Task Execution Service (TES) [3] endpoints that implement
+the GA4GH standard for interoperable “bring-compute-to-
+data” task execution across heterogeneous computing infras-
+tructure; and HiveWatch, a geographic observability toolkit
+developed by us for monitoring distributed task execution.
+Together, these components enable a federated GWAS meta-
+analysis over an international network of TES endpoints with
+real-time operational visibility.
+II. PIPELINE IMPLEMENTATION
+A. Federated Meta-Analysis
+The federated meta-analysis follows a standard cross-silo
+federated learning (FL) pattern in APPFL. Each site instan-
+tiates a SiteGWASTrainer that (i) loads local PLINK
+genotypes and phenotype/covariate tables, (ii) runs a chunked
+ordinary-least-squares GWAS for the quantitative trait (Body
+Mass Index) and a covariate-adjusted score test against a
+logistic null model for the binary trait (Type 2 Diabetes), and
+(iii) returns per-variant effect sizes βi, standard errors SEi,
+minor-allele frequencies, and sample sizes. No individual-
+level genotype or phenotype ever leaves the site. The server
+runs a MetaAnalysisAggregator implementing inverse-
+variance-weighted fixed-effect meta-analysis. For each variant,
+with per-site weights wi = 1/SE2
+i ,
+βmeta =
+P
+i wi βi
+P
+i wi
+,
+SEmeta =
+1
+pP
+i wi
+,
+(1)
+arXiv:2609.02227v1  [cs.DC]  2 Sep 2026
+
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13 14 15 16 171819202122
+Chromosome
+0
+10
+20
+30
+log10 (P)
+P < 5×10
+T2D Manhattan: 239,801 variants, N=100,000, 14 genome-wide significant
+0
+5
+10
+15
+20
+25
+30
+Expected 
+log10 (P)
+0
+10
+20
+30
+Observed 
+log10 (P)
+GC = 1.063
+QQ
+Fig. 2: Federated meta-analysis of type-2 diabetes across the five TES endpoints via inverse-variance-weighted fixed-effect meta-analysis (p < 5 × 10−8
+threshold; 239,801 variants, N = 100,000 partitioned as 18,032 / 9,237 / 25,028 / 40,752 / 6,951). Left: Manhattan plot, showing 14 genome-wide significant
+associations; the lead signals at chr20:43.04 Mb and chr10:114.75 Mb correspond to the HNF4A and TCF7L2 loci. Right: quantile-quantile plot (λGC = 1.063),
+in which observed statistics follow the null expectation across the bulk of variants with departure confined to the significant tail, indicating no inflation from
+the federated pipeline. Isolated rather than clustered peaks reflect LD-pruning of the source genotypes.
+from which a Z-statistic and p-value are derived. Because (1)
+combines only transmitted aggregates, the federated estimate
+asymptotically recovers the pooled fixed-effect result, coin-
+ciding exactly under homogeneous per-site residual variance;
+genome-wide significance is assessed at p < 5 × 10−8.
+B. TES Endpoint Network
+In our pipeline, each FL site launches a GA4GH TES
+endpoint, implemented with Funnel [4] and deployed on
+cloud compute in a distinct geographic region (Fig. 1). TES
+is a GA4GH standard that defines a common API for se-
+curely submitting, monitoring, and managing computational
+tasks across heterogeneous computing environments, enabling
+portable bring-compute-to-data workflows for genomics and
+other data-intensive biomedical applications [3]. APPFL or-
+chestrates federated GWAS by submitting containerized anal-
+ysis tasks to each site’s TES endpoint through the TES APIs
+for local execution. Each TES endpoint enforces authentication
+and authorization, allowing only the trusted federated server to
+submit, monitor, and retrieve the results of analysis tasks. By
+exposing a standardized task execution interface, TES abstracts
+heterogeneous computing environments, allowing APPFL to
+interact with all participating sites through a common API
+while ensuring that individual-level genomic data remain local.
+C. Geographic Observability with HiveWatch
+To observe distributed execution across endpoints, we also
+developed HiveWatch (https://github.com/APPFL/hivewatch),
+a geographic observability toolkit integrated with the APPFL
+that records task dispatch, execution, and completion events
+and visualizes them on a live geographic map during the run
+(as shown in Fig. 1), with full replay from logs afterward.
+Endpoint-level visibility makes stalls, stragglers, and failures
+diagnosable across heterogeneous infrastructures.
+III. EVALUATION AND RESULTS
+We evaluate the pipeline on a controlled simulation designed
+to have a known answer. Synthetic European-ancestry geno-
+types for 100,000 individuals over 239,801 variants (GRCh37),
+derived from 1000 Genomes reference structure, are parti-
+tioned across five sites of deliberately unequal size (18,032;
+9,237; 25,028; 40,752; and 6,951 individuals) to exercise the
+sample-size weighting in (1). Phenotypes for Type 2 Diabetes
+and Body Mass Index are simulated from PGS Catalog scores
+(PGS003443 and PGS004994) with age and sex covariates.
+The federated GWAS meta-analysis recovers this structure
+without any genotype centralization (Fig. 2). The Type 2
+Diabetes scan yields 14 genome-wide significant associations
+(p < 5×10−8), led by chr20:43.04 Mb (p = 1.6×10−34) and
+chr10:114.75 Mb (p = 1.3×10−24), which fall in HNF4A and
+TCF7L2; Body Mass Index yields 33 at the same threshold.
+The bulk of variants tracks the null diagonal while true signal
+departs only in the tail (λGC = 1.063 for T2D and 1.056
+for BMI), indicating calibrated test statistics without inflation
+from the federation procedure.
+IV. CONCLUSION
+This work combines FL and GA4GH standards to enable
+deployable, privacy-preserving GWAS meta-analysis across
+international institutions. APPFL provides federated orchestra-
+tion and exact fixed-effect meta-analysis, TES enables interop-
+erable bring-compute-to-data execution across heterogeneous
+sites, and HiveWatch allows real-time observability. While our
+evaluation uses synthetic data to isolate the infrastructure con-
+tribution, future work will extend to real multi-institution de-
+ployments, more sophisticated meta-analysis models, stronger
+privacy guarantees, and resilient execution.
+ACKNOWLEDGMENT
+This material is based upon work supported by the U.S.
+Department of Energy, Office of Science, under contract num-
+ber DE-AC02-06CH11357. We also gratefully acknowledge
+Amazon Web Services for providing cloud computing credits
+that were used to assist with experiments for this manuscript.
+REFERENCES
+[1] M. Ryu, Y. Kim, K. Kim, and R. K. Madduri, “Appfl: open-source soft-
+ware framework for privacy-preserving federated learning,” in 2022 IEEE
+international parallel and distributed processing symposium workshops
+(IPDPSW).
+IEEE, 2022, pp. 1074–1083.
+[2] Z. Li, S. He, Z. Yang, M. Ryu, K. Kim, and R. Madduri, “Advances in
+appfl: A comprehensive and extensible federated learning framework,” in
+2025 IEEE 25th International Symposium on Cluster, Cloud and Internet
+Computing (CCGrid).
+IEEE, 2025, pp. 01–11.
+[3] A. Kanitz, M. H. McLoughlin, L. Beckman, V. S. Malladi, and K. Ellrott,
+“The ga4gh task execution application programming interface: Enabling
+easy multicloud task execution,” Computing in science & engineering,
+vol. 26, no. 3, pp. 30–39, 2024.
+[4] OHSU Computational Biology, “Funnel: A toolkit for distributed task
+execution via the GA4GH TES API,” GitHub repository, 2024, [Online].
+Available: https://github.com/calypr/funnel.
