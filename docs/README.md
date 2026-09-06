@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-05</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-06</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 12 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 3 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>3</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>9</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>2</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-05 21:13:55 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-06 22:18:05 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,10 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共生成 12 篇推荐（精读 3 篇，速读 9 篇）</p>
-<p>精读：《Genetic association testing with multivariate survival phenotypes under interval censoring》（9.0/10）, 《Towards Global Federated Genome-Wide Association Meta-Analysis Using GA4GH TES》（8.0/10）</p>
-<p>速读：《Accelerating Bayesian Variable Selection using Piecewise Deterministic Markov Processes》（7.0/10）, 《Propagating construction-time knowledge quality into medical question answering: A framework grounded in clinical guidelines》（7.0/10）, 《Advancing Interaction-Sensitive Feature Selection: Novel Relief-Based Algorithms, Expanded Comparisons, and Recommendations for Biomedical Data Mining》（7.0/10）</p>
-<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
+<p>今日精读聚焦生成式AI结合知识图谱与RAG提升临床决策和鉴别诊断，另涉单细胞扰动预测与病理全模态表征学习两篇速读。</p>
+<p>最值得关注的是知识图谱+检索增强生成对临床支持系统的增强效果，其方法可解释性优于纯大模型生成，评分达8/10。</p>
+<p>建议普通读者优先了解该框架如何减少误诊，其余两篇偏方法学，适合有计算背景者再深入。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -81,12 +80,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">3 篇</strong>
+    <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Genetic association testing with multivariate survival phenotypes under interval censoring">Genetic association testing with multivariate survival phenotypes under interval censoring</span></li><li><span class="dpr-home-dashboard-paper-title" title="Towards Global Federated Genome-Wide Association Meta-Analysis Using GA4GH TES">Towards Global Federated Genome-Wide Association Meta-Analysis Using GA4GH TES</span></li><li><span class="dpr-home-dashboard-paper-title" title="Multimarker genetic association tests for panel count data">Multimarker genetic association tests for panel count data</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Enhancing Clinical Decision Support and Differential Diagnosis with Knowledge Graphs, and Retrieval Augmented Generation in Generative AI">Enhancing Clinical Decision Support and Differential Diagnosis with Knowledge Graphs, and Retrieval Augmented Generation in Generative AI</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -94,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">9 篇</strong>
+    <strong class="dpr-home-dashboard-count">2 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Accelerating Bayesian Variable Selection using Piecewise Deterministic Markov Processes">Accelerating Bayesian Variable Selection using Piecewise Deterministic Markov Processes</span></li><li><span class="dpr-home-dashboard-paper-title" title="Propagating construction-time knowledge quality into medical question answering: A framework grounded in clinical guidelines">Propagating construction-time knowledge quality into medical question answering: A framework grounded in clinical guidelines</span></li><li><span class="dpr-home-dashboard-paper-title" title="Advancing Interaction-Sensitive Feature Selection: Novel Relief-Based Algorithms, Expanded Comparisons, and Recommendations for Biomedical Data Mining">Advancing Interaction-Sensitive Feature Selection: Novel Relief-Based Algorithms, Expanded Comparisons, and Recommendations for Biomedical Data Mining</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="PopPert: Population-level Joint-Distribution Modeling for Single-Cell Perturbation Prediction">PopPert: Population-level Joint-Distribution Modeling for Single-Cell Perturbation Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Synergistic Information Disentanglement for Omni-modal Slide Representation Learning in Computational Pathology">Synergistic Information Disentanglement for Omni-modal Slide Representation Learning in Computational Pathology</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span></div>
 </section>
 </div>
 
