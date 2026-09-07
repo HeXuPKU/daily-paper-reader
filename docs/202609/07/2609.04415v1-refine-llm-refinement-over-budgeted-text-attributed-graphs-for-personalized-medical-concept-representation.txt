@@ -1,0 +1,1032 @@
+Title: REFINE: LLM Refinement over Budgeted Text-Attributed Graphs for Personalized Medical Concept Representation
+
+URL Source: https://arxiv.org/pdf/2609.04415v1
+
+Published Time: Mon, 07 Sep 2026 00:10:20 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+## REFINE: LLM Refinement over Budgeted Text-Attributed Graphs for Personalized Medical Concept Representation 
+
+Mohsen Nayebi Kerdabadi, Arya Hadizadeh Moghaddam, Dongjie Wang, Zijun Yao *
+
+University of Kansas, USA 
+
+{mohsen.nayebi, a.hadizadehm, wangdongjie, zyao}@ku.edu 
+
+Abstract 
+
+Learning rich medical concept representations is essential for EHR prediction. Text-attributed knowledge graphs (TKGs) provide a natural foundation by organizing heterogeneous med-ical relations together with textual semantics. However, most existing encoders process con-cepts uniformly across patients, despite the fact that a code’s meaning and predictive value de-pend on patient-specific clinical context and trajectory. Learning patient-personalized con-cept representations from TKGs introduces two key challenges: (1) deciding how much KG context to incorporate for each observed code, and (2) aligning semantic information with the patient-specific relational structure. We propose REFINE, a KG-aware budgeted LLM graph refinement framework for patient-personalized medical concept encoding. Start-ing from a global TKG, REFINE constructs patient-specific temporal graphs. A sequential reinforcement learning policy selects a person-alized KG expansion budget for each observed code. The resulting patient graph is processed by a heterogeneous GNN to capture relation-aware structural dependencies, while a frozen LLM uses graph-aware soft prompts to seman-tically refine concept representations. Experi-ments on MIMIC-III and MIMIC-IV show that REFINE consistently improves diverse EHR backbones, outperforms strong baselines, and demonstrates robust gains across component ablation, KG selection, and data insufficiency. 
+
+1 Introduction 
+
+Electronic health records (EHRs) provide a lon-gitudinal view of patient health through high-dimensional sequences of diagnosis, medication, and procedure codes, enabling a wide range of clinical prediction tasks (Nayebi Kerdabadi et al., 2023; Jiang et al., 2023). A central challenge in EHR mining is to learn medical concept represen-tations that capture both rich clinical semantics 
+
+> *Corresponding author.
+
+and heterogeneous relational dependencies among codes, such as treatment patterns and comorbidities. Text-attributed knowledge graphs (TKGs) provide a natural way to organize these semantic and rela-tional signals by linking medical concepts through typed relations and textual attributes. However, most existing concept encoders learn codes in a static manner across patients, overlooking that the same concept can have different clinical meaning and predictive value depending on patient history, visit context, and treatment trajectory. The same diagnosis may reflect a stable chronic condition in one patient but signal acute deterioration in an-other; likewise, a medication may be routine in one trajectory but highly informative when paired with specific comorbidities or procedures. Thus, beyond learning general concept semantics from TKGs, medical concept representations should be personalized to each patient’s local clinical context. Personalizing concept representations, however, is non-trivial and raises two challenges. The first challenge concerns the relational aspect of the TKG: how much KG context should be at-tached to each observed code in a patient’s history. Existing KG-based EHR models (Jiang et al., 2023; Kerdabadi et al., 2026) often apply fixed expansion rules, retrieving the same hop depth or neighbor budget for every code across patients. This uniform strategy ignores that the value of relational context varies across patients and concepts. A code may be self-explanatory in one trajectory but require richer multi-hop evidence in another to reveal co-morbidities, treatment dependencies, or medication interactions. Conversely, unnecessary neighbors can introduce noise, increase computation, and di-lute salient clinical signals. Therefore, personalized concept representation requires a graph-budgeting mechanism that adaptively determines how much relational context to retrieve for each observed code within a patient’s history, rather than committing to a single global expansion budget. arXiv:2609.04415v1 [cs.LG] 3 Sep 2026 The second challenge concerns the semantic text aspect of the TKG: how to use LLMs as patient-personalized semantic refiners rather than generic text encoders. Although LLMs can encode con-cept semantics, isolated encoding is insufficient because a code’s meaning depends on co-occurring codes, visit position, temporal history, and selected KG context. We therefore define refinement as adapting a code’s general semantics to the patient’s specific clinical context, enabling patient-specific representations of the same code. To refine seman-tic knowledge in interaction with patient-specific EHR and TKG structure, the key question is how to expose such structure to the LLM. Directly se-rializing the full patient history and all KG neigh-bors into text is inefficient, redundant, and does not explicitly preserve the relational scaffold. Thus, patient-personalized semantic refinement requires a compact mechanism that lets the LLM jointly reason over textual semantics, longitudinal EHR context, and selected relational evidence. In this work, we propose a medical concept encoder for EHR prediction named REFINE :KG-Aware LLM Refiner for Budgeted Patient-Personalized Concept Encoding. Starting from a global TKG over EHR codes, REFINE constructs a personalized graph for each patient’s EHR his-tory. For every observed code, a sequential rein-forcement learning policy selects a code-specific KG expansion budget, allowing the same medi-cal code to receive rich multi-hop context for one patient but minimal context for another. The pol-icy makes these decisions sequentially, account-ing for interactions among observed codes and the cumulative relational context already added to the patient graph. The resulting graph is en-coded by two parallel branches: a heterogeneous GNN captures relation-aware structural dependen-cies, while a frozen LLM refiner uses graph-aware mixed prompts to refine code semantics through interactions among hard text tokens, code soft to-kens, and KG-context soft tokens. The hard tokens describe the task and visit-code structure, while the soft tokens compactly represent observed codes and their selected KG context. Finally, the two representations are fused into patient-personalized medical concept embeddings for downstream EHR prediction. Our contributions are: • We introduce REFINE, a patient-personalized medical concept encoder that learns context-dependent representations for EHR codes by adapting general TKG knowledge to each pa-tient’s clinical context. • We develop a patient-specific graph construction and budgeting framework that extracts patient graphs from a global TKG and uses sequential re-inforcement learning to select code- and patient-specific relational context. • We propose a graph-aware LLM refinement mechanism that encodes observed codes and se-lected KG neighborhoods as soft prompt tokens, enabling semantic refinement through interac-tions with the patient-specific visit-code scaffold. • We integrate the resulting personalized concept representations into standard EHR prediction backbones and evaluate their effectiveness on sequential diagnosis prediction. 
+
+2 Methodology 
+
+2.1 Notation and Problem Definition EHRs. Let P denote the patient set and let C =
+
+Cdx ∪ C rx ∪ C px denote the global vocabulary of diagnosis, medication, and procedure codes. The EHR of patient p ∈ P is a temporally ordered visit sequence Xp = ( Vp, 1, . . . , V p,T p ), where each visit 
+
+Vp,t ⊆ C is a set of observed codes. 
+
+Predictive Task. Given the observed history 
+
+X≤t∗ 
+
+> p
+
+= ( Vp, 1, . . . , V p,t ∗ ), our goal is to learn a patient-personalized medical concept encoder. For each observed code c ∈ Vp,t , 1 ≤ t ≤ t∗, the encoder ΦΘ produces 
+
+zp,t,c = Φ Θ
+
+
+
+c, X ≤t∗
+
+> p
+
+
+
+∈ Rd, (1) The resulting representations are used by a down-stream EHR prediction model. For next-visit diag-nosis prediction, we predict: 
+
+ˆyp = fΩ
+
+
+
+{Pool( {zp,t,c : c ∈ Vp,t })}t∗
+
+> t=1
+
+
+
+, (2) where ˆyp is next-visit label and ˆyp ∈ [0 , 1] |C dx |.
+
+2.2 Method Summary 
+
+We propose REFINE, a patient-personalized medi-cal concept encoder with five steps, shown in Fig-ure 1. (1) We construct a global text-attributed KG whose nodes are medical codes, with LLM-inferred semantic relations. (2) For each patient, we extract a patient-specific graph containing patient, visit, observed-code, and selected KG-neighbor nodes, connected by structural EHR edges and retrieved KG edges. (3) REFINE learns a graph-budgeting Figure 1: Overview of REFINE. Starting from longitudinal EHR visits and a global text-attributed medical KG, REFINE constructs a patient-personalized graph with RL-selected KG context for each observed code. A heterogeneous GNN and frozen LLM refiner process the selected graph in parallel, and their fused representations are used for downstream EHR prediction. 
+
+policy that selects how much KG context to retrieve for each observed code, allowing expansion depth and neighbor budget to vary for codes across pa-tients. (4) The budgeted patient graph is processed by parallel GNN and LLM branches: the GNN captures structural dependencies through message passing, while the LLM refines concept represen-tations based on patient semantic context through mixed prompting. (5) REFINE fuses the GNN and LLM outputs into patient-personalized concept embeddings for downstream EHR prediction. 
+
+2.3 Global TKG Construction 
+
+We first construct a global TKG over the full med-ical code vocabulary following Kerdabadi et al. (2026). Candidate code pairs are identified from longitudinal EHRs using statistically reliable intra-visit co-occurrences and next-visit transitions. For each pair, we compute support, conditional proba-bilities, smoothed PMI, and statistical significance, and filter non-significant pairs. The remaining can-didate pairs are passed to a type-constrained LLM relation induction module. Given two codes, EHR-derived statistics, and a type-specific relation set, the LLM assigns a directed semantic relation and a short clinical rationale, yielding clinically mean-ingful relations such as treats , leads_to , and 
+
+diagnostic_of . Nodes and edges are further as-sociated with textual attributes, including concept descriptions and relation rationales. Appendix A.1 provides details of the global TKG construction. We denote the resulting TKG as: 
+
+G = ( V, E, ϕ, ψ ) , (3) where V = C is the set of medical concept nodes and E ⊆ V × V is the set of directed edges. The mapping ϕ : V → T assigns each node to a clinical type, and ψ : E → R assigns each edge to a seman-tic relation type. For an edge e = ( u, v ) ∈ E , we write ψ(e) = r and equivalently denote the typed relation as (u, r, v ). Each node v is associated with a textual concept description dv, and each edge 
+
+e is associated with a textual relation rationale ηe.Thus, G is a heterogeneous TKG used as the seman-tic substrate for extracting patient-specific graphs. Unlike global concept encoders that assign a sin-gle embedding to each code, REFINE produces instance-specific code representations conditioned on patient history and the local KG neighborhood. 
+
+2.4 Patient-Personalized Graph Construction 
+
+Given patient p’s history X≤t∗ 
+
+> p
+
+= {Vp,t }t∗
+
+> t=1
+
+, we construct a patient-personalized graph 
+
+G≤t∗ 
+
+> p
+
+= ( Vp, Ep) . (4) Let Sp = St∗ 
+
+> t=1
+
+Vp,t denote the set of distinct medi-cal codes observed in the patient history. For each distinct observed code c ∈ Sp, REFINE selects a patient-dependent KG subgraph from G:
+
+Gkg  
+
+> p,c
+
+=
+
+
+
+Vkg 
+
+> p,c
+
+, Ekg 
+
+> p,c
+
+
+
+, Gkg  
+
+> p,c
+
+⊆ G . (5) Thus, the same medical code may receive different relational context across different patients. Figure 2: Graph-aware mixed prompting. Patient visits are serialized into a structured prompt with hard text tokens, code soft tokens, and KG-context soft tokens, enabling a frozen LLM to generate personalized seman-tic representations for observed medical codes. 
+
+We use up for the patient node, uVp,t for the visit node at time t, and up,c for the local node asso-ciated with code c. The selected KG code set is 
+
+Ckg  
+
+> p
+
+= S 
+
+> c∈Sp
+
+Vkg 
+
+> p,c
+
+. The local code vocabulary is then Cloc  
+
+> p
+
+= Sp ∪ C kg  
+
+> p
+
+. Accordingly, the patient-graph node set is 
+
+Vp = {up} ∪ { uVp,t }t∗ 
+
+> t=1
+
+∪ { up,c : c ∈ C loc  
+
+> p
+
+}. (6) The edge set contains structural EHR edges and selected KG edges: 
+
+Ep = Eehr  
+
+> p
+
+∪ E kg  
+
+> p
+
+. (7) The structural edges connect the patient node to all visit nodes and each visit node to its observed codes: Eehr  
+
+> p
+
+= Ep↔vp ∪ E v↔cp . Here, Ep↔vp con-tains edges between up and uVp,t , and Ev↔cp con-tains edges between uVp,t and up,c for all c ∈ Vp,t .The selected KG edges are obtained by mapping selected global KG edges to their corresponding local code nodes: 
+
+Ekg  
+
+> p
+
+=
+
+(up,a , u p,b ) : ( a, b ) ∈ [
+
+> c∈S p
+
+Ekg 
+
+> p,c
+
+ . (8) Each selected KG edge inherits its semantic rela-tion type and textual rationale from the global TKG 
+
+G. The neighborhood selection policy is described in Sec. 2.5, determining how much relational con-text to retrieve for each observed code. 
+
+2.5 Personalized Concept Sub-KG Extraction 
+
+Using the same KG expansion budget for all codes is suboptimal, since the utility of relational context depends on the patient history and code ambigu-ity. We therefore learn a patient-specific policy that decides how much KG context to retrieve for each distinct observed code root in the patient his-tory. For each root code c ∈ Sp, REFINE selects a patient-specific KG subgraph from the global TKG. 
+
+Expansion actions. For each distinct observed code root c ∈ Sp, we define a discrete expan-sion action a = (K, m) ∈ A, where K ∈{0, . . . , K max } is the KG expansion depth and 
+
+m = ( m1, . . . , m K ) specifies the per-hop fanout. The no-expansion action is a0 = (0 , ∅). For ex-ample, (2 , (2 , 1)) expands up to two hops from the observed code: it first retains the top-2 one-hop neighbors and then the top-1 second-hop neighbor for each selected first-hop node. Neighbors are not sampled randomly; candidate edges are ranked using evidence scores derived from the statistical evidence computed during global KG construc-tion. Thus, the RL policy controls the patient-code-specific expansion budget, while neighbor selection within each budget remains evidence-grounded. 
+
+Sequential decision process. The policy makes sequential decisions over the distinct observed code roots Sp. Initially, each root code is assigned the no-expansion action a0. At step ℓ, the policy selects a macro-action bℓ = ( c, a ), which updates the ex-pansion action for one distinct observed code root. This sequential formulation allows each decision to condition on the KG context already selected for other codes. Let Ekg ,(ℓ) 
+
+> p
+
+and Ckg ,(ℓ) 
+
+> p
+
+denote the selected global KG edges and selected KG codes af-ter step ℓ. The incremental cost of assigning action 
+
+a to root code c is 
+
+∆Cℓ(c, a ) = ωE Ekg 
+
+> p,c
+
+(a) \ E kg ,(ℓ)
+
+> p
+
++ ωC Vkg 
+
+> p,c
+
+(a) \
+
+
+
+Ckg ,(ℓ) 
+
+> p
+
+∪ Sp
+
+
+
+(9) The process terminates when the policy selects a stop action, reaches the maximum number of steps, or exhausts the graph budget. 
+
+Policy and value networks. At step ℓ, the policy observes a state vector sℓ that summarizes the pa-tient history, selected KG context, and remaining budget. For each feasible macro-action b = ( c, a ),we construct an action feature ξℓ(b) containing the state, code representation, action embedding, and incremental cost. The actor scores feasible macro-actions as 
+
+πη(b | sℓ) = softmax b (fη(ξℓ(b))) , (10) and the critic estimates the state value 
+
+Vω(sℓ) = fω(sℓ). (11) During training, macro-actions are sampled from 
+
+πη for exploration; during validation and inference, we use greedy selection. 
+
+Reward. During Stage I, after the policy con-structs the selected patient graph Gsel  
+
+> p
+
+, we evaluate it using the frozen GNN-only proxy predictor. Let 
+
+Lp(G) denote the corresponding prediction loss for patient p under graph G, and let G0 
+
+> p
+
+be the base-line graph obtained by assigning a0 to all observed codes. The terminal reward is 
+
+Rp = Lp(G0 
+
+> p
+
+) − L p(Gsel  
+
+> p
+
+) − λcost Cp. (12) Here, the graph cost is 
+
+Cp = ωE |E kg ,sel  
+
+> p
+
+| + ωC |C kg ,sel  
+
+> p
+
+\ S p|. (13) Thus, the policy is rewarded for improving predic-tion relative to the no-expansion graph while being penalized for adding unnecessary KG context. 
+
+RL objective. Let τp = {bℓ}Lp 
+
+> ℓ=1
+
+denote the se-lected macro-action trajectory for patient p. We optimize an actor–critic objective with entropy reg-ularization. The advantage at step ℓ is 
+
+Aℓ = Rp − Vω(sℓ). (14) The RL loss is                 
+
+> LRL =EpLp
+> X
+> ℓ=1
+> h
+> −λact log πη(bℓ|sℓ)Aℓ
+> +λcrit (Vω(sℓ)−Rp)2−λent H(πη(· | sℓ))
+> i
+> .
+> (15)
+
+2.6 Graph-Aware LLM Refinement for Personalized Concept Representation 
+
+After constructing the patient-personalized graph 
+
+G≤t∗ 
+
+> p
+
+, REFINE processes it with two parallel branches: a heterogeneous GNN branch and an LLM refinement branch. Both are grounded in the same fixed text-derived semantics from node descriptions dc and edge rationales ηe, but each branch maintains its own trainable parameters. 
+
+Node and edge embedding initialization. For each branch q ∈ { G, L }, where G and L denote the GNN and LLM branches, respectively, we ini-tialize code and KG-edge representations with a residual blend of learnable embeddings and fixed text-derived semantics. For a code node up,c with description encoding ˜dc, we define 
+
+hq, 0 
+
+> up,c
+
+= (1 − λqc )aqc + λqc Wqd ˜dc, (16) where aqc is a learnable code embedding. Patient and visit nodes use learnable type and position em-beddings. For a selected KG edge e = ( up,a , u p,b )
+
+corresponding to the global edge (a, b ) ∈ E , with relation re = ψ(( a, b )) and rationale encoding 
+
+˜η(a,b ), we define 
+
+eqe = (1 − λqr)aqre + λqrWqη ˜η(a,b ). (17) This initialization injects clinical semantics while preserving trainable branch-specific flexibility. 
+
+Heterogeneous GNN branch. The GNN branch performs message passing over the selected patient graph G≤t∗ 
+
+> p
+
+. Let χ(u) denote the node type of u
+
+and re denote the edge type of e ∈ E p. For each layer ℓ, an edge-specific message is computed as 
+
+m(ℓ) 
+
+> u→v
+
+= f msg 
+
+> re
+
+
+
+hG,ℓ u , eGe
+
+
+
+, e = ( u, v ).
+
+(18) Messages are aggregated by relation type and used to update the destination node with a type-specific update function: 
+
+m(ℓ) 
+
+> v,r
+
+= AGG r{m(ℓ) 
+
+> u→v
+
+: e ∈ E p, r e = r}, (19) 
+
+hG,ℓ +1  
+
+> v
+
+= f upd 
+
+> χ(v)
+
+
+
+hG,ℓ v , {m(ℓ)
+
+> v,r
+
+}r∈R p(v)
+
+
+
+. (20) where Rp(v) = {re : e = ( u, v ) ∈ E p} denotes the set of incoming edge types at node v. After 
+
+L layers, the GNN produces a structural represen-tation hGp,c ∈ Rd for each distinct observed code, refined by the patient-specific selected graph. 
+
+LLM refiner branch. For the LLM branch, each observed code is represented by a code soft to-ken and a KG-context soft token. The code soft token is obtained by projecting the LLM-branch residual code representation into the LLM hidden space: sp,c = Wc
+
+> soft
+
+hL, 0 
+
+> up,c
+
+∈ RdLM . To summa-rize the selected KG context Gkg 
+
+> p,c
+
+, we aggregate the LLM-branch representations of its selected neigh-bor nodes and relations: 
+
+kp,c = KGPool 
+
+
+
+{hL, 0 
+
+> up,v
+
+: v ∈ V kg 
+
+> p,c
+
+},
+
+{eLe : e ∈ E kg 
+
+> p,c
+
+}
+
+
+
+.
+
+(21) KGPool( ·) applies a lightweight GNN-style ag-gregator over the selected code-specific KG sub-graph, combining selected neighbor-node embed-dings and relation/rationale-aware edge embed-dings, producing a compact KG-context token for code c.
+
+Mixed Graph Prompt. We keep the LLM frozen and construct a mixed prompt without modifying its tokenizer or embedding table. Hard tokens en-code the task, visit structure, code names, and code types, while soft tokens inject code-level and KG-context semantics. For patient p, the prompt fol-lows a visit-code hierarchy: 
+
+J (p, t ∗) = 
+
+h
+
+xtask , x quest , {Γ( Vp,t )}t∗
+
+> t=1
+
+i
+
+, (22) where xtask and xquest denote the hard-token task instruction and prediction query, respectively, and each visit block contains its observed codes, 
+
+Γ( Vp,t ) = [Γ( p, t, c ) : c ∈ Vp,t ] , (23) and each code block is represented as 
+
+Γ( p, t, c ) = [name( c), ϕ (c), ⟨sp,c ⟩, ⟨kp,c ⟩] . (24) 
+
+LLM refinement branch. Let Xp ∈ RMp×dLM 
+
+be the final mixed embedding sequence obtained by interleaving LLM token embeddings for hard text with code and KG soft tokens. The frozen LLM encodes this sequence as 
+
+HLp = LLM ( Xp) . (25) For each observed code c ∈ Vp,t , we extract the hid-den state at its code-soft-token position and project it back to the model hidden space: 
+
+hLp,t,c = WLHLp,i (p,t,c ) ∈ Rd, (26) where i(p, t, c ) denotes the prompt position of the code soft token. This representation captures se-mantic interactions among hard textual context, code soft tokens, and selected KG-context tokens. When a code appears in multiple visits, its input code and KG-context soft tokens are shared across occurrences, while the resulting LLM hidden states remain visit-specific through their distinct prompt positions. 
+
+Fusion of GNN and LLM Representations. 
+
+The GNN and LLM branches capture complemen-tary patient-personalized information: hGp,c repre-sents graph-structural context, while hLp,t,c repre-sents LLM-refined semantic context. We combine them using gated fusion: 
+
+gp,t,c = σ  WF [hGp,c ; hLp,t,c ] , (27) 
+
+zp,t,c = gp,t,c ⊙ hLp,t,c + (1 − gp,t,c ) ⊙ hGp,c (28) 
+
+zp,t,c is then used for downstream EHR prediction. 
+
+2.7 Integration with Downstream Models 
+
+REFINE serves as a plug-in concept encoder for standard EHR models. Given the observed history 
+
+X≤t∗ 
+
+> p
+
+, it produces a patient-personalized represen-tation for each observed code c ∈ Vp,t :
+
+zp,t,c = REFINE Θ
+
+
+
+c, X ≤t∗ 
+
+> p
+
+, G
+
+
+
+(29) These code representations are aggregated within each visit and passed to an EHR backbone: 
+
+hp = fΩ
+
+
+
+{Pool ( {zp,t,c : c ∈ Vp,t })}t∗
+
+> t=1
+
+
+
+(30) The final next-visit diagnosis prediction is 
+
+byp = σ (Wohp + bo) , byp ∈ [0 , 1] |C dx |.
+
+(31) In Stage II, with the selected patient graphs fixed, we train the full model using multi-label binary cross-entropy between byp and the next-visit diag-nosis label yp.
+
+3 Experiments 
+
+Experimental Setting. We evaluate on two pub-lic EHR benchmarks, MIMIC-III (Johnson et al., 2016) and MIMIC-IV (Johnson et al., 2023). Ta-ble 2 reports cohort statistics. The task is next-visit diagnosis prediction over imbalanced label spaces (515 codes in MIMIC-III; 562 in MIMIC-IV). Implementation details, including LLM/GNN configurations and the two-stage training pipeline, are provided in Appendix A.3. The source code is available at https://github.com/mohsen-nyb/ REFINE.git 
+
+Evaluation Metrics. We report results averaged over five folds for AUPRC (both general and also stratified by label frequency to assess performance across code rarity levels), Acc@k (top-k accuracy normalized by min( k, |yt+1 |)), and F1 .
+
+4 Results 
+
+We evaluate REFINE through five research ques-tions: RQ1: Does REFINE improve downstream EHR prediction as a plug-in concept encoder? 
+
+RQ2: How does REFINE compare with existing AdaC AttPool Transf RETAIN TCN           
+
+> 0.38 0.40 0.43 0.45 0.48 0.50 0.53 0.55
+> MIMIC-IV: AUPRC
+> Base Improvement
+> AdaC AttPool Transf RETAIN TCN
+> 0.30 0.35 0.40 0.45 0.50
+> MIMIC-IV: F1
+> Base Improvement
+> AdaC AttPool Transf RETAIN TCN
+> 0.50 0.55 0.60 0.65
+> MIMIC-IV: Acc@20
+> Base Improvement
+> AdaC AttPool Transf RETAIN TCN
+> 0.35 0.38 0.40 0.43 0.45 0.48 0.50
+> MIMIC-III: AUPRC
+> Base Improvement
+> AdaC AttPool Transf RETAIN TCN
+> 0.30 0.35 0.40 0.45
+> MIMIC-III: F1
+> Base Improvement
+> AdaC AttPool Transf RETAIN TCN
+> 0.45 0.48 0.50 0.53 0.55 0.58 0.60
+> MIMIC-III: Acc@20
+> Base Improvement
+
+Figure 3: Performance gains from integrating REFINE as a plug-in concept encoder across prediction backbones. Table 1: Baseline performance comparison. We report overall AUPRC, F1, and Acc@k, and stratified AUPRC by label frequency quartiles. The first row corresponds to the selected base model, Transformer, and subsequent rows denote plug-in variants, for example REFINE = REFINE + Base. All values are reported as percentages. 
+
+Model General Performance Label-Frequency AUPRC AUPRC F1 Acc@15 Acc@20 Acc@30 0–25% 25–50% 50–75% 75–100% MIMIC-III 
+
+Base (Vaswani, 2017) 39 .44 30 .96 46 .47 49 .60 57 .73 38 .64 47 .30 70 .63 74 .30 
+
+GRAM (Choi et al., 2017) 40 .10 32 .32 47 .75 51 .02 58 .71 40 .06 49 .84 71 .78 75 .16 
+
+MMORE (Song et al., 2019) 40 .95 33 .08 48 .42 51 .73 59 .34 40 .72 50 .92 72 .55 75 .86 
+
+KAME (Ma et al., 2018) 40 .54 32 .83 48 .17 51 .20 58 .99 39 .70 49 .49 71 .70 75 .02 
+
+G-BERT (Shang et al., 2019) 40 .83 33 .15 48 .47 51 .49 59 .22 39 .93 49 .78 71 .94 75 .18 
+
+HAP (Zhang et al., 2020) 40 .70 32 .95 48 .30 51 .34 59 .12 39 .82 49 .63 71 .82 75 .10 
+
+ADORE (Cheong et al., 2023) 40 .92 33 .20 48 .55 51 .63 59 .28 40 .05 49 .86 71 .99 75 .21 
+
+KAMPNet (An et al., 2023) 41 .37 33 .70 49 .10 52 .20 59 .82 40 .50 50 .59 72 .50 75 .78 
+
+GraphCare (Jiang et al., 2023) 43 .35 35 .46 52 .76 56 .00 62 .75 44 .80 58 .16 70 .97 65 .72 
+
+Rel-LLM (Wu et al., 2025) 43 .58 36 .05 52 .90 56 .08 62 .92 44 .95 58 .35 73 .85 78 .40 
+
+LINKO (Nayebi Kerdabadi et al., 2025) 44 .10 37 .05 53 .05 56 .20 63 .00 45 .20 59 .05 74.25 79 .20 
+
+MedCo (Kerdabadi et al., 2026) 45.35 39.90 53.22 56.32 63.18 45.73 64.00 73 .80 82.80 
+
+REFINE 47.41 42.46 54.38 57.62 64.60 47.92 66.55 76.28 86.95 MIMIC-IV 
+
+Base (Vaswani, 2017) 43 .56 36 .94 54 .02 57 .24 63 .64 44 .93 53 .50 51 .85 73 .10 
+
+GRAM (Choi et al., 2017) 44 .72 37 .78 54 .76 58 .02 64 .56 45 .76 54 .39 52 .60 73 .80 
+
+MMORE (Song et al., 2019) 45 .28 38 .35 55 .27 58 .54 64 .96 46 .25 54 .88 53 .47 74 .30 
+
+KAME (Ma et al., 2018) 44 .39 37 .43 54 .45 57 .65 64 .09 45 .22 54 .05 52 .18 73 .52 
+
+G-BERT (Shang et al., 2019) 44 .80 37 .86 54 .86 58 .06 64 .50 45 .63 54 .52 52 .76 73 .94 
+
+HAP (Zhang et al., 2020) 44 .75 37 .70 54 .75 58 .00 64 .43 45 .55 54 .37 52 .69 73 .84 
+
+ADORE (Cheong et al., 2023) 44 .94 38 .00 55 .00 58 .19 64 .65 45 .78 54 .64 52 .90 74 .02 
+
+KAMPNet (An et al., 2023) 45 .48 38 .65 55 .61 58 .86 65 .32 46 .31 55 .34 54 .00 74 .60 
+
+GraphCare (Jiang et al., 2023) 46 .90 40 .12 55 .89 59 .14 65 .71 48 .31 60.31 73.70 66 .33 
+
+Rel-LLM (Wu et al., 2025) 47 .20 40 .55 56 .45 59 .85 66 .35 48 .70 56 .80 56 .40 76 .60 
+
+LINKO (Nayebi Kerdabadi et al., 2025) 47 .55 41 .10 57 .05 60 .55 67 .05 49 .10 57 .10 56 .95 77 .20 
+
+MedCo (Kerdabadi et al., 2026) 48.28 43.10 58.30 61.55 67.60 49.95 57 .35 57 .70 78.20 
+
+REFINE 50.24 45.48 59.48 62.82 69.00 52.30 57.98 59.65 81.55 
+
+Table 2: Data statistics for MIMIC-III and MIMIC-IV. 
+
+Metric MIMIC-III MIMIC-IV 
+
+# Patients 7,515 18,829 # Visits (samples) 12,430 25,028 # Labels/sample 12.31 10.56 # Unique conditions (ICD) 515 562 # Conditions/sample 22.94 59.50 # Drugs/sample 54.95 118.16 # Unique drugs 468 510 # Procedures/sample 5.92 5.41 # Unique procedures 280 322 
+
+baselines? RQ3: Which components contribute the most to performance? RQ4: Does learned KG bud-geting outperform fixed KG selection strategies? 
+
+RQ5: Does REFINE improve prediction under data scarcity? RQ1–RQ4 are addressed in the main results, and RQ5 in Appendix A.6. 
+
+4.1 RQ1: Plug-in Encoder Evaluation 
+
+We evaluate whether REFINE improves standard EHR backbones when used as a plug-in concept encoder. We integrate REFINE into five represen-tative models: AttPool , a simple attention pool-ing predictor; AdaCare (Ma et al., 2020); Trans-
+
+Table 3: Component-wise ablation of REFINE on MIMIC-IV and MIMIC-III. 
+
+Variant AUPRC F1 Acc@20 MIMIC-IV  Full REFINE 50.24 45.48 62.82 
+
+w/o RL budgeting 49.18 44.18 61.92 w/o full LLM refiner 49.32 44.05 61.84 w/o soft prompt tokens 49.38 44.12 61.90 w/o KG soft tokens 49.72 44.78 62.32 w/o full personalized GNN 47.35 40.82 60.25 Global code representation (MedCo) 48.28 43.10 61.55 
+
+> MIMIC-III
+
+Full REFINE 47.41 42.46 57.62 
+
+w/o RL budgeting 46.38 41.02 56.70 w/o full LLM refiner 46.51 40.88 56.62 w/o soft prompt tokens 46.57 40.96 56.68 w/o KG soft tokens 46.92 41.68 57.10 w/o full personalized GNN 43.85 36.62 56.14 Global code representation (MedCo) 45.35 39.90 56.32 
+
+former (Vaswani, 2017); RETAIN (Choi et al., 2016b); and TCN (Bai et al., 2018). For each backbone, we compare the base model with its RE-FINE-enhanced variant. As shown in Figure 3, RE-FINE consistently improves performance across backbones, demonstrating its effectiveness as a plug-in personalized concept encoder. (0, ∅) (1, (1)) (1, (2)) (1, (5)) (1, (10)) (2, (1, 1)) (2, (2, 1)) (2, (2, 2)) (2, (5, 1)) (2, (5, 5))   
+
+> Fixed hop--fanout action
+> 45.0 45.5 46.0 46.5 47.0 47.5
+> PRAUC
+> RL VoI
+> KG Selection Strategy
+> Fixed expansion VoI RL
+
+Figure 4: AUPRC comparison of KG selection strate-gies. 0.0 2.5 5.0 7.5 10.0 12.5 15.0 17.5 20.0  
+
+> Selected action percentage (%)
+> A0: (0, )
+> A1: (1, (1)) A2: (1, (2)) A3: (1, (5)) A4: (1, (10)) A5: (2, (1, 1)) A6: (2, (2, 1)) A7: (2, (2, 2)) A8: (2, (5, 1)) A9: (2, (5, 5))
+> 8.7% 7.7% 13.4% 15.4% 5.7% 9.3% 17.0% 12.9% 5.7% 4.3%
+> Learned KG Expansion Action Distribution on MIMIC-III
+> No expansion 1-hop expansion 2-hop expansion
+
+Figure 5: Distribution of learned KG expansion actions. 
+
+4.2 RQ2: Baseline Comparison 
+
+We compare REFINE with representative medi-cal concept encoders, including the base Trans-former (Vaswani, 2017), ontology-based methods (GRAM (Choi et al., 2017), MMORE (Song et al., 2019), KAME (Ma et al., 2018), G-BERT (Shang et al., 2019), HAP (Zhang et al., 2020)), and KG-based methods: ADORE (Cheong et al., 2023) uses SNOMED relations; Graph-Care (Jiang et al., 2023) combines UMLS- and LLM-derived edges; KAMPNet (An et al., 2023) and LINKO (Nayebi Kerdabadi et al., 2025) con-struct cross-type connections; Rel-LLM follows relational graph prompting (Wu et al., 2025); and 
+
+MedCo (Kerdabadi et al., 2026) learns global KG– LLM concept embeddings from a medical TKG. All methods use the same downstream backbone. As shown in Table 1, REFINE achieves the best overall performance, highlighting the benefit of patient-personalized, budgeted TKG refinement. For rare-condition analysis, we stratify diagnosis labels into frequency quartiles; REFINE achieves the best AUPRC in six of eight quartile groups. 
+
+4.3 RQ3: Ablation Study 
+
+Table 3 shows that each component contributes to the final performance of REFINE. Removing the personalized GNN yields the largest drop, confirm-ing that the frozen LLM alone is insufficient and that patient-graph structure is central to REFINE. Removing the LLM refiner or using only hard name tokens also degrades performance, showing that semantic refinement benefits from trainable soft prompts rather than text names alone. The drop without KG soft tokens indicates that selected re-lational context adds value beyond observed-code soft tokens. Finally, removing RL budgeting con-sistently hurts performance, demonstrating the im-portance of adaptively selecting patient- and code-specific KG context instead of using an unbudgeted or fixed expansion. Even without the LLM refiner, REFINE outperforms MedCo, showing that per-sonalized budgeted TKG construction alone im-proves over global KG-based code representations. 
+
+4.4 RQ4: Personalized KG Selection 
+
+Figure 4 compares different KG selection strategies. Fixed strategies apply the same hop–fanout expan-sion to all observed codes, and their performance varies substantially across actions, indicating that a single global KG budget is suboptimal. The value-of-information (VoI) strategy 1 improves over fixed expansion by using a learned utility critic to se-lect visit-level KG expansion actions. The critic is trained with sparse label-derived utility targets, while validation and test-time selection is label-free. In contrast, the RL policy performs sequential code-level budgeting, allowing different observed code roots to receive different KG expansions while con-ditioning on previously selected KG context. Its superior performance demonstrates the benefit of adaptive, fine-grained KG selection. 
+
+Analysis of learned RL action distribution. To better understand the learned selection behavior, Figure 5 shows the distribution of RL policy expan-sion actions on MIMIC-III. The policy does not col-lapse to a single hop–fanout configuration, but in-stead selects a diverse range of no-expansion, one-hop, and two-hop actions, with moderate one-hop and two-hop budgets among the more frequently selected configurations. This diversity suggests that the selector balances predictive utility against graph-expansion cost across different patient-code instances. 
+
+Qualitative personalization analysis. To make this behavior more concrete, we inspect representa-tive RL policy decisions from individual MIMIC-III prediction samples. Here, code frequency de-
+
+> 1
+
+Details of the VoI strategy are provided in Appendix A.5. Table 4: Representative examples of RL-policy budget personalization on MIMIC-III. Code frequency is the number of prediction samples containing the code at least once.                          
+
+> Code / Patient Code Freq. Selected Budget Patient Context Interpretation
+> conditions:14.5.23 72-hop (5 ,1) 2 visits, 9 observed codes A rare diagnosis receives deeper multi-hop rela-tional context in a short patient history.
+> procedures:7.12.2 10 2-hop (5 ,1) 1 visit, 41 observed codes A rare procedure also receives deeper expansion, showing that adaptive budgeting is not limited to diagnosis codes.
+> drugs:B05XA 10,809 0-hop 5 visits, 211 observed codes A highly frequent drug receives no additional KG context, showing selective expansion.
+> conditions:16.10.1.4 683 1-hop (5) 5 visits, 182 observed codes A medium-frequency diagnosis receives only one-hop context expansion.
+
+notes the number of prediction samples containing a code at least once. As shown in Table 4, the pol-icy does not uniformly expand all observed code roots. For example, a rare diagnosis appearing in only 7 samples receives a 2-hop budget in a pa-tient history with 2 visits and 9 observed codes, while a rare procedure appearing in 10 samples also receives a 2-hop budget in another patient. In contrast, a frequent medication appearing in 10,809 samples receives no KG expansion in a pa-tient with 5 visits and 211 observed codes, while a medium-frequency diagnosis receives only local 1-hop context. These examples show that the RL policy assigns heterogeneous budgets across codes and patient contexts rather than uniformly expand-ing patient graphs. 
+
+5 Related Work 
+
+The increasing availability of EHRs has advanced clinical prediction methods, ranging from early se-quential models (Choi et al., 2016a,b) to attention-based and Transformer architectures (Li et al., 2020; Nayebi Kerdabadi et al., 2023; Hu et al., 2025; Hadizadeh Moghaddam et al., 2024), as well as graph-based approaches (Xu et al., 2022; Yang et al., 2023). These methods primarily improve patient-level prediction architectures, whereas our focus is on learning patient-personalized represen-tations of the medical concepts. A major line of work improves medical code rep-resentations by incorporating pre-existing medical ontologies or KG structure. GRAM (Choi et al., 2017), MMORE (Song et al., 2019), KAME (Ma et al., 2018), and HAP (Zhang et al., 2020) ex-ploit hierarchical ontology structure to refine con-cept embeddings through parent–child dependen-cies and attention mechanisms. Beyond hierarchies, G-BERT (Shang et al., 2019), ADORE (Cheong et al., 2023), KAMPNet (An et al., 2023), and LINKO (Nayebi Kerdabadi et al., 2025) incorpo-rate richer relational graphs, multi-source knowl-edge, or contrastive objectives. GCL (Lu et al., 2021), RAM-EHR (Xu et al., 2024), KARE (Jiang et al., 2024), and GraphCare (Jiang et al., 2023) further integrate retrieved knowledge, auxiliary text, or patient-specific graph context. However, GraphCare relies on fixed neighborhood expansion, whereas REFINE learns sequential patient- and code-specific KG budgets, allowing different ob-served codes within the same patient to receive different amounts of relational context. Recent work also combines LLMs with rela-tional or medical graph representations. Rel-LLM (Wu et al., 2025) injects explicit relational structure through graph-aware soft prompting, while REFINE compresses the selected code-specific KG neighborhood into compact soft con-text tokens within a visit-aware prompt, avoiding explicit serialization of every retrieved relation. MedCo (Kerdabadi et al., 2026) learns a single global KG–LLM representation per medical con-cept. In contrast, REFINE learns patient-code representations conditioned on longitudinal history and adaptively selected KG context, using this rela-tional evidence to guide LLM semantic refinement. 
+
+6 Conclusion 
+
+We presented REFINE, a patient-personalized plug-in medical concept encoder that learns EHR code representations from budgeted text-attributed patient graphs. REFINE uses sequential reinforce-ment learning to select code- and patient-specific KG budgets, builds compact personalized graphs, and combines a heterogeneous GNN with a frozen LLM through graph-aware soft prompts. Exper-iments on MIMIC-III and MIMIC-IV show con-sistent gains across diverse backbones and strong baselines. Ablation and KG-selection analyses con-firm the complementary benefits of personalized graph construction, adaptive budgeting, and LLM refinement, while showing that the learned policy adapts budgets across codes and patient contexts. REFINE also remains effective under limited su-pervision and across frozen LLM backbones. 7 Limitations and Future Work 
+
+A limitation of our KG selection module is its pre-defined discrete action space with fixed hop and neighbor budgets. Although neighbors within each selected budget are chosen by evidence-based edge rankings rather than random sampling, the policy does not directly select the exact nodes or adapt the budget continuously at each hop. Future work will explore more flexible RL strategies that jointly select, rank, and budget KG nodes while remaining efficient for large-scale EHR prediction. 
+
+8 Ethical Considerations 
+
+We comply with the ACL Ethics Policy throughout this study. All experiments use publicly available, de-identified EHR datasets, which provide strong privacy protections. We do not send patient-level records or identifiable clinical histories to exter-nal LLM services. LLM-based KG construction uses only concept-level information and aggregated EHR-derived statistics, and the LLM used in RE-FINE is run locally and kept frozen. AI-assisted tools were used solely for writing and grammar checking, and not for data analysis, experimen-tal design, or generating scientific claims. The proposed model is intended for research on EHR representation learning and should not be used for clinical decision-making without prospective vali-dation, fairness evaluation, and expert oversight. 
+
+9 Acknowledgments 
+
+This research was supported by the National Sci-ence Foundation under Award No. 2544634. 
+
+References 
+
+Yang An, Haocheng Tang, Bo Jin, Yi Xu, and Xiaopeng Wei. 2023. Kampnet: multi-source medical knowl-edge augmented medication prediction network with multi-level graph contrastive learning. BMC Medical Informatics and Decision Making , 23(1):243. Shaojie Bai, J Zico Kolter, and Vladlen Koltun. 2018. An empirical evaluation of generic convolutional and recurrent networks for sequence modeling. arxiv. 
+
+arXiv preprint arXiv:1803.01271 , 10. Chin Wang Cheong, Kejing Yin, William K Cheung, Benjamin CM Fung, and Jonathan Poon. 2023. Adap-tive integration of categorical and multi-relational ontologies with ehr data for medical concept embed-ding. ACM Transactions on Intelligent Systems and Technology , 14(6):1–20. Edward Choi, Mohammad Taha Bahadori, Andy Schuetz, Walter F Stewart, and Jimeng Sun. 2016a. Doctor ai: Predicting clinical events via recurrent neural networks. In Machine learning for healthcare conference , pages 301–318. PMLR. Edward Choi, Mohammad Taha Bahadori, Le Song, Walter F Stewart, and Jimeng Sun. 2017. Gram: graph-based attention model for healthcare represen-tation learning. In Proceedings of the 23rd ACM SIGKDD international conference on knowledge dis-covery and data mining , pages 787–795. Edward Choi, Mohammad Taha Bahadori, Jimeng Sun, Joshua Kulas, Andy Schuetz, and Walter Stewart. 2016b. Retain: An interpretable predictive model for healthcare using reverse time attention mechanism. 
+
+Advances in neural information processing systems ,29. Aaron Grattafiori and et al. 2024. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 .Arya Hadizadeh Moghaddam, Mohsen Nayebi Kerd-abadi, Mei Liu, and Zijun Yao. 2024. Contrastive learning on medical intents for sequential prescrip-tion recommendation. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management , pages 748–757. Jinxiang Hu, Mohsen Nayebi Kerdabadi, Xiaohang Mei, Joseph Cappelleri, Richard Barohn, and Zijun Yao. 2025. Recurrent neural networks and attention scores for personalized prediction and interpretation of patient-reported outcomes. Journal of Biopharma-ceutical Statistics , pages 1–11. Binyuan Hui, Jian Yang, Zeyu Cui, Jiaxi Yang, Dayiheng Liu, Lei Zhang, Tianyu Liu, Jiajun Zhang, Bowen Yu, Keming Lu, and 1 others. 2024. Qwen2. 5-coder technical report. arXiv preprint arXiv:2409.12186 .Pengcheng Jiang, Cao Xiao, Adam Cross, and Jimeng Sun. 2023. Graphcare: Enhancing healthcare pre-dictions with personalized knowledge graphs. arXiv preprint arXiv:2305.12788 .Pengcheng Jiang, Cao Xiao, Minhao Jiang, Parminder Bhatia, Taha Kass-Hout, Jimeng Sun, and Jiawei Han. 2024. Reasoning-enhanced healthcare predictions with knowledge graph community retrieval. arXiv preprint arXiv:2410.04585 .Alistair EW Johnson, Lucas Bulgarelli, Lu Shen, Alvin Gayles, Ayad Shammout, Steven Horng, Tom J Pol-lard, Sicheng Hao, Benjamin Moody, Brian Gow, and 1 others. 2023. Mimic-iv, a freely accessible elec-tronic health record dataset. Scientific data , 10(1):1. Alistair EW Johnson, Tom J Pollard, Lu Shen, Li-wei H Lehman, Mengling Feng, Mohammad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G Mark. 2016. Mimic-iii, a freely accessi-ble critical care database. Scientific data , 3(1):1–9. Mohsen Nayebi Kerdabadi, Arya Hadizadeh Moghad-dam, Chen Chen, Dongjie Wang, and Zijun Yao. 2026. Text-attributed knowledge graph enrichment with large language models for medical concept rep-resentation. In Proceedings of the 64th Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 16544–16560. Yikuan Li, Shishir Rao, José Roberto Ayala Solares, Abdelaali Hassaine, Rema Ramakrishnan, Dexter Canoy, Yajie Zhu, Kazem Rahimi, and Gholamreza Salimi-Khorshidi. 2020. Behrt: transformer for elec-tronic health records. Scientific reports , 10(1):7155. Chang Lu, Chandan K Reddy, Prithwish Chakraborty, Samantha Kleinberg, and Yue Ning. 2021. Collab-orative graph learning with auxiliary text for tem-poral event prediction in healthcare. arXiv preprint arXiv:2105.07542 .Fenglong Ma, Quanzeng You, Houping Xiao, Radha Chitta, Jing Zhou, and Jing Gao. 2018. Kame: Knowledge-based attention model for diagnosis pre-diction in healthcare. In Proceedings of the 27th ACM international conference on information and knowledge management , pages 743–752. Liantao Ma, Junyi Gao, Yasha Wang, Chaohe Zhang, Jiangtao Wang, Wenjie Ruan, Wen Tang, Xin Gao, and Xinyu Ma. 2020. Adacare: Explainable clin-ical health status representation learning via scale-adaptive feature extraction and recalibration. In Pro-ceedings of the AAAI conference on artificial intelli-gence , volume 34, pages 825–832. Meta. 2024. Llama-3.2-1b model card. https: //huggingface.co/meta-llama/Llama-3.2-1B .Hugging Face model card, accessed 2026-04-13. Mohsen Nayebi Kerdabadi, Arya Hadizadeh Moghad-dam, Bin Liu, Mei Liu, and Zijun Yao. 2023. Con-trastive learning of temporal distinctiveness for sur-vival analysis in electronic health records. In Pro-ceedings of the 32nd ACM International Conference on Information and Knowledge Management , pages 1897–1906. Mohsen Nayebi Kerdabadi, Arya Hadizadeh Moghad-dam, Dongjie Wang, and Zijun Yao. 2025. Multi-ontology integration with dual-axis propagation for medical concept representation. In Proceedings of the 34th ACM International Conference on Informa-tion and Knowledge Management , pages 2201–2211. Qwen Team. 2024. Qwen2.5-0.5b model card. https: //huggingface.co/Qwen/Qwen2.5-0.5B . Hug-ging Face model card, accessed 2026-04-13. Junyuan Shang, Tengfei Ma, Cao Xiao, and Jimeng Sun. 2019. Pre-training of graph augmented transform-ers for medication recommendation. arXiv preprint arXiv:1906.00346 .Lihong Song, Chin Wang Cheong, Kejing Yin, William K Cheung, Benjamin CM Fung, and Jonathan Poon. 2019. Medical concept embedding with multiple ontological representations. In IJCAI ,volume 19, pages 4613–4619. A Vaswani. 2017. Attention is all you need. Advances in Neural Information Processing Systems .Fang Wu, Vijay Prakash Dwivedi, and Jure Leskovec. 2025. Large language models are good relational learners. In Proceedings of the 63rd Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 7835–7854. Ran Xu, Wenqi Shi, Yue Yu, Yuchen Zhuang, Bowen Jin, May D Wang, Joyce C Ho, and Carl Yang. 2024. Ram-ehr: Retrieval augmentation meets clinical pre-dictions on electronic health records. arXiv preprint arXiv:2403.00815 .Ran Xu, Yue Yu, Chao Zhang, Mohammed K Ali, Joyce C Ho, and Carl Yang. 2022. Counterfac-tual and factual reasoning over hypergraphs for in-terpretable clinical predictions on ehr. In Machine Learning for Health , pages 259–278. PMLR. Nianzu Yang, Kaipeng Zeng, Qitian Wu, and Junchi Yan. 2023. Molerec: Combinatorial drug recommen-dation with substructure-aware molecular represen-tation learning. In Proceedings of the ACM Web Conference 2023 , pages 4075–4085. Muhan Zhang, Christopher R King, Michael Avidan, and Yixin Chen. 2020. Hierarchical attention prop-agation for healthcare representation learning. In 
+
+Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining ,pages 249–256. A Appendix 
+
+A.1 Global Text-Attributed KG Construction 
+
+We reuse the evidence-grounded TKG construc-tion protocol from MedCo (Kerdabadi et al., 2026), where the induced relation schema and represen-tative KG edges were clinically validated. There-fore, this work does not introduce a new KG induc-tion pipeline; instead, it studies how to personalize the use of this validated global TKG for patient-specific EHR prediction. We construct a global text-attributed knowledge graph (KG) over the medical code vocabulary. Let 
+
+C = Cdx ∪ C rx ∪ C px denote the set of diagnosis, medication, and procedure codes. The resulting global graph is denoted as 
+
+G = ( V, E, ϕ, ψ ) , (32) where V = C is the set of medical concept nodes and E ⊆ V × V is the set of directed edges. The mapping ϕ : V → T c assigns each node to a clinical type, where Tc = {dx , rx , px }, and ψ : E → R 
+
+assigns each edge to a semantic relation type. For an edge e = ( u, v ) ∈ E , we write ψ(e) = r and equivalently denote the typed relation as (u, r, v ).Each node v is associated with a textual concept description dv, and each edge e is associated with a textual relation rationale ηe.
+
+Candidate pair extraction. Each patient record is represented as a sequence of visits 
+
+{Vp, 1, . . . , V p,T p }, where each visit contains a de-duplicated set of medical codes. We extract candidate code pairs using two complementary EHR-derived evidence channels. The first channel captures intra-visit co-occurrence, where two codes appear in the same visit. The second channel captures next-visit temporal transitions, where a source code appears in Vp,t and a target code appears in Vp,t +1 . These two channels allow the global KG to encode both simultaneous clinical associations and temporally ordered dependencies. 
+
+Pairwise statistical evidence. For each candi-date directed pair (ci, c j ) and evidence channel 
+
+m ∈ { co , temp }, we compute support counts, a smoothed conditional probability, a PMI-style as-sociation score, and a statistical significance score. The smoothed conditional probability is 
+
+Pm(cj | ci) = xm(ci, c j ) + αxm(ci) + α|C| , (33) where xm(ci, c j ) is the pair count under channel 
+
+m, xm(ci) is the corresponding source-code count, and α is a Laplace smoothing constant. We also compute a PMI-style score: 
+
+PMI m(ci, c j ) = log pm(ci, c j )
+
+psrc  
+
+> m
+
+(ci)ptgt  
+
+> m
+
+(cj ) . (34) Here, pm(·) denotes empirical probabilities esti-mated from the corresponding counts. For intra-visit co-occurrence, psrc  
+
+> m
+
+= ptgt  
+
+> m
+
+, while for temporal transitions the source and target marginals are com-puted from adjacent visits. We further compute a 
+
+χ2 test of dependence from a 2 × 2 contingency table. To avoid data leakage, all EHR-derived co-occurrence and temporal-transition statistics used to construct the global TKG are computed only from the training split within each fold. 
+
+Evidence filtering. For each pair, we consolidate the co-occurrence and temporal statistics into a compact evidence summary: 
+
+aij = [ aco  
+
+> ij
+
+; atemp  
+
+> ij
+
+], (35) where each channel-specific vector contains sup-port, conditional probability, PMI, and the χ2 sig-nificance score. Candidate pairs with insufficient support, weak association, or non-significant de-pendence are removed before LLM-based relation induction. This filtering step prevents assigning se-mantic relations to arbitrary code pairs and ensures that the candidate set is grounded in empirical EHR evidence. 
+
+Type-constrained LLM relation induction. 
+
+Each remaining candidate pair is passed to a type-constrained LLM relation induction module. For a pair (ci, c j ), the allowed relation set is selected according to the source and target code types: 
+
+Rij = Rϕ(ci),ϕ (cj ). (36) For example, diagnosis–medication pairs may use relations such as treats ,
+
+prevents , contraindicated_for , and 
+
+causes_adverse_event , while diagnosis– diagnosis pairs may use relations such as causes , risk_factor_for , leads_to ,and complicates . Ambiguous cases are handled by conservative abstention labels such as no_significant_relation and 
+
+cannot_decide .The LLM prompt includes the two code identi-fiers, code names, clinical types, parent categories, marginal frequencies, the EHR-derived evidence summary aij , a short glossary of the statistical met-rics, and the allowed type-specific relation set Rij .The LLM is instructed to return a structured out-put containing a directed relation label, an oriented triple, a confidence score, and a short clinical ra-tionale. We use the confidence score and format checks for quality control, while the final graph stores the selected relation type through ψ(e) and the textual rationale as the edge text ηe.
+
+Node and edge textual attributes. After rela-tion induction, we enrich the graph with textual attributes. For each node v ∈ V , we attach a con-cise clinical description dv generated using a type-specific prompt. The description summarizes the medical meaning of the code, such as disease pre-sentation for diagnoses, therapeutic role for medi-cations, or clinical purpose for procedures. For each retained edge e = ( u, v ) ∈ E , we at-tach the LLM-generated relation rationale ηe as the edge text. Thus, the text-attributed graph contains both node-level concept semantics and edge-level relational semantics: 
+
+v 7 → dv, e 7 → ηe. (37) The statistical evidence is used during graph con-struction and relation induction, but in the current formulation the edge attribute used by the down-stream model is the textual rationale ηe.
+
+Directionality. The induced edges are directed and preserve their clinical orientation. For exam-ple, if the LLM assigns a relation indicating that a medication treats a diagnosis, the resulting edge direction follows the induced semantic triple. For message passing, we add inverse computational edges during local graph materialization to support bidirectional information flow in the GNN. They do not change the semantic direction of the original global KG relation. 
+
+Use in patient-specific temporal graph construc-tion. The global graph G serves as the source graph from which patient-specific temporal graphs are extracted. Given a patient p and a prediction cutoff time t∗, only codes observed up to t∗ are used as root nodes. The selected neighborhoods of these roots provide relational KG context for the pa-tient graph. The node descriptions {dv} and edge rationales {ηe} provide the textual semantics used to initialize or generate the graph-contextualized code and KG soft prompts in REFINE. 
+
+A.2 LLM-Based Node Description Construction 
+
+In addition to relation-typed edges, we enrich each medical concept node with a textual description following the node-level enrichment strategy of Kerdabadi et al. (2026). For each node v ∈ V ,corresponding to a medical code c, we generate a concise clinical description dv using a type-specific LLM prompt: 
+
+dv = LLM ( Pdesc (c, ϕ (v))) , (38) where ϕ(v) ∈ T c denotes the code type, and Pdesc 
+
+is a prompt template specialized for diagnosis, med-ication, and procedure codes. The prompt provides the code identifier, code name, clinical type, and available parent category information, and instructs the LLM to generate a single clinically focused paragraph. The type-specific guidance asks for different information depending on the code category: diagnosis descrip-tions summarize the condition definition, typical presentation, risk factors, and clinical management; procedure descriptions summarize clinical purpose, indications, contraindications, and peri-procedural considerations; and medication descriptions sum-marize pharmacologic class, mechanism, indica-tions, adverse effects, and common interaction pat-terns. To avoid unsupported or overly specific con-tent, the prompt asks the LLM to avoid patient-level facts, URLs, dosage thresholds, hospital policies, and uncertain claims. The LLM output is parsed as structured JSON and the generated description is attached to the corresponding node as its textual attribute: 
+
+v 7 → dv. (39) These node descriptions provide fixed text-derived clinical semantics used by REFINE to initialize code representations and construct graph-aware soft prompts. Together with the edge rationales ηe
+
+generated during the relation induction, they make 
+
+G a relation-typed and text-attributed medical KG. 
+
+A.3 Implementation Details 
+
+We map ICD diagnosis/procedure codes to CCS categories and medications from National Drug Codes (NDC) to the Anatomical Thera-peutic Chemical (ATC) classification. We use 
+
+Llama-3.2-1B (Grattafiori and et al., 2024; Meta, 2024) as the frozen LLM backbone. All reported re-sults are averaged over five-fold experiments using the same preprocessing and evaluation protocol. 25% 50% 75% 100%                   
+
+> Train set ratio
+> 0.300 0.325 0.350 0.375 0.400 0.425 0.450 0.475
+> Score
+> AUPRC (MIMIC-III)
+> 25% 50% 75% 100%
+> Train set ratio
+> 0.400 0.425 0.450 0.475 0.500 0.525 0.550 0.575
+> Acc@20 (MIMIC-III)
+> 25% 50% 75% 100%
+> Train set ratio
+> 0.30 0.35 0.40 0.45 0.50
+> AUPRC (MIMIC-IV)
+> 25% 50% 75% 100%
+> Train set ratio
+> 0.450 0.475 0.500 0.525 0.550 0.575 0.600 0.625 0.650
+> Acc@20 (MIMIC-IV)
+> AdaC AdaC* AttPool AttPool* Transformer Transformer* RETAIN RETAIN* TCN TCN*
+
+Figure 6: Data insufficiency analysis on MIMIC-III and MIMIC-IV under different training-set ratios. We compare each backbone model with its REFINE-enhanced variant across AUPRC and Acc@20. Solid lines denote the original backbone models, while dashed lines with hollow markers denote the corresponding models augmented with REFINE. Across datasets, metrics, and backbone architectures, REFINE consistently improves performance, demonstrating its robustness under limited supervision. 
+
+Hyperparameters. The heterogeneous GNN uses GAT-style message passing with hidden di-mension 128 , 4 layers, 2 attention heads, dropout 
+
+0.4, pooled-code patient representation, and bidi-rectional KG message passing. We run the frozen LLM in bfloat16 precision and do not update its tokenizer, embedding table, or backbone pa-rameters. The trainable components include the heterogeneous GNN, residual code and relation embeddings, text-semantic projection layers, KG-context pooling module, soft-token projections, GNN–LLM fusion layer, downstream EHR back-bone, and prediction head. We use graph-aware mixed prompts with hard text tokens for the task and visit-code scaffold, and two soft tokens per observed code: one code soft token and one KG-context soft token. We train with Adam using a learning rate of 
+
+5 × 10 −4, weight decay 0, and batch size 256 . In the first-stage graph-budgeting phase, we warm up the proxy GNN for 120 epochs and then train the sequential RL selector for up to 50 epochs with early stopping after at least 5 epochs, patience 5,and minimum improvement 10 −5 on the mean RL reward. The RL selector uses additive transitions with minimum and maximum decision steps of 
+
+2 and 5, respectively. The KG cost weights are 
+
+ωC = 0 .05 for selected nodes and ωE = 0 .5 for selected edges, with cost penalty λcost = 10 −4.The actor, critic, and entropy weights are 0.1, 0.1,and 0.02 , respectively. During RL training, actions are sampled for exploration, while validation and inference use greedy selection. The task model is frozen during RL selector training, and selected patient graphs are exported for second-stage full REFINE training. 
+
+Two-stage training pipeline. Algorithm 1 sum-marizes the two-stage training pipeline of REFINE. We train REFINE in two stages to separate discrete graph-budget learning from the more expensive LLM-based semantic refinement. In the first stage, we train a personalized graph-budgeting policy us-ing a GNN-only proxy predictor, avoiding repeated LLM rollouts during discrete graph selection. For each patient p, let Sp = S 
+
+> t≤t∗
+
+Vp,t denote the set of distinct observed code roots up to the prediction cutoff. The policy selects from a discrete action grid a = ( K, m), where K is the KG expansion depth and m = ( m1, . . . , m K ) specifies the per-hop fanout. The grid includes the no-expansion action a0 = (0 , ∅) and bounded expansions up to 
+
+Kmax = 2 .In Algorithm 1, Ap denotes the current action map that assigns each root code c ∈ S p to an ex-pansion action a ∈ A . At RL step ℓ, Uℓ denotes the feasible macro-action set, where each macro-action b = ( c, a ) updates the expansion action for one distinct observed code root. The operator EXPAND (Sp, A p, G) materializes the selected pa-tient graph Gsel  
+
+> p
+
+from the global TKG G according to the action map Ap. We use Ckg (Ap) to denote the induced KG cost, Bkg for the graph budget, 
+
+Lmax for the maximum number of RL decisions, and M for the exported selected-graph cache. The process terminates when the policy selects the stop action, reaches Lmax , or exhausts the graph budget. The reward is computed from the downstream GNN-only prediction loss improvement relative to the no-expansion graph, with an additional penalty for selected KG nodes and edges. During training, actions are sampled from the actor for exploration; during validation and inference, we use greedy se-lection. The best selected patient-specific graphs are exported and cached in M.In the second stage, we fix the selected pa-tient graphs and train the full REFINE architec-ture for next-visit diagnosis prediction. For each patient p, GNNE NC (·) produces structural repre-sentations HGp , LLMR EFINE (·) produces frozen-LLM-refined semantic representations HLp , and FUSE (·) combines them into personalized code representations Zp = {zp,t,c }. The LLM remains frozen, and only the trainable REFINE compo-nents are updated, including the heterogeneous GNN, residual code and relation embeddings, text-semantic projection layers, KG-context pooling module, soft-token projections, GNN–LLM fusion layer, downstream EHR backbone, and prediction head. This design separates graph-budget learning from LLM-based semantic refinement while pre-serving patient-personalized code representations from the selected graph context. 
+
+A.4 KG-Context Pooling and Prompt Design 
+
+For each patient–code pair (p, c ), REFINE con-structs a selected code-specific KG subgraph Gkg 
+
+> p,c
+
+.The goal of KGPool( ·) is to summarize this se-lected relational context as a single KG-context soft token kp,c that can be inserted into the frozen LLM prompt. We considered several implementations, includ-ing mean pooling, gated attention, and relation-aware aggregation over selected neighbor nodes and KG edges. The best-performing implementa-tion uses a lightweight GNN-style aggregator. For each selected KG edge (a, b ) ∈ E kg 
+
+> p,c
+
+, we first com-bine the LLM-branch representation of the neigh-bor node with the corresponding relation/rationale-aware edge representation. These edge-aware mes-sages are then aggregated over the selected code-specific subgraph to produce a compact context vector, which is projected into the LLM hidden space as kp,c . This design preserves local relational information while avoiding the need to insert every selected KG triple as a separate prompt object. We also explored a more explicit relational prompt format inspired by recent relational LLM prompting work, where relational structures are se-rialized in a JSON-like format and graph-derived embeddings are inserted as soft prompt tokens. Rel-LLM, for example, argues that flat text serialization can obscure relational structure, introduce redun-dancy, and exceed LLM context limits, and instead uses graph encoders and structured prompts to pre-serve relational information. Following this intu-ition, we adapted a triplet-style prompt in which selected KG evidence was represented as soft-tokenized triples of the form (node , edge , node) 
+
+inside our JSON visit-code hierarchy. However, this design substantially increased prompt length and the number of soft tokens, especially for pa-tients with many observed codes and multi-hop KG expansions. Empirically, this led to higher memory and computational costs and weaker per-formance than the compact KGPool design. There-fore, REFINE uses KGPool to summarize each selected code-specific KG neighborhood into one KG-context token, balancing relational expressive-ness and prompt efficiency. 
+
+A.5 Value-of-Information KG Selection 
+
+As an alternative to fixed KG expansion and sequen-tial RL budgeting, we consider a learned value-of-information (VoI) selection strategy. The goal is to predict the KG expansion action expected to pro-vide the largest predictive benefit relative to a no-expansion baseline. We use the same discrete hop– fanout action grid as the RL policy: (0 , ∅), (1 , (1)) ,
+
+(1 , (2)) , (1 , (5)) , (1 , (10)) , (2 , (1 , 1)) , (2 , (2 , 1)) ,
+
+(2 , (2 , 2)) , (2 , (5 , 1)) , and (2 , (5 , 5)) .VoI uses a learned critic to score candidate ex-pansion actions at the visit level. During training, sparse utility targets are constructed from training labels. Let G0 
+
+> p
+
+denote the baseline patient graph in which all visits use the no-expansion action. For a candidate action a ∈ A at visit t, let G(t,a ) 
+
+> p
+
+de-note the graph in which visit t uses action a while all other visits remain at no expansion. Given a prediction loss Lp(·), the target utility is defined as 
+
+∆p,t (a) = Lp(G0 
+
+> p
+
+) − L p(G(t,a ) 
+
+> p
+
+). (40) These sparse utility targets supervise the VoI critic, which predicts a utility score b∆p,t (a) for each candidate action. At validation and test time, ground-truth labels are not used for KG selection. Instead, the selected VoI action is 
+
+ˆap,t = arg max 
+
+> a∈A
+
+b∆p,t (a). (41) Unlike fixed expansion, VoI adapts KG expan-sion across visit contexts and performs label-free selection at inference. However, its visit-level deci-sions are made independently rather than sequen-tially conditioning on KG context already selected for other code roots. In contrast, the RL policy makes sequential code-level decisions conditioned Llama-3.2-1B Qwen2.5-0.5B  
+
+> 46.8 47.0 47.2 47.4 47.6
+> AUPRC
+> 47.41 46.92
+> MIMIC-III
+> Llama-3.2-1B Qwen2.5-0.5B
+> 49.8 50.0 50.2 50.4
+> 50.24 49.85
+> MIMIC-IV
+> Sensitivity to Frozen LLM Backbone
+
+Figure 7: Sensitivity of REFINE to the frozen LLM backbone on MIMIC-III and MIMIC-IV. REFINE re-mains stable when replacing Llama-3.2-1B with the smaller Qwen2.5-0.5B .
+
+on the patient state, remaining budget, and previ-ously selected KG context, enabling finer-grained personalized graph construction. 
+
+A.6 RQ5: Data Insufficiency Analysis 
+
+To evaluate the robustness of REFINE under lim-ited supervision, we conduct a data insufficiency analysis by varying the fraction of the available training set. This setting simulates practical clini-cal scenarios where labeled EHR data are limited. As shown in Figure 6, REFINE consistently im-proves downstream prediction performance across different training-set ratios on both MIMIC-III and MIMIC-IV. The improvements are observed across multiple backbone models, including AdaCare, AttPool, Transformer, RETAIN, and TCN, indi-cating that REFINE functions as a general plug-in refinement module rather than being specific to one architecture. The gains are especially meaning-ful in low-data regimes, where base EHR models have limited supervision to learn reliable repre-sentations for sparse and rare medical codes. By incorporating patient-specific graph context and se-mantic refinement, REFINE provides additional inductive bias that helps improve both AUPRC and Acc@20. Importantly, the enhanced models re-main stronger than their base counterparts even at the full-data setting, suggesting that REFINE provides complementary information beyond what is learned from labeled sequences alone. Over-all, these results show that REFINE is robust to data insufficiency and can improve EHR prediction performance across datasets, architectures, and su-pervision levels. 
+
+A.7 Sensitivity to LLM Backbone 
+
+We evaluate the sensitivity of REFINE to the frozen LLM backbone by comparing 
+
+Llama-3.2-1B (Grattafiori and et al., 2024; Meta, 2024) with the smaller Qwen2.5-0.5B (Hui et al., 2024; Qwen Team, 2024). As shown in Figure 7, replacing Llama-3.2-1B with Qwen2.5-0.5B 
+
+leads to a moderate decrease in AUPRC on both MIMIC-III and MIMIC-IV, but the overall performance remains competitive. This suggests that REFINE can benefit from its graph-contextual refinement mechanism across different small frozen LLM backbones. However, this analysis is limited to relatively small models, and future work should evaluate larger LLM backbones to better understand how backbone capacity affects semantic refinement and downstream EHR prediction. Algorithm 1 Two-stage training of REFINE 
+
+Require: Training set D, global TKG G, action set A, null ac-tion a0, graph budget Bkg , minimum/maximum decision steps Lmin , L max 
+
+Ensure: Trained parameters Θ
+
+Stage I: RL-based graph budgeting 
+
+1: Initialize and warm up GNN-only proxy predictor; freeze its parameters 2: Initialize actor–critic policy (πη , V ω )
+
+3: for epoch = 1 , . . . , E 1 do 
+
+4: for p ∈ D do 
+
+5: Sp ← S 
+
+> t≤t∗
+
+Vp,t ▷ distinct observed code roots 6: Ap ← { ac ← a0 : c ∈ S p}
+
+7: Gsel  
+
+> p
+
+← EXPAND (Sp, A p, G)
+
+8: for ℓ = 1 , . . . , L max do 
+
+9: if Ckg (Ap) ≥ Bkg then 
+
+10: break 
+
+11: end if 
+
+12: Uℓ ← FEASIBLE (Sp, A p, A, B kg ) ▷
+
+additive, budget-feasible updates 13: if ℓ ≥ Lmin then 
+
+14: Uℓ ← U ℓ ∪ { STOP }
+
+15: end if 
+
+16: if Uℓ = ∅ then 
+
+17: break 
+
+18: end if 
+
+19: Select bℓ ∼ πη (· | sℓ) over Uℓ
+
+20: if bℓ = STOP then 
+
+21: break 
+
+22: end if 
+
+23: Let bℓ = ( cℓ, a ℓ); update Ap[cℓ] ← aℓ
+
+24: Gsel  
+
+> p
+
+← EXPAND (Sp, A p, G)
+
+25: end for 
+
+26: Rp ← Lp(G0 
+
+> p
+
+) − Lp(Gsel  
+
+> p
+
+) − λcost Ckg (Ap)
+
+27: Update (πη , V ω ) using the actor–critic objective with reward Rp
+
+28: end for 
+
+29: end for 
+
+30: Export graph cache M by running the learned policy greedily for each p ∈ D 
+
+Stage II: Full REFINE training 
+
+31: Initialize full REFINE with frozen LLM parameters 32: for epoch = 1 , . . . , E 2 do 
+
+33: for minibatch P ⊂ D do 
+
+34: for p ∈ P do 
+
+35: Retrieve Gsel  
+
+> p
+
+from cache M
+
+36: HGp ← GNNE NC (Gsel  
+
+> p
+
+)
+
+37: HLp ← LLMR EFINE (Gsel  
+
+> p
+
+)
+
+38: Zp ← FUSE (HGp , H Lp )
+
+39: ˆyp ← fΩ(Zp)
+
+40: end for 
+
+41: Update Θ using P 
+
+> p∈P
+
+LBCE (ˆ yp, y p)
+
+42: end for 
+
+43: end for 
+
+44: return Θ

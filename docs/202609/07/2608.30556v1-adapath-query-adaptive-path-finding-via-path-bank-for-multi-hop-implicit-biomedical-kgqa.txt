@@ -1,0 +1,1256 @@
+Title: AdaPath: Query-Adaptive Path-Finding via Path-Bank for Multi-Hop Implicit Biomedical KGQA
+
+URL Source: https://arxiv.org/pdf/2608.30556v1
+
+Published Time: Tue, 01 Sep 2026 03:05:34 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+> arXiv:2608.30556v1 [cs.AI] 31 Aug 2026
+
+# ADA PATH : Query-Adaptive Path-Finding via Path-Bank for Multi-Hop Implicit Biomedical KGQA 
+
+Jun Hyeong Kim 1, Dongki Kim 1, Yinhua Piao 1, Sung Ju Hwang 1,2 
+
+1KAIST, 2DeepAuto.ai 
+
+{tommykim0906, cleverki, yinhua.piao, sungju.hwang}@kaist.ac.kr 
+
+Abstract 
+
+Path-finding over knowledge graphs has be-come an effective way to ground LLM reason-ing on multi-hop questions. However, biomedi-cal QA introduces two distinct challenges that general-domain methods are not designed for: (i) queries do not expose intermediate reason-ing and can be answered through multiple valid pathways, and (ii) biomedical knowledge graphs are densely connected, so path-finding methods easily take wrong turns. To address these challenges, we propose A DA PATH , a path-finding framework that retrieves query-adaptive meta-paths from Path-Bank , which captures both query semantics and biomedi-cal knowledge graph structure. A DA PATH pro-vides the missing cues in biomedical queries while effectively pruning dense knowledge graph neighborhoods during multi-hop reason-ing. We further release B IO STRAT -QA, a biomedical KGQA benchmark that stratifies multi-hop queries by how much intermediate reasoning they expose. Across biomedical KGQA benchmarks, A DA PATH consistently outperforms baselines, sustaining meaningful path-finding even when multi-hop queries ex-pose less surface information. The source code is available at https://github.com/Jun-H yeong-Kim/AdaPath .
+
+1 Introduction 
+
+Recent large language models (LLMs) display in-creasingly sophisticated reasoning, and retrieval-augmented generation (RAG) (Lewis et al., 2020) has become a widely adopted approach for ground-ing LLM reasoning (Wei et al., 2022; Wang et al., 2023) with external evidence from knowl-edge sources. In the biomedical domain, ques-tion answering (QA) both demands domain-specific knowledge that LLMs often lack and re-quires chain of causalities rather than independent facts (Barabási et al., 2011; Menche et al., 2015; Sung et al., 2021; Singhal et al., 2023). For in-stance, as shown in Figure 1B, explaining why Explicit 
+
+Implicit                 
+
+> ch synthetic glucocorticoid carried by ABCB1 , a gene associated with kinsonian-pyramidal syndrome ?
+> arkinsonian-pyramidal syndrome linked to handling of drugs he blood-brain barrier, which synthetic glucocorticoid is implicated?
+> Intermediate named
+> Intermediate paraphrased
+> insonian-pyramidal syndrome (disease ) — associated with →
+> ABCB1 (gene) —carrier →Fluticasone furoate (drug)
+
+omedical path 
+
+Bare      
+
+> ch synthetic glucocorticoid is linked to parkinsonian-pyramidal syndrome ?
+> Intermediate omitted
+> Parkinsonian neurodegenerative disorder is linked to a transporter that exports foreign compounds out of cells … active at the blood-brain barrier …
+
+Summary for Implicit query    
+
+> Obama Michelle Obama Chicago,IL wife hometown
+
+General-domain query 
+
+“What is the hometown of the wife of Obama ?”    
+
+> Metformin ?Type 2 Diabetes
+> ??
+
+Biomedical-domain query 
+
+“Which disease is treated with Metformin ?” 
+
+A
+
+Multiple valid biological pathways B  
+
+> Metformin Type 2 Diabetes Hepatic gluconeogenesis ↓
+> Complex 1 inhibition AMPK activation
+
+C
+
+Figure 1: Challenges of Biomedical KGQA and Mo-tivation of A DA PATH . (A) The general-domain query includes traversal relations directly through “ wife ” and “hometown ”, constructing the intermediate path, while the biomedical query leaves such cues out. (B) Several candidate intermediate paths exist for the biomedical query, as in the multiple mechanism chains from “ Met-formin ” to “ T2D ”, making it hard to identify the most relevant one. (C) A DA PATH sustains performance rela-tive to path-finding baselines on multi-hop biomedical queries with limited surface information. 
+
+metformin treats type-2 diabetes requires tracing a multi-step pathway from the drug through protein-level interactions to its downstream effect on gluco-neogenesis (Jin et al., 2021). Therefore, answering biomedical questions requires traversing multi-hop chains, necessitating the path-finding retrieval over biomedical knowledge graphs to ground LLM rea-soning on the causal pathways (Ogata et al., 1999; Milacic et al., 2024) biomedical QA demands. However, off-the-shelf path-finding meth-ods (Jiang et al., 2023; Li et al., 2024; Sun et al., 2024; Chen et al., 2024; Ma et al., 2025) de-signed for general-domain Knowledge Graph Ques-tion Answering (KGQA) (Wu et al., 2024; Bol-lacker et al., 2008; Vrandeˇ ci´ c and Krötzsch, 2014) struggle when applied to biomedical KGQA due to its characteristics: (i) Elusive guidance cues. 
+
+Compared to general-domain queries, biomedical queries tend to directly state a goal without ex-posing the intermediate steps needed to reach it, lacking the salient cues for path-finding. Specifi-cally, as shown in Figure 1A, while general queries explicitly expose the cues for answering such as the relations and topic entities, cues for biomedical queries are hidden and non-trivial, facing a diffi-culty to guide multi-hop traversal. Compounding the difficulty, multiple valid biological pathways can typically lead to the same answer (Figure 1B), making it more difficult to determine which cue is best suited to anchor traversal for any given query. 
+
+(ii) Dense KG topology. Existing path-finding methods (Sun et al., 2024; Ma et al., 2025) typi-cally perform Breadth-First Search (BFS) over the KG from the topic entity toward the answer en-tity. However, the complex interconnectivity of biological pathways makes biomedical KGs far denser than general-domain ones (Table 1), forcing them to examine a large number of candidate enti-ties. This complexity could mislead to follow high-degree biological hubs or weakly relevant connec-tions, leading to spurious paths that deviate from the biologically relevant reasoning chain. To address these issues, we propose ADA P-
+
+> ATH
+
+, a path-finding framework guided by query-adaptive meta-paths, explicitly supplying the inter-mediate cues that biomedical queries often leave implicit while enhancing the dense KG traversal via pruning. We first construct a Path-Bank , a repository of typed meta-paths mined from training queries. These meta-paths encode reusable inter-mediate cues that are often missing from biomedi-cal queries, while reflecting both query semantics and the structural connectivity of the biomedical KG. At inference time, A DA PATH adaptively re-trieves query-relevant meta-paths from Path-Bank and uses them as pruning guidance for candidate expansion in the dense biomedical KG. This en-ables to recover intermediate cues absent from the query while focusing traversal on biologically plau-sible directions. Consequently, A DA PATH avoids                   
+
+> Domain KG Node # Edge # Degree
+> General Amazon 1.04 M 9.44 M 18.2 MAG 1.87 M 39.80 M 43.5
+> Biomedicine Prime 129 K 8.10 M 125.2
+> Table 1: Statistics on Knowledge Graphs across dif-ferent domains. Degree is the average node degree
+> 2|E|/|V|, with each edge treated as undirected.
+
+the indiscriminate expansion of BFS while preserv-ing the flexibility to follow multiple valid reasoning pathways toward an answer (Figure 1C). On the other hand, evaluating biomedical path-finding requires controlled tests of whether a method can recover missing intermediate cues and remain reliable as reasoning depth increases. How-ever, existing biomedical KGQA evaluations do not explicitly disentangle hop depth from the amount of intermediate reasoning exposed in the query. We therefore release B IO STRAT -QA, a biomed-ical KGQA benchmark that stratifies multi-hop queries by surface exposure of intermediate rea-soning. It derives queries from shared reasoning chains and organizes them into explicit , implicit ,and bare levels, enabling systematic measurement of path-finding robustness as surface cues decrease and reasoning paths extend up to three hops. We experimentally validate A DA PATH on di-verse biomedical KGQAs including B IO STRAT -QA, STaRK-Prime, and MedDDx, and we observe that A DA PATH consistently outperforms baselines, including path-finding methods, across all three benchmarks, particularly on multi-hop queries with limited intermediate cues. Path-level analyses fur-ther show that A DA PATH retrieves paths that both align with ground-truth reasoning chains and sur-face semantically related alternatives, matching the dual challenge of implicit cues and multiple valid pathways in biomedical KGQA. We summarize our contribution as follows: • We introduce A DA PATH , a path-finding frame-work where meta-paths from a Path-Bank re-flect both query semantics and biomedical KG structure, supplying implicit cues and filtering dense KG neighborhoods. • We release B IO STRAT -QA, a biomedical KGQA benchmark designed to systematically measure path-finding ability under these chal-lenges, stratifying queries along explicit / im-plicit / bare levels of intermediate-information exposure and hop depths up to three. • A DA PATH consistently outperforms baselines on biomedical KGQA, with gains over path-finding baselines most pronounced on multi-hop, surface-implicit queries where dense KG topology most easily misleads path-finding. 
+
+2 Related Work 
+
+2.1 LLM Reasoning for Knowledge Graph Question Answering (KGQA) 
+
+Retrieval-augmented generation (Lewis et al., 2020) grounds LLM reasoning (Wang et al., 2023; Wei et al., 2022) by injecting external knowl-edge into the prompt, mitigating hallucination and stale parametric knowledge. For KGQA, fact-retrieval methods (Pan et al., 2024) typically ex-tract triples or short paths matching the query and inject them into the LLM prompt as evidence. Chain-of-Knowledge (Li et al., 2024) retrieves evi-dence chains across heterogeneous sources such as KGs, Wikipedia, and tables, injecting them into the prompt without exploiting explicit graph structure. KGARevion (Su et al., 2025) targets biomedical QA by having the LLM generate candidate triples, verifying them against the KG, and revising the chain when verification fails. 
+
+2.2 Path-Finding Methods for KGQA 
+
+Path-finding methods construct multi-hop reason-ing chains explicitly by traversing the KG hop by hop, providing the LLM with structured evidence paths rather than the local triples fact-retrieval methods return. StructGPT (Jiang et al., 2023) treats the KG as a structured store accessed through specialized query interfaces, expanding the single-hop neighborhood at each step and having the LLM filter the result. Think-on-Graph (ToG) (Sun et al., 2024) performs LLM-guided beam search over the KG, maintaining top-N reasoning paths at each hop. Think-on-Graph 2.0 (ToG-2) (Ma et al., 2025) hybridizes beam search with text-based retrieval and iterative refinement so that graph and con-text mutually refine each other. Plan-on-Graph (PoG) (Chen et al., 2024) decomposes the question into sub-objectives and self-corrects exploration via guidance, memory, and reflection. These meth-ods are designed for general-domain KGs, where per-hop neighborhoods are small and queries tend to surface their reasoning chains. However, they struggle to transfer to biomedical KGQA. 
+
+2.3 Biomedical KGQA Benchmarks 
+
+Biomedical KGQA evaluates whether retrieval-augmented systems can navigate biomedical re-lations on a knowledge graph and reach the correct answer entity, commonly used to benchmark do-main reasoning in clinical, pharmacological, and disease-mechanism settings. STaRK-Prime (Wu et al., 2024) provides a template-driven retrieval benchmark built over PrimeKG (Chandak et al., 2023), with questions mostly at shallow hop depths and reasonably explicit phrasing. MedDDx (Su et al., 2025) builds a differential-diagnosis variant on STaRK-Prime by adding semantically similar entities as distractors, ordered from Basic through Intermediate to Expert as distractor similarity to the gold answer increases. 
+
+3 Method 
+
+ADA PATH is a two-stage path-finding framework guided by query-adaptive meta-paths retrieved from a Path-Bank (Figure 2). In Section 3.1, we construct Path-Bank by mining meta-paths from training queries, which reflect both query seman-tics and biomedical KG structure. In Section 3.2, at the inference stage, A DA PATH adaptively retrieves query-relevant meta-paths from the constructed Path-Bank and uses them as pruning guidance for candidate expansion in the dense biomedical KG. Alongside the framework, in Section 3.3 we con-struct B IO STRAT -QA, a biomedical KGQA bench-mark for systematic evaluation of path-finding methods, with multi-hop queries derived from shared reasoning chains and stratified by surface exposure of intermediate reasoning. 
+
+3.1 Path-Bank Construction 
+
+To address the challenges (implicit-query and dense-KG) mentioned in Section 1, query-adaptive guidance is necessary for traversal at inference. ADA PATH provides this guidance as meta-paths retrieved from Path-Bank, mined offline from train-ing queries. To construct a rich and reliable pool of meta-paths from the dense biomedical KG, Path-Bank construction proceeds in three stages: (i) 
+
+Query-conditioned edge weighting, (ii) Bidirec-tional Personalized PageRank (PPR), and (iii) Hop-stratified meta-path registration. 
+
+Query-conditioned Edge Weighting. Path-Bank construction uses Personalized PageRank (PPR) (Jeh and Widom, 2003), a random walk over the KG that estimates each node’s structural Q3.Path     
+
+> Q2.Path
+> Q. A. Q. A. Q. A. Q. A. …
+> Train Queries
+> Q. Which blood disorder is associated with Odanacatib? A. Neutropenia
+> Query-conditioned Edge Weighting Bidirectional Personalized PageRank
+> Corridor Subgraph
+> Hop-stratified Meta-Path Registration
+> Forward PPR
+> Backward PPR
+> Q. What disease involving liver dysfunction is linked to Fluorescein? A. Talazoparib
+> Path Bank
+> drug
+> disease
+> gene
+> ➙associated
+> ➙transporter
+> ➙targeted
+> ➙synergistic
+> Q3.
+> Path Q2.
+> Path
+
+# 🔍      
+
+> Q1.Path
+> 1-hop 3-hop
+> 2-hop
+> ➙➙
+> ➙➙
+> Retrieved Meta-Path
+> : 2-hop!
+> LLM: Given the candidate pattern, how many hops are needed for reasoning the test query?
+
+# 🧠  
+
+> Query-adaptive Meta-Path Retrieval Meta-Path Guided BFS
+> 1-hop reasoning
+
+➙ ➙ ➙ ➙
+
+> Q1.Path
+> Q1.
+> Path
+
+🥇 
+
+🌟 
+
+💬 🤖 
+
+Bio KG                   
+
+> Dense Neighbors
+> LLM scorer
+> 2-hop reasoning
+> ➙➙
+> ➙➙➙
+> ➙
+> 1-hop 3-hop
+> …
+> ➙➙
+> ➙➙
+> 2-hop ➙
+> Entity Pruning Entity Pruning
+> Fluorescein ➙[transporter] ➙ABCB11 ➙[associated with] ➙Talazoparib Retrieved triplets: Answer: Based on the retrieved triplets, … , the answer is {Talazoparib}.
+> Test Query Reasoning
+> 𝑤 𝑢, 𝑟, 𝑣 = sim(𝒒|𝑢, 𝑟, 𝑣)
+> 𝑢 𝑣 𝑟 𝑣 𝑣 𝜋 !(𝑣)
+> 𝜋 !(𝑣) 𝑝 𝑣 = 𝜋 !𝑣 0 𝜋 "(𝑣)
+> 𝑣 #$%
+> 𝑣 &'(
+> K-cost-minimal Paths
+> 𝑣 #$%
+> 𝑣 &'(
+> Path Bank
+> 𝐶 𝑃 =𝑔(𝑝 0 , 𝑤 0 )
+> Corridor Score
+
+(A) (B) 
+
+> Test Query
+> LLM scorer
+
+Figure 2: ADA PATH Overview. (A) Path-Bank Construction (Section 3.1). We construct a Path-Bank , a repository of meta-paths mined from training queries. These meta-paths encode reusable intermediate cues and reflect both query semantics and the structural connectivity of the biomedical KG. (B) Query-Adaptive Meta-Path Guided Path-Finding (Section 3.2). At inference, A DA PATH adaptively retrieves test-query-relevant meta-paths from Path-Bank and uses them as pruning guidance for candidate expansion in the dense biomedical KG. 
+
+proximity to designated seeds. To mine paths that reflect query semantics in addition to KG structure, we weight each edge by how strongly its endpoints and relation align with the train query q, combining the three similarities into a single weight wu,r,v for the edge connecting u to v through relation r:
+
+wu,r,v = β sim( q, r )+ 1−β
+
+2
+
+sim( q, u ) + sim( q, v ). (1) 
+
+sim is a per-query normalized BM25 (Lin et al., 2022) similarity to biomedical KG’s node and rela-tion descriptions, and β ∈ [0 , 1] trades off relation against endpoint terms. 
+
+Bidirectional Personalized PageRank. To se-lect nodes that can form routes between topic and answer entity for each training query, we run for-ward and backward PPR walks seeded at the two entities, both biased by the query-conditioned edge weights wu,r,v . Let M be the transition matrix obtained by normalizing wu,r,v over each node’s outgoing edges, η the teleport probability, and 
+
+stop , s ans the one-hot seed indicators at the topic and answer entities. The forward and backward stationary distributions πf and πb satisfy 
+
+πf = (1 − η) M π f + η s top , (2) 
+
+πb = (1 − η) M π b + η s ans . (3) The element-wise product of πf and πb yields a 
+
+corridor score 
+
+ρ(v) = πf (v) · πb(v). (4) The top-K nodes by corridor score form the query-specific corridor subgraph , semantically aligned with the query and structurally central to both topic and answer entities. 
+
+Hop-stratified Path-Bank Registration. To en-rich each training query’s Path-Bank entry with meta-paths across multiple hops, we extract the top-
+
+n cost-minimizing paths from the topic entity vtop 
+
+to the answer entity vans within the corridor sub-graph using Yen’s k-shortest-paths algorithm (Yen, 1971). The path cost 
+
+c(P ) = X
+
+(u,r,v )∈P
+
+α w u,r,v + (1 − α) ¯ ρ(u, v )−1,
+
+(5) decreases in both the query-conditioned edge weight wu,r,v from Eq. 1 and the average endpoint corridor score ¯ρ(u, v ) = 12 (ρ(u) + ρ(v)) , with 
+
+α ∈ [0 , 1] trading off the two. We convert each extracted path to its meta-path and bin it by hop length as the Path-Bank entry for q.Explicit                         
+
+> Implicit
+> Which synthetic glucocorticoid carried by ABCB1 , a gene associated with parkinsonian-pyramidal syndrome ?In parkinsonian-pyramidal syndrome linked to handling of drugs at the blood-brain barrier, which synthetic glucocorticoid is implicated?
+> Intermediate named
+> Intermediate paraphrased
+> Parkinsonian-pyramidal syndrome (disease ) — associated with →
+> ABCB1 (gene) —carrier →Fluticasone furoate (drug)
+> Biomedical path
+> Bare
+> Which synthetic glucocorticoid is linked to parkinsonian-pyramidal syndrome ?
+> Intermediate omitted
+> Parkinsonian neurodegenerative disorder is linked to a transporter that
+> exports foreign compounds out of cells … active at the blood-brain barrier …
+> Summary for Implicit query
+
+Figure 3: BIO STRAT -QA Query Stratification. Three queries are generated from one reference path, differ-ing in how much intermediate information reaches the surface: named ( Explicit ), summarized without naming (Implicit ), or omitted ( Bare ). 
+
+3.2 Query-Adaptive Meta-Path Guided Path-Finding 
+
+For each test query qtest , it retrieves from Path-Bank a query-adaptive set of meta-paths and uses them to guide BFS over the biomedical knowledge graph (bioKG) from qtest ’s topic entity. The retrieved meta-paths, drawn from training queries similar to qtest , supply the intermediate cues qtest leaves implicit on its surface. Restricting BFS expansion to the matched relation-type transitions filters the dense biomedical KG to directions suitable for qtest .
+
+Path-Bank Retrieval. We retrieve qtest -adaptive meta-paths from Path-Bank in two steps: candidate query ranking, then meta-path filtering. With qtest ’s topic entity linked to a bioKG node, we restrict candidates to training queries with the same topic entity type and rank each qi by 
+
+sim( q, q i) = λ esSBERT (q, q i)+(1 −λ) esBM25 (q, q i),
+
+(6) where esSBERT and esBM25 are per-test-query min-max normalized sentence-embedding (Reimers and Gurevych, 2019) and BM25 (Lin et al., 2022) simi-larities, and λ ∈ [0 , 1] trades off the two. From the meta-paths of the top-k ranked training queries, we retain those consistent with an LLM-inferred an-swer type and hop length, and realizable as walks from vtop on bioKG. 
+
+Meta-Path Guided BFS. Guided by the re-trieved meta-paths, A DA PATH performs BFS over bioKG from the topic entity vtop , retrieving candi-date paths for qtest . At each hop, A DA PATH keeps only neighbors whose incoming relation and node type match a retrieved meta-path, mitigating the wrong-turn risk BFS faces at densely connected hubs. The surviving candidates are further nar-rowed by sentence-BERT similarity to qtest , and the next-hop frontier is selected by LLM scoring under a depth-specific sub-query. When the final hop is reached, the assembled paths are passed to the LLM with qtest to ground its final answer. 
+
+3.3 BIO STRAT -QA Construction 
+
+We also construct B IO STRAT -QA to systematically evaluate path-finding when biomedical queries leave intermediate reasoning implicit, stratifying multi-hop queries by how much of it surfaces. Built atop PrimeKG (Chandak et al., 2023), B IO STRAT -QA extends STaRK-Prime (Wu et al., 2024)’s 2-hop query templates with additional single-hop and 3-hop templates, retaining only those with suffi-cient grounding in PrimeKG. Full templates and synthesis prompts appear in Appendix A. 
+
+Stratification by intermediate-information level. 
+
+For each reference path, we synthesize three par-allel queries using GPT-5.4 (OpenAI, 2026) at dis-tinct levels of intermediate-information exposure: 
+
+Explicit , Implicit , and Bare . All three share the path’s topic and answer entities, differing only in surface exposure of intermediate reasoning. Ex-plicit names every intermediate entity and relation along the path. Implicit replaces intermediate enti-ties with paraphrased descriptions preserving the underlying mechanism, using a pathway summary for multi-hop paths. Bare retains only the topic entity and the answer type, stripping all interme-diate cues. For 1-hop paths with no intermediate node, the three levels collapse to differences in how directly the answer-bearing relation is named, with 
+
+Bare omitting the relation entirely. Figure 3 shows a 2-hop example on a disease → gene → drug path. 
+
+4 Experiments 
+
+4.1 Datasets 
+
+We evaluate on three biomedical KGQA datasets. 
+
+BIO STRAT -QA , introduced in Section 3.3, strat-ifies multi-hop queries into explicit, implicit, and bare information levels, enabling fine-grained evaluation of path-finding across query difficulty. 
+
+STaRK-Prime (Wu et al., 2024) contributes Category Method Explicit Implicit Bare Overall                                                                                                                                                                                                                                                                                  
+
+> 1-hop 2-hop 3-hop Avg 1-hop 2-hop 3-hop Avg 1-hop 2-hop 3-hop Avg
+> Llama-3.1-70B
+> LLM only
+> IO 45.8 35.8 34.1 39.2 41.6 39.4 35.5 39.5 42.3 33.3 33.6 36.7 38.5 CoT 46.2 36.4 32.7 39.4 40.0 40.0 32.7 38.7 41.4 32.8 31.8 35.8 37.9 SC 43.5 35.6 33.6 38.2 38.7 37.9 37.8 38.2 43.0 32.6 30.9 36.1 37.5
+> Fact-retrieval CoK 49.2 38.5 31.8 41.2 44.2 39.8 40.6 41.6 45.3 36.4 38.2 40.0 41.0 KGARevion 30.7 27.6 34.1 30.0 30.7 31.2 36.4 32.0 30.4 21.7 33.2 27.0 29.7
+> Path-finding
+> StructGPT 42.6 21.1 36.9 32.0 36.6 26.3 33.6 31.5 33.6 17.5 40.1 27.6 30.4 ToG 55.8 37.1 32.7 43.2 49.4 38.1 38.2 42.3 43.7 28.0 31.8 34.5 40.0 ToG-2 66.6 19.8 16.1 36.5 62.0 22.7 16.6 36.1 60.9 18.3 12.0 32.9 35.2 PoG 82.8 25.0 15.7 44.7 77.3 25.3 17.1 43.1 62.9 12.4 16.1 31.8 39.9
+> AdaPath 87.9 61.3 62.2 71.3 83.1 62.5 53.9 68.5 69.8 50.5 44.2 56.5 65.5
+> Qwen-2.5-72B
+> LLM only
+> IO 41.6 29.5 27.6 33.6 39.4 34.3 30.9 35.6 43.0 32.2 35.5 36.8 35.3 CoT 39.4 31.6 30.4 34.3 35.5 35.4 36.4 35.6 37.8 30.5 37.8 34.6 34.8 SC 41.0 32.6 32.7 35.7 34.3 36.2 38.2 35.9 38.9 30.3 36.4 34.6 35.4
+> Fact-retrieval CoK 47.6 33.9 33.2 38.9 40.0 36.8 35.0 37.7 44.4 30.5 37.8 37.0 37.8 KGARevion 25.4 18.7 33.2 23.9 23.3 22.7 35.0 25.2 21.7 17.9 27.6 21.1 23.4
+> Path-finding
+> StructGPT 58.1 18.9 34.1 36.2 52.6 20.6 35.5 35.2 36.6 9.7 22.6 22.0 31.2 ToG 55.6 31.4 30.4 40.2 51.9 34.7 34.6 41.1 48.3 27.4 32.3 36.1 39.1 ToG-2 70.9 27.8 30.0 44.2 65.9 27.4 17.5 39.9 58.8 22.5 22.1 35.9 40.0 PoG 76.0 29.9 24.9 46.1 72.1 32.8 30.4 46.9 59.7 9.7 10.1 28.3 40.4
+> AdaPath 84.9 58.3 53.9 67.4 83.3 59.2 44.7 65.5 71.9 44.8 41.0 54.1 62.3
+
+Table 2: Main results on B IO STRAT -QA. Exact-match (%) per (information-level, hop-depth) cell; Overall 
+
+averages all nine cells. Per-column best is bold and second-best is underlined (ties share rank). Small-backbone (Llama-3.1-8B, Qwen-2.5-7B) results are in Appendix B. 
+
+two splits: a Synthesized split of 2,801 LLM-synthesised template-based queries, and a Human-generated split of 98 naturally phrased, human-written queries with manually verified answers. 
+
+MedDDx (Su et al., 2025) contributes 1,769 multi-choice differential-diagnosis queries built from STaRK-Prime by adding semantically similar dis-tractors, with Basic , Intermediate , and Expert bins ordered by increasing distractor similarity to the gold answer. For STaRK-Prime and MedDDx, we extract topic entities from each query during prepro-cessing to serve as starting nodes for path-finding methods (Appendix C). 
+
+4.2 Baselines 
+
+We compare against three baseline categories. 
+
+LLM-only baselines establish a floor without any KG, including IO (direct prompting), Chain-of-Thought (CoT) (Wei et al., 2022), and Self-Consistency (SC) (Wang et al., 2023). Fact-level retrieval methods consult the KG without travers-ing it, including CoK (Li et al., 2024) and KGARe-vion (Su et al., 2025). Path-finding methods , our most direct comparison, traverse the KG hop by hop. We compare with StructGPT (Jiang et al., 2023), Plan-on-Graph (PoG) (Chen et al., 2024), Think-on-Graph (ToG) (Sun et al., 2024), and Think-on-Graph 2.0 (ToG-2) (Ma et al., 2025). For ToG-2, we used semi-structured KG node descrip-tions as the per-node text source. 
+
+4.3 Experimental Settings 
+
+We evaluate A DA PATH and all baselines using two families of open-weight LLMs, Llama-3.1-Instruct (Grattafiori et al., 2024) and Qwen-2.5-Instruct (Yang et al., 2024). We use the bioKG from STaRK-Prime (Wu et al., 2024), PrimeKG aug-mented with per-node textual descriptions. Path-finding baselines share the same topic-entity links, bioKG, backbone, and three-hop search limit. We report exact match (EM) on B IO STRAT -QA and STaRK-Prime, and accuracy over four candidate an-swers for each multiple-choice query on MedDDx. Metric details and A DA PATH hyperparameters are in Appendices D and J. 
+
+4.4 Results 
+
+As shown in Table 2, we evaluate A DA PATH and the baselines on B IO STRAT -QA across query in-formation levels and hop depths. A DA PATH con-sistently outperforms all retrieval and path-finding baselines across every information level and hop Method STaRK-Prime MedDDx                                                                                                                              
+
+> Synthesized Human-generated Basic Inter. Expert All
+> Llama-3.1-70B
+> IO 18.6 20.4 44.5 39.2 41.6 40.6 CoT 16.6 21.4 50.2 40.3 40.0 41.6 SC 16.7 21.4 56.3 42.5 45.3 45.2 CoK 18.2 17.3 51.4 44.1 46.8 45.8 KGARevion 18.9 18.4 56.3 44.1 47.4 46.7 StructGPT 37.6 30.6 56.3 48.3 45.1 48.6 ToG 32.1 22.4 60.4 48.3 47.6 49.8 ToG-2 33.5 34.7 37.1 34.4 30.9 33.8 PoG 41.4 40.8 55.5 47.0 43.9 47.3
+> AdaPath 46.9 43.9 65.3 55.1 52.4 55.8
+> Qwen-2.5-72B
+> IO 16.1 17.3 40.4 39.4 35.4 38.4 CoT 14.1 16.3 50.2 40.2 38.7 41.2 SC 15.0 18.4 50.2 41.0 40.0 42.0 CoK 14.9 15.3 44.9 41.6 39.5 41.5 KGARevion 16.0 15.3 53.5 41.9 39.3 42.8 StructGPT 32.6 30.6 58.8 50.0 42.4 49.2 ToG 32.0 25.5 54.3 48.8 43.5 48.1 ToG-2 31.9 35.7 39.6 36.1 32.3 35.6 PoG 33.5 30.6 44.9 42.7 41.0 42.6
+> AdaPath 46.7 39.8 62.0 54.5 51.8 54.8
+
+Table 3: Results on STaRK-Prime and MedDDx. Per-formance comparison across different methods. Best re-sults are bolded , and second-best results are underlined. 
+
+depth. Path-finding baselines, in particular, degrade sharply on multi-hop queries with low surface infor-mation. Lacking surface cues and confronting the dense biomedical KG, they accumulate wrong turns hop by hop, with several multi-hop bare cells even falling below the LLM-only floor. Even on implicit 
+
+and bare queries where surface cues are scarce or absent, A DA PATH sustains robust and consis-tently high performance through Path-Bank meta-paths mined per-query from both query semantics and KG structure. A DA PATH also outperforms all baselines on the external datasets STaRK-Prime and MedDDx (Table 3), generalizing across syn-thesized and human-generated queries on STaRK-Prime and maintaining robustness across difficulty levels on MedDDx. We further evaluate A DA PATH 
+
+on the smaller Llama-3.1-8B and Qwen-2.5-7B backbones, where it retains the same trend and leads all baselines (Appendix B). 
+
+4.5 Path-level Analysis of A DA PATH 
+
+To further analyze whether retrieved paths are quantitatively and qualitatively related to solving biomedical queries, we assess whether the paths retrieved during traversal support answering the query (Table 4). For each test query and at each reasoning depth, Recall measures how much of the reference biomedical path is recovered in the retrieved set through exact triplet match. Addi-tionally, given that multiple valid biological path-ways typically lead to the same answer for any given biomedical query, we further measure Con-text Relevance (CR) (Xiang et al., 2026). Scored by GPT-4o-mini (OpenAI, 2024) as an LLM judge, 
+
+Context Relevance assesses whether the retrieved paths as a whole form a biomedical mechanism semantically aligned with both the query and the reference path, capturing whether the path-finding genuinely contributes to solving the query. A DA -PATH outperforms other path-finding methods on both Recall and Context Relevance across all con-ditions, including queries with limited surface cues. The retrieved meta-paths from Path-Bank, seman-tically and structurally aligned with the test query, lead A DA PATH to retrieve paths that remain seman-tically connected to the query’s reasoning. These meta-paths also remain traversable from the topic entity to the answer at a meaningful rate even after exact ground-truth matches are excluded, surfac-ing valid alternative schemas rather than a single reference path (Appendix F). 
+
+4.6 Depth-level Analysis of A DA PATH 
+
+While the previous analysis examined path-level recovery, we also measure depth-level traversal accuracy on 3-hop queries by tracking whether each method reaches the correct entity at each rea-soning depth in Figure 4. ADA PATH shows the highest hit rate at every depth across all query types in the dense biomedical KG, while other path-finding baselines, such as PoG and ToG-2, reach reasonable entities at the first hop but drop sharply at deeper depths. The robustness across depths explains A DA PATH ’s strong performance on multi-hop biomedical QA across all query types. On 2-hop queries, we observe a similar pattern, with A DA PATH again sustaining the highest hit rate at later depths across all query types (Ap-pendix E). We also conduct case studies to demon-strate the strength of A DA PATH compared to base-lines in multi-hop path-finding for implicit and bare 
+
+biomedical queries (Appendix O). 
+
+4.7 Ablation Study on A DA PATH 
+
+To isolate the effect of query-adaptive meta-path guidance from Path-Bank, we compare A DA PATH 
+
+against two ablations on B IO STRAT -QA along two axes, hop depth and query type (Figure 5). The w/o Llama-3.1-70B Qwen-2.5-72B Explicit Implicit Bare Explicit Implicit Bare Method Recall CR Recall CR Recall CR Recall CR Recall CR Recall CR StructGPT 19.53 13.99 16.22 12.00 11.25 8.74 38.44 25.81 29.97 20.14 18.82 12.99 ToG 19.35 16.62 16.98 15.95 12.19 15.31 21.59 19.42 18.95 19.47 12.19 16.71 ToG-2 33.11 37.45 29.39 38.30 17.52 32.57 42.03 44.19 32.21 40.29 18.55 33.21 PoG 46.15 38.55 38.04 32.91 26.79 26.27 43.95 38.01 38.40 33.59 29.17 28.09 
+
+AdaPath 55.82 50.17 48.79 48.39 33.47 41.18 56.05 50.76 48.34 47.63 33.83 41.01 
+
+Table 4: Path-level Analysis on A DA PATH . We report Recall (%) and Context Relevance (CR, %) by query type and backbone, averaged across all hop depths. Per-column best bolded , second-best underlined. depth 0 depth 1 depth 2            
+
+> 020 40 60 80
+> Hit rate (%)
+> (topic entity) (answer entity)
+> Explicit
+> depth 0 depth 1 depth 2
+> 020 40 60 80
+> (topic entity) (answer entity)
+> Implicit
+> depth 0 depth 1 depth 2
+> 020 40 60 80
+> (topic entity) (answer entity)
+> Bare
+> StructGPT ToG ToG-2 PoG AdaPath
+
+Figure 4: Depth-level Analysis on A DA PATH . We report hit rate on 3-hop B IO STRAT -QA queries. Explicit ( left ) / Implicit ( middle ) / Bare ( right ) panels plot the fraction of queries whose explored entity set contains the reference 
+
+d-th node along the evidence path. Values shown are extracted for Llama-3.1-70B. A DA PATH sustains its hit rate at later depths while baselines drop sharply. 1-hop 2-hop 3-hop      
+
+> 020 40 60 80 100
+> EM (%)
+> Hop-wise
+> Explicit Implicit Bare
+> 020 40 60 80 100 Query type-wise
+> AdaPath w/o Path-Bank w/o meta-path
+
+Figure 5: Path-Bank ablation across hop depth and query type. EM (%) averaged across Llama-3.1-70B and Qwen-2.5-72B. Hop-wise ( left ), averaged over query types. Query type-wise ( right ), sample-size weighted average across hop depths. w/o Path-Bank 
+
+uses LLM-generated meta-path as guidance instead of using pre-defined Path-Bank; w/o meta-path routes ev-ery query through free BFS with no Path-Bank guidance at all. The results indicate the effectiveness of Path-Bank’s query-adaptive meta-path during path-finding. 
+
+Path-Bank variant replaces the pre-defined Path-Bank with LLM-generated meta-paths, where the LLM plans node- and relation-level chains at infer-ence time for each test query, isolating the effect of Path-Bank’s offline mining. The w/o meta-path 
+
+variant removes meta-path guidance entirely. Both ablations fall below A DA PATH , and the gap widens as queries span more hops. By query type, A DA -PATH outperforms both ablations across all types, and w/o Path-Bank underperforms w/o meta-path 
+
+on bare queries where the LLM lacks sufficient surface cues to plan useful meta-paths, validating the quality of Path-Bank’s query-adaptive meta-path selection. We further provide detailed ablation results in Appendix Tables 15 and 16. 
+
+5 Conclusion 
+
+To address challenges in biomedical KGQA, we present ADA PATH , a path-finding framework guided by query-adaptive meta-paths from a Path-Bank reflecting both query semantics and KG structure. We further release B IO STRAT -QA, a biomedical KGQA benchmark stratifying multi-hop queries by surface exposure of intermediate reasoning. ADA PATH consistently outperforms baselines. Path- and depth-level analyses confirm that this advantage originates in the path-finding stage, where A DA PATH retrieves paths quantita-tively and qualitatively optimized for each query. 
+
+Limitations 
+
+ADA PATH relies on LLM scoring to select the next-hop frontier after query-adaptive meta-path filter-ing, so weaker backbones produce noisier per-hop decisions that propagate across hops and degrade longer reasoning chains. Meta-path filtering also depends on LLM-inferred hop length and answer type, and queries without a matching meta-path fall back to unguided traversal. The reachable answer space of A DA PATH is bounded by what the underlying graph encodes, leaving queries that hinge on absent node or relation types, such as re-cently approved drugs or newly characterised mech-anisms, difficult to answer through path-finding alone. Our benchmarks share a common synthetic construction procedure, and validation on indepen-dently collected biomedical QA remains future work. The mechanistically grounded paths A DA -PATH presents may also invite over-trust, and its answers should not substitute for expert judgment. 
+
+Acknowledgments 
+
+This work was supported by Institute for Informa-tion & communications Technology Planning & Evaluation (IITP) grant funded by the Korea gov-ernment (MSIT) (RS-2019-II190075, Artificial In-telligence Graduate School Program (KAIST)), Na-tional Research Foundation of Korea (NRF) grant funded by the Korea government (MSIT) (No. RS-2023-00256259), a grant of the Korea Machine Learning Ledger Orchestration for Drug Discov-ery Project (K-MELLODDY), funded by the Min-istry of Health & Welfare and Ministry of Science and ICT, Republic of Korea (grant number: RS-2024-00460870), the “Advanced GPU Utilization Support Program” funded by the Government of the Republic of Korea (Ministry of Science and ICT), and the InnoCORE program of the Ministry of Science and ICT (MSIT) (N10250153). 
+
+References 
+
+Anthropic. 2025. System card: Claude Haiku 4.5. http s://www.anthropic.com/claude-haiku-4-5-s ystem-card . Accessed: 2026-08-30. Albert-László Barabási, Natali Gulbahce, and Joseph Loscalzo. 2011. Network medicine: a network-based approach to human disease. Nature reviews genetics ,12(1):56–68. Kurt Bollacker, Colin Evans, Praveen Paritosh, Tim Sturge, and Jamie Taylor. 2008. Freebase: a collabo-ratively created graph database for structuring human knowledge. In Proceedings of the 2008 ACM SIG-MOD international conference on Management of data , pages 1247–1250. Payal Chandak, Kexin Huang, and Marinka Zitnik. 2023. Building a knowledge graph to enable pre-cision medicine. Scientific data , 10(1):67. Liyi Chen, Panrong Tong, Zhongming Jin, Ying Sun, Jieping Ye, and Hui Xiong. 2024. Plan-on-graph: Self-correcting adaptive planning of large language model on knowledge graphs. Advances in Neural Information Processing Systems , 37:37665–37691. Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, and 1 others. 2024. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 .Daniel Scott Himmelstein, Antoine Lizee, Christine Hessler, Leo Brueggeman, Sabrina L Chen, Dexter Hadley, Ari Green, Pouya Khankhanian, and Ser-gio E Baranzini. 2017. Systematic integration of biomedical knowledge prioritizes drugs for repurpos-ing. eLife , 6:e26726. Glen Jeh and Jennifer Widom. 2003. Scaling person-alized web search. In Proceedings of the 12th in-ternational conference on World Wide Web , pages 271–279. Jinhao Jiang, Kun Zhou, Zican Dong, Keming Ye, Xin Zhao, and Ji-Rong Wen. 2023. Structgpt: A gen-eral framework for large language model to reason over structured data. In Proceedings of the 2023 con-ference on empirical methods in natural language processing , pages 9237–9251. Di Jin, Eileen Pan, Nassim Oufattole, Wei-Hung Weng, Hanyi Fang, and Peter Szolovits. 2021. What disease does this patient have? a large-scale open domain question answering dataset from medical exams. Ap-plied Sciences , 11(14):6421. Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Hein-rich Küttler, Mike Lewis, Wen-tau Yih, Tim Rock-täschel, and 1 others. 2020. Retrieval-augmented gen-eration for knowledge-intensive nlp tasks. Advances in neural information processing systems , 33:9459– 9474. Xingxuan Li, Ruochen Zhao, Yew Ken Chia, Bosheng Ding, Shafiq Joty, Soujanya Poria, and Lidong Bing. 2024. Chain-of-knowledge: Grounding large lan-guage models via dynamic knowledge adapting over heterogeneous sources. In International Conference on Learning Representations , volume 2024, pages 9565–9587. Jimmy Lin, Rodrigo Nogueira, and Andrew Yates. 2022. 
+
+Pretrained transformers for text ranking: Bert and beyond . Springer Nature. Shengjie Ma, Chengjin Xu, Xuhui Jiang, Muzhi Li, Huaren Qu, Cehao Yang, Jiaxin Mao, and Jian Guo. 2025. Think-on-graph 2.0: Deep and faithful large language model reasoning with knowledge-guided retrieval augmented generation. In International Con-ference on Learning Representations , volume 2025, pages 52782–52806. Jörg Menche, Amitabh Sharma, Maksim Kitsak, Su-san Dina Ghiassian, Marc Vidal, Joseph Loscalzo, and Albert-László Barabási. 2015. Uncovering disease-disease relationships through the incomplete interactome. Science , 347(6224):1257601. Marija Milacic, Deidre Beavers, Patrick Conley, Chuqiao Gong, Marc Gillespie, Johannes Griss, Robin Haw, Bijay Jassal, Lisa Matthews, Bruce May, and 1 others. 2024. The reactome path-way knowledgebase 2024. Nucleic acids research ,52(D1):D672–D678. Hiroyuki Ogata, Susumu Goto, Kazushige Sato, Wataru Fujibuchi, Hidemasa Bono, and Minoru Kanehisa. 1999. Kegg: Kyoto encyclopedia of genes and genomes. Nucleic acids research , 27(1):29–34. OpenAI. 2024. GPT-4o mini: Advancing cost-efficient intelligence. https://openai.com/index/gpt-4 o-mini-advancing-cost-efficient-intellige nce/ . Accessed: 2026-08-30. OpenAI. 2026. GPT-5.4 thinking system card. https: //openai.com/index/gpt-5-4-thinking-syste m-card/ . Accessed: 2026-08-30. Shirui Pan, Linhao Luo, Yufei Wang, Chen Chen, Ji-apu Wang, and Xindong Wu. 2024. Unifying large language models and knowledge graphs: A roadmap. 
+
+IEEE Transactions on Knowledge and Data Engi-neering , 36(7):3580–3599. Nils Reimers and Iryna Gurevych. 2019. Sentence-bert: Sentence embeddings using siamese bert-networks. In Proceedings of the 2019 conference on empirical methods in natural language processing and the 9th international joint conference on natural language processing (EMNLP-IJCNLP) , pages 3982–3992. Karan Singhal, Shekoofeh Azizi, Tao Tu, S Sara Mah-davi, Jason Wei, Hyung Won Chung, Nathan Scales, Ajay Tanwani, Heather Cole-Lewis, Stephen Pfohl, and 1 others. 2023. Large language models encode clinical knowledge. Nature , 620(7972):172–180. Xiaorui Su, Yibo Wang, Shanghua Gao, Xiaolong Liu, Valentina Giunchiglia, Djork-Arné Clevert, and Marinka Zitnik. 2025. Kgarevion: an ai agent for knowledge-intensive biomedical qa. In International Conference on Learning Representations , volume 2025, pages 40572–40599. Jiashuo Sun, Chengjin Xu, Lumingyuan Tang, Saizhuo Wang, Chen Lin, Yeyun Gong, Lionel Ni, Heung-Yeung Shum, and Jian Guo. 2024. Think-on-graph: Deep and responsible reasoning of large language model on knowledge graph. In International Con-ference on Learning Representations , volume 2024, pages 3868–3898. Mujeen Sung, Jinhyuk Lee, Sean Yi, Minji Jeon, Sung-dong Kim, and Jaewoo Kang. 2021. Can language models be biomedical knowledge bases? In Proceed-ings of the 2021 Conference on Empirical Methods in Natural Language Processing , pages 4723–4734. Denny Vrandeˇ ci´ c and Markus Krötzsch. 2014. Wiki-data: a free collaborative knowledgebase. Communi-cations of the ACM , 57(10):78–85. Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc V Le, Ed H Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. 2023. Self-consistency improves chain of thought reasoning in language models. In 
+
+The Eleventh International Conference on Learning Representations .Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, and 1 others. 2022. Chain-of-thought prompting elic-its reasoning in large language models. Advances in neural information processing systems , 35:24824– 24837. Shirley Wu, Shiyu Zhao, Michihiro Yasunaga, Kexin Huang, Kaidi Cao, Qian Huang, Vassilis N Ioanni-dis, Karthik Subbian, James Zou, and Jure Leskovec. 2024. Stark: Benchmarking llm retrieval on textual and relational knowledge bases. Advances in Neural Information Processing Systems , 37:127129–127153. Zhishang Xiang, Chuanjie Wu, Qinggang Zhang, Shengyuan Chen, Zijin Hong, Xiao Huang, and Jin-song Su. 2026. When to use graphs in rag: A com-prehensive analysis for graph retrieval-augmented generation. In International Conference on Learning Representations , volume 2026, pages 66145–66178. An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li, Day-iheng Liu, Fei Huang, Haoran Wei, and 1 others. 2024. Qwen2.5 technical report. arXiv preprint arXiv:2412.15115 .Jin Y Yen. 1971. Finding the k shortest loopless paths in a network. management Science , 17(11):712–716. Appendix A BIO STRAT -QA Dataset Details 
+
+This section details the construction of B IO STRAT -QA, covering the split-wise statistics, the metapath template inventory, and the verbatim prompts used to generate the EXPLICIT , IMPLICIT , and BARE 
+
+queries from a single evidence path. 
+
+A.1 Dataset Statistics 
+
+BIO STRAT -QA contains 4,568 queries split into train, dev, and test with a roughly 5:2:3 ratio, jointly covering 1-, 2-, and 3-hop biomedical reasoning over PrimeKG (Table 5). Each record carries the same topic and answer entities under three query formulations, so per-record difficulty is controlled by information level rather than by a change of topic or answer.                     
+
+> Split Total 1-hop 2-hop 3-hop
+> train 2,491 922 1,119 450 dev 898 331 404 163 test 1,179 437 525 217 Total 4,568 1,690 2,048 830
+
+Table 5: BIO STRAT -QA size by split and hop depth. 
+
+Each record carries three query formulations, explicit, implicit, and bare, over the same evidence path. 
+
+A.2 Metapath Templates 
+
+The template inventory takes the STaRK-Prime (Wu et al., 2024) templates as its core and extends them so that B IO STRAT -QA covers reason-ing paths up to three hops. Queries are generated from 60 hand-crafted metapath templates over PrimeKG, consisting of 18 one-hop, 30 two-hop, and 12 three-hop patterns. Most templates are single-topic chains. A subset encodes a junction pattern where two named entities meet at a shared intermediate or answer node. Tables 6, 7, and 8 list every template. 
+
+A.3 Query Generation Prompts 
+
+Given an evidence path, three queries are generated through separate GPT-5.4 batch calls, one per in-formation level, so that no information leaks across formulations of the same path. The IMPLICIT level additionally takes a precomputed pathway sum-mary that paraphrases intermediate node and rela-tion descriptions without naming any intermediate or answer entity. The verbatim prompts are listed below.                                                             
+
+> ID Metapath
+> 1h-01 drug →[indication] →disease 1h-02 drug →[side effect] →effect/phenotype 1h-03 drug →[target] →gene/protein 1h-04 disease →[associated with] →gene/protein 1h-05 disease →[phenotype present] →effect/phenotype 1h-06 gene/protein →[expression present] →anatomy 1h-07 drug →[contraindication] →disease 1h-08 gene/protein →[ppi] →gene/protein 1h-09 drug →[enzyme] →gene/protein 1h-10 effect/phenotype →[associated with] →gene/protein 1h-11 effect/phenotype →[phenotype absent] →disease 1h-12 drug →[contraindication] →disease ←[associated with] ←gene/protein †
+> 1h-13 anatomy →[expression present] →gene/protein
+> ←[expression absent] ←anatomy †
+> 1h-15 drug →[carrier] →gene/protein ←[carrier] ←drug †
+> 1h-16 drug →[off-label use] →disease 1h-17 exposure →[linked to] →disease 1h-18 drug →[transporter] →gene/protein 1h-19 gene/protein →[interacts with] →biological_process
+
+Table 6: 1-hop metapath templates. † marks a 2-topic junction template. 
+
+Pathway summary (used as input to IMPLICIT 
+
+for 2- and 3-hop paths).                                       
+
+> System prompt
+> You are a biomedical knowledge expert. You are given abiomedical pathway from aknowledge graph with node names, descriptions, and relations. Your task: Summarize the biomedical pathway in 2-4 sentences. Rules: -In your summary, do NOT directly use the names of intermediate nodes or the answer node. Paraphrase them based on the provided descriptions. -The summary should read as anatural biomedical explanation of how the topic entity relates to an entity of the answer type.
+
+The user message provides the topic entity with its name and type, each hop in the form source name , relation , target description , and the type of the target entity without its name. For 1-hop paths this step is skipped and a hand-written relation-level description is used directly. 
+
+Explicit query. The model sees the full path with intermediate names and relation labels, and is told not to reveal the answer entity name.      
+
+> System prompt
+> You are a biomedical expert. Generate a natural biomedical question based on the provided evidence path. Rules:
+
+ID Metapath 
+
+2h-01 anatomy →[expression present] → gene/protein →[target] → drug 2h-02 drug →[side effect] → effect/phenotype →[side effect] → drug 2h-03 drug →[carrier] → gene/protein →[carrier] → drug 2h-04 anatomy →[expression present] → gene/protein →[enzyme] → drug 2h-05 cellular_component →[interacts with] → gene/protein →[carrier] → drug 2h-06 molecular_function →[interacts with] → gene/protein →[target] → drug 2h-07 effect/phenotype →[side effect] → drug →[synergistic interaction] → drug 2h-08 disease →[indication] → drug →[contraindication] → disease 2h-09 disease →[parent-child] → disease →[phenotype present] → effect/phenotype 2h-10 gene/protein →[transporter] → drug →[side effect] → effect/phenotype 2h-11 drug →[transporter] → gene/protein →[interacts with] → exposure 2h-12 pathway →[interacts with] → gene/protein →[ppi] → gene/protein 2h-13 drug →[synergistic interaction] → drug →[transporter] → gene/protein 2h-15 effect/phenotype →[associated with] → gene/protein →[interacts with] → biological_process 2h-16 drug →[transporter] → gene/protein →[expression present] → anatomy 2h-17 drug →[target] → gene/protein →[interacts with] → cellular_component 2h-18 biological_process →[interacts with] → gene/protein →[expression absent] → anatomy 2h-19 effect/phenotype →[associated with] → gene/protein →[expression absent] → anatomy 2h-20 drug →[indication] → disease →[indication] → drug ∗
+
+2h-22 gene/protein →[associated with] → disease →[associated with] → gene/protein ∗
+
+2h-23 gene/protein →[associated with] → effect/phenotype →[associated with] → gene/protein ∗
+
+2h-25 disease →[associated with] → gene/protein →[carrier] → drug ←[side effect] ← effect/phenotype †
+
+2h-26 drug →[target] → gene/protein →[associated with] → disease ←[phenotype present] ← effect/phenotype †
+
+2h-28 drug →[off-label use] → disease →[associated with] → gene/protein 2h-29 exposure →[linked to] → disease →[indication] → drug 2h-30 drug →[indication] → disease →[phenotype absent] → effect/phenotype 2h-31 disease →[phenotype absent] → effect/phenotype →[associated with] → gene/protein 2h-33 drug →[synergistic interaction] → drug →[target] → gene/protein 2h-34 disease →[parent-child] → disease →[associated with] → gene/protein 2h-35 drug →[transporter] → gene/protein →[associated with] → disease 
+
+Table 7: 2-hop metapath templates. ∗ marks a conjoint template with an auxiliary direct constraint between the two ends, such as a synergistic interaction or a PPI. † marks a 2-topic junction template. 
+
+ID Metapath 
+
+3h-03 disease →[associated with] → gene/protein →[target] → drug →[side effect] → effect/phenotype 3h-04 disease →[associated with] → gene/protein →[ppi] → gene/protein →[target] → drug 3h-05 drug →[target] → gene/protein →[associated with] → disease →[phenotype present] → effect/phenotype 3h-07 effect/phenotype →[associated with] → gene/protein →[target] → drug →[indication] → disease 3h-08 gene/protein →[associated with] → disease →[indication] → drug →[side effect] → effect/phenotype 3h-09 drug →[carrier] → gene/protein →[associated with] → disease →[phenotype present] → effect/phenotype 3h-10 disease →[indication] → drug →[target] → gene/protein →[expression present] → anatomy 3h-12 disease →[associated with] → gene/protein →[target] → drug →[side effect] → effect/phenotype ←[associated with] ←
+
+gene/protein †
+
+3h-18 exposure →[linked to] → disease →[indication] → drug →[side effect] → effect/phenotype 3h-19 drug →[indication] → disease →[phenotype absent] → effect/phenotype →[associated with] → gene/protein 3h-22 drug →[target] → gene/protein →[transporter] → drug →[indication] → disease 3h-23 biological_process →[interacts with] → gene/protein →[ppi] → gene/protein →[expression present] → anatomy 
+
+Table 8: 3-hop metapath templates. † marks a 2-topic junction template. - Use the topic entity name. - Use intermediate node names from the evidence path. - Use relation names from the evidence path (e.g., “indication”, “target”). - Use the answer description (if provided) to specify the answer, but do NOT mention the answer entity name. If no answer description is provided, you may use your biomedical knowledge about the answer entity to add specificity. - The question should sound natural, as if asked by a researcher or clinician. - Output ONLY the question, nothing else. 
+
+User prompt template 
+
+Topic entity: <topic_name> (<topic_type>) Evidence path: <hop1.src> -[<hop1.rel>]-> <hop1.dst> <hop2.src> -[<hop2.rel>]-> <hop2.dst> ... Answer entity: <answer_name> (<answer_type>) Answer description: <answer_desc> Generate a question that follows this evidence path. Do NOT mention the answer entity name “<answer_name>” in the question. 
+
+Implicit query. Intermediate names and relation labels are withheld. The model instead receives the pathway summary for 2- and 3-hop paths, or a canonical relation description for 1-hop paths. 
+
+System prompt 
+
+You are a biomedical expert. Generate anatural biomedical question based on the provided pathway information. Rules: - Use the topic entity name. - Do NOT mention intermediate node names directly. - Do NOT use relation names directly. Paraphrase based on the relation context (1-hop) or pathway summary (2-3 hop). - Use the answer description (if provided) to specify the answer, but do NOT mention the answer entity name. If no answer description is provided, you may use your biomedical knowledge about the answer entity to add specificity. - The question should sound natural, as if asked by a researcher or clinician. - Output ONLY the question, nothing else. 
+
+User prompt template 
+
+Topic entity: <topic_name> (<topic_type>) # 1-hop: relation description from relation_descriptions.json Relation context: <relation_desc> # OR 2-3 hop: pathway summary from the previous stage Pathway summary: <name-free 2-4 sentence summary> Answer entity: <answer_name> (<answer_type>) Answer description: <answer_desc> Generate a question reflecting the pathway above. Do NOT mention intermediate node names, relation names, or the answer entity name “<answer_name>” in the question. 
+
+Bare query. No path detail is shown, and the model is constrained to use a generic linking phrase rather than a specific relation verb. 
+
+System prompt 
+
+You are a biomedical expert. Generate anatural biomedical question that asks about a relationship between the given entities. Rules: - Use the topic entity name. - Do NOT mention intermediate node names or any pathway/mechanism details. - Do NOT use specific relation verbs (e.g., “treats”, “targets”, “induces”, “expressed in”). Use generic linking phrases like “associated with”, “related to”, “linked to”, “connected to”, or natural variations appropriate for the entity types. - Use the answer description (if provided) to specify the answer, but do NOT mention the answer entity name. If no answer description is provided, you may use your biomedical knowledge about the answer entity to add specificity. - Use varied and natural phrasing. - Output ONLY the question, nothing else. 
+
+User prompt template 
+
+Topic entity: <topic_name> (<topic_type>) Answer entity: <answer_name> (<answer_type>) Answer description: <answer_desc> Generate a natural question about a<answer_type> that has some relationship with <topic_name>, using varied and natural phrasing. Do NOT mention the answer entity name “<answer_name>” or any specific pathway/mechanism details. 
+
+B Results on Small Backbones 
+
+We report A DA PATH and baseline results on smaller backbones, Llama-3.1-8B and Qwen-2.5-7B, complementing the large-backbone main re-sults in Section 4.4 (Tables 9 and 10). Performance levels shift with backbone scale, yet A DA PATH 
+
+retains the pattern of improvement over baselines observed with the larger backbones. 
+
+C Topic Entity Extraction for STaRK-Prime and MedDDx 
+
+STaRK-Prime (Wu et al., 2024) and MedDDx share the same underlying query set, so we run topic entity extraction once and reuse the resulting entity links across both evaluations. The extrac-Category Method Explicit Implicit Bare Overall                                                                                                                                                                                                                                                                                  
+
+> 1-hop 2-hop 3-hop Avg 1-hop 2-hop 3-hop Avg 1-hop 2-hop 3-hop Avg
+> Llama-3.1-8B
+> LLM only
+> IO 32.7 24.6 19.4 26.6 31.6 27.8 19.8 27.7 33.0 25.1 22.1 27.5 27.3 CoT 37.1 29.7 21.2 30.9 32.7 29.5 26.7 30.2 33.2 25.9 24.9 28.4 29.8 SC 34.8 28.2 21.7 29.4 30.9 30.3 27.6 30.0 33.2 25.5 24.9 28.2 29.2
+> Fact-retrieval CoK 37.3 30.5 23.0 31.6 35.7 31.8 27.2 32.4 38.2 28.6 25.4 31.6 31.9 KGARevion 30.9 26.9 20.7 27.2 31.1 31.2 27.6 30.5 31.1 21.7 23.0 25.4 27.7
+> Path-finding
+> StructGPT 43.7 22.7 17.5 29.5 36.2 25.9 18.4 28.3 33.2 17.3 15.2 22.8 26.9 ToG 46.9 28.0 18.9 33.3 41.2 25.3 19.8 30.2 36.4 15.8 14.7 23.2 28.9 ToG-2 64.1 22.1 18.0 36.9 58.1 23.6 18.4 35.5 57.9 20.6 15.7 33.5 35.3 PoG 67.7 9.0 7.8 30.5 53.3 5.7 7.8 23.7 35.7 2.7 9.2 16.1 23.5
+> ADA PATH 74.4 47.8 28.6 54.1 76.2 44.6 32.3 54.0 56.3 31.6 25.4 39.6 49.2
+> Qwen-2.5-7B
+> LLM only
+> IO 33.4 21.9 19.8 25.8 27.7 25.3 21.2 25.4 26.8 19.2 19.8 22.1 24.4 CoT 29.7 22.9 21.2 25.1 25.4 23.8 30.9 25.7 25.4 23.4 24.9 24.4 25.1 SC 31.8 22.7 21.7 25.9 26.3 27.8 31.3 27.9 26.1 23.8 29.0 25.6 26.5
+> Fact-retrieval CoK 33.4 23.2 21.7 26.7 29.1 27.0 30.4 28.4 31.4 21.7 30.4 26.9 27.3 KGARevion 25.9 18.7 22.1 22.0 23.3 23.2 21.2 22.9 21.5 17.5 18.0 19.1 21.3
+> Path-finding
+> StructGPT 60.6 21.1 19.8 35.5 53.8 19.6 23.5 33.0 38.0 10.1 11.5 20.7 29.7 ToG 47.4 24.0 17.1 31.4 44.4 23.4 24.0 31.3 38.0 14.9 16.1 23.7 28.8 ToG-2 73.0 29.1 29.0 45.4 63.4 25.9 19.4 38.6 56.5 18.5 14.8 31.9 38.6 PoG 63.6 14.9 14.3 32.8 60.2 20.2 21.2 35.2 45.8 9.1 14.3 23.7 30.6
+> ADA PATH 72.5 52.2 43.8 58.2 70.2 51.0 34.6 55.1 60.6 37.7 29.9 44.8 52.7
+
+Table 9: Main results on B IO STRAT -QA, small backbones. EM (%) per (information-level, hop-depth) cell; 
+
+Overall averages all nine cells. Per-column best is bold and second-best is underlined within each backbone block. 
+
+tion follows a four-stage pipeline that interleaves typed graph traversal with two GPT-5.4 batch calls, narrowing the candidate metapaths and all type-matching nodes in PrimeKG down to one template and one entity per topic slot. 
+
+Stage 1: Typed reverse BFS feasibility filter. 
+
+The search space is a set of metapath templates built on the STaRK-Prime template set (Wu et al., 2024), complemented with additional single-edge patterns enumerated from the PrimeKG schema. For each query we identify which of these tem-plates can actually reach the given answer entity in PrimeKG. From every answer node we walk the template metapath backward, enforcing edge type and target node type at every hop. For queries with multiple valid answers, we intersect the candidate sets obtained from each answer node, and fall back to their union when the intersection is empty. Tem-plates with two topic slots are traversed once per slot. A template survives only if its reverse traver-sal returns at least one candidate. A median of ∼7templates survive per query and are passed to the next stage. 
+
+Stage 2: LLM template pick. The surviving templates are passed to GPT-5.4 via the OpenAI batch API. We prompt the model with the query, the answer entity, and the list of graph-feasible templates, each shown as both its formal metapath and a short paraphrase, and ask it to return the single template that best matches the question’s intent in strict JSON. Templates that fail to parse or fall outside the allowed range are discarded. 
+
+Stage 3: Per-slot candidate scoring. For each topic slot of the chosen template we collect all PrimeKG nodes whose type matches the slot, then rank them against the query by combining BM25 (Lin et al., 2022) over name-plus-description text with a sentence-BERT (Reimers and Gurevych, 2019) similarity. The two scores are min–max nor-malised within the candidate pool and summed, and the top-10 candidates are kept. To bound compute for slots with very large candidate pools such as all gene/protein nodes, we first take the top-1,000 
+
+by BM25 and then rerank with SBERT, which preserves top-10 quality at a fraction of the cost. Each surviving candidate is also annotated with the line-level chunk of its description that maximises BM25 against the query, truncated to 300 charac-ters, which provides compact evidence for the next stage. Method STaRK-Prime MedDDx                                                                                                                              
+
+> Synthesized Human-generated Basic Inter. Expert All
+> Llama-3.1-8B
+> IO 13.1 12.2 42.9 36.2 34.6 36.7 CoT 13.1 15.3 41.6 32.9 37.9 35.5 SC 12.2 12.2 44.9 35.7 38.1 37.6 CoK 13.1 14.3 48.2 38.1 36.9 39.2 KGARevion 12.5 12.2 38.4 34.5 31.5 34.2 StructGPT 17.2 18.4 44.5 37.4 37.1 38.3 ToG 28.9 24.5 51.8 41.4 40.8 42.7 ToG-2 29.2 35.7 41.6 39.2 34.0 38.1 PoG 23.1 20.4 32.2 30.8 30.6 31.0
+> ADA PATH 43.0 44.9 58.4 49.4 49.5 50.6
+> Qwen-2.5-7B
+> IO 10.9 12.2 37.1 33.4 32.9 33.8 CoT 10.1 9.2 34.3 32.1 33.5 32.8 SC 10.5 9.2 40.0 33.1 30.8 33.5 CoK 11.0 9.2 36.3 32.3 34.8 33.5 KGARevion 10.6 4.1 37.1 32.1 32.1 32.8 StructGPT 25.3 23.5 48.2 37.7 39.1 39.5 ToG 29.6 24.5 42.9 40.5 37.5 40.0 ToG-2 31.2 33.7 36.3 31.5 27.9 31.2 PoG 29.7 27.6 44.1 41.5 44.1 42.6
+> ADA PATH 43.7 37.8 50.6 47.6 44.5 47.2
+
+Table 10: Results on STaRK-Prime and MedDDx, small backbones. STaRK-Prime: EM (%). MedDDx: accuracy (%). Per-column best is bold , second-best is underlined within each backbone block. 
+
+Stage 4: Per-slot LLM entity pick. GPT-5.4 then selects the final topic entity from the top-10 
+
+candidates per slot. The prompt presents the query, the answer entity, the slot’s type, and each candi-date with its name and best chunk, and asks the model to pick the entity the query starts from rather than the one it seeks as the answer. Each candi-date carries a node identifier so that the model can disambiguate same-name nodes. For each query the pipeline records the topic entity of every slot in the selected template. The topic entity is passed unchanged to A DA PATH and to every path-finding baseline as the starting point for traversal on STaRK-Prime and MedDDx. 
+
+D Evaluation Metrics 
+
+We summarise the four metrics used throughout the paper, namely exact match (EM) on B IO STRAT -QA and STaRK-Prime, accuracy on MedDDx, triplet-level recall on retrieved reasoning chains, and an LLM-judged context-relevance score for retrieved paths. 
+
+Exact Match (EM). For B IO STRAT -QA and STaRK-Prime, a prediction is counted correct when the model’s final answer matches any of the ground-truth answer names recorded for the query, with case and whitespace normalised. Each record is re-leased with a multi-answer expansion, so the model is credited for identifying any of the semantically equivalent answer entities rather than having to recover a single canonical name. EM is reported as a percentage and, for B IO STRAT -QA, micro-averaged within each cell. 
+
+Accuracy. For the multiple-choice queries in MedDDx, we report standard classification accu-racy. A prediction is counted correct when it matches either the ground-truth option letter or the name of the entity that option refers to. 
+
+Recall. For path-finding methods we evaluate path recovery via per-depth triplet recall against the ground-truth (GT) evidence path. Let gd =(hd, r d, t d) denote the GT triplet at reasoning depth 
+
+d and Pd the set of retrieved triplets at depth d,capped at K = 100 random samples per depth with seed 42 . We compare triplets after lower-casing the head and tail entity names, writing 
+
+norm( h, r, t ) = (lower( h), r, lower( t)) , and the hit indicator at depth d is 
+
+Hit d = 1[norm( gd) ∈ { norm( p) : p ∈ Pd}] .
+
+(7) Per-record recall is the depth-wise average of Hit d
+
+over the D depths of that record. The reported recall is the micro-average over all record and depth pairs across the 1-, 2-, and 3-hop subsets, dividing the total number of hits by the total number of pairs. 
+
+Context Relevance. To complement triplet-exact recall, which penalises retrieved paths that pass through semantically valid neighbours without ex-actly reproducing the GT triplets, we additionally report Context Relevance, a per-record score pro-duced by a GPT-4o-mini judge over the retrieved paths. Each method’s retrieved triplets are assem-bled into complete multi-hop chains running from the topic entity to the answer entity, capped at 
+
+K = 100 per record, and presented to the judge to-gether with the query and the GT evidence triplets. The judge returns a score of 2 when the retrieved paths trace a coherent biomedical pathway from topic to answer that captures the expected mech-anism, 1 when they surface related neighbours or analogous entities, and 0 otherwise. Scores are rescaled to [0 , 1] and averaged over all records, ex-cluding those where the judge output fails to parse after three retries. depth 0 depth 1          
+
+> 020 40 60 80
+> Hit rate (%)
+> (topic entity) (answer entity)
+> Explicit
+> depth 0 depth 1
+> 020 40 60 80
+> (topic entity) (answer entity)
+> Implicit
+> depth 0 depth 1
+> 020 40 60 80
+> (topic entity) (answer entity)
+> Bare
+> StructGPT ToG ToG-2 PoG AdaPath
+
+Figure 6: Per-depth hit rate on 2-hop B IO STRAT -QA queries (Llama-3.1-70B). Explicit ( left ), Implicit ( middle ), and Bare ( right ) panels plot the fraction of queries whose explored entity set contains the reference d-th node along the evidence path. Each subplot uses an independent y-axis. A DA PATH sustains its hit rate at the answer depth across all three query formulations, while path-finding baselines drop sharply. 
+
+E Per-Depth Traversal Accuracy on 2-hop Queries 
+
+The main paper reports per-depth hit rate on 3-hop queries in Figure 4, and here we provide the com-panion plot for 2-hop queries on the same Llama-3.1-70B backbone (Figure 6). The trend mirrors the 3-hop result, where A DA PATH sustains a high hit rate at the answer-bearing depth across all three query formulations, while path-finding baselines drop sharply after the topic entity. A DA PATH stays ahead of the strongest baseline at the answer depth under every formulation, consistent with the pattern observed in the 3-hop figure. 
+
+F Meta-Path Retrieval Quality 
+
+Path-Bank stores type-level meta-path schemas rather than entity-level paths. One meta-path such as drug → gene → disease instantiates many entity-level paths, and in B IO STRAT -QA the meta-paths are shared across splits while the entity-level paths are disjoint, so meta-path overlap does not reveal the test path or its answer. Table 4 and Figure 4 assess the entity-level paths that traversal produces, and we complement them here by assessing the meta-paths that guide it. We ask whether A DA P- 
+
+> ATH
+
+recovers the reference meta-path behind each query, and whether the alternatives it retrieves in-stead remain traversable to the answer once every exact ground-truth match is excluded (Table 11). Reference meta-path recovery declines moder-ately as surface cues are removed, and the re-trieved alternatives remain traversable at a nearly constant rate across all three information levels. Read together with the Context Relevance results in Table 4, A DA PATH supplies usable reasoning schemas rather than reproducing a single reference path.                                           
+
+> Level R@1 R@3 R@5 MRR Trav. †QA
+> Llama-3.1-70B
+> Explicit 66.2 79.5 82.7 0.730 55.9 71.3 Implicit 52.7 67.1 71.2 0.601 56.5 68.5 Bare 44.8 60.1 65.7 0.527 55.0 56.5
+> Qwen-2.5-72B
+> Explicit 63.2 75.8 79.0 0.697 54.4 67.4 Implicit 51.2 65.4 69.3 0.584 55.6 65.5 Bare 46.4 61.3 66.8 0.541 54.3 54.1
+
+Table 11: Meta-path retrieval quality on B IO STRAT -QA. R@ k and MRR score recovery and ranking of the ground-truth meta-path. Trav. † is the share of retrieved meta-paths that can be walked from the topic entity to the answer entity on the KG, computed after excluding all exact ground-truth matches so that it covers only the retrieved alternatives. QA is downstream accuracy. 
+
+On STaRK-Prime and MedDDx the ground-truth evidence path behind each query is not released, so the path-level analysis of Section 4.5 is not ap-plicable. We instead measure traversability only, which requires no reference path. Two differences from the B IO STRAT -QA setting should be noted. The template pool underlying both datasets reaches at most two hops (Wu et al., 2024), and the whole retrieved pool is measured here without excluding exact ground-truth matches, so the numbers are not directly comparable to Table 11. Under this measurement, traversability remains high in every case, including the human-generated split written without templates (Table 12). Dataset Split n Llama-70B Qwen-72B             
+
+> STaRK-Prime Synthesized 2,801 99.0 99.3 STaRK-Prime Human 98 86.4 89.7 MedDDx Test 1,769 99.2 99.4
+
+Table 12: Traversability of retrieved meta-paths on STaRK-Prime and MedDDx. Neither dataset releases a reference path, so no exact ground-truth match can be excluded and traversability is measured over the whole retrieved pool rather than the alternatives alone. 
+
+G Semantic Robustness of Query-Adaptive Retrieval 
+
+Path-Bank retrieval scores training queries by a mix of dense sentence-embedding and sparse BM25 similarity (Eq. 6), which raises the question of how much the retrieved meta-paths depend on the word-ing of the query rather than the mechanism be-hind it. We isolate this by building the Path-Bank from one query formulation and evaluating on an-other, holding the underlying biomedical mecha-nism fixed. The same-expression setting averages the three matched pairings of explicit, implicit and bare, and the different-expression setting averages the six mismatched pairings. Under mismatch, Recall@5 decreases only mod-erately and QA accuracy stays well above the strongest baseline (Table 13). Even after every ex-act ground-truth match is removed, roughly half or more of the retrieved meta-paths remain traversable in both settings, so retrieval surfaces usable alter-natives rather than only the schema that generated the query.                
+
+> Path-Bank / Test Recall@5 MRR Trav. †QA Acc. ∆
+> Same-expression 73.2 0.619 55.8 65.4 +22.8 Different-expression 68.9 0.544 49.2 61.8 +19.2
+
+Table 13: Retrieval and QA under matched and mis-matched query formulations. Recall@5 and MRR are computed against the ground-truth meta-path. Trav. †
+
+excludes all exact ground-truth matches, so it covers only the retrieved alternatives. ∆ is the gain over the strongest baseline. 
+
+H Robustness of Context Relevance 
+
+LLM-as-judge scoring carries variance across both the choice of judge and repeated runs, so we verify the Context Relevance results in Table 4 against both. We re-score the same reasoning paths with a second judge, Claude-Haiku-4.5 (Anthropic, 2025), alongside the GPT-4o-mini judge used in the main results, running three trials per judge and averaging. ADA PATH is the best method under both judges and both backbones, and run-to-run variation stays below half a point (Table 14).                       
+
+> Method Llama-3.1-70B Qwen-2.5-72B
+> GPT-4o-mini Claude-Haiku-4.5 GPT-4o-mini Claude-Haiku-4.5 StructGPT 14.4 ±0.12 22.3 ±0.08 29.7 ±0.27 43.7 ±0.04 ToG 16.2 ±0.11 23.2 ±0.21 19.0 ±0.20 25.8 ±0.42 ToG-2 37.3 ±0.24 45.7 ±0.26 39.8 ±0.16 47.7 ±0.12 PoG 33.0 ±0.32 47.4 ±0.09 33.5 ±0.17 49.2 ±0.18
+> ADA PATH 46.7 ±0.13 59.6 ±0.22 47.1 ±0.12 60.0 ±0.09
+
+Table 14: Context Relevance under two LLM judges. 
+
+Values are mean ± std over three trials, ×100. Per-column best is bold and second-best is underlined. 
+
+I Ablation Study on Path-Bank & Meta-Path 
+
+We ablate A DA PATH ’s query-adaptive meta-path guidance on large backbones, Llama-3.1-70B and Qwen-2.5-72B, comparing three variants of the path-finding stage. ADA PATH runs the full pipeline with query-adaptive meta-paths retrieved from the pre-mined Path-Bank. w/o Path-Bank has the LLM plan meta-paths at inference rather than re-trieving them from the pre-mined Path-Bank, and non-traversable plans fall back to free BFS. w/o meta-path routes every query through free BFS with no meta-path guidance. All variants share the same answer-generation stage, so any gap isolates the effect of query-adaptive meta-path guidance. On B IO STRAT -QA, A DA PATH leads both ab-lations on every cell, and the gap widens as rea-soning paths extend (Table 15). On 1-hop queries, where a single edge separates topic from answer, the two ablations stay close to A DA PATH across all three information levels. The gap opens up on 2-hop and 3-hop queries, where an unguided search has to commit to intermediate entities be-fore reaching the answer. Such a pattern indicates that query-adaptive meta-path guidance carries an increasing share of the answer-generation accuracy as path-finding moves into deeper regions of the biomedical KG. We also run the same ablation on the external datasets STaRK-Prime and MedDDx (Table 16). On STaRK-Prime, A DA PATH stays ahead of both ablations on the synthesized and human-generated splits across both backbones. On MedDDx, whose Method Explicit Implicit Bare Overall 
+
+1-hop 2-hop 3-hop Avg 1-hop 2-hop 3-hop Avg 1-hop 2-hop 3-hop Avg 
+
+Llama-3.1-70B 
+
+w/o meta-path 81.2 43.2 35.0 55.8 77.1 41.3 38.2 54.0 68.4 34.5 34.1 47.0 52.3 w/o Path-Bank 84.0 57.1 41.5 64.2 79.0 51.0 39.2 59.2 64.5 32.0 29.9 43.7 55.7 
+
+ADA PATH 87.9 61.3 62.2 71.3 83.1 62.5 53.9 68.5 69.8 50.5 44.2 56.5 65.5 
+
+Qwen-2.5-72B 
+
+w/o meta-path 78.3 36.0 33.6 51.2 73.9 37.9 36.9 51.1 66.6 28.2 32.3 43.2 48.5 w/o Path-Bank 81.7 50.9 41.0 60.5 81.7 45.5 34.6 56.9 69.1 28.6 34.6 44.7 54.0 
+
+ADA PATH 84.9 58.3 53.9 67.4 83.3 59.2 44.7 65.5 71.9 44.8 41.0 54.1 62.3 
+
+Table 15: Ablation on Path-Bank and Meta-Path, B IO STRAT -QA, large backbones. Exact-match (%) per cell, where Overall averages all nine cells. Per-column best is bold and second-best is underlined within each backbone block.                                            
+
+> Method STaRK-Prime MedDDx
+> Synthesized Human-generated Basic Inter. Expert All
+> Llama-3.1-70B
+> w/o meta-path 37.0 38.8 62.0 50.9 51.1 52.5 w/o Path-Bank 41.2 39.8 59.6 53.0 50.3 53.2
+> ADA PATH 46.9 43.9 65.3 55.1 52.4 55.8
+> Qwen-2.5-72B
+> w/o meta-path 39.2 38.8 58.4 54.4 46.0 52.6 w/o Path-Bank 43.2 35.7 60.4 52.5 47.8 52.3
+> ADA PATH 46.7 39.8 62.0 54.5 51.8 54.8
+
+Table 16: Ablation on Path-Bank and Meta-Path, STaRK-Prime and MedDDx, large backbones. Exact-match (%) on STaRK-Prime and multiple-choice accu-racy (%) on MedDDx. Per-column best is bold and second-best is underlined within each backbone block. 
+
+tiers order distractors by semantic closeness to the gold answer, A DA PATH stays ahead of both abla-tions on every tier under both backbones, so the guidance holds up even when the answer options are hard to tell apart. 
+
+J Hyperparameter Settings 
+
+The hyperparameters used for Path-Bank construc-tion and inference are listed in Table 17. 
+
+K Efficiency Analysis 
+
+K.1 Offline Path-Bank Construction 
+
+Path-Bank is built once, offline. Its costly stage is Yen’s k-shortest-path search, which we run in-side the query-specific corridor produced by edge weighting and bidirectional PPR instead of over the full KG. To quantify the saving, we profile 360 BIO STRAT -QA queries sampled evenly across the three formulations and reasoning depths, varying 
+
+Symbol Value Description 
+
+β 0.3 Trade-off between relation and endpoint similarity in edge weighting (Eq. 1) 
+
+η 0.85 Teleport probability of the PPR walks (Eqs. 2, 3) 
+
+K 150 Corridor subgraph size in nodes (Eq. 4) 
+
+α 0.5 Trade-off between edge weight and corridor score in the path cost (Eq. 5) 
+
+n 5 Paths extracted per hop length by Yen’s algorithm 
+
+λ 0.5 Trade-off between sentence-embedding and BM25 similarity in retrieval (Eq. 6) 
+
+k 5 Top-ranked training queries retained as candidates 
+
+Table 17: Hyperparameters for Path-Bank construc-tion and inference. Values are shared across datasets and backbones. 
+
+the KG from 30K to 129K nodes and timing each stage. The corridor itself comes from edge weight-ing and PPR, so the two settings differ only in where Yen’s search runs. Edge weighting and PPR stay inexpensive as the KG grows, whereas Yen’s search over the raw KG grows sharply in both runtime and memory (Ta-bles 18 and 19). Confining it to the corridor keeps both nearly flat. Over all 7,473 training queries, corridor-restricted search finishes in under ten CPU-minutes, against dozens of CPU-hours for the raw KG. 
+
+K.2 Online Path-Finding 
+
+At inference the cost is dominated by the LLM scoring that selects the next-hop frontier, a stage shared with the other path-finding baselines, while Path-Bank matching is negligible (Table 20). Ta-ble 21 compares all path-finding methods under the Nodes Edges Edge wt. PPR Yen’s search                      
+
+> Raw KG Corridor 30K 552K 94 ms 65 ms 1.52 s 77 ms 60K 1.90M 323 ms 117 ms 4.52 s 78 ms 90K 4.00M 662 ms 201 ms 9.95 s 87 ms 129K 8.10M 1.34 s 427 ms 19.57 s 69 ms
+
+Table 18: Runtime of Path-Bank construction by KG size. Edge weighting and PPR are shared by both settings.                          
+
+> Nodes Edges Edge wt. PPR Yen’s search
+> Raw KG Corridor 30K 552K 44 MB 2.6 MB 48 MB 0.47 MB 60K 1.90M 151 MB 5.3 MB 166 MB 0.48 MB 90K 4.00M 318 MB 7.9 MB 351 MB 0.47 MB 129K 8.10M 640 MB 11.4 MB ∼711 MB ∼0.40 MB
+
+Table 19: Peak memory of Path-Bank construction by KG size. The corridor variant stays under 0.5 MB, since Yen’s search never leaves the extracted subgraph. 
+
+same backbone and search budget, reporting cost together with accuracy. ADA PATH issues fewer LLM calls and far fewer tokens than ToG and PoG while running faster and reaching higher accuracy. StructGPT and ToG-2 are cheaper still, but explore far less and land well below A DA PATH in EM. Restricting traversal to the relation and node types of the retrieved meta-paths, and stopping at the required reasoning depth, keeps the search bounded.            
+
+> Stage Runtime / query Memory
+> Path-Bank matching 0.1 ms (0.0002%) 524 MB CPU, 2.6 GB GPU LLM next-hop scoring 42.89 s (95.2%) 0.72 MB per query Other operations 2.14 s (4.8%) included in peak Total 45.03 s (100%)
+
+Table 20: Per-stage online cost of A DA PATH . Memory for Path-Bank matching is a one-time footprint rather than a per-query cost.                               
+
+> Method Latency (s) Calls Tokens Mem. (MB) EM
+> mean / max StructGPT 7.7 / 15.7 5.5 2,175 671 30.4 ToG-2 13.5 / 34.4 5.8 2,565 4,895 35.2 ToG 152.0 / 803.9 17.7 13,285 2,429 40.0 PoG 64.8 / 507.7 289.3 155,150 3,565 39.9
+> ADA PATH 45.0 / 164.5 11.2 7,036 4,186 65.5
+
+Table 21: End-to-end online cost and accuracy. All methods share the same search budget on Llama-3.1-70B. Calls and tokens are per query. 
+
+L Statistical Significance 
+
+We assess significance with a paired bootstrap over the main results in Tables 2 and 3, resampling the per-query correct or incorrect outcomes 10,000 times and taking the 2.5th and 97.5th percentiles of the accuracy difference. Comparing A DA PATH 
+
+against each baseline in every setting and backbone yields 270 pairwise comparisons, of which 255 are significant. Table 22 reports the interval against the strongest baseline in each setting. The remaining cases sit in the smallest subsets, such as the STaRK-Prime human-written split and MedDDx Basic, where the limited sample size widens the interval. The point estimate stays posi-tive in every one of these settings. 
+
+M Generalization to an External Biomedical KG 
+
+We examine whether A DA PATH ’s path-finding scheme remains effective on a knowledge graph other than PrimeKG. We build a Hetionet-based KGQA dataset following the B IO STRAT -QA con-struction procedure, with explicit, implicit and bare variants of every query. Hetionet (Himmelstein et al., 2017) differs from PrimeKG in scale, degree distribution, entity and relation types, and available textual metadata. We compare against the LLM-only floor and the path-finding baselines, with all methods running on Llama-3.1-70B under the same protocol as the main experiments. ADA PATH is the strongest method at every in-formation level (Table 23), and its margin over the path-finding baselines widens as intermediate cues disappear. Query-adaptive meta-path retrieval from Path-Bank therefore transfers as a path-finding scheme to a knowledge graph built independently of PrimeKG. 
+
+N LLM-Inferred Control Signals 
+
+ADA PATH filters the retrieved meta-paths by an LLM-inferred hop length and answer type (Sec-tion 3.2). We check how reliably the two are pre-dicted, and how much the framework depends on getting them right, by replacing each prediction with its ground-truth value. Answer-type prediction stays high regardless of information level, and hop prediction assigns the correct depth to the majority of queries at every level, with accuracy decreasing from explicit to bare as the query retains fewer intermediate cues to infer depth from (Table 24). Replacing both Setting Llama-3.1-70B Qwen-2.5-72B 
+
+∆ [95% CI] Baseline ∆ [95% CI] Baseline BIO STRAT -QA Explicit 1-hop +5.0 [+0.9, +9.2] PoG +8.9 [+4.6, +13.3] PoG Explicit 2-hop +22.9 [+18.1, +27.6] CoK +24.4 [+19.6, +29.1] CoK Explicit 3-hop +25.3 [+17.5, +33.2] StructGPT +19.8 [+12.0, +27.6] StructGPT Implicit 1-hop +5.7 [+0.9, +10.5] PoG +11.2 [+6.6, +16.0] PoG Implicit 2-hop +22.5 [+17.7, +27.0] CoT +22.5 [+17.5, +27.4] CoK Implicit 3-hop +13.4 [+6.5, +20.3] CoK +6.5 [ −0.5, +13.4] SC Bare 1-hop +6.9 [+1.6, +11.9] PoG +12.1 [+7.3, +16.9] PoG Bare 2-hop +14.1 [+9.5, +18.9] CoK +12.6 [+7.8, +17.3] IO Bare 3-hop +4.1 [ −3.7, +12.0] StructGPT +3.2 [ −3.2, +9.7] CoT STaRK-Prime and MedDDx STaRK-Prime (synth.) +5.5 [+3.4, +7.7] PoG +13.2 [+11.1, +15.4] PoG STaRK-Prime (human) +3.1 [ −7.1, +13.3] PoG +4.1 [ −6.1, +14.3] ToG-2 MedDDx Basic +4.9 [ −0.8, +10.6] ToG +2.9 [ −3.7, +9.4] StructGPT MedDDx Inter. +6.8 [+3.6, +10.1] StructGPT +4.5 [+1.4, +7.6] StructGPT MedDDx Expert +4.8 [ −0.4, +9.9] KGARevion +8.5 [+4.1, +12.8] ToG MedDDx All +6.0 [+3.7, +8.4] ToG +5.7 [+3.3, +8.0] StructGPT 
+
+Table 22: Accuracy difference over the strongest baseline with 95% bootstrap intervals. The Baseline column names the strongest baseline in that setting. An interval that excludes zero is a significant gain. 
+
+Method Explicit Implicit Bare 
+
+IO 39.0 36.9 27.7 CoT 39.7 39.0 32.6 SC 44.0 40.0 29.8 StructGPT 60.3 48.9 41.1 ToG 61.7 41.1 38.3 PoG 53.2 39.7 37.6 
+
+ADA PATH 78.0 68.8 67.4 
+
+Table 23: QA accuracy on Hetionet KGQA. The three information levels are generated from the same refer-ence path, so they differ only in how much intermediate reasoning the query exposes. Per-column best is bold 
+
+and second-best is underlined. 
+
+predictions with their ground-truth values shifts performance by only a few points in either direction (Table 25), so the LLM inference of these control signals is not a bottleneck for the framework. 
+
+Query level Llama-3.1-70B Qwen-2.5-72B 
+
+Hop Ans Type Hop Ans Type Explicit 90.1 97.1 88.9 93.6 Implicit 80.6 90.1 80.7 88.7 Bare 68.6 91.8 70.6 92.5 All 79.8 93.0 80.0 91.6 
+
+Table 24: Control-signal prediction accuracy (%). 
+
+Hop and Ans Type are scored against the ground-truth reasoning depth and answer entity type. 
+
+Formulation 1-hop 2-hop 3-hop 
+
+Pred. Oracle Pred. Oracle Pred. Oracle Explicit 87.9 88.3 61.3 58.9 62.2 61.3 Implicit 83.1 87.0 62.5 62.5 53.9 51.2 Bare 69.8 76.2 50.5 52.0 44.2 47.0 
+
+Table 25: Oracle substitution on control signals (%). 
+
+Oracle replaces both the predicted hop length and an-swer type with ground-truth values, on Llama-3.1-70B. 
+
+O Case Studies 
+
+To illustrate how ADA PATH converts query-adaptive meta-path guidance into a correct answer, we walk through individual cases on Llama-3.1-70B, comparing CoT , ToG , and ADA PATH on the same evidence path under all three query formula-tions. We first assess whether the reasoning each method produces holds up to domain scrutiny. A blinded human evaluation covers 10 sampled ques-tions spanning Llama and Qwen outputs, with anonymized outputs from CoT, ToG and A DA PATH 
+
+presented in random order. ToG and A DA PATH rea-son over triplets retrieved from the graph, whereas CoT relies on the backbone alone. Nine biomedical experts, each with over seven years of experience, who received a compensation of $5 upon comple-tion of the task, independently rated every output on two 1–5 scales. Validity asks whether the rea-soning steps are biologically valid, and Relevance asks whether the reasoning traces a pathway that contributes to answering the question. The scales were rated independently, since biologically true reasoning may still fail to address the question. The instructions, shown verbatim below, stated the purpose of the study and the two rating scales. Rat-ings were collected solely for aggregate statistics reported in this paper, and no personal data was collected.                                                                                         
+
+> Introduction PURPOSE
+> This study evaluates how well a knowledge-graph QA system reasons over biomedical questions. Each answer is produced by tracing a reasoning path, a chain of entities connected by typed relations (for example: disease -> gene -> drug). Automatic metrics only check whether apath exactly matches areference path, so they cannot tell whether adiffering path is still biologically sensible and still relevant to the question. We ask you, as a domain expert, to judge exactly that.
+> WHAT YOU WILL DO
+> For each of the 10 cases you will see one biomedical question and three reasoning outputs labeled A, B, and C (presented in random order). Some reasoning outputs are very long, so we show a curated view focusing on the main steps. Rate each output on the two scales below.
+> SCALES (1-5, applied to A, B, and C separately)
+> (1) Biomedical validity: is the reasoning biomedically meaningful, i.e., are the stated reasoning steps biologically valid? 5 = fully valid 3 = partially valid 1= not valid / unrelated (2) Pathway relevance: does the reasoning trace arelevant pathway that contributes to answering this specific question? 5=directly relevant /decisive 3=partially relevant 1 = irrelevant Areasoning can score high on one scale and low on the other (e.g., biologically true statements that do not actually address the question). Please rate the two independently. There are no right or wrong responses; judge based on your expertise.
+
+As shown in Table 26, A DA PATH receives the highest ratings on both, so the paths it retrieves support reasoning that is biologically sound and pertinent to the question. ToG falls below CoT on each, which may indicate that retrieved paths degrade reasoning quality when they diverge from the mechanism the question concerns. We further provide the reasoning traces of each method as per-case tables. Each case is built around one ground-truth path, and for every method we report the intermediate triplets visited during path-finding together with the reasoning leading to the                     
+
+> Method Validity Relevance
+> CoT 3.70 ±1.04 3.22 ±1.03 ToG 2.98 ±0.99 2.63 ±1.26
+> ADA PATH 4.28 ±1.05 4.32 ±1.08
+
+Table 26: Blinded expert ratings of reasoning paths. 
+
+Nine biomedical experts scored 10 questions on two independent 1–5 scales. Values are mean ± std across raters and questions. 
+
+final answer. Excerpts are trimmed with . . . el-lipses around the key intermediate entities. The trailing “ the answer is { ·}” phrase is blue when the final answer matches the ground truth and red 
+
+when it does not, and cases without a parseable answer show ×. The advantage of A DA PATH over path-finding baselines grows as the query exposes less of the mechanism (Tables 27, 28, 29, 30). Ex-plicit queries name the biomedical mechanism in enough detail that an LLM can often answer them from prior knowledge, so a baseline may reach the correct answer even when its traversal misses the ground-truth triplets. ToG answers the explicit query correctly in every case below, in most of them while recovering few or none of the reference triplets. Implicit and bare queries leave the mecha-nism unstated, so a method that drifts away from the reference path has little left to recover the an-swer from, and ToG tends to settle on neighboring entities instead. A DA PATH traces the ground-truth path under all three formulations. 
+
+P Use of AI Assistants 
+
+During manuscript preparation, the authors em-ployed AI-based writing assistants solely for lan-guage refinement, including grammar, phrasing, and clarity. The research design, methodology, ex-periments, analyses, and reported findings remain entirely the authors’ own contributions. Explicit Implicit Bare Query Anterior plagiocephaly is associated with CDC45; with which DNA re-pair biological process does CDC45 interact that involves restarting DNA synthesis from a break site? In anterior plagiocephaly, alter-ations in a highly conserved fac-tor that initiates genome duplica-tion suggest disruption of what DNA repair process that restores broken chromosomes by restarting DNA syn-thesis from a break site? Which DNA damage repair process is linked to Anterior plagiocephaly? 
+
+Ground-truth path : Anterior plagiocephaly associated with 
+
+−−−−−−−→ CDC45 interacts with 
+
+−−−−−−→ double-strand break repair via break-induced replication CoT 
+
+Reasoning . . . break-induced replication is a type of DNA repair mechanism for double-strand breaks . . . 
+
+the answer is {break-induced repli-cation} 
+
+. . . cycles between the ATR/Chk1 
+
+and FoxM1 pathways without con-verging on a final answer . . . 
+
+×
+
+. . . no specific DNA damage repair process found to be linked to ante-rior plagiocephaly . . . 
+
+the answer is {None} 
+
+ToG 
+
+Path-finding 
+
+d1: Anterior plagiocephaly →
+
+CDC45 ✓
+
+d2: CDC45 → double-strand break repair via break-induced replication 
+
+✓
+
+d1: Anterior plagiocephaly →
+
+CDC45 ✓
+
+d2: CDC45 → Activation of ATR ×
+
+d1: Anterior plagiocephaly →
+
+CDC45 ✓
+
+d2: CDC45 → cerebral cortex ×
+
+Reasoning . . . CDC45 interacts with double-strand break repair via break-induced replication . . . 
+
+the answer is {double-strand break repair via break-induced replication} 
+
+. . . CDC45 interacts with Activation of ATR , a parent of G2/M Check-points . . . 
+
+the answer is {G2/M Checkpoints} 
+
+. . . CDC45 interacts with Activation of ATR , a parent of G2/M Check-points . . . 
+
+the answer is {G2/M Checkpoints} 
+
+ADA PATH 
+
+Path-finding 
+
+d1: Anterior plagiocephaly →
+
+CDC45 ✓
+
+d2: CDC45 → double-strand break repair via break-induced replication 
+
+✓
+
+d1: Anterior plagiocephaly →
+
+CDC45 ✓
+
+d2: CDC45 → double-strand break repair via break-induced replication 
+
+✓
+
+d1: Anterior plagiocephaly →
+
+CDC45 ✓
+
+d2: CDC45 → double-strand break repair via break-induced replication 
+
+✓
+
+Reasoning . . . Anterior plagiocephaly is asso-ciated with CDC45 , which interacts with double-strand break repair via break-induced replication . . . 
+
+the answer is {double-strand break repair via break-induced replication} 
+
+. . . anterior plagiocephaly →
+
+CDC45 → double-strand break re-pair via break-induced replication ,which restarts DNA synthesis from the break site . . . 
+
+the answer is {double-strand break repair via break-induced replication} 
+
+. . . Anterior plagiocephaly →
+
+CDC45 → double-strand break re-pair via break-induced replication ,a DNA damage repair process . . . 
+
+the answer is {double-strand break repair via break-induced replication} 
+
+Table 27: Case study, 2-hop, data_id=3940. CoT does not perform path-finding. ToG recovers the correct second-hop triplet only under the explicit query and drifts to neighboring processes such as Activation of ATR and cerebral cortex once the intermediate cue is removed, leading to incorrect final answers. A DA PATH reaches the ground-truth triplet at both depths under all three formulations. Explicit Implicit Bare Query Which drug is carried by TF that in-teracts with the basal plasma mem-brane and is the active ingredient in Pepto-Bismol? Which common over-the-counter gastrointestinal remedy used for nau-sea, heartburn, indigestion, upset stomach, and diarrhea is indirectly associated with the basal plasma membrane through a circulating fer-ric iron-binding transport glycopro-tein that can also carry drugs? Which drug commonly used for nau-sea, heartburn, indigestion, upset stomach, and diarrhea is associated with the basal plasma membrane? 
+
+Ground-truth path : basal plasma membrane interacts with 
+
+−−−−−−→ TF carrier 
+
+−−−→ Bismuth subsalicylate CoT 
+
+Reasoning . . . Pepto-Bismol ’s active ingredient is Bismuth subsalicylate , carried by transferrin . . . 
+
+the answer is {Bismuth subsalicy-late} 
+
+. . . cycles between Pepto-Bismol ,
+
+Maalox , Mylanta , and Tums without committing to a final candidate . . . 
+
+×
+
+. . . candidates such as Ranitidine 
+
+and Bismuth subsalicylate are con-sidered for the symptom set . . . 
+
+the answer is {Ranitidine} 
+
+ToG 
+
+Path-finding 
+
+d1: basal plasma membrane →
+
+BEST1 ×
+
+d2: BMPR2 → Dibotermin alfa ×
+
+d1: basal plasma membrane →
+
+ABCC1 /AQP1 ×
+
+d2: ABCC1 → Clofazimine ×
+
+d1: basal plasma membrane →
+
+ABCC1 /AQP5 ×
+
+d2: AQP5 → palmoplantar kerato-derma ×
+
+Reasoning . . . traversed triplets do not connect to a Pepto-Bismol ingredient, but the answer is recalled from external knowledge as Bismuth subsalicy-late . . . 
+
+the answer is {Bismuth subsalicy-late} 
+
+. . . ABCC1 /AQP1 routes do not sur-face a gastrointestinal remedy . . . 
+
+the answer is {(no GI remedy iden-tified)} 
+
+. . . no path connects basal plasma membrane to a GI remedy; candidate-class reasoning lands elsewhere . . . 
+
+the answer is {Ranitidine} 
+
+ADA PATH 
+
+Path-finding 
+
+d1: basal plasma membrane → TF 
+
+✓
+
+d2: TF → Bismuth subsalicylate ✓
+
+d1: basal plasma membrane → TF 
+
+✓
+
+d2: TF → Bismuth subsalicylate ✓
+
+d1: basal plasma membrane → TF 
+
+✓
+
+d2: TF → Bismuth subsalicylate ✓
+
+Reasoning . . . TF interacts with the basal plasma membrane and carries Bis-muth subsalicylate , the active ingre-dient in Pepto-Bismol . . . 
+
+the answer is {Bismuth subsalicy-late} 
+
+. . . basal plasma membrane → TF 
+
+→ Bismuth subsalicylate , a com-mon GI remedy . . . 
+
+the answer is {Bismuth subsalicy-late} 
+
+. . . basal plasma membrane → TF 
+
+→ Bismuth subsalicylate for GI symptoms . . . 
+
+the answer is {Bismuth subsalicy-late} 
+
+Table 28: Case study, 2-hop, data_id=3786. ToG misses the ground-truth first hop from basal plasma membrane 
+
+to TF under all three query formulations and lands on unrelated transporters. It still produces the correct final answer on the explicit query by leveraging the Pepto-Bismol cue in the question itself, but fails on implicit and bare. ADA PATH recovers the entire ground-truth path at both depths in all three settings. Explicit Implicit Bare Query Delayed eruption of teeth is associ-ated with THRA; which disease char-acterized by an excess of lipids in the blood is indicated for the THRA-targeting drug Dextrothyroxine? Delayed eruption of teeth can be as-sociated with impaired thyroid hor-mone signaling involving a recep-tor targeted by a synthetic thyrox-ine analogue; this points to what metabolic disorder characterized by excess lipids in the blood? Delayed eruption of teeth is associ-ated with what disease characterized by an excess of lipids in the blood? 
+
+Ground-truth path : Delayed eruption of teeth associated with 
+
+−−−−−−−→ THRA target 
+
+−−→ Dextrothyroxine indication 
+
+−−−−−→ hyperlipidemia CoT 
+
+Reasoning . . . THRA regulates thyroid signal-ing; the THRA-targeting drug used for blood lipid disorders is Dex-trothyroxine , indicated for hyper-lipidemia . . . 
+
+the answer is {hyperlipidemia} 
+
+. . . thyroid hormone receptor reason-ing meanders across multiple disor-ders without settling on a definite answer . . . 
+
+×
+
+. . . candidate lipid disorders include 
+
+familial hypercholesterolemia , but the final answer settles on a differ-ent condition . . . 
+
+the answer is {familial hyperc-holesterolemia} 
+
+ToG 
+
+Path-finding 
+
+d1: Delayed eruption of teeth →
+
+THRA ✓
+
+d2: Abnormality of dental eruption 
+
+→ neighbor syndromes ×
+
+d3: — (path lost) 
+
+d1: Delayed eruption of teeth →
+
+THRA ✓
+
+d2: Delayed eruption of primary teeth → Cockayne syndrome ×
+
+d3: — 
+
+d1: Delayed eruption of teeth →
+
+THRA ✓
+
+d2: Abnormality of dental eruption 
+
+→ neighbor syndromes ×
+
+d3: — 
+
+Reasoning . . . retrieved triplets do not con-nect THRA to a lipid disorder, but the THRA-Dextrothyroxine-hyperlipidemia mechanism is recalled from prior knowledge . . . 
+
+the answer is {hyperlipidemia} 
+
+. . . no lipid disorder surfaced in the traversed subgraph; reasoning loops between thyroid-related conditions 
+
+. . . 
+
+the answer is {Resistance to Thy-roid Hormone} 
+
+. . . same as the CoT-style fallback; the answer drifts to a related lipid disorder . . . 
+
+the answer is {familial hyperc-holesterolemia} 
+
+ADA PATH 
+
+Path-finding 
+
+d1: Delayed eruption of teeth →
+
+THRA ✓
+
+d2: THRA → Dextrothyroxine ✓
+
+d3: Dextrothyroxine → hyperlipi-demia ✓
+
+d1: Delayed eruption of teeth →
+
+THRA ✓
+
+d2: THRA → Dextrothyroxine ✓
+
+d3: Dextrothyroxine → hyperlipi-demia ✓
+
+d1: Delayed eruption of teeth →
+
+THRA ✓
+
+d2: THRA → Dextrothyroxine ✓
+
+d3: Dextrothyroxine → hyperlipi-demia ✓
+
+Reasoning . . . THRA -targeting drug Dex-trothyroxine is indicated for hyper-lipidemia (and familial hyperlipi-demia) . . . 
+
+the answer is {hyperlipidemia} 
+
+. . . the synthetic thyroxine analogue targeting THRA is Dextrothyrox-ine , indicated for hyperlipidemia 
+
+. . . 
+
+the answer is {hyperlipidemia} 
+
+. . . Delayed eruption of teeth →
+
+THRA → Dextrothyroxine → hy-perlipidemia . . . 
+
+the answer is {hyperlipidemia} 
+
+Table 29: Case study, 3-hop, data_id=4416. ToG recovers only one of the three ground-truth triplets even on the explicit query, landing on the THRA seed but failing to trace through Dextrothyroxine . The THRA to Dextrothyroxine to hyperlipidemia link is then filled in from prior knowledge to answer the explicit query correctly, but the implicit and bare formulations strip enough mechanism that the fallback no longer works. A DA PATH 
+
+recovers all three hops under every formulation. Explicit Implicit Bare Query Which disease, characterized by a supraventricular arrhythmia with absent consistent P waves and an irregular ventricular response, is an indication for the THRA-targeting drug Dronedarone, where THRA is associated with Neurodevelopmental delay? Which supraventricular arrhythmia, marked by absent organized P waves and an irregularly irregular ventric-ular response, could be linked to neu-rodevelopmental delay through dis-rupted thyroid hormone-regulated transcription and the target profile of a rhythm-control antiarrhythmic drug? Which disease marked by a rapid, irregular rhythm arising in the upper chambers of the heart is associated with Neurodevelopmental delay? 
+
+Ground-truth path : Neurodevelopmental delay associated with 
+
+−−−−−−−→ THRA target 
+
+−−→ Dronedarone indication 
+
+−−−−−→ atrial fibrillation CoT 
+
+Reasoning . . . description matches atrial fibril-lation ; Dronedarone is indicated for atrial fibrillation/flutter . . . 
+
+the answer is {atrial fibrillation} 
+
+. . . the described rhythm-control drug acting on a thyroid receptor points to Dronedarone , indicated for atrial fibrillation . . . 
+
+the answer is {atrial fibrillation} 
+
+. . . neurodevelopmental syndromes with rhythm abnormalities are con-sidered, with the final pick drifting away from atrial fibrillation . . . 
+
+the answer is {Wolff-Parkinson-White syndrome} 
+
+ToG 
+
+Path-finding 
+
+d1: Neurodevelopmental delay →
+
+Beckwith-Wiedemann syndrome ×
+
+d2: — (THRA branch missed) 
+
+d3: — 
+
+d1: Neurodevelopmental delay →
+
+tuberous sclerosis /CARS1 ×
+
+d2: CARS1 → Cysteine ×
+
+d3: — 
+
+d1: Neurodevelopmental delay →
+
+CARS1 /KCNK4 ×
+
+d2: Delayed social development →
+
+Turner syndrome ×
+
+d3: — 
+
+Reasoning . . . traversed subgraph misses the Dronedarone link; the question’s de-scription of the arrhythmia recovers 
+
+atrial fibrillation from prior knowl-edge . . . 
+
+the answer is {atrial fibrillation} 
+
+. . . ATP-binding parent-class reason-ing still surfaces atrial fibrillation 
+
+as the matching arrhythmia . . . 
+
+the answer is {atrial fibrillation} 
+
+. . . Turner syndrome is associated with neurodevelopmental delay and carries cardiovascular risk . . . 
+
+the answer is {Turner syndrome} 
+
+ADA PATH 
+
+Path-finding 
+
+d1: Neurodevelopmental delay →
+
+THRA ✓
+
+d2: THRA → Dronedarone ✓
+
+d3: Dronedarone → atrial fibrilla-tion ✓
+
+d1: Neurodevelopmental delay →
+
+THRA ✓
+
+d2: THRA → Dronedarone ✓
+
+d3: Dronedarone → atrial fibrilla-tion ✓
+
+d1: Neurodevelopmental delay →
+
+THRA ✓
+
+d2: THRA → Dronedarone ✓
+
+d3: Dronedarone → atrial fibrilla-tion ✓
+
+Reasoning . . . Dronedarone is indicated for 
+
+atrial fibrillation (supraventricular arrhythmia with absent P waves) . . . 
+
+the answer is {atrial fibrillation} 
+
+. . . Dronedarone targets THRA 
+
+(linked to neurodevelopmental de-lay ) and is indicated for atrial fibril-lation . . . 
+
+the answer is {atrial fibrillation} 
+
+. . . neurodevelopmental delay →
+
+THRA → Dronedarone → atrial fibrillation . . . 
+
+the answer is {atrial fibrillation} 
+
+Table 30: Case study, 3-hop, data_id=4423. ToG recovers none of the three ground-truth triplets, never reaching the THRA seed, yet still answers the explicit and implicit queries correctly because both spell out enough mechanism for the LLM to recall the atrial-fibrillation indication of Dronedarone. Once the bare query removes the drug-mechanism cue, ToG drifts to Turner syndrome. A DA PATH traces the full path and stays correct.
