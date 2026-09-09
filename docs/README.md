@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-08</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-09</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 7 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 4 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>2</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>5</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>3</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>1</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-08 22:38:35 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-09 21:47:46 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,9 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日7篇AI医学论文，聚焦生成式AI辅助临床决策与单细胞扰动预测。</p>
-<p>最值得精读两篇：知识图谱+检索增强生成提升鉴别诊断（9.0分），以及预算受限图上的LLM个性化医疗概念表示（8.0分）。</p>
-<p>建议可先验证知识图谱增强的AI诊断工具在真实临床场景中的可靠性，再探索可配置语义分块对检索效果的影响。</p>
+<p>今日精读3篇、速读1篇，聚焦遗传力估计与单细胞扰动预测两方向；最值得关注的是基于遗传相似性表征的遗传力估计（10分），以及群体级联合分布建模的扰动预测方法（9分）。建议普通读者优先理解这两项方法如何提升复杂性状与细胞响应的预测能力，再结合网络贝叶斯模型在药物基因组学的应用作延伸。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -80,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">2 篇</strong>
+    <strong class="dpr-home-dashboard-count">3 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Enhancing Clinical Decision Support and Differential Diagnosis with Knowledge Graphs, and Retrieval Augmented Generation in Generative AI">Enhancing Clinical Decision Support and Differential Diagnosis with Knowledge Graphs, and Retrieval Augmented Generation in Generative AI</span></li><li><span class="dpr-home-dashboard-paper-title" title="REFINE: LLM Refinement over Budgeted Text-Attributed Graphs for Personalized Medical Concept Representation">REFINE: LLM Refinement over Budgeted Text-Attributed Graphs for Personalized Medical Concept Representation</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Heritability estimation using genetic similarity representation">Heritability estimation using genetic similarity representation</span></li><li><span class="dpr-home-dashboard-paper-title" title="PopPert: Population-level Joint-Distribution Modeling for Single-Cell Perturbation Prediction">PopPert: Population-level Joint-Distribution Modeling for Single-Cell Perturbation Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation">When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -93,12 +91,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">5 篇</strong>
+    <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation">When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Configurable Semantic Chunking for Biomedical Information Extraction in Retrieval-Augmented Generation">Configurable Semantic Chunking for Biomedical Information Extraction in Retrieval-Augmented Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="PopPert: Population-level Joint-Distribution Modeling for Single-Cell Perturbation Prediction">PopPert: Population-level Joint-Distribution Modeling for Single-Cell Perturbation Prediction</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="A Network-Structured Bayesian Hierarchical Model for Sparse Mutation-Drug Response Associations: Application to Cancer Pharmacogenomics">A Network-Structured Bayesian Hierarchical Model for Sparse Mutation-Drug Response Associations: Application to Cancer Pharmacogenomics</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 </div>
 
