@@ -1,6 +1,9 @@
 * <a class="dpr-sidebar-root-link" href="#/">首页</a>
 * <a class="dpr-sidebar-root-link dpr-sidebar-noactive-link" href="javascript:void(0)" data-dpr-hash="#/tutorial/README">使用教程</a>
 * Daily Papers
+  * 2026-09-11 <!--dpr-date:20260911-->
+    * 速读区
+      * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/11/2609.04861v1-when-genomic-masking-priors-fail-to-transfer-strong-variant-prediction-weak-functional-generation" data-sidebar-item="{&quot;title&quot;: &quot;When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.04861v1-when-genomic-masking-priors-fail-to-transfer-strong-variant-prediction-weak-functional-generation&quot;, &quot;score&quot;: &quot;7.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;med-ai&quot;}], &quot;evidence&quot;: &quot;面向变异效应预测与序列生成的大规模基因组扩散模型&quot;}">When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation</a>
   * 2026-09-09 <!--dpr-date:20260909-->
     * 精读区
       * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/09/2609.06392v1-heritability-estimation-using-genetic-similarity-representation" data-sidebar-item="{&quot;title&quot;: &quot;Heritability estimation using genetic similarity representation&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.06392v1-heritability-estimation-using-genetic-similarity-representation&quot;, &quot;score&quot;: &quot;10.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;gwas&quot;}], &quot;evidence&quot;: &quot;直接提出GWAS遗传力估计的相似性表示框架，属于GWAS统计方法&quot;}">Heritability estimation using genetic similarity representation</a>
