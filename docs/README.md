@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-11</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-12</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 1 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 3 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>1</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>3</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-11 21:54:41 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-12 21:45:59 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,9 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日速读1篇7.0分论文《When Genomic Masking Priors Fail to Transfer》，聚焦基因组掩码先验迁移失败。</p>
-<p>最值得看的是其核心反差：变异预测表现强，但功能生成弱，提示掩码先验跨任务迁移并不牢靠。</p>
-<p>普通读者可先记住“预测强≠生成强”，后续关注这类先验在真实功能任务中的复现与验证。</p>
+<p>2026-09-12 日报精选 3 篇速读论文，聚焦基因组预测、癌症风险评分与错误发现率定位。最值得关注：基因组掩码先验在变异预测上强、功能生成上弱，以及多目标纵向生物标志物评分可改进癌症风险评估。普通读者可优先了解后两篇在风险分层和统计定位上的实际应用思路。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -93,12 +91,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">1 篇</strong>
+    <strong class="dpr-home-dashboard-count">3 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation">When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation">When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Multi-Objective Composite Longitudinal Biomarker Scores for Improved Cancer Risk Assessment">Multi-Objective Composite Longitudinal Biomarker Scores for Improved Cancer Risk Assessment</span></li><li><span class="dpr-home-dashboard-paper-title" title="Covariate-localized False Discovery Rates">Covariate-localized False Discovery Rates</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>2</strong></span><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
 </section>
 </div>
 
