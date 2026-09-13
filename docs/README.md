@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-12</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-13</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 3 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 2 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>3</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>2</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-12 21:45:59 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-13 21:33:34 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-09-12 日报精选 3 篇速读论文，聚焦基因组预测、癌症风险评分与错误发现率定位。最值得关注：基因组掩码先验在变异预测上强、功能生成上弱，以及多目标纵向生物标志物评分可改进癌症风险评估。普通读者可优先了解后两篇在风险分层和统计定位上的实际应用思路。</p>
+<p>1）今日完成2篇速读、0篇精读，聚焦多重检验FDP控制与Lasso重拟合，两篇均获6.0/10。</p>
+<p>2）最值得扫一眼的是“依赖下的FDP控制经验分布方法”和“Lasso的广义岭重拟合与预测改进界”两个方向。</p>
+<p>3）普通读者可先读摘要与引言，判断这些方法是否适用于自己的高维数据分析或预测场景。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -91,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">3 篇</strong>
+    <strong class="dpr-home-dashboard-count">2 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation">When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Multi-Objective Composite Longitudinal Biomarker Scores for Improved Cancer Risk Assessment">Multi-Objective Composite Longitudinal Biomarker Scores for Improved Cancer Risk Assessment</span></li><li><span class="dpr-home-dashboard-paper-title" title="Covariate-localized False Discovery Rates">Covariate-localized False Discovery Rates</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Revisiting dependence in multiple testing: empirical distribution approaches for FDP control">Revisiting dependence in multiple testing: empirical distribution approaches for FDP control</span></li><li><span class="dpr-home-dashboard-paper-title" title="Generalized Ridge Refitting for the Lasso and Prediction Improvement Bounds">Generalized Ridge Refitting for the Lasso and Prediction Improvement Bounds</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>2</strong></span><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>2</strong></span></div>
 </section>
 </div>
 
