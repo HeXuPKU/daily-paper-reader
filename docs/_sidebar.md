@@ -1,6 +1,9 @@
 * <a class="dpr-sidebar-root-link" href="#/">首页</a>
 * <a class="dpr-sidebar-root-link dpr-sidebar-noactive-link" href="javascript:void(0)" data-dpr-hash="#/tutorial/README">使用教程</a>
 * Daily Papers
+  * 2026-09-14 <!--dpr-date:20260914-->
+    * 速读区
+      * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/14/2609.11032v1-bayesian-variable-selection-for-high-dimensional-predictors-with-missing-psychometric-outcomes" data-sidebar-item="{&quot;title&quot;: &quot;Bayesian Variable Selection for High-Dimensional Predictors with Missing Psychometric Outcomes&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.11032v1-bayesian-variable-selection-for-high-dimensional-predictors-with-missing-psychometric-outcomes&quot;, &quot;score&quot;: &quot;6.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;gwas&quot;}], &quot;evidence&quot;: &quot;高维预测变量的贝叶斯变量选择，类似贝叶斯PRS收缩&quot;}">Bayesian Variable Selection for High-Dimensional Predictors with Missing Psychometric Outcomes</a>
   * 2026-09-13 <!--dpr-date:20260913-->
     * 速读区
       * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/13/2609.06509v1-revisiting-dependence-in-multiple-testing-empirical-distribution-approaches-for-fdp-control" data-sidebar-item="{&quot;title&quot;: &quot;Revisiting dependence in multiple testing: empirical distribution approaches for FDP control&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.06509v1-revisiting-dependence-in-multiple-testing-empirical-distribution-approaches-for-fdp-control&quot;, &quot;score&quot;: &quot;6.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;gwas&quot;}], &quot;evidence&quot;: &quot;多重检验FDP控制，是GWAS统计的核心&quot;}">Revisiting dependence in multiple testing: empirical distribution approaches for FDP control</a>
