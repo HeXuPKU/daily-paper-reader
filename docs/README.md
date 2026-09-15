@@ -48,7 +48,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-14</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-15</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 1 篇</strong>
@@ -58,7 +58,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>1</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-14 22:24:29 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-15 21:51:50 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日速读1篇：高维预测变量下心理测量结果缺失的贝叶斯变量选择（6.0/10）。适合关注缺失数据与高维变量选择交叉方向的读者，可留意其如何处理结果缺失时的变量筛选。普通读者若遇到问卷缺失又想筛关键预测因素，可先了解贝叶斯变量选择的基本思路。</p>
+<p>今日日报完成 1 篇速读、0 篇精读，聚焦知识增强的单细胞基础模型。最值得看的是《Towards a knowledge-enhanced single-cell foundation model》（6.0/10），了解知识增强如何补足单细胞基础模型。普通读者可先读这篇速读摘要，若关注单细胞与基础模型交叉方向，再顺藤摸瓜找相关论文。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -94,9 +94,9 @@
     <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Bayesian Variable Selection for High-Dimensional Predictors with Missing Psychometric Outcomes">Bayesian Variable Selection for High-Dimensional Predictors with Missing Psychometric Outcomes</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Towards a knowledge-enhanced single-cell foundation model">Towards a knowledge-enhanced single-cell foundation model</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
 </section>
 </div>
 
