@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-17</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-18</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 4 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 5 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>4</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-17 22:26:14 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-18 21:58:42 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,9 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日速读4篇、精读0篇，重点集中在单细胞基础模型、临床理由生成与基因组隐私推理。</p>
-<p>最值得看的是两篇7.0分工作：知识增强的单细胞基础模型，以及面向可验证临床理由生成的EviGen，分别关注模型知识注入与临床可信度。</p>
-<p>普通读者可先扫这两篇摘要，重点看验证方式和落地限制；6.0分的基因组基础模型同态推理可作补充了解。</p>
+<p>2026-09-18 日报精选5篇：1篇精读聚焦大模型智能体用于循证遗传病严重度分类（8.0分），4篇速读覆盖单细胞基础模型、药物重定位筛选与衰老遗传调控。最值得关注大模型智能体在遗传病证据整合分类中的落地潜力，以及知识增强单细胞模型和药物重定位预训练表示两个方向。普通读者可先读精读那篇了解AI辅助遗传病判读的思路，再按兴趣浏览速读。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -80,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">0 篇</strong>
+    <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Large Language Model Agents for Evidence Based Genetic Disease Severity Classification">Large Language Model Agents for Evidence Based Genetic Disease Severity Classification</span></li></ul>
   </div>
-
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -96,9 +94,9 @@
     <strong class="dpr-home-dashboard-count">4 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Towards a knowledge-enhanced single-cell foundation model">Towards a knowledge-enhanced single-cell foundation model</span></li><li><span class="dpr-home-dashboard-paper-title" title="EviGen: Predictive Evidence Scaffolding for Verifiable Clinical Rationale Generation">EviGen: Predictive Evidence Scaffolding for Verifiable Clinical Rationale Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Feasibility of Homomorphic Inference for a Genomic Foundation Model">Feasibility of Homomorphic Inference for a Genomic Foundation Model</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Towards a knowledge-enhanced single-cell foundation model">Towards a knowledge-enhanced single-cell foundation model</span></li><li><span class="dpr-home-dashboard-paper-title" title="Pretrained Medical Representations for the Practical Screening of Drug Repositioning Candidates">Pretrained Medical Representations for the Practical Screening of Drug Repositioning Candidates</span></li><li><span class="dpr-home-dashboard-paper-title" title="GIA: Germline-Informed Aging with AlphaGenome Finds Genetically Regulated CpGs">GIA: Germline-Informed Aging with AlphaGenome Finds Genetically Regulated CpGs</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>3</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 </div>
 
