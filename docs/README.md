@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-20</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-21</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 7 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 6 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>6</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-20 21:15:45 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-21 22:57:45 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-09-20 日报精选 7 篇医学 AI 论文，其中 1 篇精读、6 篇速读。最值得关注的是精读论文 EviGen（8.0/10）用预测性证据脚手架生成可验证的临床推理依据，速读中 LLM 智能体做遗传病严重度分级与预训练医学表征筛选药物重定位候选各得 7.0 分。普通读者可优先从 EviGen 入手，理解 AI 临床推理如何做到有据可查、可验证。</p>
+<p>2026-09-21 日报精选 6 篇速读，聚焦单细胞基础模型、LLM 遗传病分级与临床多模态图推理。最值得看的是知识增强的单细胞基础模型，以及用 LLM 智能体做循证遗传病严重度分类。建议普通读者优先浏览这两篇摘要，了解 AI 如何辅助生物医学证据整合。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">1 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="EviGen: Predictive Evidence Scaffolding for Verifiable Clinical Rationale Generation">EviGen: Predictive Evidence Scaffolding for Verifiable Clinical Rationale Generation</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
+
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -94,9 +94,9 @@
     <strong class="dpr-home-dashboard-count">6 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Large Language Model Agents for Evidence Based Genetic Disease Severity Classification">Large Language Model Agents for Evidence Based Genetic Disease Severity Classification</span></li><li><span class="dpr-home-dashboard-paper-title" title="Pretrained Medical Representations for the Practical Screening of Drug Repositioning Candidates">Pretrained Medical Representations for the Practical Screening of Drug Repositioning Candidates</span></li><li><span class="dpr-home-dashboard-paper-title" title="On Large-Scale Multiple Testing Over Networks: A Non-Asymptotic Approach">On Large-Scale Multiple Testing Over Networks: A Non-Asymptotic Approach</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Towards a knowledge-enhanced single-cell foundation model">Towards a knowledge-enhanced single-cell foundation model</span></li><li><span class="dpr-home-dashboard-paper-title" title="Large Language Model Agents for Evidence Based Genetic Disease Severity Classification">Large Language Model Agents for Evidence Based Genetic Disease Severity Classification</span></li><li><span class="dpr-home-dashboard-paper-title" title="M2G-LLM: Enhancing Clinical Prediction via Multimodal Graph Reasoning and LLM Context Injection">M2G-LLM: Enhancing Clinical Prediction via Multimodal Graph Reasoning and LLM Context Injection</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>6</strong></span></div>
 </section>
 </div>
 
