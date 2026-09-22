@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-21</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-22</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 6 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 5 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>6</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>5</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-21 22:57:45 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-22 22:09:26 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-09-21 日报精选 6 篇速读，聚焦单细胞基础模型、LLM 遗传病分级与临床多模态图推理。最值得看的是知识增强的单细胞基础模型，以及用 LLM 智能体做循证遗传病严重度分类。建议普通读者优先浏览这两篇摘要，了解 AI 如何辅助生物医学证据整合。</p>
+<p>今天速读 5 篇、精读 0 篇，主线集中在 LLM 智能体如何服务临床推理、遗传病分级与真实临床数据分析。</p>
+<p>最值得看的是三篇 7.0 分工作：EviGen 用预测性证据脚手架生成可验证的临床理由，遗传病严重度分类强调基于证据的智能体，Ascent 则把智能体架在 MCP 上做真实临床数据分析。</p>
+<p>普通读者可优先关注&quot;证据可追溯、结论可验证&quot;这条共同线索，看这些系统能否在真实医疗场景中稳定落地。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -91,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">6 篇</strong>
+    <strong class="dpr-home-dashboard-count">5 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Towards a knowledge-enhanced single-cell foundation model">Towards a knowledge-enhanced single-cell foundation model</span></li><li><span class="dpr-home-dashboard-paper-title" title="Large Language Model Agents for Evidence Based Genetic Disease Severity Classification">Large Language Model Agents for Evidence Based Genetic Disease Severity Classification</span></li><li><span class="dpr-home-dashboard-paper-title" title="M2G-LLM: Enhancing Clinical Prediction via Multimodal Graph Reasoning and LLM Context Injection">M2G-LLM: Enhancing Clinical Prediction via Multimodal Graph Reasoning and LLM Context Injection</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="EviGen: Predictive Evidence Scaffolding for Verifiable Clinical Rationale Generation">EviGen: Predictive Evidence Scaffolding for Verifiable Clinical Rationale Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Large Language Model Agents for Evidence Based Genetic Disease Severity Classification">Large Language Model Agents for Evidence Based Genetic Disease Severity Classification</span></li><li><span class="dpr-home-dashboard-paper-title" title="Ascent: An Agentic System over the Model Context Protocol for Real-World Clinical Data Analysis">Ascent: An Agentic System over the Model Context Protocol for Real-World Clinical Data Analysis</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>6</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span></div>
 </section>
 </div>
 
