@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-23</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-24</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 4 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 8 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>2</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>2</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>7</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-23 22:29:34 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-24 22:07:17 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,10 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读2篇、速读2篇共4篇论文，聚焦LLM智能体在遗传病分级与超高维变量筛选中的落地。最值得关注LLM Agent用于循证遗传病严重度分类（8.0）和结构化“筛选—选择”超高维变量选择（8.0）。普通读者可先读这两篇精读，再按需速读临床数据分析与单细胞长尾基准。</p>
+<p>今日共生成 8 篇推荐（精读 1 篇，速读 7 篇）</p>
+<p>精读：《Ascent: An Agentic System over the Model Context Protocol for Real-World Clinical Data Analysis》（8.0/10）</p>
+<p>速读：《Large Language Model Agents for Evidence Based Genetic Disease Severity Classification》（7.0/10）, 《EviGen: Predictive Evidence Scaffolding for Verifiable Clinical Rationale Generation》（6.0/10）, 《Pretrained Medical Representations for the Practical Screening of Drug Repositioning Candidates》（6.0/10）</p>
+<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +81,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">2 篇</strong>
+    <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Large Language Model Agents for Evidence Based Genetic Disease Severity Classification">Large Language Model Agents for Evidence Based Genetic Disease Severity Classification</span></li><li><span class="dpr-home-dashboard-paper-title" title="Structured Screen-and-Select for Ultra-High-Dimensional Variable Selection">Structured Screen-and-Select for Ultra-High-Dimensional Variable Selection</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Ascent: An Agentic System over the Model Context Protocol for Real-World Clinical Data Analysis">Ascent: An Agentic System over the Model Context Protocol for Real-World Clinical Data Analysis</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -91,12 +94,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">2 篇</strong>
+    <strong class="dpr-home-dashboard-count">7 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Ascent: An Agentic System over the Model Context Protocol for Real-World Clinical Data Analysis">Ascent: An Agentic System over the Model Context Protocol for Real-World Clinical Data Analysis</span></li><li><span class="dpr-home-dashboard-paper-title" title="Rethinking Class Imbalance for Single-Cell Foundation Models: A Systematic Benchmark Across Architectures and Long-Tail Loss Functions">Rethinking Class Imbalance for Single-Cell Foundation Models: A Systematic Benchmark Across Architectures and Long-Tail Loss Functions</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Large Language Model Agents for Evidence Based Genetic Disease Severity Classification">Large Language Model Agents for Evidence Based Genetic Disease Severity Classification</span></li><li><span class="dpr-home-dashboard-paper-title" title="EviGen: Predictive Evidence Scaffolding for Verifiable Clinical Rationale Generation">EviGen: Predictive Evidence Scaffolding for Verifiable Clinical Rationale Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Pretrained Medical Representations for the Practical Screening of Drug Repositioning Candidates">Pretrained Medical Representations for the Practical Screening of Drug Repositioning Candidates</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>2</strong></span></div>
 </section>
 </div>
 

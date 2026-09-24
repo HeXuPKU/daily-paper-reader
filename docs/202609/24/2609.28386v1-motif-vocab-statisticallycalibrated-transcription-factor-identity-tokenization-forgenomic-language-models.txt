@@ -1,0 +1,306 @@
+Title: Motif-Vocab: StatisticallyCalibrated Transcription-Factor-Identity Tokenization forGenomic Language Models
+
+URL Source: https://arxiv.org/pdf/2609.28386v1
+
+Published Time: Thu, 24 Sep 2026 01:31:01 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Motif-Vocab: Statistically Calibrated Transcription-Factor-Identity Tokenization for Genomic Language Models 
+
+## Liangyu Li, Michael A. White ∗
+
+Washington University in St. Louis {l.liangyu, mawhite}@wustl.edu 
+
+Abstract 
+
+Tokenization is a central design choice in genomic language models, yet most deoxyribonucleic acid (DNA) tokenizers use characters, fixed-length k-mers, or frequency-derived sub-words without explicitly using prior information about the specificity of DNA-binding regulatory factors. We introduce Motif-Vocab, a biologically informed tokenizer that scans both DNA strands for statistically calibrated motif matches, emits transcription-factor (TF) identity tokens, and applies nu-cleotide, k-mer, or byte-pair encoding (BPE) to unmatched se-quence. Motif-specific null distributions put position-weight matrices (PWMs) of different lengths and degeneracy on a common significance scale; deterministic overlap rules make the representation reproducible. In controlled Bidirectional Encoder Representations from Transformers (BERT) pretrain-ing on two billion base pairs, real motif libraries outper-form randomized-motif controls on 54 of 55 in-scope down-stream tasks. On a motif-disjoint recognition task derived from DART-Eval Task 2, TF-specific tokens improve macro-F1 by 0.040 over a position-matched generic motif token and by 0.033 over a matched no-motif tokenizer (95% bootstrap confidence interval: 0.027–0.038). Motif tokens also receive stronger attribution and produce larger occlusion effects than shuffled controls. Dense no-motif tokenizers remain strong general-purpose baselines, including a near-tie on the five-task BERT-base panel. Thus, Motif-Vocab is not a universal accuracy replacement; it is a targeted, interpretable inductive bias for motif-sensitive genomic modeling. 
+
+## 1 Introduction 
+
+Tokenization determines the units on which a language model allocates embeddings, attention, and prediction tar-gets. Natural-language processing (NLP) commonly uses data-driven subwords such as byte-pair encoding (BPE) (Sen-nrich, Haddow, and Birch 2016; Kudo and Richardson 2018); Bidirectional Encoder Representations from Transformers (BERT) then learns contextual representations by masked language modeling (MLM) over these units (Devlin et al. 2019). Tokenization schemes from NLP are commonly used for deoxyribonucleic acid (DNA) sequences, where there are only four canonical characters but no spaces or agreed word boundaries. Existing genomic language models use single bases, fixed k-mers, BPE, or learned segmentation (Ji et al. 2021; Zhou et al. 2024; Nguyen et al. 2023; Schiff et al. 
+
+> ∗
+
+Corresponding author. 
+
+2024; Dalla-Torre et al. 2025; Qiao et al. 2024; Li et al. 2026; Huang et al. 2026). These choices balance sequence length and vocabulary size, but tokens are not chosen to align with meaningful genomic sequence elements. This mismatch is especially relevant in regulatory DNA, the non-protein-coding sequences that control the spatial and temporal expression of genes. Regulatory DNA functions by encoding binding sites for transcription factor (TF) proteins that recognize short, degenerate DNA patterns called mo-tifs. Motifs are typically 6-12 base pairs (bp) in length, can occur on either strand of the DNA double helix, and can over-lap. A generic tokenizer may split one motif across tokens, merge it with unrelated context, or represent occurrences of the same TF inconsistently. An attractive alternative to generic tokenizers would be a biologically-motivated tok-enization scheme that accounts for TF binding motifs. Mo-tifs are represented as position-frequency matrices (PFMs), which record nucleotide counts at each motif position; adding pseudocounts and normalizing the four nucleotide counts at each position yields position probability matrices (PPMs), which give the probability of each of the four DNA nu-cleotides occurring at each motif position, or as position-weight matrices (PWMs), which convert those frequen-cies into position-specific log-odds scores. Open, curated databases such as JASPAR (Ovek Baydar et al. 2026) and The Homo sapiens Comprehensive Model Collection (HOCO-MOCO) (Vorontsov et al. 2024) collect thousands of PWMs that could be used as prior information for motif-based to-kenization. However, motif scanning algorithms cannot be easily incorporated into a tokenization pipeline because a raw motif scanner returns scores that are not comparable across motifs of different lengths and information content, and be-cause de novo scans are too computationally expensive for a general-purpose genomic language model tokenizer. We address these challenges with a DNA tokenizer that identifies statistically significant motifs, paired with a fall-back representation to handle sequences between motifs. We propose Motif-Vocab (Figure 1). It calibrates each motif against a background-specific null distribution, maps signifi-cant matches from all matrices and both strands to one token per TF, resolves competing matches deterministically, and fills unmatched regions with bases, k-mers, or BPE. This creates an input interface in which a token can be traced to a known regulatory factor. We can then test whether the model arXiv:2609.28386v1 [q-bio.GN] 23 Sep 2026 uses that token through attribution, which assigns prediction importance to input tokens, and occlusion, which masks a token and measures the prediction change. We find that Motif-Vocab does not universally supersede generic tokenizers, but it provides an interpretable inductive bias for motif-sensitive regulatory tasks. We match the inter-nal encoder, pretraining base-pair corpus, downstream splits, and nominal training budget, while varying tokenization. We compare real motifs with no-motif, randomized-motif, and position-matched generic-token controls, then add pub-lic DNABERT-2, Nucleotide Transformer version 2 (NT-v2), and Caduceus baselines. The evidence supports three contri-butions: 
+
+• We introduce a deterministic TF-identity tokenizer with motif-specific significance calibration, both-strand scan-ning, nucleotide, 6-mer, or BPE fallback units, and overlap-aware MLM. 
+
+• We provide a controlled study spanning 12 tokeniz-ers variants, 55 in-scope downstream tasks, three seeds, BERT-base scale-up, public DNA language models, and a motif-disjoint DART-Eval-derived evaluation. 
+
+• We show that real TF identity contributes beyond seg-mentation geometry and supports mechanistic interpre-tation on motif-sensitive tasks, while clearly delimiting settings where dense no-motif tokenizers remain stronger on motif-independent tasks. 
+
+## 2 Background and Related Work 
+
+Tokenization and domain priors. BPE and Sentence-Piece compress frequent substrings, but segmentation quality depends on the domain and objective (Bostrom and Durrett 2020; Rust et al. 2021). Byte-level models remove learned boundaries at the cost of longer sequences (Xue et al. 2022). Motif-Vocab instead retains generic fallback units while re-serving atomic tokens for detected motifs. 
+
+Language models and AI for Science. Large language models (LLMs) and foundation models show that pretrain-ing on large corpora can produce transferable representations (Brown et al. 2020; Bommasani et al. 2021). Multimodal LLMs (MLLMs) extend this idea by aligning language with another modality through contrastive pretraining or cross-modal conditioning (Radford et al. 2021; Alayrac et al. 2022). A recurring theme in AI for Science is that raw measurements are not enough: useful models often encode domain struc-ture in the representation, objective, or simulator (Wang et al. 2023). Examples include physics-informed losses, message-passing simulators, neural operators, and scientific MLLM systems (Raissi, Perdikaris, and Karniadakis 2019; Sanchez-Gonzalez et al. 2020; Kovachki et al. 2023; Huang et al. 2025). Our model is not itself a multimodal LLM. The rele-vance is representational: MLLMs connect raw observations to a second semantic modality, whereas Motif-Vocab con-nects DNA substrings to symbols from a curated TF knowl-edge source. The TF token stream can therefore act as a lightweight bridge between sequence and biological seman-tics, and could later support DNA–text or DNA–knowledge MLLMs. Here we isolate the preceding question: whether that symbolic alignment is already useful within a sequence-only encoder. 
+
+Genomic language models and tokenizers. DNABERT uses overlapping k-mers, DNABERT-2 uses BPE, and Nu-cleotide Transformer uses fixed k-mers at larger multi-species scale (Ji et al. 2021; Zhou et al. 2024; Dalla-Torre et al. 2025). HyenaDNA and Caduceus operate at nucleotide resolution with long-context sequence architectures (Nguyen et al. 2023; Schiff et al. 2024). Recent work makes segmen-tation itself adaptive: MxDNA learns overlapping and dis-continuous units, MergeDNA merges context-dependent to-kens, and DNAChunker learns variable-length chunks (Qiao et al. 2024; Li et al. 2026; Kim et al. 2026). EvoLen biases BPE vocabulary construction with evolutionary conservation (Huang et al. 2026). Closest to our aim, DNAMotifTokenizer injects motif knowledge and motivates our low-information flank trimming (Zhou et al. 2025). DNAMotifTokenizer is closest in using motif knowledge. Motif-Vocab differs in four central respects: it preserves full PWM degeneracy, calibrates each motif on a common p-value scale, collapses multiple matrices and strands to one TF token, and uses determinis-tic overlap resolution with base-span masking (Zhou et al. 2025). 
+
+Regulatory sequence models. Predicting regulatory func-tion from DNA sequence alone has long been an important modeling goal in genomics(Beer and Tavazoie 2004). Task-specific neural networks, such as DeepSEA(Zhou and Troy-anskaya 2015), Basenji(Kelley et al. 2018), BPNet(Avsec et al. 2021b), and Enformer(Avsec et al. 2021a), have shown some success at predicting regulatory DNA function, the impact of DNA sequence variants, and long-range interac-tions between distant regulatory elements in the genome. These models learn motifs as latent features, which are then extracted through post-hoc attribution methods(Avsec et al. 2021b; Shrikumar et al. 2018). With genomic language mod-els, motif recovery is challenging because motifs may span token boundaries, and their latent representations must be mapped back to nucleotide-level patterns. Motif-Vocab in-stead presents calibrated motif identities at the model input. 
+
+Motif scoring and regulatory evaluation. A PWM as-signs a log-odds score to each base at each motif po-sition (Stormo 2013). Find Individual Motif Occurrences (FIMO) established the value of calibrated motif occur-rence tests (Grant, Bailey, and Noble 2011); we adapt this idea to token generation and precompute exact score dis-tributions. Our matrices come from JASPAR CORE 2026 (Ovek Baydar et al. 2026). For evaluation, Genomic Bench-marks provides reproducible regulatory sequence classifica-tion tasks (Grešová et al. 2023); DNABERT-2 and Nucleotide Transformer add broader genome-understanding panels; and DART-Eval targets regulatory DNA under zero-shot, prob-ing, and fine-tuning protocols (Patel et al. 2024). 
+
+## 3 Method 
+
+3.1 Calibrated Motif Matching 
+
+Let x ∈ { A, C, G, T }n and let P ∈ [0 , 1] L×4 be the position probability matrix of a length-L motif. With background base OFFLINE 
+
+# ONLINE                     
+
+> 0.2 0.7 0.1 0.1 0.0 0.1
+> 0.2 0.0 0.9 0.0 0.1 0.3
+> 0.3 0.2 0.0 0.8 0.9 0.3
+> 0.3 0.1 0.0 0.1 0.0 0.3
+> A
+> C
+> G
+> T
+
+motif matrices 
+
+> keep
+
+normalize + trim 
+
+> 𝑊 = 𝑙𝑜𝑔 2(𝑃
+> 𝑏 )
+> log-odds PWM
+> reverse complement
+
++
+
+exact null DP 
+
+p
+
+s
+
+motif library  
+
+> score p-value
+
+TF 
+
+build once 
+
+per sequence  
+
+> -..GGGTATAAAGG..CACGTG..
+> + ..CCCATATTTCC..GTGCAC..
+
+scan DNA sequence 
+
+→ score → motif -specific  𝑝 
+
+𝛼 
+
+keep  𝑝 ≤ 𝛼   
+
+> 𝑝 = 10 −5
+> 𝑝 = 10 −6
+> 𝑝 =10 −8
+
+significance-priority 
+
+> (keep the smallest p-value hit)
+
+TF:GATA  TF:CTCF 
+
+per-TF tokens + fallback 
+
+(k-mer / BPE / base) 
+
+look up PWM and motif-specific null table 
+
+Two overlapping motif hits  Emit tokens Figure 1: Motif-Vocab pipeline. Offline, JASPAR position-frequency matrices (PFMs) are normalized into PPMs, trimmed only at low-information flanks, converted to log-odds PWMs, augmented with reverse complements, and assigned exact null score tables. Online, both strands are scanned; candidates with calibrated p ≤ α become TF-identity tokens, and unmatched sequence uses a nucleotide, k-mer, or BPE fallback. Token spans are retained for base-span masking and interpretation. probabilities ba, its PWM is Wk,a = log 2(Pk,a /b a) and the score at start i is 
+
+SW (x, i ) = 
+
+> L
+
+X
+
+> k=1
+
+Wk,x i+k−1 . (1) Raw scores cannot be compared across motifs. Under the assumption of independent background bases Bk ∼ b, we therefore use pW (s) = Pr[ P 
+
+> k
+
+Wk,B k ≥ s]. A dynamic pro-gram convolves the per-position score distributions on a grid of precision γ = 100 and stores the survival table once per motif. At tokenization time, a score needs one lookup; a can-didate is retained when pW (SW ) ≤ α, with α = 10 −4 in all main experiments. The observed 2-billion-base-pair train-ing background supplies b. This calibration converts motif-specific raw scores into a common significance scale: a short, low-degeneracy motif and a longer, more degenerate motif are compared by how unlikely their scores are under the same background, not by the raw score magnitude. We add pseudocount 0.01 , normalize each PFM to ob-tain PPM, and trim only consecutive maximum PPM prob-ability of flank columns below the information threshold 
+
+0.4; the motif interior is never removed. The trimming rule is inspired by the motif-boundary refinement in DNAMo-tifTokenizer (Zhou et al. 2025). We then build forward and reverse-complement PWMs. The offline library stores the TF name, matrix accession, strand, trimmed length, PWM, and calibrated survival table. JASPAR matrix accessions shar-ing the same exact TF name map to one token, so versions or alternative matrices for GATA1 map to ⟨TF : GATA1 ⟩.Related TFs, such as GATA1 and GATA2, remain distinct, even though they may have highly similar motifs. Reverse-complement hits also retain the same TF identity while strand is stored as metadata. 
+
+3.2 TF Vocabulary, Overlap, and Masking 
+
+The vocabulary contains five special tokens, the four bases, the fallback inventory, and one token ⟨TF : t⟩ per TF (Fig-ure 2). The final library uses all non-redundant Vertebrata entries in JASPAR CORE 2026, rather than a human/mouse-only filter: 1,019 forward JASPAR PWMs, their reverse complements, collapsing accessions by TF name yields 964 unique TF identities and therefore 964 TF token IDs; strand orientation does not create an additional token. The ma-trix evidence is annotated to Homo sapiens , Mus muscu-lus , Rattus norvegicus , Rattus rattus , Oryctolagus cunicu-lus , Gallus gallus , and Xenopus laevis ; one PFM lacks a species field, and one has four source species. These species fields record the origin of the evidence used to construct a profile, whereas Vertebrata is the profile’s taxonomic scope (Ovek Baydar et al. 2026). Each emitted token carries its half-open base span [s, e ), strand, motif accession, score, and p-value. For an input sequence, Motif-Vocab scans every start position on both strands. Each significant hit is rep-resented as h = ( sh, e h, t h, r h, S h, p h), where sh, e h are base coordinates, th is the TF identity, rh is the strand, and 
+
+Sh, p h are the PWM score and calibrated significance. Un-covered bases are encoded by the selected fallback tokenizer: nucleotide, fixed k-mer, or BPE. This makes the method a drop-in tokenizer rather than a separate feature extractor. Motif-Vocab supports two regimes. In non-overlap mode, all significant hits are sorted by 
+
+κ(h) = ( ph, −Sh, −ℓh, s h, name h), (2) and are greedily accepted if they do not overlap an accepted interval. This keeps the most significant local evidence and gives deterministic ties (Figure 3). In coupled-overlap mode, used by K6-OV (overlapping 6-mer fallback) and BPE-OV (overlapping byte-pair-encoding fallback), the best candidate at each start is emitted and the scan advances one base; fall-back k-mers or BPE pieces also advance one base. Thus mo-tif and fallback evidence can cover the same bases. Because ordinary token MLM would over-mask or leak overlapping content, we sample masked base spans and mask every token intersecting those spans; the prediction target is therefore tied to genomic coordinates rather than to an arbitrary segmenta-tion. 
+
+Variant notation. The variant labels describe tokenizer conditions, not different internal encoder architectures: all broad controlled variants use the same BERT-small model. A label combines the motif layer, fallback tokenizer, and overlap mode; for example, Motif K6-OV means real JAS-PAR TF tokens plus an overlapping 6-mer fallback. For the shuffled-motif control, we randomly permuted the motif po-sitions for each JASPAR PFM and then independently shuf-fled the A/C/G/T count labels within each position. This preserves motif length and the per-position count distribu-tions while destroying true TF sequence specificity, thereby controlling for generic motif-like structure rather than TF identity. Generic identity (Generic ID) is a separate DART-T2 control that retains real hit spans but maps every TF to one shared <MOTIF> token.                
+
+> Label part Values Meaning Motif layer No motif; Motif; Shuffled none; real JASPAR; ran-domized matrices Fallback nucleotide; K6; BPE single base; fixed 6-mer; byte-pair encoding Suffix NO; OV non-overlap; coupled one-base overlap Scale BERT-small; BERT-base controlled main study; se-lected scale-up
+
+For M motifs with total length Ltot = P 
+
+> m
+
+Lm and H
+
+retained candidates, online scanning and non-overlap reso-lution cost O(nL tot + H log H); coupled overlap omits the global sort. Offline null construction costs O(γ∆ P 
+
+> m
+
+L2
+
+> m
+
+)
+
+for score range ∆ and is paid once. In practice, the expensive step is library construction, while training and fine-tuning reuse serialized motif tables and tokenized caches. Serial-ized libraries and tokenizer metadata make the mapping de-terministic and reusable. 
+
+## 4 Experiments 
+
+4.1 Data, Models, and Benchmarks 
+
+Pretraining. We use non-overlapping 512-base-pair (bp) windows from the GENCODE Release 49 human GRCh38.p14 and Release M38 mouse GRCm39 primary assemblies (Mudge et al. 2025). We retain canonical au-tosomes and chromosome X, reserve chromosome 8 from both species for validation and chromosome 9 for test, and use the remaining canonical chromosomes for training. Win-dows with more than 5% characters other than A, C, G, or T are discarded. We prespecified 2.00 billion unique training bp as a controlled-compute budget: it keeps DNA exposure equal across 12 tokenizer variants and three seeds while making the full comparison tractable in compute, tokenized-cache storage, and wall time. The cap is an experimental budget, not a biological boundary or a claim that 2 billion bp represent both complete genomes; processing every eligible base from both assemblies for every variant would increase cost without improving isolation of the tokenizer variable. We allocate 3,906,250 training windows proportionally to the eligible window count of each species and chromosome, then retain windows in genomic order up to each quota. This is deterministic quota-based truncation, not random sam-pling. The resulting 2.00 billion bp comprise 1.067 billion human and 0.933 billion mouse bp; validation and test con-tain 0.270 billion and 0.243 billion bp. Thus the corpus is a reproducible subset of the two assemblies, not their full combined sequence. BPE is trained only on the training split. Each three-epoch BERT-small run therefore receives 6.00 billion bp of cumulative sequence exposure from 2.00 billion unique training bp. Controlled BERT-small models have 6 layers, width 512, 8 attention heads, and feed-forward width 2,048; they use 15% MLM, three corpus epochs, and the same input base-pair budget. BERT-base scale-up uses 12 layers, width 768, 12 heads, and width 3,072. Tokenization necessarily changes sequence length, vocabulary-dependent embedding parameters, and masking implementation; these are measured consequences of the tokenizer, not held-fixed quantities. All downstream summaries average seeds 13, 42, and 3407 and report macro-F1. 
+
+Broad and core panels. The broad controlled study re-ports 55 binary or multiclass tasks: six Genomic Bench-marks (GB), 34 Genome Understanding Evaluation (GUE) tasks from DNABERT-2, and 15 Nucleotide Transformer (NT) tasks. They cover promoters, enhancers, open chro-matin regions (OCRs), splice sites, histone marks, and TF binding. Many broad tasks are only indirectly connected to JASPAR TF-binding motifs, so they should be read as gener-alization stress tests rather than tasks designed to favor Motif-Vocab. We uniformly exclude three initially acquired GUE task groups: phage fragment classification, virus/coronavirus disease 2019 (COVID-19) classification, and virus species classification. Their taxonomic sequence labels do not di-rectly test eukaryotic TF binding or the cis-regulatory mech-anisms represented by the JASPAR vocabulary. JASPAR CORE is a eukaryotic TF motif collection and does not sup-ply a viral TF-binding vocabulary for these labels. This se-mantic scope rule is applied to every tokenizer, independent of score. Twelve tokenizer variants and three seeds there-fore give 1,980 paper-facing runs. All 2,088 original runs remain in provenance. An exploratory five-task core panel tests scale transfer on human non-TATA promoters, human OCRs, synthetic motif disruption, enhancers, and TATA-box [PAD] ... [MASK]  A/C/G/T  k-mers / BPE 
+
+Many motif views, one TF identity      
+
+> special nucleotides fallback pieces TF identity tokens
+> TF:GATA TF:CTCF …
+
+GATA 
+
+CTCF        
+
+> PWM 1 (+) PWM 1 (-) PWM 2 (+)
+> PWM 1 (+) PWM 1 (-)
+> A
+> C
+> G
+> T
+> A
+> C
+> G
+> T
+> Motif entries group by TF identity
+> <TF:GATA>
+> <TF:CTCF>
+> All matrices mowned by TF τ( m) share tok( m)= ⟨TF: τ( m)⟩.
+> one shared ID
+> one shared ID
+
+Figure 2: TF-level vocabulary. Multiple matrices and both strands map to one exact TF identity token. Different GATA factors remain separate; the schematic label GATA denotes one example identity, not a merged TF family. Fixed special and nucleotide IDs and fallback units remain available for unmatched sequence. Which overlapping motif should become a token?              
+
+> 10 12 20 22
+> A: start 10, p= 10 −3
+> B: start 12, p= 10 −8
+> B is 10 5×more significant
+> Position-greedy
+> Earlier start wins
+> keep Adrop B
+> Result depends on where the scan encounters a hit.
+> Significance-priority (ours)
+> Smaller calibrated p-value wins
+> keep Bdrop A
+> Deterministic: the strongest local evidence is retained.
+
+Figure 3: Non-overlap conflict resolution. An earlier weak hit can hide a later strong hit under position-greedy seg-mentation. Significance priority retains the smaller p-value. Coupled-overlap variants instead emit the best hit at each start and do not apply this exclusion step. promoters. The core panel was chosen for endpoint diversity and closer TF-regulatory relevance, not as a prespecified universal benchmark. 
+
+DART-Eval. DART-Eval defines five regulatory evalua-tions: (T1) regulatory sequence versus dinucleotide-matched control; (T2) sensitivity to 1,443 TF motifs; (T3) cell-type-specific regulatory DNA; (T4) quantitative regulatory activity; and (T5) genetic-variant effect prediction (Patel et al. 2024). We use the released T2 positive and shuffled motif-insertion sequences, generated from the HOCOMOCO v12 motif library (Vorontsov et al. 2024), to construct a balanced supervised recognition stress test (100k/20k/20k train/validation/ test), with all 1,443 motif identities disjoint across splits. We call it DART-T2 motif recognition ; “motif-disjoint” means that the motif identities used to generate pos-itives in the held-out split are absent from fine-tuning. It tests whether a tokenizer transfers to unseen motif identities under one fine-tuning protocol; it is not the official DART zero-shot likelihood/embedding score. Project-specific T5 diagnostics are kept in the supplement because their protocol and objec-tive differ from the official benchmark. 
+
+4.2 Results and Ablations 
+
+Broad performance scopes the claim. Tables 1 and 2 show that dense overlapping 6-mers are the strongest general-purpose tokenizer: on common 55-task non-virus support, No-motif K6-OV obtains 0.766 overall and 0.794 when the three families are weighted equally, versus 0.756/0.784 for Motif K6-OV. The lower broad-task aggregate of Motif K6-OV shows that Motif-Vocab is not a universal accuracy re-placement. Most broad tasks do not directly ask whether a JASPAR TF motif is present. Their labels can depend on general sequence composition, splice-site syntax, his-tone or epigenetic state, or regulatory context that is only partly explained by TF-binding specificity. Dense K6-OV supplies a 6-mer at every sequence start, preserving uniform local sequence evidence for such endpoints. Motif-Vocab is deliberately narrower: at a significant match it substitutes a categorical TF identity for one fallback unit. Its advan-tage should therefore be judged against matched motif con-trols and on TF-sensitive tasks, not by requiring it to domi-nate a general benchmark average. The matched real-versus-randomized comparison is different: real Motif K6-OV im-proves GB/GUE/NT by 0.034/0.089/0.065 and is positive on 54 of 55 task means (two-sided sign test p = 3 .11 × 10 −15 ). The randomized library actually covers more bases (0.788 versus 0.723) and activates more distinct motifs (1,796 ver-sus 1,658), so this gain is not explained by greater token density. Because hit positions still differ, this control tests biological motif structure, not identity alone. 
+
+TF identity survives stricter controls. The generic-ID model, also called the generic-motif control, uses the same real-JASPAR hits, spans, K6-OV fallback tokens, pretrain-ing seed, and budget as Motif K6-OV, but replaces every named TF token with one shared <MOTIF> token. It there-fore preserves where motif-shaped segments occur and their tokenization geometry while removing which TF matched. Motif-Vocab reaches 0.790 ± 0.003 on DART-T2, versus 
+
+0.749 ± 0.005 for generic ID, a 0.040 gain in all three seeds. Against the matched no-motif tokenizer, a paired hierarchi-GB (6) GUE (34) NT (15) 0.00 0.05 0.10  
+
+> Δ macro-F1
+> +0.034 6/6 +0.089 33/34 +0.065 15/15
+
+(a) Real vs. shuffled motif libraries       
+
+> 0.50 0.55 0.60 0.65 0.70 0.75 0.80
+
+Macro-F1 
+
+> Real TF IDs Shuffled IDs No motif Generic ID DNABERT-2 NT-v2 Caduceus
+> Tokenizer / model
+> 0.791 0.682 0.758 0.749 0.757 0.701 0.639
+
+(b) DART-T2 motif recognition       
+
+> 0.74 0.75 0.76 0.77 0.78 0.79 0.80
+
+Mean macro-F1     
+
+> Motif BPE-OV Motif K6-OV No motif K6-OV Motif BPE-NO No motif BPE Shuffled K6-OV DNABERT-2 NT-v2 Caduceus
+> 0.796 0.784 0.795 0.747 0.758 0.768 0.786 0.784 0.747
+
+(c) Five-task BERT-base core panel   
+
+> Real motifs Shuffled motifs 0122.16x 1.53x 1.78 0.80
+
+(d) Motif-token interpretation 
+
+> Attribution enrichment Occlusion drop (pp)
+
+Figure 4: Main empirical evidence. (a) Real motifs consistently beat randomized libraries across broad families, although no-motif K6 is the best broad aggregate. (b) On DART-T2 recognition, real TF tokens beat a shuffled-motif control, position-matched generic token, matched no-motif control, and evaluated public models. The four internal conditions in panel (b) all use K6-OV, and the vertical axis lists tokenizer or model conditions. (c) Five-task BERT-base means show a practical tie between Motif BPE-OV and No-motif K6-OV and include non-overlap BPE controls. (d) Real motif tokens receive stronger attribution and cause a larger probability drop when occluded than shuffled tokens. 
+
+Group Task / aggregate Motif BPE-OV Motif K6-OV No motif K6-OV Shuffled K6-OV DNABERT-2 NT-v2 Caduceus Broad GB (6) 0.839 0.845 0.856 0.811 – – –GUE (34) 0.719 0.732 0.744 0.644 – – –NT (15) 0.767 0.773 0.781 0.708 – – –Family-balanced 0.775 0.784 0.794 0.721 – – –All 55 tasks 0.745 0.756 0.766 0.680 – – –Core Non-TATA promoter 0.920 0.919 0.915 0.906 0.930 0.898 0.864 Open chromatin 0.798 0.793 0.786 0.776 0.807 0.785 0.750 Motif disruption 0.538 0.551 0.522 0.518 0.496 0.544 0.524 Enhancer 0.803 0.792 0.797 0.768 0.758 0.759 0.736 TATA promoter 0.920 0.868 0.955 0.871 0.939 0.934 0.860 DART-derived DART-T2 motif recognition 0.773 0.791 0.758 0.682 0.757 0.701 0.639  
+
+> Notes. BPE is byte-pair encoding; K6-OV is an overlapping 6-mer fallback. DART-T2 recognition is our supervised motif-disjoint derivative, not the official zero-shot DART score. The shuffled value uses validation-selected checkpoints; all three held-out runs pass prediction-health gates. External models provide context rather than data-matched tokenizer ablations.
+
+Table 1: Comprehensive three-seed macro-F1 comparison. Broad results use common 55-task non-virus support. Three GUE phage/virus classification tasks are outside the eukaryotic regulatory scope represented by the JASPAR transcription-factor vocabulary and are excluded uniformly. Family-balanced weights GB, GUE, and NT equally. Bold indicates the best result and underlining indicates the second-best valid result in each row. cal bootstrap over examples and seeds gives 0.033 [0.027, 0.038]. Against the validation-selected shuffled-motif con-trol, the corresponding gain is 0.109 [0.095, 0.129], with all three held-out runs passing prediction-health checks. This is the cleanest evidence that TF-level categorical identity con-tributes beyond where a motif-shaped token occurs. Motif-Vocab also exceeds the evaluated pretrained DNABERT-2, NT-v2, and Caduceus baselines under our supervised proto-col. These external LLMs were pretrained on substantially larger and more diverse genomic corpora than our internal models trained on 2 billion base pairs, so the comparison is intentionally conservative for Motif-Vocab. However, differ-ences in pretraining data and architecture mean that it is not a data-matched causal comparison of tokenizers. Tokenizer GB GUE NT All No motif K6-OV 0.856 0.744 0.781 0.766 
+
+No motif nucleotide 0.849 0.735 0.774 0.758 No motif BPE 0.854 0.742 0.750 0.756 Motif K6-OV 0.845 0.732 0.773 0.756 No motif K6-NO 0.852 0.722 0.773 0.750 Motif BPE-OV 0.839 0.719 0.767 0.745 Motif BPE-NO 0.833 0.724 0.727 0.737 Motif K6-NO 0.824 0.711 0.720 0.726 Shuffled BPE-OV 0.834 0.686 0.755 0.721 Shuffled BPE-NO 0.825 0.697 0.721 0.717 Shuffled K6-NO 0.823 0.686 0.715 0.709 Shuffled K6-OV 0.811 0.644 0.708 0.680 
+
+Table 2: Controlled tokenizer comparison on common 55-task non-virus support. GB, GUE, and NT contain 6, 34, and 15 tasks; All is the task-level macro average. OV and NO denote overlapping and non-overlapping tokenization. Bold and underlining mark the best and second-best result in each column. 
+
+Evidence Real motif Control Effect / support Broad GB 0.845 0.811 +0.034; 6/6 tasks Broad GUE 0.732 0.644 +0.089; 33/34 tasks Broad NT 0.773 0.708 +0.065; 15/15 tasks DART generic ID 0.790 0.749 +0.040; 3/3 seeds DART no motif 0.791 0.758 +0.033 [0.027,0.038] DART shuffled 0.791 0.682 +0.109 [0.095,0.129] Calibration 0.858 0.612 +0.245 Attribution enrich. 2.157 1.533 1.41 ×
+
+Motif occlusion 0.0178 0.0080 2.22 ×
+
+> Real motif is the real JASPAR TF-identity condition for accuracy rows and the motif-specific signal for diagnostic rows. Control is the corresponding randomized, generic, no-motif, or raw-score comparison. The final three rows are diagnostics, not macro-F1.
+
+Table 3: Controlled evidence for biological motif structure and TF-level token utility. Broad rows compare real and ran-domized K6-OV libraries; DART-T2 controls preserve fall-back segmentation and, for generic identity, motif hit posi-tions. Accuracy rows report macro-F1; the final three diag-nostic rows report calibration, attribution enrichment, and occlusion effects. 
+
+Scale and interpretation. On the five-task BERT-base panel, Motif BPE-OV scores 0.7956 and No-motif K6-OV scores 0.7950: an effective tie, with different task wins (Fig-ure 4c). We therefore do not claim a scale-wide accuracy ad-vantage. The benefit is an interpretable interface: integrated-gradient attribution (Sundararajan, Taly, and Yan 2017) as-signs prediction importance to tokens, and attribution to real motif tokens is enriched 2.16-fold over the token baseline, versus 1.53-fold for shuffled controls. Motif-token occlusion masks motif tokens and measures the predicted-class proba-bility drop; this drop is 0.0178 for real motifs versus 0.0080 for shuffled controls. Both attribution enrichment and mo-tif occlusion are averaged over seed-42 runs on the same five core tasks. These independent diagnostics indicate that the classifier uses real motif identities as predictive evidence rather than merely benefiting from compression. Table 3 con-solidates the controlled accuracy, calibration, attribution, and occlusion evidence. 
+
+## 5 Limitations 
+
+TF tokens do not capture binding affinity: after threshold-ing, different significant scores for the same TF map to the same identity token, although score and p-value remain in metadata. The prior can help when TF identity is relevant, but it can discard within-motif nucleotide variation and can-not encode TF abundance, cell state, or binding strength. Additionally, related TFs often bind nearly identical motifs, and thus in practice token IDs do not uniquely identify the TFs that bind at that genomic site. Independent background bases make calibration reproducible but do not model lo-cal genomic dependence. Internal experiments match input base-pair data and architecture, yet token length, vocabulary size, masking, and compute change with tokenization. Public models are contextual baselines, not data-matched ablations. Finally, DART-T2 recognition is a supervised derivative de-signed to isolate motif transfer, not an official DART leader-board score; the official five-task suite remains a distinct evaluation target. 
+
+## 6 Conclusion 
+
+Motif-Vocab turns calibrated prior information about the specificity of DNA-binding regulatory factors into TF-identity tokens while preserving generic sequence fallback. Controlled comparisons show a bounded but useful result: dense overlapping k-mers remain excellent general tokeniz-ers, whereas real TF identities provide stable gains over position-matched generic tokens and support direct attribu-tion on motif-sensitive recognition. More broadly, tokeniza-tion is an underused point for injecting structured scientific knowledge into foundation models. Future work could con-dition motif tokens on cell state and extend them from identi-fication of isolated sites to learning the interactions between them that make up the grammar of regulatory DNA. 
+
+## Generative AI Use Disclosure 
+
+Generative AI tools assisted with language editing, code re-view and debugging, and manuscript organization. The au-thors verified all scientific claims, references, analyses, and reported values. All experimental measurements were pro-duced by the documented computational pipeline. References 
+
+Alayrac, J.-B.; Donahue, J.; Luc, P.; Miech, A.; Barr, I.; Hasson, Y.; Lenc, K.; Mensch, A.; Millican, K.; Reynolds, M.; et al. 2022. Flamingo: A Visual Language Model for Few-Shot Learning. In Advances in Neural Information Pro-cessing Systems , volume 35, 23716–23736. Avsec, Ž.; Agarwal, V.; Visentin, D.; Ledsam, J. R.; Grabska-Barwinska, A.; Taylor, K. R.; Assael, Y.; Jumper, J.; Kohli, P.; and Kelley, D. R. 2021a. Effective Gene Expression Predic-tion from Sequence by Integrating Long-Range Interactions. 
+
+Nature Methods , 18: 1196–1203. Avsec, Ž.; Weilert, M.; Shrikumar, A.; Krueger, S.; Alexan-dari, A.; Dalal, K.; Fropf, R.; McAnany, C.; Gagneur, J.; Kun-daje, A.; and Zeitlinger, J. 2021b. Base-Resolution Models of Transcription-Factor Binding Reveal Soft Motif Syntax. 
+
+Nature Genetics , 53: 354–366. Beer, M. A.; and Tavazoie, S. 2004. Predicting gene expres-sion from sequence. Cell , 117(2): 185–198. Bommasani, R.; Hudson, D. A.; Adeli, E.; Altman, R.; Arora, S.; von Arx, S.; Bernstein, M. S.; Bohg, J.; Bosselut, A.; Brunskill, E.; et al. 2021. On the Opportunities and Risks of Foundation Models. arXiv preprint arXiv:2108.07258 .Bostrom, K.; and Durrett, G. 2020. Byte Pair Encoding Is Suboptimal for Language Model Pretraining. In Findings of EMNLP , 4617–4624. Brown, T. B.; Mann, B.; Ryder, N.; Subbiah, M.; Kaplan, J.; Dhariwal, P.; Neelakantan, A.; Shyam, P.; Sastry, G.; Askell, A.; et al. 2020. Language Models are Few-Shot Learners. In Advances in Neural Information Processing Systems , vol-ume 33, 1877–1901. Dalla-Torre, H.; Gonzalez, L.; Mendoza-Revilla, J.; Lopez Carranza, N.; Grzywaczewski, A. H.; Oteri, F.; Dal-lago, C.; Trop, E.; de Almeida, B. P.; Sirelkhatim, H.; et al. 2025. Nucleotide Transformer: Building and Evaluating Ro-bust Foundation Models for Human Genomics. Nature Meth-ods , 22: 287–297. Devlin, J.; Chang, M.-W.; Lee, K.; and Toutanova, K. 2019. BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. In Proceedings of NAACL-HLT ,4171–4186. Grant, C. E.; Bailey, T. L.; and Noble, W. S. 2011. FIMO: Scanning for Occurrences of a Given Motif. Bioinformatics ,27(7): 1017–1018. Grešová, K.; Martinek, V.; Čechák, D.; Šimeček, P.; and Alexiou, P. 2023. Genomic Benchmarks: A Collection of Datasets for Genomic Sequence Classification. BMC Ge-nomic Data , 24: 25. Huang, N.; Zhou, X.; Cui, J.; Tapia-Pacheco, M.; Amariuta, T.; Li, Y.; and Shang, J. 2026. EvoLen: Evolution-Guided Tokenization for DNA Language Model. arXiv preprint arXiv:2604.08698 .Huang, Y.; Gao, T.; Xu, H.; Zhao, Q.; Song, Y.; Gui, Z.; Lv, T.; Chen, H.; Cui, L.; Li, S.; and Wei, F. 2025. PEACE: Empow-ering Geologic Map Holistic Understanding with MLLMs. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 3899–3908. Ji, Y.; Zhou, Z.; Liu, H.; and Davuluri, R. V. 2021. DNABERT: Pre-trained Bidirectional Encoder Represen-tations from Transformers Model for DNA-Language in Genome. Bioinformatics , 37(15): 2112–2120. Kelley, D. R.; Reshef, Y. A.; Bileschi, M.; Belanger, D.; McLean, C. Y.; and Snoek, J. 2018. Sequential Regulatory Activity Prediction across Chromosomes with Convolutional Neural Networks. Genome Research , 28(5): 739–750. Kim, T.; Shin, J.; Kim, H.; Jung, Y.; Lee, J.; Lee, W.-C.; Ahn, S.; and Han, I. 2026. DNACHUNKER: Learnable Tokenization for DNA Language Models. arXiv preprint arXiv:2601.03019 .Kovachki, N.; Li, Z.; Liu, B.; Azizzadenesheli, K.; Bhat-tacharya, K.; Stuart, A.; and Anandkumar, A. 2023. Neural Operator: Learning Maps Between Function Spaces with Ap-plications to PDEs. Journal of Machine Learning Research ,24(89): 1–97. Kudo, T.; and Richardson, J. 2018. SentencePiece: A Simple and Language Independent Subword Tokenizer and Deto-kenizer for Neural Text Processing. In Proceedings of EMNLP: System Demonstrations , 66–71. Li, S.; Yu, K.; Wang, A.; Liu, Z.; Yu, C.; Zhou, J.; Yang, Q.; Guo, Y.; Zhang, X.; and Li, S. Z. 2026. MergeDNA: Context-Aware Genome Modeling with Dynamic Tokeniza-tion Through Token Merging. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, 668–676. Mudge, J. M.; Carbonell-Sala, S.; Diekhans, M.; Gonza-lez Martinez, J.; Hunt, T.; Jungreis, I.; Loveland, J. E.; et al. 2025. GENCODE 2025: Reference Gene Annotation for Human and Mouse. Nucleic Acids Research , 53(D1): D966– D975. Nguyen, E.; Poli, M.; Faizi, M.; Thomas, A.; Birch-Sykes, C.; Wornow, M.; Patel, A.; Rabideau, C.; Massaroli, S.; Ben-gio, Y.; Ermon, S.; Baccus, S. A.; and Ré, C. 2023. Hye-naDNA: Long-Range Genomic Sequence Modeling at Single Nucleotide Resolution. arXiv preprint arXiv:2306.15794 .Ovek Baydar, D.; Rauluseviciute, I.; Aronsen, D. R.; Blanc-Mathieu, R.; Bonthuis, I.; de Beukelaer, H.; et al. 2026. JASPAR 2026: Expansion of Transcription Factor Binding Profiles and Integration of Deep Learning Models. Nucleic Acids Research , 54(D1): D184–D193. Patel, A.; Singhal, A.; Wang, A.; Pampari, A.; Kasowski, M.; and Kundaje, A. 2024. DART-Eval: A Comprehensive DNA Language Model Evaluation Benchmark on Regula-tory DNA. In Advances in Neural Information Processing Systems , volume 37. Qiao, L.; Ye, P.; Ren, Y.; Bai, W.; Liang, C.; Ma, X.; Dong, N.; and Ouyang, W. 2024. Model Decides How to Tokenize: Adaptive DNA Sequence Tokenization with MxDNA. In 
+
+Advances in Neural Information Processing Systems , vol-ume 37. Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; et al. 2021. Learning Transferable Visual Models from Natural Language Supervision. In Proceedings of the 38th International Conference on Machine Learning , volume 139 of Proceedings of Machine Learning Research , 8748–8763. Raissi, M.; Perdikaris, P.; and Karniadakis, G. E. 2019. Physics-Informed Neural Networks: A Deep Learning Framework for Solving Forward and Inverse Problems In-volving Nonlinear Partial Differential Equations. Journal of Computational Physics , 378: 686–707. Rust, P.; Pfeiffer, J.; Vulić, I.; Ruder, S.; and Gurevych, I. 2021. How Good Is Your Tokenizer? On the Monolingual Performance of Multilingual Language Models. In Proceed-ings of ACL-IJCNLP , 3118–3135. Sanchez-Gonzalez, A.; Godwin, J.; Pfaff, T.; Ying, R.; Leskovec, J.; and Battaglia, P. 2020. Learning to Simu-late Complex Physics with Graph Networks. In Proceedings of the 37th International Conference on Machine Learning ,volume 119 of Proceedings of Machine Learning Research ,8459–8468. Schiff, Y.; Kao, C.-H.; Gokaslan, A.; Dao, T.; Gu, A.; and Kuleshov, V. 2024. Caduceus: Bi-Directional Equivariant Long-Range DNA Sequence Modeling. In Proceedings of the 41st International Conference on Machine Learning , vol-ume 235 of Proceedings of Machine Learning Research ,43632–43648. Sennrich, R.; Haddow, B.; and Birch, A. 2016. Neural Ma-chine Translation of Rare Words with Subword Units. In 
+
+Proceedings of ACL , 1715–1725. Shrikumar, A.; Tian, K.; Avsec, Ž.; Shcherbina, A.; Banerjee, A.; Sharmin, M.; Nair, S.; and Kundaje, A. 2018. Technical Note on Transcription Factor Motif Discovery from Impor-tance Scores (TF-MoDISco) version 0.5.6.5. arXiv preprint arXiv:1811.00416 .Stormo, G. D. 2013. Modeling the Specificity of Protein– DNA Interactions. Quantitative Biology , 1(2): 115–130. Sundararajan, M.; Taly, A.; and Yan, Q. 2017. Axiomatic Attribution for Deep Networks. In Proceedings of the 34th International Conference on Machine Learning , volume 70 of Proceedings of Machine Learning Research , 3319–3328. Vorontsov, I. E.; et al. 2024. HOCOMOCO in 2024: A Rebuild of the Curated Collection of Binding Models for Human and Mouse Transcription Factors. Nucleic Acids Research , 52(D1): D154–D163. Wang, H.; Fu, T.; Du, Y.; Gao, W.; Huang, K.; Liu, Z.; Chandak, P.; Liu, S.; Van Katwyk, P.; Deac, A.; et al. 2023. Scientific Discovery in the Age of Artificial Intelligence. 
+
+Nature , 620: 47–60. Xue, L.; Barua, A.; Constant, N.; Al-Rfou, R.; Narang, S.; Kale, M.; Roberts, A.; and Raffel, C. 2022. ByT5: Towards a Token-Free Future with Pre-trained Byte-to-Byte Models. 
+
+Transactions of the Association for Computational Linguis-tics , 10: 291–306. Zhou, J.; and Troyanskaya, O. G. 2015. Predicting Effects of Noncoding Variants with Deep Learning-Based Sequence Model. Nature Methods , 12: 931–934. Zhou, X.; Wang, Z.; Shang, J.; and Li, Y. E. 2025. DNAMo-tifTokenizer: Towards Biologically Informed Tokenization of Genomic Sequences. arXiv preprint arXiv:2512.17126 .Zhou, Z.; Ji, Y.; Li, W.; Dutta, P.; Davuluri, R. V.; and Liu, H. 2024. DNABERT-2: Efficient Foundation Model and Benchmark for Multi-Species Genomes. In International Conference on Learning Representations .
