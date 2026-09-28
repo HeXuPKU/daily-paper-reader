@@ -1,6 +1,9 @@
 * <a class="dpr-sidebar-root-link" href="#/">首页</a>
 * <a class="dpr-sidebar-root-link dpr-sidebar-noactive-link" href="javascript:void(0)" data-dpr-hash="#/tutorial/README">使用教程</a>
 * Daily Papers
+  * 2026-09-28 <!--dpr-date:20260928-->
+    * 速读区
+      * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/28/2609.30640v1-towards-more-plausible-point-identifying-assumptions-in-two-sample-mendelian-randomization" data-sidebar-item="{&quot;title&quot;: &quot;Towards more plausible point-identifying assumptions in two-sample Mendelian randomization&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.30640v1-towards-more-plausible-point-identifying-assumptions-in-two-sample-mendelian-randomization&quot;, &quot;score&quot;: &quot;7.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;gwas&quot;}], &quot;evidence&quot;: &quot;利用GWAS汇总数据与遗传工具的两样本孟德尔随机化&quot;}">Towards more plausible point-identifying assumptions in two-sample Mendelian randomization</a>
   * 2026-09-27 <!--dpr-date:20260927-->
     * 精读区
       * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202609/27/2609.24620v1-ascent-an-agentic-system-over-the-model-context-protocol-for-real-world-clinical-data-analysis" data-sidebar-item="{&quot;title&quot;: &quot;Ascent: An Agentic System over the Model Context Protocol for Real-World Clinical Data Analysis&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2609.24620v1-ascent-an-agentic-system-over-the-model-context-protocol-for-real-world-clinical-data-analysis&quot;, &quot;score&quot;: &quot;8.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;med-ai&quot;}], &quot;evidence&quot;: &quot;基于MCP工具的智能体系统，用于真实临床数据分析、医学编码与队列分析&quot;}">Ascent: An Agentic System over the Model Context Protocol for Real-World Clinical Data Analysis</a>
