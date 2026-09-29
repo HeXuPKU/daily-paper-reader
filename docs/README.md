@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-28</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-29</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 1 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 2 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>1</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>2</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-28 23:39:11 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-29 22:49:28 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日速读 1 篇，聚焦两样本孟德尔随机化中更合理的点识别假设。这篇 7.0 分论文值得关注的是：它讨论如何让因果推断的假设更可信，而非只追求统计显著。普通读者可先了解孟德尔随机化“工具变量需满足哪些条件”，再判断结论是否可靠。</p>
+<p>今日速读两篇 6.0 分论文，聚焦临床数据分析智能体与基因组疾病推理。值得关注的是 Ascent 基于模型上下文协议打通真实临床数据分析流程，以及 GenoMorph 用通路引导的自适应潜在计算做基因组疾病推理。普通读者可先浏览这两篇的摘要，判断哪条路线更贴近自己的临床或基因分析需求再深入阅读。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -91,12 +91,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">1 篇</strong>
+    <strong class="dpr-home-dashboard-count">2 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Towards more plausible point-identifying assumptions in two-sample Mendelian randomization">Towards more plausible point-identifying assumptions in two-sample Mendelian randomization</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Ascent: An Agentic System over the Model Context Protocol for Real-World Clinical Data Analysis">Ascent: An Agentic System over the Model Context Protocol for Real-World Clinical Data Analysis</span></li><li><span class="dpr-home-dashboard-paper-title" title="GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation">GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span></div>
 </section>
 </div>
 
