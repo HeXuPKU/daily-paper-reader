@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-02</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-03</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 5 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 9 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>4</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>8</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-02 23:08:28 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-03 22:33:46 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>2026-10-02 共筛出5篇文献，精读1篇、速读4篇，重点聚焦遗传关联研究中的严格多效性检验。最值得看的是获9.0分的《Testing Procedures for Strict Pleiotropy in Genetic Association Studies》，以及EHRAdapt用语义先验让预训练模型适配电子病历罕见事件（7.0分）。普通读者可先读精读篇了解多效性检验思路，再按需浏览速读篇的临床应用方向。</p>
+<p>2026-10-03 日报精选 9 篇，精读 EHRAdapt 探索语义先验如何让预训练语言模型更好捕捉罕见临床事件。最值得看的方向是医疗大模型对稀有病症的适配，以及 GenoMorph、VANDAM 等基因组推理与 DNA 先验建模。普通读者可优先读 EHRAdapt 精读，再按兴趣浏览基因组方向速读。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -81,9 +81,9 @@
     <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Testing Procedures for Strict Pleiotropy in Genetic Association Studies">Testing Procedures for Strict Pleiotropy in Genetic Association Studies</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="EHRAdapt: Adapting Pretrained Language Models to Electronic Health Records with Semantic Priors for Rare Clinical Events">EHRAdapt: Adapting Pretrained Language Models to Electronic Health Records with Semantic Priors for Rare Clinical Events</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -91,12 +91,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">4 篇</strong>
+    <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="EHRAdapt: Adapting Pretrained Language Models to Electronic Health Records with Semantic Priors for Rare Clinical Events">EHRAdapt: Adapting Pretrained Language Models to Electronic Health Records with Semantic Priors for Rare Clinical Events</span></li><li><span class="dpr-home-dashboard-paper-title" title="GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation">GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Proximal Empirical Bayes for Sparse Regression with Posterior Decision Support">Proximal Empirical Bayes for Sparse Regression with Posterior Decision Support</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation">GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation</span></li><li><span class="dpr-home-dashboard-paper-title" title="The INSIDE assumption under all positive coding: interpretation and partial empirical assessment">The INSIDE assumption under all positive coding: interpretation and partial empirical assessment</span></li><li><span class="dpr-home-dashboard-paper-title" title="VANDAM: Viewing a nucleotide sequence with DNA molecular priors">VANDAM: Viewing a nucleotide sequence with DNA molecular priors</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>2</strong></span><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>6</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>2</strong></span></div>
 </section>
 </div>
 
