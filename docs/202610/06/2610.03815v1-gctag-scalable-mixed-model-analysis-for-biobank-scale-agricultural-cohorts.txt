@@ -1,0 +1,402 @@
+Title: 2610.03815v1.pdf
+
+URL Source: https://arxiv.org/pdf/2610.03815v1
+
+Published Time: Tue, 06 Oct 2026 00:03:32 GMT
+
+Number of Pages: 31
+
+Markdown Content:
+## GCTAg: scalable mixed-model analysis for biobank-scale agricultural cohorts 
+
+Alexander S. Leonard 1,* , Qiongyu He 1, Natasha Watson 1, Naveen Kumar Kadri 1, Hubert Pausch 1 
+
+> 1
+
+Animal Genomics, ETH Zurich, Universitaetstrasse 2, 8092 Zurich, Switzerland * alleonard@ethz.ch 
+
+Abstract 
+
+Genome-wide association studies identify genomic variants associated with traits. Mixed linear model association (MLMA) methods using a whole-genome relationship matrix, such as those implemented in GCTA, are powerful but computationally expensive. Here, we remove key memory and CPU bottlenecks in GCTA, reducing REML memory usage by nearly 75% and substantially accelerating MLMA by orders of magnitude in biobank-scale cohorts while preserving exactness. We further exploit relatedness in the mapping cohort through a reduced-rank Woodbury matrix approach, delivering further orders of magnitude performance gains with controlled genomic inflation. Native on-the-fly dominance recoding also eliminates slow I/O-operations on intermediate files, enabling efficient additive and dominance MLMA analyses in large agricultural cohorts. 
+
+Keywords: Genome-wide association study, Genomic relationship matrix, Biobank-scale analysis, Agricultural genomics 
+
+Introduction 
+
+Genome-wide association studies (GWAS) are a key discovery step in identifying variants which are associated with specific phenotypes or traits. Mixed linear models emerged as a method of choice for GWAS as they minimize spurious associations by accounting for confounding factors like population stratification and relatedness within the mapping cohort [1,2]. GCTA (Yang et al. 2011, 2014) remains one of the most popular software tools for GWAS and mixed linear model associations (MLMA). Successful MLMA requires careful handling of genomic relatedness matrices (GRM) and estimating variance components from the null mixed model before testing each variant for association with traits and diseases. Due to the heavy use of matrix operations, efficient use of linear algebra libraries can vastly accelerate these calculations [4]. However, MLMA remains computationally demanding and tends to scale poorly to large mapping cohorts comprising several hundred thousand individuals genotyped at millions of markers. The development of association testing methods that appropriately account for sample relatedness while maintaining scalability to increasingly large mapping cohorts has become an active area of research in the past decade. Several algorithmic advancements in MLMA largely depend on exploiting “sparse” GRMs, where individuals are minimally related and off-diagonal GRM entries can be neglected. Software tools such as BOLT-LMM [5], GCTA-fastGWA [6], and REGENIE [7] can scale to much larger cohorts than GCTA-MLMA. However, agricultural populations tend to be highly related due to small effective population size, strong artificial selection and the widespread use of a small number of elite breeding individuals. As a result, mapping cohorts in these populations typically have “dense” GRMs and can invalidate the sparse GRM assumption of such tools, inflating the test statistics in many agricultural GWAS [8,9]. With an increasing number of individuals being genotyped on dense arrays [10] due to national genotyping initiatives [11–13], scalable methods that account for the typical structure of agricultural populations are needed to fully leverage the power of biobank-scale cohorts for complex trait analysis. One common approach for handling large GWAS cohorts is to split samples into multiple smaller subsets for MLMA followed by a meta-analysis, as recently applied [14–16]. Alternatively, modelling all variants with a fixed variance term [12] or stochastic REML methods (i.e. as implemented in SLEMM [17]), can scale to much larger cohorts. However, these approaches can be less robust when modelling large-effect SNPs or may implicitly fail to converge to stable numerical solutions [18]. Other approaches build on the Algorithm for Proven and Young (APY), a reduced-representation appropriate to dense GRMs using a smaller set of “proven” samples to represent the larger set of “young” samples [19]. Similar reduced-rank approaches help ease the matrix inversion bottlenecks in variance components estimation [20] or Genomic Best Linear Unbiased Prediction (GBLUP) [21,22]. GWAS typically assume additive effects of quantitative trait loci (QTL), where a heterozygous genotype contributes half the effect of a homozygous alternate genotype. While biobank-scale studies in human populations indicate that genetic variance for complex traits is predominantly additive [16], there is increasing evidence from large-scale studies in livestock that dominance (i.e. a subset of non-additive) QTL can remain undetected when the statistical models assume additive inheritance [23–27]. Despite dominance “genotypes” simply being a numeric recoding [28], testing these alternative modes currently requires generating an additional set of genotypes in formats such as the cumbersome MaCH dosage format [29]. The MaCH dosage format has previously been used to represent genotype probabilities and account for uncertainties introduced by genotype imputation [30,31]. Here, we reimplemented several core components of GCTA to increase GWAS throughput and improve memory management, as well as several approximations in the PCA/REML steps. We also implemented several new features including on-the-fly dominance recoding to further streamline and expand the functionality. Finally, we demonstrate that these modifications now allow using “GCTAg” (GCTA with improvements targeted at agricultural species compatible with the GPL-3 license) for association testing and related investigations in cohort designs that previously required subsetting and meta-analysis strategies. 
+
+Results 
+
+To benchmark GCTA and our reimplementation GCTAg, we first simulated a large genotype-phenotype dataset consisting of N=152,522 individuals genotyped at m=600,000 markers. We used AlphaSimR to seed a founding population followed by generations of selection and mating to mimic cattle populations. We simulated a moderately heritable phenotype with genetic variation arising from additive effects at several distributed QTL. Using subsets of this dataset (from N=9,375 to N=150,000) we benchmarked typical GCTA GWAS for both runtime and peak memory. We benchmarked these analyses on different compute architectures, using an Apple M5 laptop with 10 cores and 24 GB of RAM (“Laptop”) and Linux AMD EPYC 9654 compute nodes with 96 cores and 384-768 GB of RAM (“Server”). The full-GRM mixed linear model GWAS implemented in GCTA is comprised of four main steps: (i) building the genomic relationship matrix (GRM) from standardized genotypes; (ii) computing its principal components by eigendecomposition; (iii) estimating the genetic and environmental variance components by REML; and (iv) testing each variant against the covariate-adjusted null model. We decoupled the REML and MLMA steps in GCTA, implementing a lossless save/load feature for the REML result. This allowed cleaner benchmarking of REML (typically memory-bound) and MLMA (typically compute-bound). We profiled CPU utilisation and memory allocation using this minimally modified version of GCTA on Laptop and Server on a reduced N=9,375 m=150k subset of the simulated data. We observed that the GRM and PCA steps were largely dispatched immediately to linear algebra operations ( Supplementary Figure 1 ). On the other hand, the REML and MLMA steps spent appreciable time in data input/output (I/O) ( Supplementary Figure 2 ). The REML step also suffered from excessive memory churn from reallocating the projection and phenotypic covariance matrices ( Supplementary Figure 3 ) while the MLMA step was bottlenecked in SGEMV ( Supplementary Figure 2 ). We first sought to address these bottlenecks in GCTAg (Supplementary Figure 1 ), then expand on existing functionality, and finally add several approximations to scale to significantly larger cohorts. 
+
+Exact implementation improvements 
+
+Although the GRM step was almost entirely spent within the highly efficient DGEMM BLAS-3 operation, it only batched (a hardcoded) 128 variants at a time. Depending on the CPU and core count, increasing the number of variants considered during each GRM accumulation step helps shift the kernel from memory-bound to compute-bound, achieving a noticeable increase in throughput ( Figure 1A , Supplementary Figure 4 ). This was especially important at high core counts, as commonly found on HPCs, gaining 30+% performance for a minor increase in memory. However, since the GRM is symmetric, we can explicitly only solve one triangle of the matrix and avoid allocating memory for the other triangle, leading to an effective ~35% reduction in peak memory ( Supplementary Note 1 ). Almost all GWAS steps can exploit this upper/lower triangular form, leading to general memory savings. The default SelfAdjointEigenSolver used in GCTA for the eigenvalue decomposition dispatches to the “QR iteration” algorithm (DSYEV in LAPACK), as opposed the newer and typically faster “Divide and Conquer” (D&C) algorithm (DSYEVD). Both algorithms calculate the entire eigendecomposition, and so when instructing GCTA to calculate only the top k eigenvalues (such that 𝑘 ≪ 𝑁 is not the full rank of the GRM), we instead used the “Multiple Relatively Robust Representations” (MRRR) algorithm (DSYEVR) to calculate only the top k eigenvalues more cheaply ( Figure 1B , Supplementary Figure 5 ). In particular, the DYSEV algorithm appears to have a non-reference implementation in the Intel Math Kernel Library (MKL) and is much less performant in other LAPACK libraries ( Supplementary Note 2 ), whereas we can largely close the performance gap across using the D&C or MRRR algorithms. This is especially important for ARM-based Apple machines which cannot use MKL. During the REML step, we were also able to fully exploit the symmetric matrix 𝑉 , only filling the lower triangle required by the Cholesky factorization, reducing memory bandwidth. We also reformulated the covariate correction of the projection matrix as a symmetric rank-c update, which avoids explicitly forming the covariate-adjusted projection matrix. By aggressively freeing, solving in-place, or swapping large matrix buffers, we were also able to markedly reduce peak memory during REML by almost 75% and runtime by 33% ( Figure 1C ). The largest computational bottleneck was the variant scan in the MLMA step, where covariate-adjusted test statistics were computed one variant at a time. Each per-variant operation was memory-bound (BLAS-2) and too small to parallelize efficiently. We restructured this step to process variants in blocks, using globally transformed phenotypes and genotypes, so that the covariate adjustment is applied once rather than repeated for every variant. By replacing many small matrix-vector operations with a few large matrix-matrix operations (BLAS-3) and only computing necessary terms (e.g. on the diagonal), we decreased runtime by almost 99% ( Figure 1D ) while preserving mathematically exact test statistics. Given BLAS-3 has better multicore scaling than BLAS-2, this gap would likely continue to grow at higher core counts.  
+
+> Figure 1. GCTA versus GCTAg compute resources used during the (A) GRM, (B) PCA, (C) REML, and (D) MLMA steps for four datasets of increasing sample size tested on Laptop using 10 cores (top) and Server using 24 cores (bottom). Each run was replicated five times (faint markers). GCTA (rebuilt) refers to our minimally modified GCTA version, while GCTA (download) is the unmodified publicly available binary. The REML and MLMA steps are not decoupledq in the downloaded version and were not run. The Laptop had insufficient memory to run GCTA for the N=37,500 dataset for the PCA, REML, and MLMA steps.
+
+Although data I/O is typically a small contributor to overall runtime for large datasets, we also identified bottlenecks where reading/writing data was typically done byte-by-byte. This was vastly accelerated using memory-mapped files, contiguous memory allocation, and buffered reads/writes ( Supplementary Figures 2 and 3 ). However, since the test statistics are calculated blockwise, we can also naturally stream blocks of genotypes with no loss of BLAS efficiency. By avoiding loading all data upfront, and only unpacking a block of variants, we can reduce peak memory usage substantially (from 𝒪(𝑚) to 𝒪(1) memory). Just unpacking the genotype data at 
+
+N=150k, m=600k requires 90 GB of memory, compared to processing batches of 1 GB. For per-chromosome MLMA (using m=600k variants), we reduced peak memory by almost 90% ( Figure 1D ). We refactored GRM merging, replacing the naïve implementation of sequentially adding each GRM element with four dense matrices in memory (GRM itself and SNP count for the per-iteration and accumulated copies). Since the lower-triangle binary file format of the GRMs is effectively one-dimensional, we can instead accumulate and then write chunks across all files, without ever holding the dense matrix in memory. This approach uses only ~0.5 GB (critically, independent of GRM size) and 15 minutes at N=150k with 4 cores (cf. 615 GB and 10 hours for GCTA) ( Supplementary Figure 6 ). These changes were especially crucial to prevent GRM-merging from becoming the top memory bottleneck after the other optimisations. 
+
+Exact robustness extensions 
+
+We also formalised the REML convergence criterion and improved the variance components initialisation. We replaced the “backward-looking” criterion, stopping when the change in log-likelihood between iterations fell below a fixed threshold. Now, convergence is based on a “forward-looking” criterion, stopping when the remaining optimisation signal, estimated from the Average Information (AI) matrix as a Newton decrement, falls below a fixed tolerance. We also refined the step-size damping applied to the variance components updates, taking full steps when the model is trustworthy and damping otherwise. Across three simulated traits, this resulted in converging in around half as many rounds (i.e. 50% reduction in REML runtime) with negligible difference in heritability estimates ( Supplementary Table 1 , Supplementary Figure 7). We also reimplemented the initial seeding of the variance components, using a Haseman–Elston (HE) estimator [32] to make a data-driven prediction as opposed to assuming an equal partitioning of variance. Because the HE starting point is numerically stable for any reasonably conditioned GRM, REML can directly proceed with the quadratically converging AI algorithm and skip the initial round of linearly converging Expectation–Maximization algorithm. The HE seeding raises the initialization cost from negligible to O(n²), but since each EM- or AI-REML iteration is O(n³), eliminating even one iteration typically yields a net saving. For Trait A, additive with low heritability, the improved initialisation reduced REML rounds by almost 60% (Supplementary Table 1 , Supplementary Fig. 7 ). GCTA natively supports partitioning the GRM building (using --make-grm-part), which becomes important at large sample sizes (since GRM memory scales as 𝒪(𝑛 !)). However, for situations that are memory-bound rather than compute-bound (i.e. running on a single machine or a small cluster), we implemented an internal tiled GRM building approach. By specifying a memory budget, we can dynamically calculate as many GRM rows as fit in the budget. Calculating the entire GRM this way was comparable in time to the partitioned approach (but from a single invocation and no subsequent file merging) and was negligibly slower than the full-build approach when specifying a budget around 50% of the memory used by the full-GRM (Supplementary Figure 8 ). Reducing the budget further incurs more time-consuming I/O passes but enabled calculating an N=75k GRM using 90% less memory while only being 26% slower. Given the frequent p-value underflow for large cohorts and/or strong associations, as the p-value approaches 2"#$!! ≈ 2.2 × 10 "%$& , we also added the option to report the logarithm of the significance, using an asymptotic expansion of the Regularized Upper Incomplete Gamma function: ln 𝑄(𝑎, 𝑥) ≈ −𝑥 + (𝑎 − 1) ln 𝑥 − ln Γ(𝑎) for 𝑥 ≫ 𝑎 . This allows us to accurately report more significant associations, as well as naturally forming the more commonly reported 
+
+− log #$ (𝑝) significance. This allows exact reporting of significances as GWAS scale to larger cohorts that potentially produce vanishingly small p-values. We also generalized the code to use any BLAS (Basic Linear Algebra Subprograms) and LAPACK (Linear Algebra PACKage) libraries using standard function notation where necessary. The choice of BLAS/LAPACK backend can have noticeable impact, e.g. using the Apple-provided Accelerate SDK was 45% faster than the OpenBLAS library and used 30% less memory under otherwise identical conditions on Laptop ( Supplementary Figure 9 ). On Server, using AMD Optimizing CPU Libraries (AOCL) was under 2% faster than OpenBLAS (the next fastest library tested) with similar memory usage with 6 cores. However, AOCL is tuned specifically for the AMD nodes used by Server, and was significantly better at parallelizing across more cores, almost 70% faster than OpenBLAS and 92% faster than MKL with 192 cores (Supplementary Figure 9 ). However, the MKL version is substantially faster for most LAPACK routines ( Supplementary Note 2 ), and so we linked AOCL and MKL for BLAS and LAPACK respectively (with AOCL taking precedence over MKL for BLAS routines). CPU architecture can also have a significant impact on performance, with Zen 4-based server nodes almost twice as fast on average as a Zen 2-based node under similar conditions ( Supplementary Figure 10 ). This improvement is largely driven by wider SIMD (single instruction, multiple data) support on Zen 4 CPUs. Loading the GRM into memory, even with the ~50% savings with the triangular form, still grows quadratically with sample size. Several REML quantities can be computed “out-of-core”, where the result is accumulated over blocks of the GRM, allowing us to only load a fraction of the GRM into memory at any given time. This reduces peak memory requirements ( Supplementary Figure 11 ) but can increase I/O pressure substantially (both through repeated reading of the GRM across REML iterations as well as less efficient smaller reads). Although reduced, the memory scaling is still quadratic due to other terms which cannot be easily distributed. 
+
+Approximate extensions enable scaling to larger cohorts 
+
+A primary bottleneck in REML iterations is calculating the trace of the projection matrix product with each variance component's matrix. We replaced this exact calculation with a stochastic Hutch++ trace estimator [33], which never requires explicitly forming the projection matrix and reduces the cost from 𝒪(𝑛 %) to 𝒪(𝑠𝑛 !) for 𝑠 probe vectors. This reduced REML runtime and memory by 67% and 16% respectively compared to the exact mode ( Figure 2A ), had no effect on MLMA runtime ( Figure 2B ), and was within 0.1% relative genomic inflation to the exact mode ( Figure 2C ). More probes reduce the standard error at the cost of runtime, but too few can impede convergence and cancel out the gains ( Supplementary Figure 12 ). Although the Hutch++ estimator is itself unbiased, we observed small deviations above and below the exact test statistics because REML applies non-linear operations to the estimated traces. We also implement two additional PCA methods, Lanczos and randomized singular value decomposition (rSVD). Both methods are highly efficient at extracting a modest number of top k
+
+eigenvalues, and the former is mathematically exact under exact arithmetic while the latter is approximate but highly accurate. They can be orders of magnitude faster than even the MRRR algorithm from LAPACK introduced earlier ( Supplementary Figure 5 ). For the top four PCs at 
+
+N=75k, as commonly used as population structure covariates, rSVD reduced the runtime by 99% compared to MRRR, or a 95% reduction for the top 10% of PCs. The rSVD method can also efficiently leverage the out-of-core GRM operations. For rSVD, we implemented two ways of constructing the leading eigensystem: power iterations and a Nyström approximation, with the latter prioritising runtime at the cost of accuracy. Many recent tools, such as BOLT-LMM and REGENIE, achieve fast association testing through approximations that assume a sparse GRM, in which individuals have negligible relatedness. Agricultural GWAS cohorts often contain highly related individuals ( Supplementary Table 2 ), which violates this assumption and can inflate test statistics [8]. However, rather than relatedness being a hindrance, we instead exploited a low-rank approximation of the GRM. Using its leading 
+
+k eigenpairs and applying the Woodbury matrix identity, the covariance matrix inverse required at each REML iteration involves only a 𝑘 × 𝑘 matrix rather than an 𝑁 × 𝑁 one. The GRM information concentrates into fewer leading components as relatedness increases, leading to massive efficiency gains when 𝑘 ≪ 𝑁 . For 𝑁 =150k and 𝑘 =10k, we reduced REML runtime and memory by 95% and 53% respectively compared to the exact mode. We reused this reduced basis to compute the variant-scan test statistics without ever forming the full inverse, also reducing MLMA runtime and memory by 88% and 85% respectively ( Figure 2B ) for a ~3.5% relative genomic inflation to the exact mode. We implemented three data-driven methods to select 𝑘 , based on Marchenko–Pastur (MP) theory from random matrices, the eigenmass approach (EIG) from [8], or limiting the variance (VAR) in the discarded tail. We reused the rSVD implementation described previously for solving the eigensystem, initially calculating a small number of eigenvalues and doubling as necessary until the selection method satisfies its stopping conditions. Calculating many PCs is computationally expensive, and so datasets with a slowly decaying eigenspectrum may spend longer calculating the rank k than just running REML with the Hutch++ approximation. The methods depend differently on the distribution of eigenvalues, and so may be overly aggressive or conservative for a given dataset ( Supplementary Figure 13 ). In particular, the GRM is not a random matrix, and linkage disequilibrium means variants are not independent variables, and so the MP approach is cheap but tends to significantly underestimate the value of k.Figure 2. Comparison of approximations used during (A) REML and (B) MLMA steps using N=150k, m=600k with 24 cores. Note, methods without “Woodbury” use the full matrix rank, and so are effectively equivalent during the MLMA step (with only minor variation to the REML solution). Error bars indicate the mean and standard deviation across five replicates. (C-F) Variant significances are strongly correlated between the approximate and exact methods and show minimal relative genomic inflation compared to the exact mode. The relative genomic inflation factor 𝜆 !" #$% is the ratio of genomic inflation factors for the exact and approximate methods, where a value greater than 1 indicates the approximate method is more inflated than the exact method. 
+
+While aggressive selection of a small k will be faster, the truncation of signal in the eigendecomposition tail biases estimates of heritability ( Supplementary Table 3 ) and thus typically inflates test statistics and significances ( Figure 2D -F) with a roughly constant factor. The information from the truncated eigenvalues can be used to partially correct the heritability estimates, but not the REML itself ( Supplementary Note 3 ), and increasing k is the most reliable approach to improve accuracy. 
+
+Direct support for genotype recoding 
+
+Conventionally, additive QTL are tested using the genotype coding scheme mapping aa, aA, and AA to 0, 1, and 2 respectively. Alternatively, the dominance variance at individual SNPs can be tested by respectively recoding genotypes to 0, 2 p, and 4 p-2, where p is the allele frequency for that variant [28]. A previous modification of GCTA, used in the recent large-scale GWAS of the 1000 Bull Genomes project [30], enabled using the already supported MaCH dose/info file format in MLMA. Previous studies further repurposed this machinery by setting the dosage to the dominance recoding [24]. However, the MaCH format is “sample-major” whereas PLINK binary BED files (typically the primary data input source for GCTA and other GWAS tools) are “variant-major”. Converting between BED and MaCH is computationally expensive in both directions in terms of CPU and memory ( Figures 3A and 3B ), as well as requiring intermediate disk storage ( Figure 3C ). MaCH is also text-format, and so can be compressed to lower storage footprint but incurring additional compression/decompression time. For the 𝑁 =150k dataset across all 29 chromosomes ( m=17.4M) variants, this would require an additional 6 TB of storage for the compressed MaCH format. Furthermore, the round-trip encoding of floating-point numbers as fixed-length strings in a text file is not lossless, compared to GCTAg’s native binary file decoding. 
+
+> Figure 3. Genotype recoding using 12 cores. (A) Recoding PLINK binary BED files to plain-text MaCH (MaCH) or compressed MaCH (MaCH_GZ) is a memory-intensive step. (B) Recoding genotypes on-the-fly from the PLINK BED file is substantially faster than loading MaCH or MaCH_GZ data, due to avoiding reshaping of the variant- or sample-major axis and the ability to stream genotypes. Since we can load and process data in parallel when streamed, the step is largely limited by I/O speed (on the order of GB/s). (C) The bit-packed format of PLINK BED genotypes requires a significantly smaller storage footprint compared to text-based MaCH, even when compressed, and does not require intermediate files on disk.
+
+Furthermore, the MaCH format cannot be easily streamed, as now implemented for BED files, requiring a large memory footprint to load and transpose the numeric genotypes. Even after optimizing a BED-to-MaCH conversion script and the GCTA MaCH loading paths, these two steps are typically the largest bottleneck and can dominate the runtime of the entire MLMA step. By implementing a recoding on-the-fly strategy, we vastly simplified the process of testing the dominance variance at individual SNPs. Crucially, this still allows subsetting variants or samples, which can affect the allele frequency estimates, whereas MaCH files would have to be regenerated on disk for any subset. 
+
+Discussion 
+
+GCTA remains an integral tool for association testing, especially for datasets which do not satisfy the assumptions of fast methods like BOLT or REGENIE. Even tools like SLEMM, targeted towards testing massive livestock cohorts, do not replace full-GRM mixed linear models like that in GCTA [8]. Here, we both improve the existing GCTA implementation and extend with validated approximations to substantially accelerate the GWAS workflow. These changes also better leverage current computing infrastructure (SSDs, SIMD, larger CPU caches, etc), and the ability to split memory- or compute-bound steps for optimized use of HPC or cloud computing resources. Such improvements have a substantial impact on both the feasibility and compute/carbon footprint considerations of large scale GWAS [33]. This mirrors similar developments in other bioinformatic software, for example the ubiquitous short read aligner bwa [34], with e.g, bwa-mem2 and bwa-mem3 [35], bwa-meme [36], etc increasing throughput primarily through engineering/implementation, as opposed to minibwa [37] using a fundamentally different algorithmic design. 
+
+The improved complexity and parallelization of the variant-scan in the MLMA step is especially crucial. As “sequence-imputed” variants, typically representing whole genome variant panels with tens of millions of variants, gain popularity over marker panels, on the order of tens or hundreds of thousands of variants, GWAS designs need to scale appropriately. By entirely removing the variant-scan bottleneck and streaming the genotypes, GWAS with GCTAg are now primarily limited (in terms of both runtime and peak memory) in the REML step by the number of samples considered rather than number of variants. At large ( N=150k, m=600k) cohort scales, even with the memory optimizations, REML with GCTAg required around 268 GB of memory and 13.5 hours and MLMA required 45 GB of memory and 1.9 hours with 24 cores. The runtime for matrix inversions at each REML iteration scale cubically with samples (and quadratically for memory, even with out-of-core GRM operations), and so is impracticable to scale much larger while retaining exactness. To support scaling to even larger cohorts, we implemented two distinct approximations. The Hutch++ approximation scales quadratically with samples for runtime and avoids materialising 
+
+𝑃 , with REML using around 220 GB of memory and 4.5 hours for the large cohort (and MLMA unchanged). The approximation is highly accurate, with only minor unbiased stochastic noise in the test significances (relative genomic inflation under 0.1%). The reduced-rank Woodbury basis approximation scales substantially more favourably with sample size, requiring 126 GB of memory and only 42 minutes for k=10k (relative genomic inflation of ~3.5%). Notably, the Woodbury basis approximation also impacts the MLMA step, using only 7 GB of memory and 13 minutes. Holding the GRM in memory becomes especially dominant in the Woodbury mode, and so out-of-core GRM operations allows us to reduce REML memory to just 54 GB (-57%) with an acceptable increase in runtime to 65 minutes (+55%) runtime. However, scaling to millions of samples, may be infeasible with the current implementation of the mixed linear model approach, necessitating alternative methods designed for massive cohorts like SLEMM or ssGBLUP [38] . Determining the rank of the Woodbury basis from the GRM, using any of the data-driven selection methods, can quickly become its own bottleneck. However, the effective rank (assuming a sufficiently large cohort) should be a relatively stable property of the breed/population and could be calculated once or estimated as the number of independent chromosome segments [8], and then reused in future GWAS. In practice, we found (on this simulated data) that an effective rank close to 90% of the eigenmass was within 1% of the exact mode, substantially lower than the theoretical 98/99% eigenmass [8]. “Warm-starting” the variance components with the HE estimator can reduce the number of REML iterations needed compared to the naïve equal partition for low heritability traits but has limited advantage at higher heritability. Given many relevant traits in livestock have low-to-moderate heritability [39], this leads to large savings on average. Traits with complex inheritance, i.e. with epistatic effects like Trait B, are poorly captured by the simple genetic+environment model and often fall back to the naïve estimator. Likewise, only damping the REML iteration steps when the underlying Hessian disagrees with the previous step expectation allows much more rapid convergence on all tested datasets, easing one of the GWAS major bottlenecks. Detecting dominance effects at individual SNPs typically requires significantly larger cohorts to achieve statistical power compared to additive effects, and so dominance effects are becoming increasingly important to study as more genotype/phenotype data is collected. Despite being a simple recoding of genotypes, many GWAS tools (with a few exceptions like PLINK and REGENIE) primarily only support additive testing. As such, drastically simplifying and accelerating the dominance recoding in GCTAg will allow testing at larger scales, facilitating the discovery of trait-associated loci with potentially substantial dominance or recessive effects that impact agricultural populations. 
+
+Conclusion 
+
+GCTAg removes key computational bottlenecks, enabling exact full-GRM GWAS with six-figure sample sizes and millions of variants at scales previously infeasible with GCTA. An unbiased trace approximation further reduces computational requirements across all datasets, while related cohorts can exploit a reduced-rank Woodbury representation for additional gains. All memory-intensive steps (GRM, PCA, and REML) support out-of-core methods to further reduce peak memory requirements. GCTAg also supports native genotype recoding for non-additive QTL analyses. Combined, these improvements will enable efficient full-GRM GWAS to match the continuing growth of modern mapping cohorts. 
+
+Methods 
+
+Baseline GCTA GWAS 
+
+The GRM is built from genotypes 𝑥 '( for a variant with allele frequency 𝑝 ( as 
+
+𝐺 = #) 𝑍𝑍 * where 𝑍 '( = +, !" "!-"./!-"+#"-".
+
+The principal components of the GRM are defined as 
+
+𝐺 = 𝑄Λ𝑄 *
+
+where 𝑄 contains the eigenvectors and Λ is the diagonal eigenvalue matrix. We model the phenotype as 
+
+𝑦 = 𝐶𝛼 + 𝑔 + 𝑒 with 𝑔~𝑁L0, 𝜎 0!𝐺N and 𝑒~𝑁(0, 𝜎 1!𝐼) 
+
+with the covariate matrix 𝐶 , such that the phenotype covariance matrix is 
+
+𝑉 = 𝜎 0!𝐺 + 𝜎 1!𝐼 
+
+where the variance components 𝜎 0! (genetic) and 𝜎 1! (environmental) are estimated during REML. The null-model projection matrix is constructed as 
+
+𝑃 $ = 𝑉 "# − 𝑉 "# 𝐶(𝐶 *𝑉 "# 𝐶) "# 𝐶 *𝑉 "# 
+
+Finally, the effect size and standard error for each variant is calculated as 
+
+𝑆𝐸L𝛽 S(N = L𝑥 (2𝑃 $𝑥 (N"#$ and 𝛽 S( = 𝑆𝐸L𝛽 S(N! × 𝑥 (*𝑃 $𝑦 
+
+for the phenotype vector 𝑦 . The Wald statistic is T𝛽 ˆ(/SEL𝛽 S(NY !
+
+, tested against a χ² distribution with one degree of freedom. 
+
+Blocked MLMA operations 
+
+We can calculate MLMA statistics over blocks of variants rather than per-variant. Fixed effects are pre-adjusted as 
+
+𝑃 $𝑦 = 𝑉 "# 𝑦 adj where 𝑦 adj = 𝑦 − 𝑋((𝑋 *𝑉 "# 𝑋) "# 𝑋 *𝑉 "# 𝑦) 
+
+For a block of variants 𝑋 34567 , the effect size and standard error are then 
+
+𝛽 ˆblock = 8block    
+
+> %9&# :adj
+> ;<=> +8 block
+> %9&# 8block .
+
+and SEL𝛽 ˆblock N = diag(𝑋 block  
+
+> *
+
+𝑉 "# 𝑋 block )"#/! 
+
+with the division taken elementwise, and the Wald statistic is the same as before. 
+
+Randomised SVD methods We implemented two approaches to calculating eigenvectors with rSVD to construct the leading eigensystem (𝑄 @, Λ @), including a small oversampling buffer ( 𝑘 ABC = 𝑘 + 𝑝) to ensure accurate eigenvalues. Using 𝑞 power iterations and a Gaussian sketch matrix Ω, we form 
+
+𝐺 DΩ=𝑄 ˜ 𝑅 
+
+as an approximate subspace of 𝐺 where 𝑄 ˜ *𝑄 ˜ = 𝐼 @'() . We use that 𝐺 is symmetric to simplify the more general power iteration form (𝐺𝐺 *)D𝐺 . Additional power iteration rounds sharpen the approximation of 𝐺 and reduce spectral lag. We then orthonormalise and recover approximate eigenpairs with a Rayleigh-Ritz step 
+
+𝑄 ˜ *𝐺𝑄 ˜ = 𝑍Λ ˜ 𝑍 *
+
+to take the leading 𝑘 eigenpairs of L𝑄 ˜ 𝑍, Λ ˜ N , which is of rank 𝑘 ABC . Alternatively, we can use the Nyström approximation 
+
+𝐺Ω(Ω *𝐺Ω) EΩ*𝐺 
+
+where the dagger represents the Moore–Penrose pseudoinverse for positive semidefinite matrices. The latter is more robust to poorly conditioned matrices but typically has a larger spectral lag to exact methods. 
+
+Hutch++ trace approximation 
+
+At each REML round, we need the trace of 𝑃𝐴 '. We can estimate this with the Hutch++ approximation using 𝑠 probes as 
+
+tr(𝑃𝐴 ') ≈ 𝑡𝑟(𝑄 *𝑃𝐴 '𝑄) + 1𝑠 f 𝑟 (*𝑃𝐴 '𝑟 (F(G# 
+
+where 𝑄 = orth(𝑃𝐴 '𝑆) for the random sketch matrix 𝑆 ∈ {±1} H×F and 𝑟 ( = (𝐼 − 𝑄𝑄 *)𝑔 ( where 
+
+𝑔 ( are stochastic probes drawn (independently of 𝑆 ) from the same Rademacher distribution. We never explicitly materialise 𝑃 or 𝑉 "# : 𝑃 is applied to vectors through the projection from introduced earlier, and 𝑉 "# through triangular solves with the Cholesky factor of 𝑉 .
+
+Reduced-rank Woodbury representation 
+
+By representing the GRM with 𝐺 ≈ 𝑄 @Λ@𝑄 @*, where 𝑘 is the reduced-rank, we can use the Woodbury matrix identity to solve for applications of the phenotype covariance matrix inverse as 
+
+𝑉 "# 𝑣 = 𝜎 eff 
+
+> "!
+
+(𝑣 − 𝑄 @𝐷 J𝑄 @*𝑣) 
+
+where 𝐷 J = diag(𝑐 '), 𝑐 ' = K*$(M !"M )+,-)K.$OK *$M!
+
+, and 𝜎 eff  
+
+> !
+
+= 𝜎 1! + 𝜎 0!𝜆 C=<4 based on the truncated tail terms 
+
+𝜆 C=<4 = CP(Q)"∑ M!!/0  
+
+> H"@
+
+and 𝜏 ! = CP+Q $."∑ M!$!/0  
+
+> H"@
+
+− 𝜆 C=<4 !
+
+We can adjust the log|𝑉| as 
+
+(𝑁 − 𝑘) log 𝜎 eff  
+
+> !
+
++ f logL𝜎 1! + 𝜎 0!𝜆 'N
+
+> 'S@
+
+We also reformulate the variant-scan to use the reduced-representation, now solving 
+
+𝑥 *𝑉 "# 𝑥 = 𝜎 eff  
+
+> "!
+
+T‖𝑥‖ ! − s𝐷 J#/! 𝑄 @*𝑥s !
+
+Y
+
+GRM-based rank selection 
+
+We can calculate the reduced-rank for a given GRM using three separate methods based on the eigenvalue spectrum. In all cases, we calculate a fixed number of eigenvalues upfront and then test the following criterion for the chosen method. If the criterion is not satisfied, we calculate double the number eigenvalues and repeat. For Marchenko–Pastur, we use the number of samples N and the number of variants m, finding the number of eigenvalues larger than the “edge” eigenvalue from random matrix theory. 
+
+𝑘 TU = |{𝑖: 𝜆 ' > 𝜆 O}| where λ O = z1 + {𝑁 𝑚 | }
+
+> !
+
+For the eigenmass approach, we find the number of eigenvalues needed to reach a target mass 
+
+𝜌 C=P>AC chosen by the user. 
+
+𝑘 VWX = min 𝑘: ∑ 𝜆 '@'G# 
+
+tr(𝐺) ≥ 𝜌 C=P>AC 
+
+We can optimise the eigenvalue expansion round for this mode, noting that the remaining eigenvalues can each only contribute at most 𝜆 @ mass. We can improve the lower bound of the rSVD expansion as 
+
+𝑘 YABC = max 2 ∗ 𝑘, 𝑘 +  T𝜌 Z[\01Z − 𝜌 @)𝑡𝑟(𝐺)Y 𝜆 @
+
+ 
+
+For the tail variance approach, we find the smallest number of total eigenvalues, such that the remaining estimated variance in the truncated eigenspectrum is smaller than 𝜉 C=P>AC chosen by the user. 
+
+𝑘 ]^_ = min 𝑘:  𝛥(𝑘) tr(𝐺 !) < 𝜉 C=P>AC  where Δ(𝑘) = tr(𝐺 !) − f 𝜆 '!@'G# 
+
+ − tr(𝐺) − ∑ 𝜆 '@'G# !
+
+𝑁 − 𝑘 
+
+Adaptive REML damping and convergence 
+
+The AI Hessian matrix ( 𝐻 `a ) is already computed during AI REML but contains information about the state of REML iterations that is not yet used. The magnitude of the Newton decrement (𝛿 !) in the optimization is roughly captured as 𝛿 ! = 𝑈 *𝐻 `a "# 𝑈 where 𝑈 is the REML score vector. We refine the convergence criterion from Δ log(ℒ) < 1 × 10 "b , where ℒ is the likelihood estimator, to 𝛿 ! < 𝜖 for a chosen 𝜖 .We also redefine the damping of AI REML steps, where updates to the variance components are damped by a factor 𝜁 in GCTA as 
+
+𝜁 = 10 "#! Δ log(ℒ) > 1 1 otherwise We instead use 
+
+𝜁 =  1 previous step trustworthy 
+
+min 1, (2𝛿 !)"#! otherwise Where trustworthy is defined as the realised gain after the current step is close to the predicted gain from the previous step (i.e. convergence is locally smooth) as c 45>(ℒ) 1'+-,2'3 
+
+> c 45>(ℒ) 41'3,5)'3
+
+≳ 0.75 . In cases where the previous step was not trustworthy and convergence is not locally smooth; we damp relative to the remaining Newton decrement rather than a fixed constant. Out-of-core GRM operations 
+
+Almost all calculations involving the GRM ( 𝐴 $) can be divided into subblocks. For example, the quadratic term of the REML score function 
+
+𝑅 $ = 𝑦 *𝑃𝐴 $𝑃𝑦 
+
+can be accumulated over 𝐵 blocks as 
+
+𝑅 $ = f(𝑃𝑦) e*feG# 
+
+𝐴 $,ee (𝑃𝑦) e + 2 f f(𝑃𝑦) e*(he feG# 
+
+𝐴 $,e( (𝑃𝑦) (
+
+with contributions from the diagonals and upper-triangle off-diagonals counted once and twice respectively (as the GRM is symmetric). 
+
+Genotype and phenotype simulation 
+
+We used AlphaSimR v2.1.0 [40] to simulate a dairy cattle population, with the random seed “1”. We generated founder haplotypes using the MaCS-based coalescent simulator for 1,000 non-inbred diploid individuals with the recommended bovine parameters. Each of the 29 simulated autosomes retained 600,000 segregating sites, resulting in a total of 17.4 million variants. We simulated two quantitative traits, based on the genetic architecture of two milk traits with moderate and low heritability respectively: trait A (h 2=0.08, additive) and trait B (h 2=0.35, additive+dominance+epistasis). We also simulated a trait based on height (trait C: h 2=0.58, additive+dominance) that was not used during selection. We expanded the population over 23 generations (5 random matings, 15 selecting on true genetic values, and 3 selecting on estimated breeding values), preserving the target genetic architecture but allowing heritability to drift. Only animals younger than 10 years of age were retained in the population, with a minimum mating age of two years. For each mating cycle, only top-ranked bulls based on the selection index were used. We then exported the final set of 152,522 individuals and genotypes into PLINK2 bfile format [41]. We created the subsets using PLINK2, randomly shuffling samples and variants and then subsetting to the desired level, such that an N=37.5k dataset was a proper subset of an N=75k dataset. 
+
+GCTAg implementation 
+
+We forked GCTAg from commit a66e042 of https://github.com/JianYang-Lab/GCTA and manually integrated equivalent changes from a previously modified version of GCTA used for the 1000BG projects from https://git.wur.nl/vande018/gcta/-/tree/dosages. Our fork is GPL3 compliant and available at https://github.com/ASLeonard/GCTAg. We used commit 2acf070 (tagged “v1.1.1 Simmental”) as the GCTAg version during benchmarking. We also created a separate branch within GCTAg (https://github.com/ASLeonard/GCTAg/tree/YangLab ) to use the generalized build updates, minimal changes required to use SIMD (fixing segmentation faults due to unaligned memory), and the save/load REML state feature as applied to the “base” GCTA using commit fdfe25a (tagged “GCTA v1.95.1 Baseline”), which we refer to as “GCTA (rebuilt)”, This allowed us to benchmark the code more fairly to avoid outdated compilers/libraries from influencing the benchmarking or profiling. We also downloaded the v1.95.1 GCTA binary for Linux and macOS-arm64 from https://yanglab.westlake.edu.cn/software/gcta/#Download for an unmodified comparison, which we refer to as “GCTA (download)”. However, this version links the BLAS libraries in the wrong order on Linux, mostly affecting the MLMA step ( Supplementary Note 4). We also provide an optimized c++ implementation (“BED2MaCH”) to convert between PLINK2 binary files and MaCH format used in this manuscript (https://github.com/AnimalGenomicsETH/GCTAg_benchmark). 
+
+Benchmarking 
+
+We benchmarked both GCTAg and the minimally modified GCTA on an Apple laptop and on the ETH Zurich Euler cluster. We measured runtime, memory, and I/O metrics with the Z shell “time” builtin and GNU time respectively. We ran five replicates to minimize variation across non-exclusive node use. We profiled the code using flamegraph (v0.6.14 https://github.com/flamegraph-rs/flamegraph) on Laptop and Server, as well as further profiling on Laptop using Instruments (version 26.6 17F113). When testing CPU architecture, we also used nodes with AMD EPYC 7742 and 512 GB RAM, AMD EPYC 7H12 and 256 GB RAM, and AMD EPYC 7763 and 256 GB RAM. We recompiled GCTAg on each node type (Zen 2, 3, and 4) separately to ensure valid use of the native optimisations. We provide the scripts used to profile the different steps of the GCTA GWAS, benchmark the comparisons between GCTA and GCTAg, and the plotting scripts at https://github.com/AnimalGenomicsETH/GCTAg_benchmark. 
+
+Ethics approval and consent to participate 
+
+Not applicable 
+
+Consent for publication 
+
+Not applicable 
+
+Availability of data and materials 
+
+Data sharing is not applicable to this article as no real datasets were generated during the current study. 
+
+Competing interests 
+
+The authors declare that they have no competing interests. 
+
+Funding 
+
+A doctoral fellowship as part of the MSCA Doctoral Network BullNet was funded by the Swiss State Secretariat for Education, Research and Innovation (SERI). This study was financially supported by the Arbeitsgemeinschaft Schweizerischer Rinderzüchter (ASR), Zollikofen, Switzerland, and the Federal Office for Agriculture (FOAG), Bern, Switzerland. 
+
+Author contributions ASL, NKK, and HP conceived the project. ASL implemented the changes to GCTA. ASL and NW tested the code. QH generated the simulation data. ASL and HP drafted the manuscript. All authors read and approved the final manuscript. 
+
+Acknowledgements 
+
+We thank Dr. Wim Gorssen for additional testing of the GCTAg software. 
+
+References 
+
+1. Aulchenko YS, De Koning DJ, Haley C. Genomewide Rapid Association Using Mixed Model and Regression: A Fast and Simple Method For Genomewide Pedigree-Based Quantitative Trait Loci Association Analysis. Genetics [Internet]. Oxford Academic; 2007 [cited 2026 Aug 17];177:577–85. https://doi.org/10.1534/GENETICS.107.075614 2. Uffelmann E, Huang QQ, Munung NS, de Vries J, Okada Y, Martin AR, et al. Genome-wide association studies. Nature Reviews Methods Primers 2021 1:1 [Internet]. Nature Publishing Group; 2021 [cited 2026 Aug 20];1:59-. https://doi.org/10.1038/s43586-021-00056-9 3. Yang J, Lee SH, Goddard ME, Visscher PM. GCTA: A Tool for Genome-wide Complex Trait Analysis. The American Journal of Human Genetics [Internet]. Cell Press; 2011 [cited 2026 Aug 13];88:76–82. https://doi.org/10.1016/J.AJHG.2010.11.011 4. Gray A, Stewart I, Tenesa A. Advanced Complex Trait Analysis. Bioinformatics [Internet]. Oxford Academic; 2012 [cited 2026 Aug 24];28:3134–6. https://doi.org/10.1093/BIOINFORMATICS/BTS571 5. Loh PR, Tucker G, Bulik-Sullivan BK, Vilhjálmsson BJ, Finucane HK, Salem RM, et al. Efficient Bayesian mixed-model analysis increases association power in large cohorts. Nature Genetics 2015 47:3 [Internet]. Nature Publishing Group; 2015 [cited 2026 Aug 13];47:284–90. https://doi.org/10.1038/ng.3190 6. Jiang L, Zheng Z, Qi T, Kemper KE, Wray NR, Visscher PM, et al. A resource-efficient tool for mixed model association analysis of large-scale data. Nature Genetics 2019 51:12 [Internet]. Nature Publishing Group; 2019 [cited 2026 Aug 13];51:1749–55. https://doi.org/10.1038/s41588-019-0530-8 7. Mbatchou J, Barnard L, Backman J, Marcketta A, Kosmicki JA, Ziyatdinov A, et al. Computationally efficient whole-genome regression for quantitative and binary traits. Nature Genetics 2021 53:7 [Internet]. Nature Publishing Group; 2021 [cited 2026 Aug 13];53:1097–103. https://doi.org/10.1038/s41588-021-00870-7 8. Jiang J. Genomic Dimensionality Bounds Mixed-Model Association Power and Fine-Mapping Resolution. bioRxiv [Internet]. Cold Spring Harbor Laboratory; 2026 [cited 2026 Aug 13];2026.06.02.729628. https://doi.org/10.64898/2026.06.02.729628 9. Wang X, Wang J, Tiezzi F, Huang Y, Huang W, Maltecca C, et al. Widely used GWAS methods can be poorly suited to SNP-level localization under diffuse polygenic architecture in livestock. bioRxiv [Internet]. Cold Spring Harbor Laboratory; 2026 [cited 2026 Aug 13];2026.07.20.739621. https://doi.org/10.64898/2026.07.20.739621 10. Georges M, Charlier C, Hayes B. Harnessing genomic information for livestock improvement. Nat Rev Genet [Internet]. Nature Publishing Group; 2019 [cited 2026 Aug 13];20:135–56. https://doi.org/10.1038/S41576-018-0082-2;SUBJMETA 11. Ring SC, Evans RD, Cromie AR, Berry DP. Cross-sectional analyses of a national database to determine if superior genetic merit translates to superior dairy cow performance. J Dairy Sci [Internet]. Elsevier; 2021 [cited 2026 Aug 13];104:8076–93. https://doi.org/10.3168/JDS.2020-19957 12. Liang Z, Prakapenka D, Zaabza HB, VanRaden PM, Van Tassell CP, Da Y. A million-cow genome-wide association study of productive life in U.S. Holstein cows. Genetics Selection Evolution 2024 56:1 [Internet]. BioMed Central; 2024 [cited 2026 Aug 13];56:67-. https://doi.org/10.1186/S12711-024-00935-1 13. Evans R, McCarthy J, Moynihan A, Quigley K, Suter J. Experiences from National Genotyping Program - Empowering Data-Driven Decisions in the Irish Beef and Dairy Industry. World Congress on Genetics Applied to Livestock Production Digital Archive [Internet]. Iowa State University Digital Press; 2026 [cited 2026 Aug 13];2026. https://doi.org/10.31274/WCGALP.23993 14. Križanac AM, Reimer C, Heise J, Liu Z, Pryce JE, Bennewitz J, et al. Sequence-based GWAS in 180,000 German Holstein cattle reveals new candidate variants for milk production traits. Genetics Selection Evolution 2025 57:1 [Internet]. BioMed Central; 2025 [cited 2026 Aug 13];57:3-. https://doi.org/10.1186/S12711-025-00951-9 15. Özkaraca Mİ, Agung M, Navarro P, Tenesa A. Divide and conquer approach for genome-wide association studies. Genetics [Internet]. Oxford Academic; 2025 [cited 2026 Aug 13];229. https://doi.org/10.1093/GENETICS/IYAF019 16. Hivert V, Sidorenko J, Rohart F, Goddard ME, Yang J, Wray NR, et al. Estimation of non-additive genetic variance in human complex traits from a large sample of unrelated individuals. The American Journal of Human Genetics [Internet]. Cell Press; 2021 [cited 2026 Aug 13];108:786–98. https://doi.org/10.1016/J.AJHG.2021.02.014 17. Cheng J, Maltecca C, VanRaden PM, O’Connell JR, Ma L, Jiang J. SLEMM: million-scale genomic predictions with window-based SNP weighting. Bioinformatics [Internet]. Oxford Academic; 2023 [cited 2026 Aug 13];39. https://doi.org/10.1093/BIOINFORMATICS/BTAD127 18. Kündig P, Sigrist F. Scalable Krylov Subspace Methods for Generalized Mixed-Effects Models with Crossed Random Effects. 2025 [cited 2026 Aug 17]; https://arxiv.org/pdf/2505.09552. Accessed 17 Aug 2026 19. Misztal I, Legarra A, Aguilar I. Using recursion to compute the inverse of the genomic relationship matrix. J Dairy Sci [Internet]. Elsevier; 2014 [cited 2026 Aug 13];97:3943–52. https://doi.org/10.3168/JDS.2013-7752 20. Rönnegård L, Mischenko K, Holmgren S, Carlborg Ö. Increasing the Efficiency of Variance Component Quantitative Trait Loci Analysis by Using Reduced-Rank Identity-by-Descent Matrices. Genetics [Internet]. Oxford Academic; 2007 [cited 2026 Aug 13];176:1935–8. https://doi.org/10.1534/GENETICS.107.071977 21. Mäntysaari EA, Evans RD, Strandén I. Efficient single-step genomic evaluation for a multibreed beef cattle population having many genotyped animals. J Anim Sci [Internet]. Oxford Academic; 2017 [cited 2026 Aug 13];95:4728–37. https://doi.org/10.2527/JAS2017.1912 22. Misztal I, Lourenco D, Legarra A. Current status of genomic evaluation. J Anim Sci [Internet]. Oxford Academic; 2020 [cited 2026 Aug 13];98. https://doi.org/10.1093/JAS/SKAA101 23. Reynolds EGM, Neeley C, Lopdell TJ, Keehan M, Dittmer K, Harland CS, et al. Non-additive association analysis using proxy phenotypes identifies novel cattle syndromes. Nature Genetics 2021 53:7 [Internet]. Nature Publishing Group; 2021 [cited 2026 Aug 13];53:949–54. https://doi.org/10.1038/s41588-021-00872-5 24. He Q, Deuber J, Seefried FR, Pausch H, Kadri NK. Genomic partitioning and functional dissection of inbreeding depression for stature in Brown Swiss cattle. Genetics Selection Evolution 2026 [Internet]. BioMed Central; 2026 [cited 2026 Aug 13]; https://doi.org/10.1186/S12711-026-01062-9 25. Hiltpold M, Kadri NK, Janett F, Witschi U, Schmitz-Hsu F, Pausch H. Autosomal recessive loci contribute significantly to quantitative variation of male fertility in a dairy cattle population. BMC Genomics 2021 22:1 [Internet]. BioMed Central; 2021 [cited 2026 Aug 13];22:225-. https://doi.org/10.1186/S12864-021-07523-3 26. Mapel XM, Kadri NK, Leonard AS, He Q, Lloret-Villas A, Bhati M, et al. Molecular quantitative trait loci in reproductive tissues impact male fertility in cattle. Nat Commun [Internet]. 2024;15:674. https://doi.org/10.1038/s41467-024-44935-7 27. Watson N, He Q, Kadri NK, Leonard AS, Seefried FR, Pausch H. Across-breed analyses of genome-wide association studies for stature and mammary gland morphology in cattle reveal pleiotropic effects of the Friesian POLLED haplotype. Genetics Selection Evolution 2026 58:1 [Internet]. BioMed Central; 2026 [cited 2026 Aug 13];58:19-. https://doi.org/10.1186/S12711-026-01042-Z 28. Zhu Z, Bakshi A, Vinkhuyzen AAE, Hemani G, Lee SH, Nolte IM, et al. Dominance Genetic Variation Contributes Little to the Missing Heritability for Human Complex Traits. The American Journal of Human Genetics [Internet]. Cell Press; 2015 [cited 2026 Aug 17];96:377– 85. https://doi.org/10.1016/J.AJHG.2015.01.001 29. Li Y, Willer CJ, Ding J, Scheet P, Abecasis GR. MaCH: Using sequence and genotype data to estimate haplotypes and unobserved genotypes. Genet Epidemiol [Internet]. John Wiley & Sons, Ltd; 2010 [cited 2026 Aug 13];34:816–34. https://doi.org/10.1002/GEPI.20533;CTYPE:STRING:JOURNAL 30. Daetwyler H, Berg I van den, Sanchez M-P, Jagt C Vander, Chamberlain A, Bouwman A, et al. Genome-wide meta-analyses in 708,480 individuals shed light on the genetic conflict between productivity and fertility in dairy cattle. 2026 [cited 2026 Aug 13]; https://doi.org/10.21203/RS.3.RS-8631217/V1 31. Pausch H, MacLeod IM, Fries R, Emmerling R, Bowman PJ, Daetwyler HD, et al. Evaluation of the accuracy of imputed sequence variant genotypes and their utility for causal variant detection in cattle. Genet Sel Evol [Internet]. BioMed Central Ltd.; 2017 [cited 2026 Aug 19];49:24. https://doi.org/10.1186/S12711-017-0301-X 32. Yang J, Zeng J, Goddard ME, Wray NR, Visscher PM. Concepts, estimation and interpretation of SNP-based heritability. Nature Genetics 2017 49:9 [Internet]. Nature Publishing Group; 2017 [cited 2026 Aug 17];49:1304–10. https://doi.org/10.1038/ng.3941 33. Grealey J, Lannelongue L, Saw WY, Marten J, McRossed D Sign©ric G, Ruiz-Carmona S, et al. The Carbon Footprint of Bioinformatics. Mol Biol Evol [Internet]. Oxford Academic; 2022 [cited 2026 Aug 13];39. https://doi.org/10.1093/MOLBEV/MSAC034 34. Li H. Aligning sequence reads, clone sequences and assembly contigs with BWA-MEM. 2013 [cited 2021 Aug 16]; http://arxiv.org/abs/1303.3997. Accessed 16 Aug 2021 35. Md V, Misra S, Li H, Aluru S. Efficient architecture-aware acceleration of BWA-MEM for multicore systems. Proceedings - 2019 IEEE 33rd International Parallel and Distributed Processing Symposium, IPDPS 2019 [Internet]. Institute of Electrical and Electronics Engineers Inc.; 2019 [cited 2021 Aug 16]. p. 314–24. https://doi.org/10.1109/IPDPS.2019.00041 36. Jung Y, Han D. BWA-MEME: BWA-MEM emulated with a machine learning approach. Bioinformatics. 2022;38:2404–13. https://doi.org/10.1093/bioinformatics/btac137 37. Li H, Homer N. Fast genomic read alignment with minibwa [Internet]. 2026. https://arxiv.org/abs/2606.15357 38. Misztal I, Lourenco D, Legarra A. Current status of genomic evaluation. J Anim Sci [Internet]. Oxford Academic; 2020 [cited 2026 Oct 1];98. https://doi.org/10.1093/JAS/SKAA101 39. Pinto LFB, Medrado BD, Pedrosa VB, Brito LF. A systematic review with meta-analysis of heritability estimates for temperament-related traits in beef and dairy cattle populations. Journal of Animal Breeding and Genetics [Internet]. John Wiley and Sons Inc; 2025 [cited 2026 Aug 21];142:1–23. https://doi.org/10.1111/JBG.12874;ISSUE:ISSUE:DOI 40. Faux A, Gorjanc G, Gaynor RC, Battagin M, Edwards SM, Wilson DL, et al. AlphaSim: Software for Breeding Program Simulation. Plant Genome [Internet]. Wiley; 2016 [cited 2026 Aug 19];9:plantgenome2016.02.0013. https://doi.org/10.3835/PLANTGENOME2016.02.0013;SUBPAGE:STRING:FULL 41. Chang CC, Chow CC, Tellier LCAM, Vattikuti S, Purcell SM, Lee JJ. Second-generation PLINK: Rising to the challenge of larger and richer datasets. Gigascience [Internet]. BioMed Central Ltd.; 2015 [cited 2023 Jun 9];4:7. https://doi.org/10.1186/s13742-015-0047-8 Supplementary Table 1. Number of iterations until REML convergence across three traits with different heritability. Variance components were initialised using either the default GCTA behaviour (equal partition of variance) or warm-starting from a HE regression. Each REML iteration could be damped under the default GCTA behaviour or use the “adaptive” convergence based on the remaining curvature in the model. REML was run using the N=18,750 subset, and final heritability estimates from all methods were within 0.01% of each other. * indicates the HE estimation failed and the fallback to equal variance was used. 
+
+trait A (h 2=0.11) trait B (h 2=0.46) trait C (h 2=0.59) 
+
+Equal+Damped 13 10 8HE-start+Damped 5 10* 8Equal+Adaptive 8 7 4HE-start +Adaptive 3 7* 3
+
+Supplementary Table 2. GRM density calculated from public datasets taken from the Genome Variant Map (GVM) through the NGDC. Higher proportion of off-diagonal elements > 0.125 indicate higher relatedness and hence sparse assumptions break down. Metrics can vary depending on upstream allele frequency filtering but are consistent that domesticated species are generally too related to use sparse GRM approximations. 
+
+Species Group Bio Category Mean Abs Value Prop > 0.05 Prop > 0.125 
+
+Arabidopsis Plant Wild, predominantly selfing 0.02196 0.04896 0.01941 Maize Plant Domesticated, outcrossing 0.01866 0.04573 0.008146 Potato Plant Domesticated, clonal/outcrossing 0.1363 0.7610 0.4055 Soybean Plant Domesticated, predominantly selfing 0.07901 0.6095 0.1509 Tomato Plant Domesticated, predominantly selfing 0.3674 0.9135 0.7663 Rice Plant Domesticated, predominantly selfing 0.1090 0.7973 0.3793 Buffalo Animal Domesticated, outbreeding 0.3934 0.9881 0.9789 Chicken Animal Domesticated, outbreeding 0.04628 0.3300 0.04819 Duck Animal Domesticated, outbreeding 0.04576 0.3139 0.05314 Goat Animal Domesticated, outbreeding 0.04074 0.3276 0.01486 Pig Animal Domesticated, outbreeding 0.1473 0.7547 0.4582 Sheep Animal Domesticated, outbreeding 0.08554 0.8293 0.08823 Human_1kGP Human Wild population, outbreeding 0.01722 0.04439 0.0003803 
+
+Supplementary Table 3. Heritability estimation from exact and approximate methods, tested on N=150k, m=600k. Over-truncation tends to drive V(G) up as the reduced basis also typically inflates the REML scoring function. 
+
+Exact Hutch++ Woodbury (k=5k) Woodbury (k=10k) Woodbury (k=20k) 
+
+V(G) 0.473 0.474 0.500 0.474 0.472 V(e) 4.095 4.095 4.076 4.095 4.096 h2 0.1035 0.1037 0.1093 0.1037 0.1033 Supplementary Figure 1. Flamegraphs from GCTA (rebuilt) and GCTAg on the profiling dataset for the four GWAS steps. We can identify potential bottlenecks in GCTA through the long calltime spent in e.g. PCA during the DSYMV operation or in MLMA in the SGEMV. Other steps like GRM and REML are mechanistically similar between GCTA and GCTAg. 
+
+Supplementary Figure 2. CPU cycle profiling. Byte-level I/O in GCTA (A) was slow, requiring 164.0 billion CPU cycles to read the BED file, compared to only 13.0 billion in GCTAg when using memory mapping and more efficient packed-genotype decoding. Likewise, the per-variant MLMA loop took 3.9 trillion CPU cycles (3.7 trillion in the SGEMV operation) in GCTA (C) compared to 84.7 billion (39.2 billion in the STRSM operation) in GCTAg (D).  
+
+> A) B) C) D)
+
+Supplementary Figure 3. Memory allocation profiling of the REML step. Across the same dataset and program command, GCTA had a peak memory use of 3.8 GB with several spikes (A) compared to GCTAg having a smooth memory profile and peaking at 1.4 GB (~63% reduction). GCTA also allocated 35.1 GB of memory across the run, compared to only 13.7 GB for GCTAg, with large reallocations due to temporary matrices (C) or frequent reallocation of memory inside loops (D). 
+
+Supplementary Figure 4. Increasing the number of variants per GRM accumulation batch from the hardcoded 128 value in GCTA improves throughput for a small increase in memory. Coincidentally, a batch size of 1024 variants is optimal when tested on Laptop (using N=18,750, m=600k) and Server (using N=75k, m=600k) despite their different BLAS libraries and CPU architectures. 
+
+Supplementary Figure 5. (A) The relative performance of eigensolver methods depends heavily on how many eigenvectors are needed, with e.g. Lanczos performing well when 𝑘 ≪ 𝑛 but worse than the exact solver once the spectral gap closes, run here for 
+
+N=75k. The out-of-core (OOC) GRM budget was 2 Gb. All PCA methods are effectively indistinguishable for top PCs, with eigenvalues shown in parentheses, for (B) Exact (DSYEVR), (C) Lanczos, and (D) rSVD methods, although the rSVD has minor eigenvalue differences since it is not mathematically exact. The OOC rSVD method has identical output to the normal rSVD method. 
+
+A) B) C) D) Supplementary Figure 6. Merging GRMs from 29 autosomes scales quadratically with sample size for memory and time for GCTA but could be done in constant memory with GCTAg. Theoretically, GCTAg runtime should scale quadratically with sample size, but the short runtime was almost entirely I/O-bound and more susceptible to noise from other shared HPC jobs. 
+
+Supplementary Figure 7. Across three simulated traits (see Supplementary Table 1 ), using either the HE-estimated or equal variance initialization (large circles) and damped or adaptive iterations all converged to effectively identical solutions (star). In general, the predicted steps are accurate (magnitude and direction shown by arrows) and damping steps by &√&( based on an arbitrary absolute 𝛥 𝑙𝑜𝑔(ℒ) > 1 condition is unnecessary. Only adaptively damping steps when the previous step was inaccurate, and otherwise taking the full step, converges much more quickly. Warm-starting Trait B failed and is not shown as it falls back to the equal partition initialisation. Note, the EM-REML first iteration for the equal start in the original GCTA implementation is never damped. Supplementary Figure 8. The GRM can be calculated with a tiled out-of-core approach, with multiple passes over the genotypes to calculate entries for different tiles of samples, run here for N=75k, m=600k. Using a small budget requires more I/O passes, which can have a small or large effect depending on I/O bandwidth relative to CPU bandwidth as well as I/O pressure. 
+
+Supplementary Figure 9. GRM building runtime on identical data can vary substantially depending on choice of BLAS library and core count. (A) For N=18,750, m=600k on Laptop, the macOS-native Accelerate was substantially better than OpenBLAS. Accelerate uses all cores (and the Apple silicon AMX co-processor), and so we only ran OpenBLAS using all 10 cores for a fair comparison. Most of the performance difference is due to OpenBLAS only using optimised CPU paths and not the AMX co-processor. (B) For N=75k, m=600k on Server, there is minimal difference in absolute runtime or memory across the BLAS libraries at low core count. However, the differences become substantial at high core counts when architecture-specific kernels can dominate. (C) The multicore scaling for each library (normalized by runtime at 6 cores for each library separately) highlights the AMD-tuned AOCL can leverage many cores on the AMD nodes more efficiently compared to Intel-tuned MKL and generic OpenBLAS which start to plateau at lower core counts. The dashed diagonal line indicates perfect scaling Supplementary Figure 10. GRM building runtime on identical data ( N=75k, m=600k) can vary substantially depending on CPU architecture. CPU architecture is especially important depending on SIMD availability. The 9654 CPU supports AVX-512, theoretically doubling FLOPs, while earlier generations can show slight improvements based on higher clock speed (7H12) or IPC/CCD (7763) over the baseline (7742). 
+
+Supplementary Figure 11. All REML modes (Exact, Hutch++, and Woodbury) can leverage out-of-core (OOC) GRM operations to calculate their relevant REML quantities, reducing a dominant quadratic cost to memory, shown here for N=150k, m=600k. Woodbury only needs to process the GRM once during the basis calculation, whereas Hutch++ and Exact must process the entire GRM each REML round and tend to incur a greater performance penalty. The “Full” GRM uses roughly 90 Gb at this sample size, whereas the OOC GRM budget was 10 Gb. Supplementary Figure 12. (A) Using more probes used during Hutch++ REML increases peak memory slightly but is a minor contributor to overall runtime, tested on ( N=37.5k, m=600k). (B) The standard error of the heritability estimate (across separate runs) decreases with more probes, although the Hutch++ estimator is still unbiased and the mean is fairly stable. Note, this is not the standard error estimated for heritability within a single run, which is independent of the number of probes. 
+
+Supplementary Figure 13. (A) The runtime and memory requirements of selecting the reduced rank size k from the data is dominated by the rSVD expansion rounds necessary to calculate sufficient eigenvalues, shown here for N=75k, m=600k using 48 cores. For example, both the EIG (90) and MP methods calculated approximately 20k eigenvalues before satisfying their convergence criteria, whereas both EIG (98) and EIG (99) ended up calculating nearly 54k eigenvalues. (B) The selected reduced rank generally grows sub-linearly, with more lenient thresholds like EIG (90) appearing nearly flat from N=75k to 
+
+N=150k. The (C) 𝜆 )*+% and (D) 𝜏 , terms from the truncated eigenspectrum can be used in a post hoc correction (see 
+
+Supplementary Note 4). The terms becoming vanishingly small for conservative thresholds, indicating the reduced rank captures almost all non-degenerate information and the correction becomes negligible. 
+
+Supplementary Note 1 
+
+Symmetric problems, like the matrix multiplication in the GRM building where i.e. 𝐺 '( = 𝐺 (' by design, can exploit symmetric matrix operations. In the case of the GRM, we can use DSYMM rather than DGEMM to only calculate the multiplication of one triangle rather than the whole square matrix. Although this is theoretically more efficient, not all BLAS routines are equally optimised and DGEMM in particular is thoroughly optimised. As such, DGEMM outperforms DSYMM on synthetic matrix data ( Table SN1 ) despite the theoretical advantages of the symmetric version. However, reduced peak memory (and memory traffic) may be a net win depending on exact hardware configurations. 
+
+Table SN1. Across different core counts and square matrix sizes, DGEMM routinely outperforms DSYMM despite the heavier memory traffic. BLAS operations are measures in runtime seconds and averaged over five repeated warm-start runs. 
+
+Cores Size DGEMM DSYMM DSYMM Overhead (%) 8 20k 37.9 38.5 1.8% 8 40k 298.8 303.8 1.7% 32 30k 41.8 43.6 4.4% 32 40k 71.4 72.7 1.9% Even though we use square matrices to store the e.g., GRM, we can designate operations as triangular (with Eigen as e.g., `triangularView<Eigen::Upper>()` or the `UPLO` field in BLAS/LAPACK). By only filling the e.g. upper triangle of the matrix and performing triangle-aware matrix operations, the other triangle of the matrix remains untouched. So, while the “virtual” memory allocation accounts for the full square matrix, the “resident” memory (the actual memory constraint to consider) only accounts for roughly the triangle. MacOS uses a “pagesize” (the operating systems memory management unit) of 16 Kb, while Linux normally uses 4 Kb. Linux can also use “transparent huge pages” (THP) of 2 Mb, which is typically much more effective for large memory allocations like the GRM matrix. However, using THPs (which varies by cluster/computer configuration) typically means all the virtual memory for the untouched triangle regions is still “faulted in” and becomes resident. In the case of the Euler HPC we tested on, THP is enabled by default, and we saw no memory savings after implementing the triangle-aware approach. By changing the memory allocator from glibc to jemalloc, allowing us to disable THP (MALLOC_CONF=“thp:never”), we recovered the expected memory savings. While there is a negative cost to disabling THPs, since tracking many small pages is less efficient than fewer large pages, the memory savings are significant at large sample sizes. 
+
+Supplementary Note 2 
+
+The Eigen::SelfAdjointEigenSolver (when EIGEN_USE_LAPACKE is true in the build) dispatches to DSYEV. MKL has a non-reference build of DSYEV, utilizing more BLAS-3 operations like DTRMM, whereas the other tested backends like OpenBLAS, libFLAME (from AOCL), and Accelerate appear to implement the reference netlib-style algorithm, bottlenecked in the BLAS-2 DSYMV operation ( Figure SN1 ). On the same profiling dataset from 
+
+Supplementary Figure 1 , MKL, OpenBLAS, and Accelerate respectively took 78, 459 (5.9x slower), and 321 (4.1x slower) seconds. Figure SN4. The Eigen SelfAdjointEigenSolver routing through DSYEV on Linux+MKL (A), Linux+OpenBLAS (B), and macOS+Accelerate(C). Although all calls start from DSYEV, they subsequently call different BLAS operations. 
+
+Similarly, the D&C algorithm in DSYEVD requires a workspace quadratic in the number of samples. For the more common 32-bit “LP64” BLAS/LAPACK libraries, the workspace size should overflow the 32-bit integer if there are more than 32,766 samples, leading to a crash. The crash is observed in OpenBLAS, libFLAME, and Accelerate, but even the 32-bit LP64 MKL library appears to internally promote the workspace calculation to a 64-bit integer and can correctly compute the eigensystem. Both the DSYEVD and DYSEVR functions are also optimised/implemented differently in MKL and can be substantially faster than the AOCL or OpenBLAS versions ( Table SN2 ). 
+
+Table 2. Elapsed time for computing 100 (DSYEVR) or all (DSYEVD) PCs using 12 cores across two GRM sizes. Mean runtime is reported across five replicates with standard deviation shown in parentheses. 
+
+BLAS GRM Size DSYEVR DSYEVD 
+
+AOCL 9,375 69.5 (9.9) 115.9 (24.8) MKL 9,375 27.0 (3.1) 42.1 (6.8) AOCL 18,750 393.1 (33.4) 516.3 (18.2) MKL 18,750 206.6 (5.2) 187.2 (11.0) 
+
+Supplementary Note 3 
+
+After applying the reduced rank approach to the GRM, we can also examine the information remaining in the tail of the eigendecomposition 𝐺 = 𝑄 @Λ7𝑄 @* + ∑ 𝜆 '𝑞 '𝑞 '*i'G@O# ¤¥¥¥¦¥¥¥§ 
+
+C=<4, i"@ CAPkl 
+
+. We can cheaply 
+
+d.. d.. Eigen:.. Eigen::ComputationIn.. void Eigen:.. 0x1834a4044 0x1834be884 0x1834c0ac4 void Eigen::internal::gemv_den.. DGEMV void Eigen::HouseholderSequence<Eigen::Matr.. void Eigen::MatrixBase<Eigen::Block<Eigen.. void .. 0.. 0x18.. 0x1.. 0x18.. 0x.. 0x.. 0x1834bf0d8 0x1834c48f4 0x1834bfd98 0x1834cde8c 0x18312f83c 0x1834a4044 void Eigen::internal::selfadjoint_product_impl<Eigen::Blo.. DSYMV Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, -1, -1, 0, -1, -1>>& Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, -1, -1, 0, -1, -.. void Eigen::internal::tridiagonalization_inplace_selector<Eigen::Matrix<double, -1, -1, 0, -1, -1>, -1, false>::run<.. void Eigen::internal::tridiagonalization_inplace<Eigen::Matrix<double,.. Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, -1, -1, 0, -1, -1>>::SelfAdjointEigenSolver<Eigen::Matrix<double, -1, -1, 0, -1, -1>>(Eige.. std::_.. gcta::read.. gcta::manip.. gcta::read_.. s.. _.. _.. st.. st.. start main option(int, char**) gcta::pca(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1:.. mk.. m.. mkl.. mkl.. mkl.. mkl.. mkl_l.. GOMP_.. mkl_lapac.. mkl_lapac.. mk.. mk.. mk.. mk.. mk.. mkl.. GOM.. mkl.. mkl_.. LAPACKE_dsyev_wo.. mkl_lapack__dsye.. mkl_lapack__dsye.. mkl_lapack_dsyev Eigen::SelfAdjoi.. LAPACKE_dsyev gcta::pca __libc_start_mai.. __libc_start_cal.. main option _start gomp_b.. g.. m.. m.. m.. m.. m.. mk.. mkl.. mkl_bla.. mkl_bla.. mkl_blas_def.. mkl_blas_def_d.. mkl_blas_def_x.. mkl_blas_dtrmm mkl_blas_dtrmm.. mkl_lapack_dlasr3._o.. mkl_bl.. mkl_blas_de.. mkl_blas_de.. mkl_lapack_.. mkl_blas_dg.. mkl_blas_dg.. clone3 start_thread gomp_thread_start mkl_lapack_ds.. mkl_blas_def_dgemm_kernel_zen gcta_gcc_MKL exec_b.. exec_t.. symv_k.. dsymv_L dsymv_.. GOMP_p.. dsymv_th.. exec_blas [unknown] dsteqr_ dlasr_ LAPACKE_dsyev_work dsyev_ Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, -1, -1, 0, -1, -1> >::SelfAdjointEigenSolver<Eigen::Matrix.. LAPACKE_dsyev __libc_start_main@@GLIBC_2.34 __libc_start_call_main main option gcta::pca _start exec_threads symv_kernel dsymv_L dsymv_kernel_4x4 exec_blas._omp_fn.1 clone3 start_thread gomp_thread_start dgemm_kern.. gcta_gcc_OpenBL 
+
+C) B) A) summarize two moments of the tail with 𝜆 C=<4 and 𝜏 ! (see methods). During REML, we are solving for the root of the score function 𝑈L𝜎 ¨0!N = − #! tr(𝑃𝐾) + #! 𝑦 *𝑃𝐾𝑃𝑦 = 0 .We can use a second-order Taylor expansion to correct the first term using the tail moments 
+
+tr(𝑃𝐾) C=<4 ≈ (𝑛 − 𝑘) ª M)+,- 
+
+> Km*$M)+,-OK m.$
+
+− 𝜎 ¨0!𝜎 ¨1! n$
+
+> +K m*$M)+,-OK m.$.6
+
+«,but the quadratic second term 
+
+𝑦 *𝑃𝐾𝑃𝑦| C=<4 = f 𝜆 '(𝑞 '*𝑃𝑦) !i'G@O# 
+
+depends on the covariance structure between the tail eigenvalues and the squared alignment of the unknown tail eigenvectors. Estimating this covariance would require additional computation and would still contribute an inexact post hoc correction term. Applying only the correction to the first term in the REML scoring frequently led to rapid unbound divergence. As such, there is limited value in attempting to correct for the truncation, as increasing k directly is relatively cheap and proven to improve accuracy. 
+
+Supplementary Note 4 
+
+The default Linux build (downloading v1.95.1 from https://yanglab.westlake.edu.cn/software/gcta/#Download) links GSL BLAS before MKL BLAS. While many linear algebra operations like DGEMM (used in GRM construction) still fall through to MKL, the SGEMV and SDOT calls (used in the MLMA variant-scan step) go through the scalar GSL implementation rather than MKL, leading to a catastrophic degradation of performance ( Figure SN2 ). By setting `LD_PRELOAD` to force loading the MKL SGEMV and SDOT routines before GSL’s versions, we can recover the performance. Alternatively, altering the linking order of libraries during compilation, such that MKL is given precedence over GSL also recovers the performance. The Apple version of the downloaded binary prioritises Accelerate over GSL, and so does not exhibit this issue. Figure SN5. (A) The MLMA step in GCTA (rebuilt) primarily calls the SGEMV operation (marked in blue), correctly dispatched to MKL. (B) However, GCTA (download) on Linux links GSL before MKL and first resolves the SGEMV operation to the much slower/scalar GSL implementation. (C) Using LD_PRELOAD=<provided MKL> resolves the issue by prioritising the MKL version of SGEMV again. The macOS version correctly prioritises the Accelerate version on both the downloaded or self-compiled version and did not face this issue. 
+
+> cblas_sgemv [gcta64] [gcta64] __libc_start_main@@GLIBC_2.34 __libc_start_call_main [gcta64] [gcta64] [gcta64] gcta64 gomp_barrier_wait_end clone3 start_thread gomp_thread_start mkl_blas_def_xsgemv_kernel_t gcta_gcc_MKL
+
+A) B) C)
