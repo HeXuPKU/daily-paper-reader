@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-04</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-06</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 5 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 4 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>5</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>1</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>3</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-04 22:42:03 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-06 00:20:13 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,9 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今天速读5篇、精读0篇，焦点集中在基因组与电子病历的罕见病推理。</p>
-<p>最值得看的是 GenoMorph（7.0/10）的路径驱动基因组疾病推理，以及 EHRAdapt、RareDx（各6.0/10）围绕语义先验、知识整合与图策略优化的罕见病诊断路线。</p>
-<p>普通读者可先读 GenoMorph 判断临床落地潜力，再按兴趣跟进另两篇。</p>
+<p>2026-10-06日报精选4篇，精读EHRAdapt（8.0），速读GenoMorph（7.0）、DoAtlas-2（6.0）和VANDAM（6.0）。</p>
+<p>最值得看EHRAdapt如何用语义先验适配预训练语言模型以应对电子健康记录中的罕见临床事件，其次关注GenoMorph的通路驱动基因组疾病推理。</p>
+<p>普通读者可先读EHRAdapt摘要，再按兴趣浏览基因组推理与生物医学发现方向的速读论文。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -80,12 +80,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">0 篇</strong>
+    <strong class="dpr-home-dashboard-count">1 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="EHRAdapt: Adapting Pretrained Language Models to Electronic Health Records with Semantic Priors for Rare Clinical Events">EHRAdapt: Adapting Pretrained Language Models to Electronic Health Records with Semantic Priors for Rare Clinical Events</span></li></ul>
   </div>
-
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -93,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">5 篇</strong>
+    <strong class="dpr-home-dashboard-count">3 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation">GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation</span></li><li><span class="dpr-home-dashboard-paper-title" title="EHRAdapt: Adapting Pretrained Language Models to Electronic Health Records with Semantic Priors for Rare Clinical Events">EHRAdapt: Adapting Pretrained Language Models to Electronic Health Records with Semantic Priors for Rare Clinical Events</span></li><li><span class="dpr-home-dashboard-paper-title" title="RareDx: Controlled Knowledge Integration and Graph-Grounded Policy Optimization for Rare-Disease Diagnosis">RareDx: Controlled Knowledge Integration and Graph-Grounded Policy Optimization for Rare-Disease Diagnosis</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation">GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation</span></li><li><span class="dpr-home-dashboard-paper-title" title="DoAtlas-2: A Foundation for Self-Evolving Causal Biomedical Discovery">DoAtlas-2: A Foundation for Self-Evolving Causal Biomedical Discovery</span></li><li><span class="dpr-home-dashboard-paper-title" title="VANDAM: Viewing a nucleotide sequence with DNA molecular priors">VANDAM: Viewing a nucleotide sequence with DNA molecular priors</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>5</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>3</strong></span></div>
 </section>
 </div>
 
