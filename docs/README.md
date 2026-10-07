@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-06</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-07</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 12 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 4 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>4</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>8</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>4</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-06 22:59:35 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-07 23:48:27 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,9 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日推荐12篇基因组与遗传分析论文，精读4篇、速读8篇，焦点落在生物银行规模农业队列与异质人群GWAS。</p>
-<p>最值得看的是两篇9.0精读：GCTAg做可扩展混合模型分析，统一无监督框架面向异质人群全基因组关联研究；速读可顺带关注非线性孟德尔随机化与罕见病诊断。</p>
-<p>普通读者建议先读这两篇精读，抓住“大规模农业数据如何算”和“跨人群关联如何更稳”，再按兴趣选速读。</p>
+<p>今日日报收录4篇、全部速读，聚焦AI+临床与生物信息：多模态患者证据对齐知识图谱（7.0分）、终身数字孪生建模范式（6.0分）、LLM-in-the-loop强化学习做特征选择（6.0分）。</p>
+<p>最值得看的是最高分的《Aligning Multimodal Patient Evidence with Biomedical Knowledge Graphs for Clinical LLMs》，它把多模态病历证据与生物医学知识图谱对齐，是临床大模型落地的关键一环；其次可关注LLM参与强化学习闭环做生信特征选择这一思路。</p>
+<p>普通读者可先从&quot;临床LLM+知识图谱&quot;这条线切入，理解AI如何借助结构化医学知识减少幻觉，再按兴趣延伸看数字孪生与特征选择。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -80,12 +80,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">4 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="GCTAg: scalable mixed-model analysis for biobank-scale agricultural cohorts">GCTAg: scalable mixed-model analysis for biobank-scale agricultural cohorts</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Unified Unsupervised Framework for Genome-Wide Association Studies in Heterogeneous Populations">A Unified Unsupervised Framework for Genome-Wide Association Studies in Heterogeneous Populations</span></li><li><span class="dpr-home-dashboard-paper-title" title="EHRAdapt: Adapting Pretrained Language Models to Electronic Health Records with Semantic Priors for Rare Clinical Events">EHRAdapt: Adapting Pretrained Language Models to Electronic Health Records with Semantic Priors for Rare Clinical Events</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">gwas <strong>2</strong></span><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span></div>
+
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -93,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">8 篇</strong>
+    <strong class="dpr-home-dashboard-count">4 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation">GenoMorph: Pathway-Grounded Genomic Disease Reasoning via Adaptive Latent Computation</span></li><li><span class="dpr-home-dashboard-paper-title" title="What does two-sample Mendelian randomization estimate when the exposure-outcome relationship is nonlinear?">What does two-sample Mendelian randomization estimate when the exposure-outcome relationship is nonlinear?</span></li><li><span class="dpr-home-dashboard-paper-title" title="RareDx: Controlled Knowledge Integration and Graph-Grounded Policy Optimization for Rare-Disease Diagnosis">RareDx: Controlled Knowledge Integration and Graph-Grounded Policy Optimization for Rare-Disease Diagnosis</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Aligning Multimodal Patient Evidence with Biomedical Knowledge Graphs for Clinical LLMs">Aligning Multimodal Patient Evidence with Biomedical Knowledge Graphs for Clinical LLMs</span></li><li><span class="dpr-home-dashboard-paper-title" title="LifeLong Digital Twin: A Unified Modeling Paradigm and Agent Harness for Event-Driven Lifelong Health State Trajectories">LifeLong Digital Twin: A Unified Modeling Paradigm and Agent Harness for Event-Driven Lifelong Health State Trajectories</span></li><li><span class="dpr-home-dashboard-paper-title" title="An LLM-in-the-loop RL Framework for Bioinformatics Feature Selection">An LLM-in-the-loop RL Framework for Bioinformatics Feature Selection</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>6</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span></div>
 </section>
 </div>
 
