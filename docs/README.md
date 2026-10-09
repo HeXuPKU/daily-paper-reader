@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-10-07</span>
+      <span class="dpr-home-dashboard-kicker">2026-10-09</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 4 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 3 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>4</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>3</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-10-07 23:48:27 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-10-09 00:15:01 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,9 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日日报收录4篇、全部速读，聚焦AI+临床与生物信息：多模态患者证据对齐知识图谱（7.0分）、终身数字孪生建模范式（6.0分）、LLM-in-the-loop强化学习做特征选择（6.0分）。</p>
-<p>最值得看的是最高分的《Aligning Multimodal Patient Evidence with Biomedical Knowledge Graphs for Clinical LLMs》，它把多模态病历证据与生物医学知识图谱对齐，是临床大模型落地的关键一环；其次可关注LLM参与强化学习闭环做生信特征选择这一思路。</p>
-<p>普通读者可先从&quot;临床LLM+知识图谱&quot;这条线切入，理解AI如何借助结构化医学知识减少幻觉，再按兴趣延伸看数字孪生与特征选择。</p>
+<p>今天日报成功收录3篇、精读0篇、速读3篇，主题集中在终身健康数字孪生、临床多模态证据对齐和基因集注释。</p>
+<p>最值得看两个7分方向：LifeLong Digital Twin 用统一建模范式与 agent harness 追踪事件驱动的终身健康状态轨迹；Aligning Multimodal Patient Evidence 把多模态患者证据与生物医学知识图谱对齐以增强临床LLM。</p>
+<p>普通读者可先读这两篇速读摘要，抓住长期健康建模与临床证据结构化两条主线，6分的 SoftGene 可作基因集注释可解释性的补充阅读。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -93,12 +93,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">4 篇</strong>
+    <strong class="dpr-home-dashboard-count">3 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Aligning Multimodal Patient Evidence with Biomedical Knowledge Graphs for Clinical LLMs">Aligning Multimodal Patient Evidence with Biomedical Knowledge Graphs for Clinical LLMs</span></li><li><span class="dpr-home-dashboard-paper-title" title="LifeLong Digital Twin: A Unified Modeling Paradigm and Agent Harness for Event-Driven Lifelong Health State Trajectories">LifeLong Digital Twin: A Unified Modeling Paradigm and Agent Harness for Event-Driven Lifelong Health State Trajectories</span></li><li><span class="dpr-home-dashboard-paper-title" title="An LLM-in-the-loop RL Framework for Bioinformatics Feature Selection">An LLM-in-the-loop RL Framework for Bioinformatics Feature Selection</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="LifeLong Digital Twin: A Unified Modeling Paradigm and Agent Harness for Event-Driven Lifelong Health State Trajectories">LifeLong Digital Twin: A Unified Modeling Paradigm and Agent Harness for Event-Driven Lifelong Health State Trajectories</span></li><li><span class="dpr-home-dashboard-paper-title" title="Aligning Multimodal Patient Evidence with Biomedical Knowledge Graphs for Clinical LLMs">Aligning Multimodal Patient Evidence with Biomedical Knowledge Graphs for Clinical LLMs</span></li><li><span class="dpr-home-dashboard-paper-title" title="SoftGene: Protein Language Model-Enhanced Soft Prompting for Interpretable Gene Set Annotation">SoftGene: Protein Language Model-Enhanced Soft Prompting for Interpretable Gene Set Annotation</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">med-ai <strong>2</strong></span><span class="dpr-home-dashboard-tag">gwas <strong>1</strong></span></div>
 </section>
 </div>
 
